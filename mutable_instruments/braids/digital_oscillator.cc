@@ -67,6 +67,59 @@ uint32_t DigitalOscillator::ComputePhaseIncrement(int16_t midi_pitch) {
   return phase_increment;
 }
 
+void DigitalOscillator::AdvancePhase(uint64_t samples) {
+  const uint32_t count = static_cast<uint32_t>(samples);
+  if (samples == 0) return;
+  if (shape_ == OSC_SHAPE_WAVE_PARAPHONIC) {
+    AdvanceWaveParaphonic(count);
+    return;
+  }
+  if (shape_ == OSC_SHAPE_SAW_SWARM) {
+    const int32_t detune = (static_cast<int32_t>(parameter_[0]) + 1024)
+        * (static_cast<int32_t>(parameter_[0]) + 1024) >> 9;
+    for (int16_t i = 0; i < 7; ++i) {
+      const int32_t saw_detune = detune * (i - 3);
+      const int32_t integral = saw_detune >> 16;
+      const int32_t fractional = saw_detune & 0xffff;
+      const int32_t a = ComputePhaseIncrement(pitch_ + integral);
+      const int32_t b = ComputePhaseIncrement(pitch_ + integral + 1);
+      const uint32_t increment = a + (((b - a) * fractional) >> 16);
+      if (i == 0) phase_ += increment * count;
+      else state_.saw.phase[i - 1] += increment * count;
+    }
+    return;
+  }
+  const uint32_t previous_phase = phase_;
+  const uint32_t carrier_increment =
+      (shape_ == OSC_SHAPE_WAVETABLES || shape_ == OSC_SHAPE_WAVE_MAP
+          || shape_ == OSC_SHAPE_WAVE_LINE)
+          ? ((phase_increment_ >> 1) << 1) : phase_increment_;
+  phase_ += carrier_increment * count;
+  if (shape_ == OSC_SHAPE_TRIPLE_RING_MOD) {
+    state_.vow.formant_phase[0] += ComputePhaseIncrement(
+        pitch_ + ((parameter_[0] - 16384) >> 2)) * count;
+    state_.vow.formant_phase[1] += ComputePhaseIncrement(
+        pitch_ + ((parameter_[1] - 16384) >> 2)) * count;
+  } else if (shape_ == OSC_SHAPE_FM) {
+    state_.modulator_phase += (ComputePhaseIncrement(
+        (12 << 7) + pitch_ + ((parameter_[1] - 16384) >> 1)) >> 1)
+        * count;
+  } else if (shape_ == OSC_SHAPE_FEEDBACK_FM) {
+    state_.ffm.modulator_phase += (ComputePhaseIncrement(
+        (12 << 7) + pitch_ + ((parameter_[1] - 16384) >> 1)) >> 1)
+        * count;
+  } else if ((shape_ == OSC_SHAPE_VOSIM || shape_ == OSC_SHAPE_VOWEL)
+      && phase_increment_ != 0) {
+    const bool wrapped = samples > (0xffffffffUL - previous_phase) / phase_increment_;
+    const uint32_t since_wrap = wrapped ? phase_ / phase_increment_ : count;
+    const size_t formants = shape_ == OSC_SHAPE_VOSIM ? 2 : 3;
+    for (size_t i = 0; i < formants; ++i) {
+      state_.vow.formant_phase[i] = wrapped ? 0 : state_.vow.formant_phase[i];
+      state_.vow.formant_phase[i] += state_.vow.formant_increment[i] * since_wrap;
+    }
+  }
+}
+
 void DigitalOscillator::Render(
     const uint8_t* sync,
     int16_t* buffer,
@@ -1093,6 +1146,21 @@ static const uint16_t chords[17][3] = {
   { 4, 4 + 12 SEMI, 12 SEMI },
   { 4, 4 + 12 SEMI, 12 SEMI },
 };
+
+void DigitalOscillator::AdvanceWaveParaphonic(uint32_t samples) {
+  uint16_t integral = parameter_[1] >> 11;
+  uint16_t fractional = parameter_[1] << 5;
+  if (fractional < 30720) fractional = 0;
+  else if (fractional >= 34816) fractional = 65535;
+  else fractional = (fractional - 30720) * 16;
+  state_.saw.phase[0] += phase_increment_ * samples;
+  for (size_t i = 0; i < 3; ++i) {
+    const uint16_t a = chords[integral][i];
+    const uint16_t b = chords[integral + 1][i];
+    const uint16_t detune = a + ((b - a) * fractional >> 16);
+    state_.saw.phase[i + 1] += ComputePhaseIncrement(pitch_ + detune) * samples;
+  }
+}
 
 void DigitalOscillator::RenderWaveParaphonic(
     const uint8_t* sync,

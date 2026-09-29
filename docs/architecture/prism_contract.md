@@ -12,6 +12,13 @@ When enabled, NOTE ON sends Braids a sync pulse and a strike. When disabled,
 NOTE ON sends neither: in particular, Braids' digital strike must not restart
 model-specific oscillator phases. Oscillator initialization belongs to runtime
 instance creation; changing a model may initialize that model's own state.
+After a voice's release has finished, the allocator stops calling its renderer.
+For PHASE OFF, the voice retains the absolute AUDIO sample time at its last
+render and consumes any unplayed Braids block samples before advancing its
+phase accumulators by the elapsed sample count at the next configuration change
+or NOTE ON. The old pitch is used up to that event; a new pitch applies from
+that event onward. This keeps the free-running phase independent of note gaps
+without rendering silent Braids blocks. PHASE ON still syncs at NOTE ON.
 
 `DETUNE` is the fixed bipolar pitch offset applied to OSC2 only (-24 to +24
 semitones). `DRIFT` adds an independent random pitch offset to each oscillator at NOTE ON.

@@ -4,6 +4,7 @@
  */
 
 #include "Audio/Engines/stack_engine.h"
+#include "audio.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -64,6 +65,8 @@ typedef struct
     uint8_t active_source_mask;
     uint8_t ramp_mask;
     uint8_t phase_reset;
+    uint8_t phase_time_valid;
+    uint64_t phase_sample_time;
     uint32_t config_version;
     uint32_t synced_config_version;
     uint32_t continuous_epoch;
@@ -543,6 +546,39 @@ static void brick6_stack_runtime_advance_free_running(brick6_stack_runtime_insta
     }
 }
 
+static void brick6_stack_runtime_advance_to(brick6_stack_runtime_instance_t *instance,
+                                             uint64_t sample_time)
+{
+    if ((instance->phase_time_valid != 0U)
+            && (sample_time > instance->phase_sample_time)
+            && (instance->phase_reset == 0U))
+    {
+        const uint32_t elapsed = (uint32_t)(sample_time - instance->phase_sample_time);
+        for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
+        {
+            stack_osc_slot_t *const osc = &instance->slots[slot];
+            switch (osc->renderer_id)
+            {
+                case STACK_RENDERER_TRIPLE_SAW:
+                    osc->phase2 += osc->phase_inc2 * elapsed;
+                    osc->phase3 += osc->phase_inc3 * elapsed;
+                    /* fall through */
+                case STACK_RENDERER_DELUGE_SINE:
+                case STACK_RENDERER_DELUGE_TRI:
+                case STACK_RENDERER_DELUGE_SQUARE:
+                case STACK_RENDERER_DELUGE_SAW:
+                case STACK_RENDERER_SHAPE:
+                    osc->phase += osc->phase_inc * elapsed;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    instance->phase_sample_time = sample_time;
+    instance->phase_time_valid = 1U;
+}
+
 static int16_t brick6_stack_runtime_render_noise_sample(brick6_stack_runtime_instance_t *instance)
 {
     uint32_t x = instance->rng;
@@ -992,6 +1028,8 @@ void brick6_stack_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t vel
         return;
     }
 
+    brick6_stack_runtime_advance_to(instance, audio_render_sample_time());
+
     instance->voice.active_note = note;
     instance->voice.has_active_note = 1U;
     instance->voice.gate = 1U;
@@ -1026,6 +1064,7 @@ void brick6_stack_runtime_initialize_held_note(uint8_t instance_id,
     brick6_stack_runtime_instance_t *const instance =
         brick6_stack_runtime_get_instance_mut(instance_id);
     if (instance == NULL) return;
+    brick6_stack_runtime_advance_to(instance, audio_render_sample_time());
     instance->voice.active_note = note;
     instance->voice.has_active_note = 1U;
     instance->voice.gate = 1U;
@@ -1090,6 +1129,7 @@ void brick6_stack_runtime_sync_voice(uint8_t track_instance, uint8_t voice_insta
     }
     if ((dst->synced_config_version == src->config_version)
             && (dst->continuous_epoch == src->continuous_epoch)) return;
+    brick6_stack_runtime_advance_to(dst, audio_render_sample_time());
     const uint8_t full = (dst->synced_config_version != src->config_version) ? 1U : 0U;
     if ((full != 0U) || (dst->continuous_version[STACK_CONT_NOISE]
             != src->continuous_version[STACK_CONT_NOISE]))
@@ -1172,6 +1212,9 @@ ITCM_TEXT uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
         return 0U;
     }
 
+    const uint64_t sample_time = audio_render_sample_time();
+    brick6_stack_runtime_advance_to(instance, sample_time);
+
     if ((instance->release_source_active != 0U)
             && (downstream_source_required == 0U))
     {
@@ -1191,6 +1234,7 @@ ITCM_TEXT uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
             brick6_stack_runtime_advance_free_running(instance, chunk);
             remaining -= chunk;
         }
+        instance->phase_sample_time = sample_time + frames;
         return 0U;
     }
 
@@ -1207,6 +1251,15 @@ ITCM_TEXT uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
         active &= (uint8_t)(active - 1U);
         brick6_stack_runtime_render_slot(instance, slot, frames);
     }
+    if (instance->phase_reset == 0U)
+    {
+        for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
+        {
+            if ((instance->active_source_mask & (uint8_t)(1U << slot)) == 0U)
+                brick6_stack_runtime_advance_slot_free_running(
+                    &instance->slots[slot], (uint8_t)frames);
+        }
+    }
     if ((instance->active_source_mask & STACK_SOURCE_NOISE_BIT) != 0U)
     {
         brick6_stack_runtime_render_noise(instance, frames);
@@ -1220,6 +1273,7 @@ ITCM_TEXT uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
         out_mono[i] = (float)g_stack_acc_scratch[i]
             * ((1.0f / 32768.0f) * STACK_OUTPUT_TRIM);
     }
+    instance->phase_sample_time = sample_time + frames;
     return 1U;
 }
 

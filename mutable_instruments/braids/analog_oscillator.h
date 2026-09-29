@@ -96,6 +96,19 @@ class AnalogOscillator {
   inline uint32_t phase() const {
     return phase_;
   }
+
+  inline void AdvancePhase(uint64_t samples) {
+    phase_ += phase_increment_ * static_cast<uint32_t>(samples);
+  }
+
+
+  inline void set_phase(uint32_t phase) { phase_ = phase; }
+
+  inline void ShiftPitch(int16_t semitones_q7) {
+    pitch_ += semitones_q7;
+    phase_increment_ = ComputePhaseIncrement(pitch_);
+    phase_increment_pitch_ = pitch_;
+  }
   
   inline void Reset() {
     phase_ = -phase_increment_;

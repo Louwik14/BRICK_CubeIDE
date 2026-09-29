@@ -47,3 +47,12 @@ void audio_boot_init_binding_io(void);
  */
 uint8_t audio_start(void);
 void audio_stop(void);
+
+/* Start sample of the AUDIO segment currently being processed. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+uint64_t audio_render_sample_time(void);
+#ifdef __cplusplus
+}
+#endif
