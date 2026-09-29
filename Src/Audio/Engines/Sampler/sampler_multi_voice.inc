@@ -537,6 +537,10 @@ brick6_sampler_runtime_start_multi_renderer(uint8_t track_id,
         brick6_sampler_runtime_multi_alloc_voice(track_id);
     if (multi_voice == NULL)
         return BRICK6_SAMPLER_NOTE_INVARIANT;
+    const uint8_t physical_voice_id =
+        brick6_sampler_runtime_multi_voice_index(multi_voice);
+    if (physical_voice_id >= SAMPLE_PAGE_LEASE_MULTI_COUNT)
+        return BRICK6_SAMPLER_NOTE_INVARIANT;
     sample_play_plan_t play_plan;
     memset(&play_plan, 0, sizeof(play_plan));
     play_plan.key = key;
@@ -586,7 +590,7 @@ brick6_sampler_runtime_start_multi_renderer(uint8_t track_id,
     sample_voice_reader_reset(&multi_voice->reader);
     if (sample_voice_reader_bind_play_plan(&multi_voice->reader,
                                            &common_plan,
-                                           BRICK6_SAMPLER_CACHE_VOICE_NONE) == 0U)
+                                           physical_voice_id) == 0U)
     {
         sample_voice_reader_reset(&multi_voice->reader);
         return BRICK6_SAMPLER_NOTE_INVARIANT;
@@ -594,7 +598,7 @@ brick6_sampler_runtime_start_multi_renderer(uint8_t track_id,
     multi_voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
     sample_voice_reader_bind_loop_cache_incarnation(
         &multi_voice->reader,
-        brick6_sampler_runtime_multi_voice_index(multi_voice),
+        physical_voice_id,
         multi_voice->trigger_order);
     const brick6_sampler_multi_voice_handle_t multi_handle =
         brick6_sampler_runtime_multi_voice_handle(multi_voice);

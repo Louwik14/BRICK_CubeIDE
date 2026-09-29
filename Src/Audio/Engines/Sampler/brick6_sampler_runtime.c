@@ -39,12 +39,11 @@
 #define SEQ_TRACK_COUNT BRICK_ENTITY_CAPACITY
 
 #define BRICK6_SAMPLER_Q16_ONE (65536U)
-#define BRICK6_SAMPLER_CACHE_VOICE_BASE (2U)
+#define BRICK6_SAMPLER_CACHE_VOICE_BASE SAMPLE_PAGE_LEASE_CLASSIC_READER_BASE
 #define BRICK6_SAMPLER_CLIP_SLOT_NONE 0xFFU
 #define BRICK6_SAMPLER_CLIP_DEFAULT_GRAIN_FRAMES 1536U
 #define BRICK6_SAMPLER_CLIP_GRAIN_LAW 0U
 #define BRICK6_SAMPLER_CLIP_GRAIN_LAW_K_FRAMES 352.0f
-#define BRICK6_SAMPLER_CACHE_VOICE_NONE UINT8_MAX
 #define BRICK6_SAMPLER_MULTI_LOOKAHEAD_PAGES SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES
 #define BRICK6_SAMPLER_MULTI_WINDOW_MASK_BITS (32U)
 #define BRICK6_SAMPLER_MIN_READY_TARGET_FRAMES SAMPLE_PREP_MIN_READY_FRAMES
@@ -250,6 +249,14 @@ static AUDIO_HOT brick6_sampler_voice_t
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLER_MULTI_MAX_GLOBAL_VOICES == 8U,
                "Multi runtime pool must remain globally capped at eight voices");
+_Static_assert(BRICK6_SAMPLER_CACHE_VOICE_BASE + SEQ_TRACK_COUNT
+                   <= SAMPLE_PAGE_LEASE_CLASSIC_COUNT,
+               "Every Stream track needs a distinct Classic/REC reader id");
+_Static_assert(SAMPLER_MULTI_MAX_GLOBAL_VOICES <= SAMPLE_PAGE_LEASE_MULTI_COUNT,
+               "Every physical Multi voice needs a distinct lease reader id");
+_Static_assert(SAMPLE_PAGE_LEASE_REC_OVERDUB_READER
+                   > BRICK6_SAMPLER_CACHE_VOICE_BASE + SEQ_TRACK_COUNT - 1U,
+               "REC overdub reader must not alias a Stream track");
 _Static_assert(sizeof(brick6_sampler_voice_t) == 472U,
                "Sampler voice size changed; remeasure DTCM before accepting it");
 _Static_assert(sizeof(g_sampler_multi_voice) == 3776U,

@@ -5,7 +5,6 @@
 #include "SD/sd_block_device.h"
 #include "stm32h7xx_hal.h"
 #include "Sampler/sample_stream_io.h"
-#include "Sampler/sample_stream_diag.h"
 
 #define SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE (512U)
 #define SAMPLE_STREAM_PHYSICAL_PENDING_COUNT (2U)
@@ -191,8 +190,6 @@ uint8_t sample_stream_backend_physical_begin(
     }
     async->active = 1U;
     g_sample_stream_physical_pending[(uint32_t)pending_slot] = async;
-    sample_stream_diag_dma_owner(async->owner_generation, target->key,
-                                 target->page_index);
     return 1U;
 }
 
@@ -351,9 +348,6 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
     if ((result == SD_BLOCK_DEVICE_BUSY)
             || (result == SD_BLOCK_DEVICE_QUEUE_FULL))
     {
-        sample_stream_diag_dma((result == SD_BLOCK_DEVICE_QUEUE_FULL)
-            ? STREAM_DIAG_QUEUE_FULL : STREAM_DIAG_DELAYED,
-            async->owner_generation, span.lba, result);
         return SD_SCHEDULER_START_BUSY;
     }
     if (result != SD_BLOCK_DEVICE_OK)

@@ -36,7 +36,6 @@ static uint8_t sample_voice_reader_prepare_multi_fwd_1x(
             state->frame_pos = forward_end;
             state->position = (float)forward_end;
             state->active = 0U;
-            sample_stream_diag_unbind(sample_voice_reader_diag_slot(state));
             sample_voice_reader_release_audio_cursor(state);
             *out_status = SAMPLE_AUDIO_SEGMENT_DONE;
             return 1U;
@@ -47,7 +46,6 @@ static uint8_t sample_voice_reader_prepare_multi_fwd_1x(
     {
         if (sample_voice_reader_acquire_audio_page(state, state->frame_pos) == 0U)
         {
-            sample_voice_reader_diag_fault(state, state->frame_pos);
             *out_status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
             return 1U;
         }
@@ -60,7 +58,6 @@ static uint8_t sample_voice_reader_prepare_multi_fwd_1x(
         sample_voice_reader_release_audio_cursor(state);
         if (sample_voice_reader_acquire_audio_page(state, state->frame_pos) == 0U)
         {
-            sample_voice_reader_diag_fault(state, state->frame_pos);
             *out_status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
             return 1U;
         }
@@ -79,15 +76,9 @@ static uint8_t sample_voice_reader_prepare_multi_fwd_1x(
     }
     if (todo == 0U)
     {
-        sample_voice_reader_diag_fault(state, state->frame_pos);
         *out_status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
         return 1U;
     }
-    sample_voice_reader_diag_check_cursor(state);
-    sample_stream_diag_use(sample_voice_reader_diag_slot(state), state->frame_pos,
-        state->audio_cursor.current_page_ref.page_index,
-        state->audio_cursor.current_frame_count - offset,
-        state->audio_cursor.current_page_ref.page_generation);
     *out_source = &state->audio_cursor.current_base[
         offset * state->audio_cursor.stride_floats];
     *out_frames = todo;
@@ -113,7 +104,6 @@ static void sample_voice_reader_commit_multi_fwd_1x(sample_voice_reader_state_t 
     if (state->frame_pos >= forward_end)
     {
         state->active = 0U;
-        sample_stream_diag_unbind(sample_voice_reader_diag_slot(state));
         sample_voice_reader_release_audio_cursor(state);
         return;
     }
@@ -266,7 +256,6 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple(sample_voice_reader_t *re
     {
         if (sample_voice_reader_acquire_audio_page(state, state->frame_pos) == 0U)
         {
-            sample_voice_reader_diag_fault(state, state->frame_pos);
             return 0U;
         }
     }
@@ -278,7 +267,6 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple(sample_voice_reader_t *re
         sample_voice_reader_release_audio_cursor(state);
         if (sample_voice_reader_acquire_audio_page(state, state->frame_pos) == 0U)
         {
-            sample_voice_reader_diag_fault(state, state->frame_pos);
             return 0U;
         }
     }
@@ -296,15 +284,9 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple(sample_voice_reader_t *re
     }
     if (todo == 0U)
     {
-        sample_voice_reader_diag_fault(state, state->frame_pos);
         return 0U;
     }
 
-    sample_voice_reader_diag_check_cursor(state);
-    sample_stream_diag_use(sample_voice_reader_diag_slot(state), state->frame_pos,
-        state->audio_cursor.current_page_ref.page_index,
-        state->audio_cursor.current_frame_count - offset_frames,
-        state->audio_cursor.current_page_ref.page_generation);
     const uint32_t frame_stride = state->audio_cursor.stride_floats;
     const uint32_t right_offset = (state->audio_cursor.format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO) ? 0U : 1U;
     const float *src = &state->audio_cursor.current_base[offset_frames * frame_stride];
@@ -403,16 +385,12 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
         if (sample_page_cache_audio_resolve_page_key(reader->key,
                 base_frame / reader->frames_per_page, &span) == 0U)
         {
-            sample_voice_reader_diag_fault(state, base_frame);
             if (out_underrun != 0)
             {
                 *out_underrun = 1U;
             }
             break;
         }
-        sample_stream_diag_use(sample_voice_reader_diag_slot(state), base_frame,
-            span.page_index, span.start_frame + span.frame_count - base_frame,
-            span.page_generation);
 
         const uint32_t span_end = span.start_frame + span.frame_count;
         uint32_t segment_frames = 0U;
@@ -550,7 +528,6 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple_mono(sample_voice_reader_
     if ((state->audio_cursor.current_acquired == 0U)
         && (sample_voice_reader_acquire_audio_page(state, state->frame_pos) == 0U))
     {
-        sample_voice_reader_diag_fault(state, state->frame_pos);
         return 0U;
     }
     if ((state->frame_pos < state->audio_cursor.current_start_frame)
@@ -560,7 +537,6 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple_mono(sample_voice_reader_
         sample_voice_reader_release_audio_cursor(state);
         if (sample_voice_reader_acquire_audio_page(state, state->frame_pos) == 0U)
         {
-            sample_voice_reader_diag_fault(state, state->frame_pos);
             return 0U;
         }
     }
@@ -578,15 +554,9 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple_mono(sample_voice_reader_
     }
     if (todo == 0U)
     {
-        sample_voice_reader_diag_fault(state, state->frame_pos);
         return 0U;
     }
 
-    sample_voice_reader_diag_check_cursor(state);
-    sample_stream_diag_use(sample_voice_reader_diag_slot(state), state->frame_pos,
-        state->audio_cursor.current_page_ref.page_index,
-        state->audio_cursor.current_frame_count - offset_frames,
-        state->audio_cursor.current_page_ref.page_generation);
     const uint32_t frame_stride = state->audio_cursor.stride_floats;
     const float *src = &state->audio_cursor.current_base[offset_frames * frame_stride];
     float *dst = &out_mono[out_offset];

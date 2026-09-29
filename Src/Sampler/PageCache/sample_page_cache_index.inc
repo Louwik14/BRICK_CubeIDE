@@ -194,8 +194,6 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
         return;
     }
 
-    sample_stream_diag_page(page->key, page->page_index, page->state, state,
-                            page->generation);
     const uint16_t key_slot = sample_page_cache_key_slot(page->key);
     if ((key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES) && (page->state != state))
     {
