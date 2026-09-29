@@ -51,7 +51,7 @@ typedef enum
     UI_PARAM_VALUE_FLASH_DIRECT = 0,
     UI_PARAM_VALUE_FLASH_PLOCK,
     UI_PARAM_VALUE_FLASH_LIVE_REC_PLOCK,
-    UI_PARAM_VALUE_FLASH_MACRO_SCENE_ASSIGN
+    UI_PARAM_VALUE_FLASH_MACRO_ASSIGN
 } ui_param_value_flash_kind_t;
 
 void ui_param_set_bank(const ui_param_bank_t *bank);

@@ -16,34 +16,24 @@
 #include "Storage/project_control.h"
 #include "Storage/persistent_key_catalog.h"
 
+#define PARAM_MACRO_TARGET_CAPACITY \
+    (2U * PERSIST_CONTROL_MACRO_COUNT * PERSIST_CONTROL_MACRO_LOCK_COUNT)
+
 typedef struct
 {
-    float amount;
-    uint8_t scene;
+    uint8_t track;
+    param_id_t param;
+    float base;
+    float delta;
     uint8_t active;
-    uint32_t touch_seq;
-    uint8_t last_count;
-    param_macro_resolution_t last_resolution[PERSIST_CONTROL_MACRO_LOCK_COUNT];
-} param_macro_source_state_t;
+    uint8_t audio;
+} param_macro_target_t;
 
-typedef struct
-{
-    uint8_t source_index;
-    param_macro_resolution_t resolution;
-} param_macro_collected_resolution_t;
-
-#define PARAM_MACRO_POT_SOURCE_COUNT PERSIST_CONTROL_MACRO_COUNT
-#define PARAM_MACRO_HALL_SOURCE_COUNT PERSIST_CONTROL_MACRO_SCENE_COUNT
-#define PARAM_MACRO_SOURCE_COUNT (PARAM_MACRO_POT_SOURCE_COUNT + PARAM_MACRO_HALL_SOURCE_COUNT)
-
-CONTROL_STATE_SDRAM static param_macro_source_state_t g_param_macro_sources[PARAM_MACRO_SOURCE_COUNT];
-static uint32_t g_param_macro_touch_seq;
-
-#define PARAM_MACRO_COLLECTED_RESOLUTION_CAPACITY \
-    (PARAM_MACRO_SOURCE_COUNT * PERSIST_CONTROL_MACRO_LOCK_COUNT)
-
-CONTROL_STATE_SDRAM static param_macro_collected_resolution_t
-    g_param_macro_collected_resolutions[PARAM_MACRO_COLLECTED_RESOLUTION_CAPACITY];
+static float g_macro_amounts[PERSIST_CONTROL_MACRO_COUNT];
+CONTROL_STATE_SDRAM static param_macro_target_t g_macro_previous[PARAM_MACRO_TARGET_CAPACITY];
+CONTROL_STATE_SDRAM static param_macro_target_t g_macro_work[PARAM_MACRO_TARGET_CAPACITY];
+static uint16_t g_macro_previous_count;
+static uint8_t g_macro_retry_pending;
 
 static uint8_t param_macro_prepare_temp_target(param_id_t param,
                                                uint8_t track,
@@ -147,18 +137,6 @@ static uint8_t param_macro_bulk_add_clear_temp(
     return 1U;
 }
 
-uint8_t param_macro_resolve_lock(uint8_t scene,
-                                 uint8_t lock,
-                                 param_macro_resolution_t *out_resolution);
-uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution);
-
-__attribute__((weak)) uint8_t param_macro_get_ui_held_scene(uint8_t macro, uint8_t *out_scene)
-{
-    (void)macro;
-    (void)out_scene;
-    return 0U;
-}
-
 static float param_macro_clamp_amount(float amount)
 {
     if (amount < 0.0f)
@@ -204,32 +182,10 @@ static uint8_t param_macro_plock_set_for_domain(track_runtime_param_domain_t dom
 
 void param_macro_init(void)
 {
-    memset(g_param_macro_sources, 0, sizeof(g_param_macro_sources));
-    g_param_macro_touch_seq = 0U;
-    for (uint8_t macro = 0U; macro < PERSIST_CONTROL_MACRO_COUNT; ++macro)
-    {
-        g_param_macro_sources[macro].scene = project_control_get_macro_scene(macro);
-    }
-
-    for (uint8_t scene = 0U; scene < PERSIST_CONTROL_MACRO_SCENE_COUNT; ++scene)
-    {
-        g_param_macro_sources[PARAM_MACRO_POT_SOURCE_COUNT + scene].scene = scene;
-    }
-}
-
-float param_macro_lerp(float base_value, float scene_value, float amount)
-{
-    if (amount <= 0.0f)
-    {
-        return base_value;
-    }
-
-    if (amount >= 1.0f)
-    {
-        return scene_value;
-    }
-
-    return base_value + ((scene_value - base_value) * amount);
+    memset(g_macro_amounts, 0, sizeof(g_macro_amounts));
+    g_macro_previous_count = 0U;
+    g_macro_retry_pending = 0U;
+    memset(g_macro_previous, 0, sizeof(g_macro_previous));
 }
 
 uint8_t param_macro_lock_target_is_supported(uint8_t track, param_id_t param)
@@ -336,426 +292,159 @@ static uint8_t param_macro_collect_value(live_parameter_audio_bulk_t *bulk,
     return 1U;
 }
 
-static uint8_t param_macro_collect_source_resolutions(
-    const param_macro_source_state_t *source,
-    uint8_t source_index,
-    live_parameter_audio_bulk_t *bulk,
-    param_macro_collected_resolution_t *collected,
-    uint16_t *collected_count)
+static uint8_t param_macro_flush_bulk(live_parameter_audio_bulk_t *bulk)
 {
-    if ((source == NULL) || (collected == NULL) || (collected_count == NULL)
-            || (source->active == 0U) || (source->amount <= 0.0f))
-    {
-        return 0U;
-    }
-
-    uint8_t any_collected = 0U;
-    for (uint8_t lock = 0U; lock < PERSIST_CONTROL_MACRO_LOCK_COUNT; ++lock)
-    {
-        param_macro_resolution_t resolution;
-        if (param_macro_resolve_lock(source->scene, lock, &resolution) == 0U)
-        {
-            if (project_control_scene_lock_is_empty(source->scene, lock) != 0U)
-                continue;
-            return 2U;
-        }
-
-        resolution.amount = source->amount;
-        resolution.resolved_value = param_macro_lerp(resolution.base_value,
-                                                      resolution.scene_value,
-                                                      source->amount);
-        if (param_macro_collect_value(bulk,
-                                      resolution.track,
-                                      resolution.param,
-                                      &resolution.resolved_value) == 0U)
-        {
-            return 2U;
-        }
-
-        if (*collected_count >= PARAM_MACRO_COLLECTED_RESOLUTION_CAPACITY)
-        {
-            return 2U;
-        }
-
-        collected[*collected_count] = (param_macro_collected_resolution_t){
-            .source_index = source_index,
-            .resolution = resolution
-        };
-        (*collected_count)++;
-        any_collected = 1U;
-    }
-
-    return any_collected;
+    if (bulk->count == 0U) return 1U;
+    if (live_parameter_audio_publication_submit_bulk(bulk) == false) return 0U;
+    bulk->count = 0U;
+    bulk->capture_tick = brick_media_clock_now_tick();
+    return 1U;
 }
 
-static uint8_t param_macro_apply_non_audio_releases(void)
+static uint8_t param_macro_recompute(const float amounts[PERSIST_CONTROL_MACRO_COUNT])
 {
-    for (uint8_t source = 0U; source < PARAM_MACRO_SOURCE_COUNT; ++source)
-    {
-        const param_macro_source_state_t *const state = &g_param_macro_sources[source];
-        for (uint8_t i = 0U; i < state->last_count; ++i)
-        {
-            const param_macro_resolution_t *const last = &state->last_resolution[i];
-            if ((last->track >= SEQ_LANE_CAPACITY)
-                    || (last->param >= PARAM_COUNT)
-                    || (last->resolved_value == last->base_value)
-                    || (param_registry_track_temp_is_applicable(
-                            last->param, last->track) != 0U))
-            {
-                continue;
-            }
+    uint16_t count = 0U;
+    live_parameter_audio_bulk_t bulk = {
+        .capture_tick = brick_media_clock_now_tick(), .count = 0U
+    };
 
-            if (param_macro_apply_backend_value(last->track,
-                                                last->param,
-                                                last->base_value) == 0U)
+    /* Include old targets so a released macro clears its temporary value. */
+    for (uint16_t i = 0U; i < g_macro_previous_count; ++i)
+    {
+        g_macro_work[count] = g_macro_previous[i];
+        g_macro_work[count].active = 0U;
+        g_macro_work[count].delta = 0.0f;
+        ++count;
+    }
+
+    for (uint8_t macro = 0U; macro < PERSIST_CONTROL_MACRO_COUNT; ++macro)
+    {
+        if (amounts[macro] <= 0.0f) continue;
+        for (uint8_t lock = 0U; lock < PERSIST_CONTROL_MACRO_LOCK_COUNT; ++lock)
+        {
+            if (project_control_macro_lock_is_empty(macro, lock) != 0U) break;
+            project_control_macro_lock_t entry;
+            if (project_control_get_macro_lock(macro, lock, &entry) == 0U) return 0U;
+            if (param_macro_lock_target_is_supported(entry.track, entry.param) == 0U)
+                continue;
+            uint16_t index = count;
+            for (uint16_t i = 0U; i < count; ++i)
+                if (g_macro_work[i].track == entry.track
+                    && g_macro_work[i].param == entry.param) { index = i; break; }
+            if (index == count)
+            {
+                if (count >= PARAM_MACRO_TARGET_CAPACITY) return 0U;
+                float base = 0.0f;
+                if (param_registry_get_track_value(entry.param, entry.track, &base) == 0U)
+                    return 0U;
+                g_macro_work[index] = (param_macro_target_t){
+                    .track = entry.track, .param = entry.param,
+                    .base = base, .delta = 0.0f, .active = 0U,
+                    .audio = param_registry_track_temp_is_applicable(entry.param, entry.track)
+                };
+                ++count;
+            }
+            else if (g_macro_work[index].active == 0U)
+            {
+                if (param_registry_get_track_value(entry.param, entry.track,
+                                                   &g_macro_work[index].base) == 0U) return 0U;
+            }
+            g_macro_work[index].delta += amounts[macro]
+                * (entry.target_value - g_macro_work[index].base);
+            g_macro_work[index].active = 1U;
+        }
+    }
+
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        param_macro_target_t *target = &g_macro_work[i];
+        const uint8_t audio = target->active != 0U
+            ? param_registry_track_temp_is_applicable(target->param, target->track)
+            : target->audio;
+        if (audio != 0U)
+        {
+            if (bulk.count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS
+                && param_macro_flush_bulk(&bulk) == 0U) return 0U;
+            if (target->active == 0U && param_registry_temp_is_clearable(target->param) != 0U)
+            {
+                if (param_macro_bulk_add_clear_temp(&bulk, target->param,
+                                                    target->track) == 0U) return 0U;
+            }
+            else
+            {
+                float value = target->base + target->delta;
+                if (value < param_registry[target->param].min) value = param_registry[target->param].min;
+                if (value > param_registry[target->param].max) value = param_registry[target->param].max;
+                if (param_macro_collect_value(&bulk, target->track,
+                                              target->param, &value) == 0U) return 0U;
+            }
+        }
+        else
+        {
+            if (target->active == 0U
+                && param_macro_lock_target_is_supported(target->track, target->param) == 0U)
+                continue;
+            float value = target->base + target->delta;
+            if (value < param_registry[target->param].min) value = param_registry[target->param].min;
+            if (value > param_registry[target->param].max) value = param_registry[target->param].max;
+            if (param_macro_apply_backend_value(target->track, target->param, value) == 0U)
                 return 0U;
         }
     }
+    if (param_macro_flush_bulk(&bulk) == 0U) return 0U;
+    g_macro_previous_count = 0U;
+    for (uint16_t i = 0U; i < count; ++i)
+        if (g_macro_work[i].active != 0U)
+            g_macro_previous[g_macro_previous_count++] = g_macro_work[i];
     return 1U;
 }
 
-static uint8_t param_macro_apply_non_audio_collected(
-    const param_macro_collected_resolution_t *collected,
-    uint16_t collected_count)
+uint8_t param_macro_sync_sources(void)
 {
-    if (collected == NULL)
-    {
-        return 0U;
-    }
-
-    for (uint16_t i = 0U; i < collected_count; ++i)
-    {
-        const param_macro_resolution_t *const resolution = &collected[i].resolution;
-        if (param_registry_track_temp_is_applicable(
-                    resolution->param, resolution->track) != 0U)
-            continue;
-        if (param_macro_apply_backend_value(resolution->track,
-                                            resolution->param,
-                                            resolution->resolved_value) == 0U)
-            return 0U;
-    }
-    return 1U;
+    const uint8_t ok = param_macro_recompute(g_macro_amounts);
+    g_macro_retry_pending = (ok == 0U) ? 1U : 0U;
+    return ok;
 }
 
-static void param_macro_commit_collected_resolutions(
-    const param_macro_collected_resolution_t *collected,
-    uint16_t collected_count)
+void param_macro_service(void)
 {
-    for (uint8_t source = 0U; source < PARAM_MACRO_SOURCE_COUNT; ++source)
-    {
-        g_param_macro_sources[source].last_count = 0U;
-        memset(g_param_macro_sources[source].last_resolution,
-               0,
-               sizeof(g_param_macro_sources[source].last_resolution));
-    }
+    if (g_macro_retry_pending != 0U)
+        (void)param_macro_sync_sources();
+}
 
-    for (uint16_t i = 0U; i < collected_count; ++i)
-    {
-        const uint8_t source = collected[i].source_index;
-        if ((source >= PARAM_MACRO_SOURCE_COUNT)
-                || (g_param_macro_sources[source].last_count
-                    >= PERSIST_CONTROL_MACRO_LOCK_COUNT))
+void param_macro_note_base_change(uint8_t track, param_id_t param)
+{
+    for (uint16_t i = 0U; i < g_macro_previous_count; ++i)
+        if (g_macro_previous[i].track == track && g_macro_previous[i].param == param)
         {
-            continue;
+            (void)param_macro_sync_sources();
+            return;
         }
-
-        g_param_macro_sources[source].last_resolution[
-            g_param_macro_sources[source].last_count++] = collected[i].resolution;
-    }
-}
-
-static void param_macro_effective_source(
-    uint8_t source_index, uint8_t candidate_index,
-    const param_macro_source_state_t *candidate,
-    uint8_t sync_project_scenes, param_macro_source_state_t *out_source)
-{
-    *out_source = ((candidate != NULL) && (source_index == candidate_index))
-        ? *candidate : g_param_macro_sources[source_index];
-    if ((sync_project_scenes != 0U)
-            && (source_index < PERSIST_CONTROL_MACRO_COUNT))
-        out_source->scene = project_control_get_macro_scene(source_index);
-}
-
-static uint8_t param_macro_recompute_sources(
-    uint8_t candidate_index, const param_macro_source_state_t *candidate,
-    uint8_t sync_project_scenes)
-{
-    uint32_t last_applied_seq = 0U;
-    live_parameter_audio_bulk_t bulk = {
-        .capture_tick = brick_media_clock_now_tick(),
-        .count = 0U
-    };
-    uint16_t collected_count = 0U;
-
-    for (uint8_t source = 0U; source < PARAM_MACRO_SOURCE_COUNT; ++source)
-    {
-        const param_macro_source_state_t *const state = &g_param_macro_sources[source];
-        for (uint8_t i = 0U; i < state->last_count; ++i)
-        {
-            const param_macro_resolution_t *const last = &state->last_resolution[i];
-            if ((last->track >= SEQ_LANE_CAPACITY)
-                    || (last->param >= PARAM_COUNT)
-                    || (last->resolved_value == last->base_value))
-            {
-                continue;
-            }
-
-            if (param_registry_track_temp_is_applicable(
-                    last->param, last->track) != 0U)
-            {
-                if (param_registry_temp_is_clearable(last->param) != 0U)
-                {
-                    if (param_macro_bulk_add_clear_temp(
-                            &bulk, last->param, last->track) == 0U) return 0U;
-                }
-                else
-                {
-                    float canonical = 0.0f;
-                    if (param_macro_bulk_add(&bulk, last->param, last->track,
-                            last->base_value, &canonical) == 0U) return 0U;
-                }
-            }
-        }
-    }
-
-    for (;;)
-    {
-        uint8_t best = PARAM_MACRO_SOURCE_COUNT;
-        uint32_t best_seq = 0xFFFFFFFFUL;
-        for (uint8_t source = 0U; source < PARAM_MACRO_SOURCE_COUNT; ++source)
-        {
-            param_macro_source_state_t effective;
-            param_macro_effective_source(source, candidate_index, candidate,
-                                         sync_project_scenes, &effective);
-            const param_macro_source_state_t *const s = &effective;
-            if ((s->active == 0U) || (s->amount <= 0.0f) || (s->touch_seq <= last_applied_seq))
-            {
-                continue;
-            }
-
-            if (s->touch_seq < best_seq)
-            {
-                best_seq = s->touch_seq;
-                best = source;
-            }
-        }
-
-        if (best >= PARAM_MACRO_SOURCE_COUNT)
-        {
-            break;
-        }
-
-        param_macro_source_state_t effective;
-        param_macro_effective_source(best, candidate_index, candidate,
-                                     sync_project_scenes, &effective);
-        const uint8_t collected_status = param_macro_collect_source_resolutions(
-                &effective,
-                best,
-                &bulk,
-                g_param_macro_collected_resolutions,
-                &collected_count);
-        if (collected_status == 2U)
-        {
-            return 0U;
-        }
-        if (collected_status == 0U)
-        {
-            last_applied_seq = best_seq;
-            continue;
-        }
-        last_applied_seq = best_seq;
-    }
-
-    if ((bulk.count != 0U)
-            && (live_parameter_audio_publication_submit_bulk(&bulk) == false))
-    {
-        return 0U;
-    }
-
-    if ((param_macro_apply_non_audio_releases() == 0U)
-            || (param_macro_apply_non_audio_collected(
-                g_param_macro_collected_resolutions, collected_count) == 0U))
-        return 0U;
-    if ((candidate != NULL) && (candidate_index < PARAM_MACRO_SOURCE_COUNT))
-    {
-        g_param_macro_sources[candidate_index] = *candidate;
-        g_param_macro_touch_seq = candidate->touch_seq;
-    }
-    if (sync_project_scenes != 0U)
-        for (uint8_t macro = 0U; macro < PERSIST_CONTROL_MACRO_COUNT; ++macro)
-            g_param_macro_sources[macro].scene =
-                project_control_get_macro_scene(macro);
-    param_macro_commit_collected_resolutions(g_param_macro_collected_resolutions,
-                                             collected_count);
-    return 1U;
-}
-
-static uint8_t param_macro_set_source_amount(uint8_t source_index, uint8_t scene, float amount)
-{
-    const float clamped = param_macro_clamp_amount(amount);
-    const uint8_t active = (clamped > 0.0f) ? 1U : 0U;
-
-    if ((source_index >= PARAM_MACRO_SOURCE_COUNT) || (scene >= PERSIST_CONTROL_MACRO_SCENE_COUNT))
-    {
-        return 0U;
-    }
-
-    const param_macro_source_state_t *const source =
-        &g_param_macro_sources[source_index];
-    if ((source->scene == scene) && (source->amount == clamped) && (source->active == active))
-    {
-        return source->active;
-    }
-
-    param_macro_source_state_t candidate = *source;
-    candidate.scene = scene;
-    candidate.amount = clamped;
-    candidate.active = active;
-    candidate.touch_seq = g_param_macro_touch_seq + 1U;
-    if (param_macro_recompute_sources(
-            source_index, &candidate, 0U) == 0U) return 0U;
-    return candidate.active;
-}
-
-uint8_t param_macro_resolve_lock(uint8_t scene,
-                                 uint8_t lock,
-                                 param_macro_resolution_t *out_resolution)
-{
-    project_control_macro_lock_t macro_lock;
-    float base_value = 0.0f;
-
-    if (out_resolution == NULL)
-    {
-        return 0U;
-    }
-
-    memset(out_resolution, 0, sizeof(*out_resolution));
-
-    if (project_control_get_scene_lock(scene, lock, &macro_lock) == 0U)
-    {
-        return 0U;
-    }
-
-    if ((macro_lock.track == 0xFFU)
-            || (macro_lock.param == PARAM_COUNT)
-            || (param_macro_lock_target_is_supported(macro_lock.track, macro_lock.param) == 0U))
-    {
-        return 0U;
-    }
-
-    if (param_registry_get_track_value(macro_lock.param, macro_lock.track, &base_value) == 0U)
-    {
-        return 0U;
-    }
-
-    out_resolution->scene = scene;
-    out_resolution->lock = lock;
-    out_resolution->track = macro_lock.track;
-    out_resolution->param = macro_lock.param;
-    out_resolution->base_value = base_value;
-    out_resolution->scene_value = macro_lock.scene_value;
-    out_resolution->amount = 0.0f;
-    out_resolution->resolved_value = base_value;
-    return 1U;
-}
-
-uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
-{
-    if ((resolution == NULL)
-            || (resolution->track >= SEQ_LANE_CAPACITY)
-            || (resolution->param >= PARAM_COUNT)
-            || (param_macro_lock_target_is_supported(resolution->track, resolution->param) == 0U))
-    {
-        return 0U;
-    }
-
-    if (param_registry_track_temp_is_applicable(
-            resolution->param, resolution->track) == 0U)
-    {
-        return param_macro_apply_backend_value(resolution->track,
-                                               resolution->param,
-                                               resolution->resolved_value);
-    }
-
-    live_parameter_audio_target_t target;
-    float canonical = 0.0f;
-    if ((param_macro_prepare_temp_target(resolution->param,
-            resolution->track, resolution->resolved_value,
-            &target, &canonical) == 0U)
-            || (live_parameter_audio_publication_submit(
-                brick_media_clock_now_tick(), &target) == false))
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
-
-uint8_t param_macro_sync_scene_sources(void)
-{
-    return param_macro_recompute_sources(
-        PARAM_MACRO_SOURCE_COUNT, NULL, 1U);
 }
 
 uint8_t param_macro_set_amount(uint8_t macro, float amount)
 {
-    uint8_t held_scene = 0U;
-
-    if (macro >= PERSIST_CONTROL_MACRO_COUNT)
-    {
-        return 0U;
-    }
-
-    if (param_macro_get_ui_held_scene(macro, &held_scene) != 0U)
-    {
-        if (project_control_set_macro_scene(macro, held_scene) == 0U)
-            return 0U;
-        return param_macro_recompute_sources(
-            PARAM_MACRO_SOURCE_COUNT, NULL, 1U);
-    }
-
-    return param_macro_set_source_amount(macro, project_control_get_macro_scene(macro), amount);
-}
-
-uint8_t param_macro_adjust_amount(uint8_t macro, int16_t delta)
-{
-    float next_amount = 0.0f;
-
-    if (macro >= PERSIST_CONTROL_MACRO_COUNT)
-    {
-        return 0U;
-    }
-
-    next_amount = g_param_macro_sources[macro].amount + ((float)delta * 0.015625f);
-    return param_macro_set_amount(macro, next_amount);
+    if (macro >= PERSIST_CONTROL_MACRO_COUNT) return 0U;
+    amount = param_macro_clamp_amount(amount);
+    if (amount == g_macro_amounts[macro]) return 1U;
+    float candidate[PERSIST_CONTROL_MACRO_COUNT];
+    memcpy(candidate, g_macro_amounts, sizeof(candidate));
+    candidate[macro] = amount;
+    const uint8_t ok = param_macro_recompute(candidate);
+    memcpy(g_macro_amounts, candidate, sizeof(candidate));
+    g_macro_retry_pending = (ok == 0U) ? 1U : 0U;
+    return ok;
 }
 
 float param_macro_get_amount(uint8_t macro)
 {
-    if (macro >= PERSIST_CONTROL_MACRO_COUNT)
-    {
-        return 0.0f;
-    }
-
-    return g_param_macro_sources[macro].amount;
+    return macro < PERSIST_CONTROL_MACRO_COUNT ? g_macro_amounts[macro] : 0.0f;
 }
 
-uint8_t param_macro_set_scene_source_amount(uint8_t scene, float amount)
+void param_macro_reset(void)
 {
-    if (scene >= PERSIST_CONTROL_MACRO_SCENE_COUNT)
-    {
-        return 0U;
-    }
-
-    return param_macro_set_source_amount((uint8_t)(PARAM_MACRO_POT_SOURCE_COUNT + scene), scene, amount);
-}
-
-void param_macro_release_scene_source(uint8_t scene)
-{
-    if (scene >= PERSIST_CONTROL_MACRO_SCENE_COUNT)
-    {
-        return;
-    }
-
-    (void)param_macro_set_source_amount((uint8_t)(PARAM_MACRO_POT_SOURCE_COUNT + scene), scene, 0.0f);
+    float cleared[PERSIST_CONTROL_MACRO_COUNT] = {0.0f};
+    const uint8_t ok = param_macro_recompute(cleared);
+    memset(g_macro_amounts, 0, sizeof(g_macro_amounts));
+    g_macro_retry_pending = (ok == 0U) ? 1U : 0U;
 }

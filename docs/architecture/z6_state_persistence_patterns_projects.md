@@ -2,7 +2,7 @@
 
 ## Modele et format
 
-Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 13. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. Aucune ancienne version ni dump de structure n'est lu. AUDIO_GLOBAL contient exactement 51 floats, FILTER douze floats, et aucun type Drum Analog historique n'est accepte. Les enveloppes courantes sont 115 300 octets pour un Pattern et 29 799 358 octets pour un Project.
+Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 13. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. La section Macro Project version 2 contient 14 macros natives, chacune avec ses valeurs cibles `(track, parametre, valeur)`. Une ancienne section Macro version 1 est lue puis remise a zero; le reste du Project est preserve. Aucun dump de structure n'est lu. AUDIO_GLOBAL contient exactement 51 floats, FILTER douze floats, et aucun type Drum Analog historique n'est accepte. Les enveloppes courantes sont 115 300 octets pour un Pattern et 29 799 358 octets pour un Project, cette derniere borne acceptant encore la taille de l'ancienne section Macro.
 
 Les cles persistantes de famille, type, parametre, MIDI, clock, modulation et asset sont explicites et independantes des ordinaux C. Les FLOAT32 conservent leurs bits. Les indices runtime, contextes AUDIO installes, pointeurs, caches, voix, phases, playheads et UI sont exclus. Note FX persiste directement son unique bloc brut de seize octets `GENERATOR/VOICER/SCALER/TRIG`; il n'existe plus de cle de modele, count, slot ou ORDER, ni de migration depuis les anciennes chaines.
 
@@ -10,7 +10,7 @@ Pattern contient les seize identites. La configuration des children inactifs est
 
 Patch contient une entite, ses parametres logiques, zero a deux references
 d'assets typees et, pour FM, le DTO de l'owner. Project contient metadata,
-Pattern de travail, manifeste d'assets, macros/scenes et jusqu'a 256 records
+Pattern de travail, manifeste d'assets, 14 macros et jusqu'a 256 records
 Pattern diffuses progressivement.
 Quand `modulation_present` est actif, ENV3 n'existe qu'une fois dans le Patch,
 dans l'enveloppe de modulation; capture, Init, codec et application utilisent

@@ -7,6 +7,7 @@
 #include "stm32h7xx_hal.h"
 #include "ui_core_mute.h"
 #include "ui_core_pattern.h"
+#include "ui_macro_interaction.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_edit.h"
 #include "ui_hall_mode_contract.h"
@@ -76,13 +77,11 @@ ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track,
 
 uint8_t ui_hall_mode_track_overlay_active(uint8_t shift_down,
                                           uint8_t track_modifier_held,
-                                          uint8_t mute_active,
-                                          uint8_t macro_overlay_active)
+                                          uint8_t mute_active)
 {
     return (uint8_t)((track_modifier_held != 0U)
                      && (shift_down == 0U)
-                     && (mute_active == 0U)
-                     && (macro_overlay_active == 0U));
+                     && (mute_active == 0U));
 }
 
 uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode)
@@ -105,17 +104,13 @@ const char *ui_get_hall_mode_short_label(void)
 {
     const uint8_t active_track = ui_get_active_lane();
     const ui_hall_mode_t raw_mode = ui_get_hall_mode();
-    ui_macro_overlay_submode_t macro_overlay_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL;
-
-    if (ui_macro_overlay_get_submode(&macro_overlay_submode) != 0U)
-    {
-        return (macro_overlay_submode == UI_MACRO_OVERLAY_SUBMODE_ASSIGN) ? "M-Assign" : "M-Ctrl";
-    }
-
     if (ui_is_track_modifier_held() != 0U)
     {
         return "TRACK";
     }
+
+    if (raw_mode == UI_HALL_MODE_MACRO)
+        return "MACRO";
 
     if ((ui_page_patch_assign_is_open() != 0U)
             || (ui_hall_patch_feedback_active(HAL_GetTick()) != 0U))
@@ -156,11 +151,6 @@ const char *ui_get_hall_mode_suffix_label(void)
     const uint8_t active_track = ui_get_active_lane();
     const ui_hall_mode_t raw_mode = ui_get_hall_mode();
 
-    if (ui_macro_overlay_is_active() != 0U)
-    {
-        return "";
-    }
-
     if (ui_is_track_modifier_held() != 0U)
     {
         return "";
@@ -186,7 +176,12 @@ const char *ui_get_hall_mode_suffix_label(void)
 
     if (raw_mode == UI_HALL_MODE_MACRO)
     {
-        return "";
+        switch (ui_macro_interaction_get_mode())
+        {
+            case UI_MACRO_ASSIGN: return "ASN";
+            case UI_MACRO_LIVE_TOGGLE: return "TGL";
+            default: return "PRS";
+        }
     }
 
     if (raw_mode == UI_HALL_MODE_MUTE)

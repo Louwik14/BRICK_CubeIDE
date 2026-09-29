@@ -10,6 +10,9 @@
 #include "ui_hall_mode_contract.h"
 #include "ui_hall_mode_projection.h"
 #include "ui_navigation.h"
+#include "ui_macro_interaction.h"
+#include "ui_renderer_oled.h"
+#include "stm32h7xx_hal.h"
 
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 
@@ -31,10 +34,6 @@ static uint8_t g_lowcost_rec_chord_active;
 static void ui_hall_mode_flow_open_patch_page(uint8_t target_track,
                                               ui_hall_mode_t previous_mode)
 {
-    if (ui_macro_overlay_is_active() != 0U)
-    {
-        ui_macro_overlay_on_hall_mode_changed();
-    }
     ui_page_patch_assign_open(target_track, previous_mode);
 }
 
@@ -42,9 +41,13 @@ static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
                                             uint8_t target_page,
                                             uint8_t is_double_tap)
 {
-    if (ui_macro_overlay_is_active() != 0U)
+    if (target_mode == UI_HALL_MODE_MACRO)
     {
-        ui_macro_overlay_on_hall_mode_changed();
+        if (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
+            ui_macro_interaction_shift_tap(HAL_GetTick());
+        else
+            ui_set_hall_mode(UI_HALL_MODE_MACRO);
+        return;
     }
     ui_set_hall_mode(target_mode);
     if (((target_mode == UI_HALL_MODE_AUDIO_REC) || (is_double_tap != 0U))
@@ -205,10 +208,6 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                 return 1U;
             }
             ui_hall_mode_flow_leave_lowcost_modal_page();
-            if (ui_macro_overlay_is_active() != 0U)
-            {
-                ui_macro_overlay_on_hall_mode_changed();
-            }
             ui_page_patch_assign_open(ui_get_active_track(), ui_get_hall_mode());
             return 1U;
 
@@ -241,7 +240,6 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
 
         case 7U:
             target_mode = UI_HALL_MODE_MACRO;
-            target_page = UI_PAGE_TEMPLATE_MACRO;
             break;
 
         case 8U:
@@ -274,6 +272,12 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
     if (target_mode != UI_HALL_MODE_AUDIO_REC)
     {
         ui_hall_mode_flow_leave_lowcost_modal_page();
+    }
+
+    if (target_mode == UI_HALL_MODE_MACRO)
+    {
+        ui_hall_mode_flow_activate_mode(target_mode, target_page, 0U);
+        return 1U;
     }
 
     const uint32_t last_tap = mode_tap_ms[target_mode];
@@ -413,6 +417,8 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
 
 void ui_hall_mode_flow_service_pending(uint32_t now_ms)
 {
+    if (ui_macro_interaction_service_navigation(now_ms) != 0U)
+        ui_renderer_oled_invalidate();
     if (g_patch_pending.active != 0U)
     {
         if ((now_ms - g_patch_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)

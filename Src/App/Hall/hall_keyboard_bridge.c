@@ -7,6 +7,9 @@
 #include "pages/ui_page_patch_assign.h"
 #include "ui_core.h"
 #include "ui_core_mute.h"
+#include "App/Hall/hall_keymap.h"
+#include "UI/ui_macro_interaction.h"
+#include "Param/param_macro.h"
 
 static uint8_t g_separate_hall_key_injected[HALL_KEY_COUNT];
 
@@ -46,6 +49,7 @@ void hall_keyboard_bridge_process(void)
         uint8_t injection_allowed = ui_hall_allows_injection(
             ui_get_active_track(), input_mode);
         if ((input_mode == UI_HALL_MODE_SEQ)
+                || (input_mode == UI_HALL_MODE_MACRO)
                 || (ui_page_patch_assign_is_open() != 0U)
                 || (ui_page_audio_rec_is_open() != 0U))
         {
@@ -71,5 +75,17 @@ void hall_keyboard_bridge_process(void)
         g_separate_hall_key_injected[key] = (pressed != 0U) ? 1U : 0U;
     }
 
+    if (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
+    {
+        for (uint8_t key = 0U; key < HALL_KEY_COUNT; ++key)
+        {
+            hall_key_metadata_t meta;
+            if (hall_keymap_metadata(key, &meta) != 0U
+                && meta.kind == HALL_KEY_KIND_WHITE)
+                ui_macro_interaction_service_hall(key, hall_engine_is_pressed(key));
+        }
+    }
+
     keyboard_runtime_tick();
+    param_macro_service();
 }

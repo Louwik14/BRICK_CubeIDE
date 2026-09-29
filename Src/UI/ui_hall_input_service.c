@@ -6,7 +6,6 @@
 #include "stm32h7xx_hal.h"
 #include "ui_core_mute.h"
 #include "Keyboard/keyboard_runtime.h"
-#include "ui_macro_interaction.h"
 #include "ui_hall_mode_flow.h"
 #include "ui_hall_mode_contract.h"
 #include "Track/entity_topology.h"
@@ -43,13 +42,6 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                                                 was_pressed,
                                                 pressed);
     const uint32_t now_ms = HAL_GetTick();
-    const uint8_t track_select_without_shift =
-        (uint8_t)((action == UI_HALL_DIRECT_ACTION_TRACK_SELECT)
-                  && (ui_hall_mode_track_overlay_active(
-                          shift_down,
-                          track_select_armed,
-                          mute_active,
-                          ui_macro_overlay_is_active()) != 0U));
     uint8_t mode_trigger = 0U;
     if (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
     {
@@ -64,21 +56,12 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
             }
         }
     }
-    const uint8_t macro_overlay_hall_context =
-        (uint8_t)((ui_macro_overlay_is_active() != 0U)
-                  && (track_select_without_shift == 0U)
-                  && (mode_trigger == 0U)
-                  && !((ui_macro_overlay_is_latched() != 0U)
-                       && (shift_down != 0U)
-                       && (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)));
-
     hall_key_metadata_t hall_key;
     const uint8_t global_navigation_key =
         (uint8_t)((hall_keymap_metadata(hall, &hall_key) != 0U)
                   && (hall_key.kind == HALL_KEY_KIND_BLACK));
     uint8_t lowcost_range_length_candidate = 0U;
     if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
-        && (macro_overlay_hall_context == 0U)
         && (global_navigation_key == 0U)
         && (mode_trigger == 0U)
         && (seq_edit_lowcost_range_length_candidate(ui_get_active_lane(), hall) != 0U))
@@ -87,7 +70,6 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
     }
 
     if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
-        && (macro_overlay_hall_context == 0U)
         && (lowcost_range_length_candidate == 0U))
     {
         ui_hall_mode_flow_handle_shift_hall_action(hall,
@@ -107,25 +89,6 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         && (hall < SEQ_LANE_CAPACITY))
     {
         hall_note_suppressed[hall] = 1U;
-    }
-
-    if ((macro_overlay_hall_context != 0U) && (mute_active == 0U))
-    {
-        if ((was_pressed == 0U) && (pressed != 0U))
-        {
-            ui_macro_interaction_note_hall_press(hall);
-            hall_note_suppressed[hall] = 1U;
-        }
-        else if ((was_pressed != 0U) && (pressed == 0U))
-        {
-            ui_macro_interaction_note_hall_release(hall);
-        }
-        ui_macro_interaction_service_hall(hall, pressed);
-
-        if (macro_overlay_hall_context != 0U)
-        {
-            return;
-        }
     }
 
     if ((action != UI_HALL_DIRECT_ACTION_TRACK_SELECT) || (mute_active != 0U) || (shift_down != 0U))

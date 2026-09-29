@@ -1,4 +1,5 @@
 #include "Storage/pattern_live_ram.h"
+#include "Param/param_macro.h"
 
 #include <string.h>
 
@@ -155,6 +156,7 @@ static uint8_t pattern_candidate_apply(uint8_t resume_transport)
     pattern_candidate_release_payload();
     persist_debug_publication(1U, 1U);
     persistent_pattern_control_sync_ui_after_commit();
+    (void)param_macro_sync_sources();
     pattern_debug_state();
     g_persist_dbg.request_generation = request_generation;
     g_persist_dbg.boundary_generation = boundary_generation;

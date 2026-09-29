@@ -11,9 +11,12 @@
 #include "Seq/seq_clipboard.h"
 #include "ui_roll_popup.h"
 
-static uint8_t ui_core_seq_transport_hall_steps_available_in_mode(ui_hall_mode_t hall_mode)
+static uint8_t ui_core_seq_transport_hall_steps_available_in_mode(ui_hall_mode_t hall_mode,
+                                                                  const ui_event_t *ev)
 {
-    return ui_hall_is_seq_context(hall_mode);
+    (void)ev;
+    return (uint8_t)((ui_hall_is_seq_context(hall_mode) != 0U)
+                     || (hall_mode == UI_HALL_MODE_MACRO));
 }
 
 uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
@@ -21,7 +24,7 @@ uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
                                                     uint8_t shift_down,
                                                     ui_core_seq_transport_feedback_fn feedback)
 {
-    if ((ev == 0) || (ui_core_seq_transport_hall_steps_available_in_mode(hall_mode) == 0U))
+    if ((ev == 0) || (ui_core_seq_transport_hall_steps_available_in_mode(hall_mode, ev) == 0U))
     {
         return 0U;
     }

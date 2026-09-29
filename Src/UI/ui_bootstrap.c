@@ -8,7 +8,6 @@
 #include "pages/ui_page_template_keyboard.h"
 #include "pages/ui_page_midi_fx.h"
 #include "pages/ui_page_template_seq.h"
-#include "pages/ui_page_template_macro.h"
 #include "pages/ui_page_template_mix.h"
 #include "pages/ui_page_template_play.h"
 #include "pages/ui_page_audio_rec.h"
@@ -52,7 +51,6 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(UI_PAGE_MIDI_FX, &g_ui_page_midi_fx);
     ui_page_manager_register(UI_PAGE_AUDIO_FX, &g_ui_page_audio_fx);
     ui_page_manager_register(UI_PAGE_TEMPLATE_SEQ, &g_ui_page_template_seq);
-    ui_page_manager_register(UI_PAGE_TEMPLATE_MACRO, &g_ui_page_template_macro);
     ui_page_manager_register(UI_PAGE_TEMPLATE_MIX, &g_ui_page_template_mix);
     ui_page_manager_register(UI_PAGE_TEMPLATE_PLAY, &g_ui_page_template_play);
     ui_page_manager_register(UI_PAGE_AUDIO_REC, &g_ui_page_audio_rec);

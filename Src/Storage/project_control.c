@@ -193,27 +193,51 @@ static void project_control_fill_default_macros(persist_control_macros_t *out)
 {
     if (out == NULL) return;
     memset(out,0,sizeof(*out));
-    out->hall_switch_key=PERSIST_MACRO_HALL_SCENE;
-    for(uint8_t i=0U;i<PERSIST_CONTROL_MACRO_COUNT;++i)out->selected_scene[i]=i;
 }
-void project_control_reset_macros(void){project_control_fill_default_macros(&g_macros);}
+void project_control_reset_macros(void){param_macro_reset();project_control_fill_default_macros(&g_macros);}
 uint8_t project_control_get_default_macros(persist_control_macros_t *out){if(out==NULL)return 0U;project_control_fill_default_macros(out);return 1U;}
 void project_control_reset_asset_banks(void){memset(g_sample_bank,0,sizeof(g_sample_bank));memset(g_wavetable_bank,0,sizeof(g_wavetable_bank));memset(g_multi_bank,0,sizeof(g_multi_bank));memset(g_unavailable_assets,0,sizeof(g_unavailable_assets));g_unavailable_asset_count=0U;memset(g_track_assets,0,sizeof(g_track_assets));memset(g_track_asset_availability,0,sizeof(g_track_asset_availability));for(uint8_t entity=0U;entity<BRICK_ENTITY_CAPACITY;++entity)control_music_output_bind_multi_instrument(entity,MULTI_SAMPLE_POOL_INVALID_ID);}
 void project_control_init(void){project_control_reset_macros();project_control_reset_asset_banks();memset(&g_ram_load,0,sizeof(g_ram_load));memset(&g_wavetable_load,0,sizeof(g_wavetable_load));audio_wave_table_projection_init();}
-project_control_hall_mode_t project_control_get_hall_mode(void){return(g_macros.hall_switch_key==PERSIST_MACRO_HALL_SWITCH)?PROJECT_CONTROL_HALL_SWITCH:PROJECT_CONTROL_HALL_SCENE;}
-uint8_t project_control_set_hall_mode(project_control_hall_mode_t mode){if(mode>PROJECT_CONTROL_HALL_SWITCH)return 0U;g_macros.hall_switch_key=(mode==PROJECT_CONTROL_HALL_SWITCH)?PERSIST_MACRO_HALL_SWITCH:PERSIST_MACRO_HALL_SCENE;return 1U;}
-uint8_t project_control_get_macro_scene(uint8_t macro){return(macro<PERSIST_CONTROL_MACRO_COUNT)?g_macros.selected_scene[macro]:0U;}
-uint8_t project_control_set_macro_scene(uint8_t macro,uint8_t scene){if(macro>=PERSIST_CONTROL_MACRO_COUNT||scene>=PERSIST_CONTROL_MACRO_SCENE_COUNT)return 0U;g_macros.selected_scene[macro]=scene;return 1U;}
-uint8_t project_control_get_scene_lock(uint8_t scene,uint8_t lock,project_control_macro_lock_t*out){if(out==NULL||scene>=PERSIST_CONTROL_MACRO_SCENE_COUNT||lock>=PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;const persist_control_macro_scene_t*s=&g_macros.scenes[scene];if(lock>=s->lock_count){out->track=0xFFU;out->param=PARAM_COUNT;out->scene_value=0.0f;return 1U;}if(persist_key_param_from_disk(s->locks[lock].parameter,&out->param)==0U)return 0U;out->track=s->locks[lock].entity;out->scene_value=s->locks[lock].scene_value;return 1U;}
-uint8_t project_control_set_scene_lock(uint8_t scene,uint8_t lock,const project_control_macro_lock_t*in){if(in==NULL||scene>=PERSIST_CONTROL_MACRO_SCENE_COUNT||lock>=PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;persist_control_macro_scene_t*s=&g_macros.scenes[scene];if(in->track==0xFFU||in->param>=PARAM_COUNT){if(lock<s->lock_count){for(uint8_t i=lock;i+1U<s->lock_count;++i)s->locks[i]=s->locks[i+1U];--s->lock_count;}return param_macro_sync_scene_sources();}persist_control_parameter_key_t key;if(in->track>=PERSIST_CONTROL_ENTITY_COUNT||persist_key_param_to_disk(in->param,&key)==0U||param_macro_lock_target_is_supported(in->track,in->param)==0U||!isfinite(in->scene_value)||in->scene_value<param_registry[in->param].min||in->scene_value>param_registry[in->param].max)return 0U;if(lock>s->lock_count)return 0U;if(lock==s->lock_count){if(s->lock_count>=PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;++s->lock_count;}s->locks[lock]=(persist_control_macro_lock_t){in->track,key,in->scene_value};return param_macro_sync_scene_sources();}
-uint8_t project_control_scene_lock_is_empty(uint8_t scene,uint8_t lock){return(scene>=PERSIST_CONTROL_MACRO_SCENE_COUNT||lock>=g_macros.scenes[scene].lock_count)?1U:0U;}
-uint8_t project_control_scene_has_locks(uint8_t scene){return(scene<PERSIST_CONTROL_MACRO_SCENE_COUNT&&g_macros.scenes[scene].lock_count!=0U)?1U:0U;}
-uint8_t project_control_get_scene_lock_for_param(uint8_t scene,uint8_t track,param_id_t param,project_control_macro_lock_t*out){if(out==NULL||scene>=PERSIST_CONTROL_MACRO_SCENE_COUNT||track>=PERSIST_CONTROL_ENTITY_COUNT||param>=PARAM_COUNT)return 0U;for(uint8_t lock=0U;lock<PERSIST_CONTROL_MACRO_LOCK_COUNT;++lock){project_control_macro_lock_t current;if(project_control_get_scene_lock(scene,lock,&current)!=0U&&current.track==track&&current.param==param){*out=current;return 1U;}}return 0U;}
-uint8_t project_control_assign_scene_lock(uint8_t scene,uint8_t track,param_id_t param,float value){if(scene>=PERSIST_CONTROL_MACRO_SCENE_COUNT||track>=PERSIST_CONTROL_ENTITY_COUNT||param>=PARAM_COUNT)return 0U;project_control_macro_lock_t next={track,param,value};for(uint8_t lock=0U;lock<PERSIST_CONTROL_MACRO_LOCK_COUNT;++lock){project_control_macro_lock_t current;if(project_control_get_scene_lock(scene,lock,&current)!=0U&&current.track==track&&current.param==param)return project_control_set_scene_lock(scene,lock,&next);}for(uint8_t lock=0U;lock<PERSIST_CONTROL_MACRO_LOCK_COUNT;++lock)if(project_control_scene_lock_is_empty(scene,lock)!=0U)return project_control_set_scene_lock(scene,lock,&next);return 0U;}
-uint8_t project_control_clear_scene_lock(uint8_t scene,uint8_t track,param_id_t param){if(scene>=PERSIST_CONTROL_MACRO_SCENE_COUNT||track>=PERSIST_CONTROL_ENTITY_COUNT||param>=PARAM_COUNT)return 0U;for(uint8_t lock=0U;lock<PERSIST_CONTROL_MACRO_LOCK_COUNT;++lock){project_control_macro_lock_t current;if(project_control_get_scene_lock(scene,lock,&current)!=0U&&current.track==track&&current.param==param){const project_control_macro_lock_t empty={0xFFU,PARAM_COUNT,0.0f};return project_control_set_scene_lock(scene,lock,&empty);}}return 0U;}
+uint8_t project_control_get_macro_lock(uint8_t macro,uint8_t lock,project_control_macro_lock_t*out){if(out==NULL||macro>=PERSIST_CONTROL_MACRO_COUNT||lock>=PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;const persist_control_macro_t*m=&g_macros.macros[macro];if(lock>=m->lock_count){*out=(project_control_macro_lock_t){0xFFU,PARAM_COUNT,0.0f};return 1U;}if(persist_key_param_from_disk(m->locks[lock].parameter,&out->param)==0U)return 0U;out->track=m->locks[lock].entity;out->target_value=m->locks[lock].target_value;return 1U;}
+uint8_t project_control_set_macro_lock(uint8_t macro,uint8_t lock,const project_control_macro_lock_t*in)
+{
+    if(in==NULL||macro>=PERSIST_CONTROL_MACRO_COUNT||lock>=PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;
+    persist_control_macro_t *m=&g_macros.macros[macro];
+    const persist_control_macro_t prior=*m;
+    if(in->track==0xFFU||in->param>=PARAM_COUNT)
+    {
+        if(lock<m->lock_count)
+        {
+            for(uint8_t i=lock;i+1U<m->lock_count;++i)m->locks[i]=m->locks[i+1U];
+            --m->lock_count;
+        }
+    }
+    else
+    {
+        persist_control_parameter_key_t key;
+        if(in->track>=PERSIST_CONTROL_ENTITY_COUNT||persist_key_param_to_disk(in->param,&key)==0U
+            ||param_macro_lock_target_is_supported(in->track,in->param)==0U
+            ||!isfinite(in->target_value)||in->target_value<param_registry[in->param].min
+            ||in->target_value>param_registry[in->param].max||lock>m->lock_count)return 0U;
+        if(lock==m->lock_count)
+        {
+            if(m->lock_count>=PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;
+            ++m->lock_count;
+        }
+        m->locks[lock]=(persist_control_macro_lock_t){in->track,key,in->target_value};
+    }
+    if(param_macro_sync_sources()!=0U)return 1U;
+    *m=prior;
+    (void)param_macro_sync_sources();
+    return 0U;
+}
+uint8_t project_control_macro_lock_is_empty(uint8_t macro,uint8_t lock){return(macro>=PERSIST_CONTROL_MACRO_COUNT||lock>=g_macros.macros[macro].lock_count)?1U:0U;}
+uint8_t project_control_get_macro_lock_for_param(uint8_t macro,uint8_t track,param_id_t param,project_control_macro_lock_t*out){if(out==NULL||macro>=PERSIST_CONTROL_MACRO_COUNT||track>=PERSIST_CONTROL_ENTITY_COUNT||param>=PARAM_COUNT)return 0U;for(uint8_t lock=0U;lock<g_macros.macros[macro].lock_count;++lock){project_control_macro_lock_t current;if(project_control_get_macro_lock(macro,lock,&current)!=0U&&current.track==track&&current.param==param){*out=current;return 1U;}}return 0U;}
+uint8_t project_control_assign_macro_lock(uint8_t macro,uint8_t track,param_id_t param,float value){if(macro>=PERSIST_CONTROL_MACRO_COUNT||track>=PERSIST_CONTROL_ENTITY_COUNT||param>=PARAM_COUNT)return 0U;project_control_macro_lock_t next={track,param,value};for(uint8_t lock=0U;lock<g_macros.macros[macro].lock_count;++lock){project_control_macro_lock_t current;if(project_control_get_macro_lock(macro,lock,&current)!=0U&&current.track==track&&current.param==param)return project_control_set_macro_lock(macro,lock,&next);}return project_control_set_macro_lock(macro,g_macros.macros[macro].lock_count,&next);}
+uint8_t project_control_clear_macro_lock(uint8_t macro,uint8_t track,param_id_t param){if(macro>=PERSIST_CONTROL_MACRO_COUNT||track>=PERSIST_CONTROL_ENTITY_COUNT||param>=PARAM_COUNT)return 0U;for(uint8_t lock=0U;lock<g_macros.macros[macro].lock_count;++lock){project_control_macro_lock_t current;if(project_control_get_macro_lock(macro,lock,&current)!=0U&&current.track==track&&current.param==param){const project_control_macro_lock_t empty={0xFFU,PARAM_COUNT,0.0f};return project_control_set_macro_lock(macro,lock,&empty);}}return 0U;}
 uint8_t project_control_capture_macros(persist_control_macros_t*out){if(out==NULL)return 0U;*out=g_macros;return 1U;}
 const persist_control_macros_t*project_control_macros_view(void){return &g_macros;}
-uint8_t project_control_apply_macros(const persist_control_macros_t*in){if(in==NULL)return 0U;for(uint8_t m=0U;m<PERSIST_CONTROL_MACRO_COUNT;++m)if(in->selected_scene[m]>=PERSIST_CONTROL_MACRO_SCENE_COUNT)return 0U;for(uint8_t scene=0U;scene<PERSIST_CONTROL_MACRO_SCENE_COUNT;++scene){if(in->scenes[scene].lock_count>PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;for(uint8_t lock=0U;lock<in->scenes[scene].lock_count;++lock){const persist_control_macro_lock_t*l=&in->scenes[scene].locks[lock];param_id_t id;if(l->entity>=PERSIST_CONTROL_ENTITY_COUNT||persist_key_param_from_disk(l->parameter,&id)==0U||param_macro_lock_target_is_supported(l->entity,id)==0U||!isfinite(l->scene_value)||l->scene_value<param_registry[id].min||l->scene_value>param_registry[id].max)return 0U;}}g_macros=*in;return param_macro_sync_scene_sources();}
+uint8_t project_control_apply_macros(const persist_control_macros_t*in){if(in==NULL)return 0U;for(uint8_t macro=0U;macro<PERSIST_CONTROL_MACRO_COUNT;++macro){const persist_control_macro_t*m=&in->macros[macro];if(m->lock_count>PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;for(uint8_t lock=0U;lock<m->lock_count;++lock){const persist_control_macro_lock_t*l=&m->locks[lock];param_id_t id;if(l->entity>=PERSIST_CONTROL_ENTITY_COUNT||persist_key_param_from_disk(l->parameter,&id)==0U||param_macro_lock_target_is_supported(l->entity,id)==0U||!isfinite(l->target_value)||l->target_value<param_registry[id].min||l->target_value>param_registry[id].max)return 0U;}}param_macro_reset();g_macros=*in;return param_macro_sync_sources();}
 uint16_t project_control_asset_count(void){uint16_t n=g_unavailable_asset_count;for(uint16_t i=0U;i<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS;++i){const sample_global_slot_t*s=sample_global_pool_get_slot(i);n+=((s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC)?1U:0U);n+=(g_sample_bank[i].used!=0U);n+=(g_wavetable_bank[i].used!=0U);}for(uint16_t i=0U;i<MULTI_SAMPLE_POOL_MAX_INSTRUMENTS;++i)n+=(g_multi_bank[i].used!=0U);return n;}
 uint8_t project_control_get_asset_ordinal(uint16_t ordinal,persist_control_asset_ref_t*out){if(out==NULL)return 0U;for(uint16_t i=0U;i<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS;++i){const sample_global_slot_t*s=sample_global_pool_get_slot(i);if(s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC){if(ordinal--==0U)return classic_asset(i,out);}}const project_control_bank_slot_t*banks[3]={g_sample_bank,g_wavetable_bank,g_multi_bank};const uint16_t caps[3]={SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS};for(uint8_t b=0U;b<3U;++b)for(uint16_t i=0U;i<caps[b];++i)if(banks[b][i].used!=0U){if(ordinal--==0U)return asset_ref_make_canonical(banks[b][i].kind,banks[b][i].canonical_path,out);}if(ordinal<g_unavailable_asset_count){*out=g_unavailable_assets[ordinal];return 1U;}return 0U;}
 

@@ -29,17 +29,17 @@ extern "C" {
         + PERSIST_CODEC_PATTERN_BODY_MAX_BYTES)
 
 /* Project envelope: four section headers, working Pattern, maximum asset
- * catalog, all Macro locks and the complete 16 x 16 Pattern bank. */
+ * catalog, 14 native Macros and the complete 16 x 16 Pattern bank. */
 #define PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES \
     (PERSIST_CODEC_HEADER_BYTES + (4U * PERSIST_CODEC_SECTION_HEADER_BYTES) \
         + (2U + PERSIST_CODEC_PROJECT_NAME_BYTES + 1U + 1U + 2U \
             + PERSIST_CODEC_PATTERN_BODY_MAX_BYTES) \
         + (2U + (PERSIST_CONTROL_ASSET_COUNT \
             * (4U + 2U + PERSIST_CONTROL_ASSET_PATH_BYTES))) \
-        + (4U + PERSIST_CONTROL_MACRO_COUNT \
-            + (PERSIST_CONTROL_MACRO_SCENE_COUNT \
-                * (1U + (PERSIST_CONTROL_MACRO_LOCK_COUNT \
-                    * (1U + 4U + 4U))))) \
+        + 586U /* legacy Macro section accepted while loading */ \
+        + (PERSIST_CONTROL_MACRO_COUNT \
+            * (1U + (PERSIST_CONTROL_MACRO_LOCK_COUNT \
+                * (1U + 4U + 4U)))) \
         + (2U + ((PERSIST_CONTROL_PATTERN_BANK_COUNT \
             * PERSIST_CONTROL_PATTERN_PER_BANK) \
                 * (3U + PERSIST_CODEC_PATTERN_BODY_MAX_BYTES))))

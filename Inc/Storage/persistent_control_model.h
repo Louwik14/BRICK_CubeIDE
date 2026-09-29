@@ -41,8 +41,7 @@ extern "C" {
 #define PERSIST_CONTROL_MOD_ROUTE_COUNT             8U
 #define PERSIST_CONTROL_PATTERN_BANK_COUNT         16U
 #define PERSIST_CONTROL_PATTERN_PER_BANK           16U
-#define PERSIST_CONTROL_MACRO_COUNT                 4U
-#define PERSIST_CONTROL_MACRO_SCENE_COUNT          16U
+#define PERSIST_CONTROL_MACRO_COUNT                 14U
 #define PERSIST_CONTROL_MACRO_LOCK_COUNT           32U
 #define PERSIST_CONTROL_ASSET_COUNT              1024U
 #define PERSIST_CONTROL_ASSET_PATH_BYTES          160U
@@ -101,12 +100,6 @@ typedef enum
     PERSIST_ASSET_MULTI         = 0x4D554C54UL, /* MULT */
     PERSIST_ASSET_WAVETABLE     = 0x57415645UL  /* WAVE */
 } persist_control_asset_kind_key_value_t;
-
-typedef enum
-{
-    PERSIST_MACRO_HALL_SCENE  = 0x53434E45UL, /* SCNE */
-    PERSIST_MACRO_HALL_SWITCH = 0x53574954UL  /* SWIT */
-} persist_control_macro_hall_key_value_t;
 
 typedef enum
 {
@@ -336,20 +329,18 @@ typedef struct
 {
     persist_control_entity_id_t entity;
     persist_control_parameter_key_t parameter;
-    float scene_value;
+    float target_value;
 } persist_control_macro_lock_t;
 
 typedef struct
 {
     uint8_t lock_count;
     persist_control_macro_lock_t locks[PERSIST_CONTROL_MACRO_LOCK_COUNT];
-} persist_control_macro_scene_t;
+} persist_control_macro_t;
 
 typedef struct
 {
-    uint32_t hall_switch_key;
-    uint8_t selected_scene[PERSIST_CONTROL_MACRO_COUNT];
-    persist_control_macro_scene_t scenes[PERSIST_CONTROL_MACRO_SCENE_COUNT];
+    persist_control_macro_t macros[PERSIST_CONTROL_MACRO_COUNT];
 } persist_control_macros_t;
 
 typedef struct

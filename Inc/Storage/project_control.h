@@ -5,7 +5,6 @@
 #include "Storage/persistent_control_model.h"
 #include "Param/param_registry.h"
 
-typedef enum { PROJECT_CONTROL_HALL_SCENE=0, PROJECT_CONTROL_HALL_SWITCH=1 } project_control_hall_mode_t;
 typedef enum {
     PROJECT_CONTROL_ASSET_FAILED = 0,
     PROJECT_CONTROL_ASSET_READY,
@@ -26,7 +25,7 @@ typedef struct {
     uint16_t result;
     uint8_t success;
 } project_control_wavetable_load_result_t;
-typedef struct { uint8_t track; param_id_t param; float scene_value; } project_control_macro_lock_t;
+typedef struct { uint8_t track; param_id_t param; float target_value; } project_control_macro_lock_t;
 typedef enum {
     PROJECT_CONTROL_ASSET_SAMPLER = 0,
     PROJECT_CONTROL_ASSET_WAVE_OSC1,
@@ -43,17 +42,12 @@ void project_control_init(void);
 void project_control_reset_macros(void);
 uint8_t project_control_get_default_macros(persist_control_macros_t *out);
 void project_control_reset_asset_banks(void);
-project_control_hall_mode_t project_control_get_hall_mode(void);
-uint8_t project_control_set_hall_mode(project_control_hall_mode_t mode);
-uint8_t project_control_get_macro_scene(uint8_t macro);
-uint8_t project_control_set_macro_scene(uint8_t macro,uint8_t scene);
-uint8_t project_control_get_scene_lock(uint8_t scene,uint8_t lock,project_control_macro_lock_t*out);
-uint8_t project_control_set_scene_lock(uint8_t scene,uint8_t lock,const project_control_macro_lock_t*in);
-uint8_t project_control_scene_lock_is_empty(uint8_t scene,uint8_t lock);
-uint8_t project_control_scene_has_locks(uint8_t scene);
-uint8_t project_control_get_scene_lock_for_param(uint8_t scene,uint8_t track,param_id_t param,project_control_macro_lock_t*out);
-uint8_t project_control_assign_scene_lock(uint8_t scene,uint8_t track,param_id_t param,float value);
-uint8_t project_control_clear_scene_lock(uint8_t scene,uint8_t track,param_id_t param);
+uint8_t project_control_get_macro_lock(uint8_t macro,uint8_t lock,project_control_macro_lock_t*out);
+uint8_t project_control_set_macro_lock(uint8_t macro,uint8_t lock,const project_control_macro_lock_t*in);
+uint8_t project_control_macro_lock_is_empty(uint8_t macro,uint8_t lock);
+uint8_t project_control_get_macro_lock_for_param(uint8_t macro,uint8_t track,param_id_t param,project_control_macro_lock_t*out);
+uint8_t project_control_assign_macro_lock(uint8_t macro,uint8_t track,param_id_t param,float value);
+uint8_t project_control_clear_macro_lock(uint8_t macro,uint8_t track,param_id_t param);
 uint8_t project_control_capture_macros(persist_control_macros_t*out);
 const persist_control_macros_t*project_control_macros_view(void);
 uint8_t project_control_apply_macros(const persist_control_macros_t*in);

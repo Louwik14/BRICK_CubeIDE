@@ -150,7 +150,6 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_cfg.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_env.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_keyboard.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_macro.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_mix.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_mod.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_play.c"

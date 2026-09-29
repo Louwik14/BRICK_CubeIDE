@@ -23,6 +23,7 @@
 #include "buttons.h"
 #include "ui_core.h"
 #include "ui_core_mute.h"
+#include "UI/ui_macro_interaction.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -43,6 +44,7 @@ typedef struct
 static uint8_t g_lowcost_key_note[LOWCOST_KEY_COUNT];
 static uint8_t g_lowcost_key_down[LOWCOST_KEY_COUNT];
 static uint8_t g_lowcost_key_consumed[LOWCOST_KEY_COUNT];
+static uint8_t g_lowcost_key_macro_owned[LOWCOST_KEY_COUNT];
 static keyboard_input_note_owner_t
     g_keyboard_input_note_owner[128U][KEYBOARD_INPUT_OWNER_STACK_DEPTH];
 static uint8_t g_keyboard_input_note_owner_count[128U];
@@ -215,6 +217,8 @@ static uint8_t keyboard_input_lowcost_shortcut_press(uint8_t key, ui_hall_mode_t
     const uint8_t shift_down = (button_down(BTN_SHIFT) != 0U) ? 1U : 0U;
     const uint8_t shortcut_active =
         (uint8_t)(((mode == UI_HALL_MODE_SEQ)
+                   || ((mode == UI_HALL_MODE_MACRO)
+                       && (ui_get_hall_mode() == UI_HALL_MODE_MACRO))
                    || ((mode == UI_HALL_MODE_KEYBOARD)
                        && (shift_down != 0U)))
                   ? 1U : 0U);
@@ -299,6 +303,23 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
     }
 
     ui_keyboard_app_set_velocity(velocity);
+
+    hall_key_metadata_t macro_key;
+    const uint8_t is_white = (uint8_t)((hall_keymap_metadata(key, &macro_key) != 0U)
+        && (macro_key.kind == HALL_KEY_KIND_WHITE));
+    if (!pressed && g_lowcost_key_macro_owned[key] != 0U)
+    {
+        g_lowcost_key_macro_owned[key] = 0U;
+        ui_macro_interaction_note_hall_release(key);
+        return;
+    }
+    if (pressed && is_white != 0U
+        && ui_get_hall_mode() == UI_HALL_MODE_MACRO)
+    {
+        g_lowcost_key_macro_owned[key] = 1U;
+        ui_macro_interaction_note_hall_press(key);
+        return;
+    }
 
     if (pressed)
     {
@@ -407,6 +428,7 @@ static void keyboard_input_all_notes_off_sink(void)
 
 void keyboard_input_init(void)
 {
+    memset(g_lowcost_key_macro_owned, 0, sizeof(g_lowcost_key_macro_owned));
     memset(g_keyboard_input_note_owner_count, 0, sizeof(g_keyboard_input_note_owner_count));
     g_keyboard_input_timed_context_active = 0U;
     g_keyboard_input_capture_tick = 0U;

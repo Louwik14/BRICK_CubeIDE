@@ -27,8 +27,12 @@ entre statut et footer.
 Le contexte temporaire TRACK est resolu par `ui_hall_mode_track_overlay_active`,
 utilise par le dispatch Hall et la projection LED. Il prime sur la page active
 pour la selection des tracks, puis disparait au relachement de TRACK; la page
-reprend alors sa projection propre. Les overlays MUTE, MACRO et SHIFT restent
-prioritaires selon leur contrat.
+reprend alors sa projection propre. MUTE et SHIFT restent prioritaires selon
+leur contrat. MACRO est un mode Hall autonome : SHIFT + STEP 8 y entre,
+un tap y alterne PRESSURE/TOGGLE apres la fenetre de double tap, et deux taps
+ouvrent ASSIGN. Les 14 touches blanches du clavier Hall pilotent les macros;
+les dix noires passent par les raccourcis clavier SEQ existants. Les pads STEP
+conservent leur handler SEQ.
 
 Audio REC est une page modale Low-Cost, mais les boutons d'ensemble restent
 navigables lorsqu'une destination est disponible. La navigation standard ferme

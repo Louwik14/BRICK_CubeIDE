@@ -335,7 +335,9 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         value = param_value_policy_canonicalize(id, track, value);
         if (param_registry_prepare_value(id, value, &prepared) == 0U)
             return 0U;
-        return track_mute_set(track, (prepared.value >= 0.5f) ? 1U : 0U);
+        const uint8_t installed = track_mute_set(track, (prepared.value >= 0.5f) ? 1U : 0U);
+        if (installed != 0U) param_macro_note_base_change(track, id);
+        return installed;
     }
 
     if (param_registry_track_value_is_audio_command(id, track) != 0U)
@@ -352,6 +354,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         const uint8_t installed =
             param_registry_install_prepared_track_control_target(&target);
         if (installed == 0U) Error_Handler();
+        if (installed != 0U) param_macro_note_base_change(track, id);
         return installed;
     }
 
@@ -375,6 +378,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         if ((installed != 0U)
                 && (param_registry_param_changes_destination_catalog(id) != 0U))
             mod_destination_catalog_invalidate_track(track);
+        if (installed != 0U) param_macro_note_base_change(track, id);
         return installed;
     }
 
@@ -394,6 +398,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             const uint8_t installed = mod_lfo_v1_install_prepared_track_param(
                 owner, lfo_index, lfo_param, canonical);
             if (installed == 0U) Error_Handler();
+            if (installed != 0U) param_macro_note_base_change(track, id);
             return installed;
         }
     }
@@ -401,10 +406,12 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     if (param_filter_is_param(id) != 0U)
     {
         const uint8_t ok = param_apply_filter_track_value(id, track, clamped);
+        if (ok != 0U) param_macro_note_base_change(track, id);
         return ok;
     }
 
     const uint8_t ok = param_apply_non_filter_track_value(id, track, clamped);
+    if (ok != 0U) param_macro_note_base_change(track, id);
     return ok;
 }
 
