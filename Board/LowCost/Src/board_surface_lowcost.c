@@ -61,7 +61,8 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
 
     sConfig.Channel = ADC_CHANNEL_19;
     sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_64CYCLES_5;
+    /* TIM6 fires every 50 us; 810.5 cycles exceed that at 15 MHz. */
+    sConfig.SamplingTime = ADC_SAMPLETIME_387CYCLES_5;
     sConfig.SingleDiff = ADC_SINGLE_ENDED;
     sConfig.OffsetNumber = ADC_OFFSET_NONE;
     sConfig.Offset = 0;
