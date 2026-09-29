@@ -53,6 +53,8 @@ Les anciennes captures de 56 octets par ligne restent décodables par
   Ce filtre intervenait après acquisition et n'établissait pas l'identité
   temporelle des conversions; son retrait n'explique pas à lui seul une
   hausse progressive des valeurs DMA brutes observées dans les captures.
+  La variante Low-Cost l'avait déjà contourné dans `c50242457` : voir
+  `docs/hall_asc_history_audit.md`.
 
 Le test O0/noipa des six fonctions Hall critiques n'ayant pas changé le
 défaut, ces fonctions sont revenues au build Release/LTO normal. Aucun seuil,
