@@ -12,6 +12,7 @@
 #include "Sampler/sample_stream_diag.h"
 #include "Sampler/sample_page_cache_audio.h"
 #include "SD/sd_block_device.h"
+#include "Storage/sd_access_gate.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
@@ -30,6 +31,102 @@ volatile sample_stream_diag_t g_sample_stream_diag __attribute__((used));
 static uint32_t sample_stream_diag_now(void) { return DWT->CYCCNT; }
 static void sample_stream_diag_max(volatile uint32_t *dst, uint32_t value)
 { if (value > *dst) *dst = value; }
+static uint8_t sample_stream_diag_boundary_slot_seen(uint8_t slot)
+{
+    if (slot < 32U) return (g_sample_stream_diag.boundary_slot_mask_lo & (1UL << slot)) != 0U;
+    if (slot < 64U) return (g_sample_stream_diag.boundary_slot_mask_hi & (1UL << (slot - 32U))) != 0U;
+    return 0U;
+}
+
+void sample_stream_diag_lease_audio(uint8_t reader, uint8_t lease_slot,
+    sample_audio_key_t key, uint32_t audio_page, uint32_t watch_page,
+    const sample_page_lease_range_t ranges[2], uint32_t result, uint32_t seq)
+{
+    if (g_sample_stream_diag.frozen || reader >= SAMPLE_STREAM_TARGET_MAX_VOICES || !ranges) return;
+    volatile sample_stream_diag_boundary_t *const b = &g_sample_stream_diag.boundary[reader][0];
+    if (b->audio_cycles && (b->watch_page != watch_page ||
+        sample_audio_key_equal((const sample_audio_key_t *)&b->key, &key) == 0U)) {
+        g_sample_stream_diag.boundary[reader][1] = *b;
+        memset((void *)b, 0, sizeof(*b));
+    }
+    b->watch_page = watch_page; b->audio_page = audio_page;
+    b->lease_slot = lease_slot; b->key = key;
+    if (lease_slot < 32U) g_sample_stream_diag.boundary_slot_mask_lo |= 1UL << lease_slot;
+    else if (lease_slot < 64U) g_sample_stream_diag.boundary_slot_mask_hi |= 1UL << (lease_slot - 32U);
+    b->audio_cycles = sample_stream_diag_now(); b->audio_seq = seq;
+    b->audio_result = result;
+    b->audio_r0_first = ranges[0].first_page; b->audio_r0_count = ranges[0].page_count;
+    b->audio_r1_first = ranges[1].first_page; b->audio_r1_count = ranges[1].page_count;
+    b->event = STREAM_BOUNDARY_AUDIO_PUBLISH;
+}
+
+void sample_stream_diag_lease_storage(uint8_t lease_slot, uint32_t ok,
+    uint32_t seq, const sample_page_lease_t *lease)
+{
+    if (g_sample_stream_diag.frozen || !sample_stream_diag_boundary_slot_seen(lease_slot)) return;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_TARGET_MAX_VOICES; ++i)
+        for (uint32_t j = 0U; j < 2U; ++j) {
+            volatile sample_stream_diag_boundary_t *const b = &g_sample_stream_diag.boundary[i][j];
+            if (!b->audio_cycles || b->lease_slot != lease_slot ||
+                !g_sample_stream_diag.reader[i].active) continue;
+            b->storage_cycles = sample_stream_diag_now();
+            b->storage_seq = ok ? lease->seq : seq;
+            b->storage_ok = ok; ++b->storage_reads;
+            if (!ok) {
+                ++b->storage_rejects; b->event = STREAM_BOUNDARY_READ_REJECT;
+                b->reason = (seq == 0U) ? 1U : ((seq & 1U) ? 2U :
+                    ((lease && lease->seq == seq && lease->ranges[0].page_count == 0U)
+                     ? 6U : 3U));
+                continue;
+            }
+            b->storage_key = lease->key;
+            b->storage_r0_first = lease->ranges[0].first_page;
+            b->storage_r0_count = lease->ranges[0].page_count;
+            b->storage_r1_first = lease->ranges[1].first_page;
+            b->storage_r1_count = lease->ranges[1].page_count;
+            b->storage_contains = 0U;
+            if (sample_audio_key_equal((const sample_audio_key_t *)&b->key, &lease->key))
+                for (uint32_t k = 0U; k < 2U; ++k)
+                    if (lease->ranges[k].page_count && b->watch_page >= lease->ranges[k].first_page
+                        && b->watch_page - lease->ranges[k].first_page < lease->ranges[k].page_count)
+                        b->storage_contains = 1U;
+            if (b->storage_contains) ++b->storage_contains_reads;
+            else ++b->storage_missing_reads;
+            b->event = STREAM_BOUNDARY_STORAGE_READ;
+            b->reason = b->storage_contains ? 0U :
+                (sample_audio_key_equal((const sample_audio_key_t *)&b->key, &lease->key) ? 4U : 5U);
+        }
+}
+
+void sample_stream_diag_boundary_candidate(uint8_t lease_slot,
+    sample_audio_key_t key, uint32_t page, uint32_t state, uint32_t event)
+{
+    if (g_sample_stream_diag.frozen || !sample_stream_diag_boundary_slot_seen(lease_slot)) return;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_TARGET_MAX_VOICES; ++i)
+        for (uint32_t j = 0U; j < 2U; ++j) {
+            volatile sample_stream_diag_boundary_t *const b = &g_sample_stream_diag.boundary[i][j];
+            if (!b->audio_cycles || b->lease_slot != lease_slot ||
+                !g_sample_stream_diag.reader[i].active ||
+                sample_audio_key_equal((const sample_audio_key_t *)&b->key, &key) == 0U) continue;
+            if (b->watch_page != page && event != STREAM_BOUNDARY_NO_WORK &&
+                event != STREAM_BOUNDARY_OTHER_CANDIDATE &&
+                event != STREAM_BOUNDARY_EARLIER_LOADING) continue;
+            if (b->watch_page == page && (event == STREAM_BOUNDARY_OTHER_CANDIDATE ||
+                event == STREAM_BOUNDARY_EARLIER_LOADING)) continue;
+            b->event = event; b->candidate_cycles = sample_stream_diag_now();
+            b->examined_page = page; b->examined_state = state;
+            b->reason = event;
+            if (event == STREAM_BOUNDARY_CANDIDATE_FOUND) ++b->candidate_found;
+            if (event == STREAM_BOUNDARY_CANDIDATE_NONE || event == STREAM_BOUNDARY_NO_WORK)
+                ++b->candidate_none;
+            if (event == STREAM_BOUNDARY_PENDING_ONLY) ++b->pending_seen;
+            if (event == STREAM_BOUNDARY_RESERVE_ATTEMPT) {
+                b->reserve_cycles = b->candidate_cycles; ++b->reserve_attempts;
+            }
+            if (event == STREAM_BOUNDARY_RESERVE_FAILED || event == STREAM_BOUNDARY_RESERVED)
+                b->reserve_result = (event == STREAM_BOUNDARY_RESERVED);
+        }
+}
 
 static void sample_stream_diag_trace(uint32_t event, uint32_t slot,
     sample_audio_key_t key, uint32_t page, uint32_t frame, uint32_t state, uint32_t extra)
@@ -67,6 +164,9 @@ void sample_stream_diag_bind(uint8_t slot, sample_audio_key_t key, uint32_t epoc
     volatile sample_stream_diag_reader_t *const r = &g_sample_stream_diag.reader[slot];
     if (r->active == 0U) ++g_sample_stream_diag.active_readers;
     memset((void *)r, 0, sizeof(*r));
+    if (!g_sample_stream_diag.frozen)
+        memset((void *)&g_sample_stream_diag.boundary[slot], 0,
+               sizeof(g_sample_stream_diag.boundary[slot]));
     r->active = 1U; r->slot = slot; r->key = key; r->registration_epoch = epoch;
     r->frame = frame; r->min_ready_distance = UINT32_MAX;
 }
@@ -134,6 +234,25 @@ void sample_stream_diag_fault(uint8_t slot, sample_audio_key_t key, uint32_t fra
     if (d->frozen != 0U) return;
     sample_stream_diag_trace(event, slot, key, page, frame, state, 0U);
     d->frozen = 1U;
+    if (slot < SAMPLE_STREAM_TARGET_MAX_VOICES)
+        for (uint32_t j = 0U; j < 2U; ++j) {
+            volatile sample_stream_diag_boundary_t *const b = &d->boundary[slot][j];
+            if (!b->audio_cycles || b->watch_page != page ||
+                b->lease_slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT) continue;
+            const sample_page_lease_t *const raw = &g_sample_page_leases[b->lease_slot];
+            b->fault_cycles = sample_stream_diag_now(); b->fault_seq = raw->seq;
+            b->fault_key = raw->key;
+            b->fault_r0_first = raw->ranges[0].first_page;
+            b->fault_r0_count = raw->ranges[0].page_count;
+            b->fault_r1_first = raw->ranges[1].first_page;
+            b->fault_r1_count = raw->ranges[1].page_count;
+        }
+    d->first_gate_polls = d->gate_polls;
+    d->first_service_calls = d->service_calls;
+    d->first_gate_pending = d->gate_pending;
+    d->first_gate_deferred_load = d->gate_deferred_load;
+    d->first_gate_acquire_fail = d->gate_acquire_fail;
+    d->first_gate_owner = sd_access_gate_current_owner();
     volatile sample_stream_diag_snapshot_t *const s = &d->first;
     s->cycles = sample_stream_diag_now(); s->event = event; s->reader_slot = slot;
     s->key = key; s->page = page; s->frame = frame; s->page_state = state;
@@ -372,8 +491,11 @@ static uint8_t sample_stream_manager_candidate_for_slot(
         return 0U;
     }
 
-    sample_page_lease_t lease;
-    if (sample_page_lease_control_read(slot, &lease) == 0U) return 0U;
+    sample_page_lease_t lease = {0};
+    const uint8_t lease_ok = sample_page_lease_control_read(slot, &lease);
+    sample_stream_diag_lease_storage(slot, lease_ok,
+        g_sample_page_leases[slot].seq, &lease);
+    if (lease_ok == 0U) return 0U;
     sample_page_lease_range_t derived = {0};
     const sample_page_lease_range_t *const tail =
         (lease.ranges[1].page_count != 0U)
@@ -408,11 +530,25 @@ static uint8_t sample_stream_manager_candidate_for_slot(
             const uint32_t page_index = range->first_page + offset;
             const sample_page_state_t state =
                 sample_page_cache_get_page_state_key(lease.key, page_index);
-            if (state == SAMPLE_PAGE_READY) continue;
+            if (state == SAMPLE_PAGE_READY) {
+                sample_stream_diag_boundary_candidate(slot, lease.key, page_index,
+                    state, STREAM_BOUNDARY_READY_SKIP);
+                continue;
+            }
 
             if (out_pending != 0) *out_pending = 1U;
-            if (state == SAMPLE_PAGE_LOADING) return 0U;
-            if (out_candidate == 0) return 0U;
+            if (state == SAMPLE_PAGE_LOADING) {
+                sample_stream_diag_boundary_candidate(slot, lease.key, page_index,
+                    state, STREAM_BOUNDARY_LOADING_BLOCK);
+                sample_stream_diag_boundary_candidate(slot, lease.key, page_index,
+                    state, STREAM_BOUNDARY_EARLIER_LOADING);
+                return 0U;
+            }
+            if (out_candidate == 0) {
+                sample_stream_diag_boundary_candidate(slot, lease.key, page_index,
+                    state, STREAM_BOUNDARY_PENDING_ONLY);
+                return 0U;
+            }
 
             memset(out_candidate, 0, sizeof(*out_candidate));
             out_candidate->key = lease.key;
@@ -422,9 +558,15 @@ static uint8_t sample_stream_manager_candidate_for_slot(
             out_candidate->page_rank = page_rank;
             out_candidate->round_robin_slot = slot;
             out_candidate->active = 1U;
+            sample_stream_diag_boundary_candidate(slot, lease.key, page_index,
+                state, STREAM_BOUNDARY_CANDIDATE_FOUND);
+            sample_stream_diag_boundary_candidate(slot, lease.key, page_index,
+                state, STREAM_BOUNDARY_OTHER_CANDIDATE);
             return 1U;
         }
     }
+    sample_stream_diag_boundary_candidate(slot, lease.key, UINT32_MAX,
+        SAMPLE_PAGE_FREE, STREAM_BOUNDARY_NO_WORK);
     return 0U;
 }
 
@@ -458,16 +600,22 @@ static uint8_t sample_stream_manager_pick_next(
     uint8_t reserved_here = 0U;
     if ((state == SAMPLE_PAGE_FREE) || (state == SAMPLE_PAGE_FAILED))
     {
+        sample_stream_diag_boundary_candidate(candidate.voice_id, candidate.key,
+            candidate.page_index, state, STREAM_BOUNDARY_RESERVE_ATTEMPT);
         if (sample_page_cache_reserve_page_key_alloc(
                 candidate.key,
                 candidate.page_index,
                 SAMPLE_PAGE_ALLOC_VOICE_WINDOW) == 0U)
         {
+            sample_stream_diag_boundary_candidate(candidate.voice_id, candidate.key,
+                candidate.page_index, state, STREAM_BOUNDARY_RESERVE_FAILED);
             sample_stream_diag_scheduler(STREAM_DIAG_RESERVE_FAIL,
                 candidate.voice_id, candidate.key, candidate.page_index, state);
             return 0U;
         }
         reserved_here = 1U;
+        sample_stream_diag_boundary_candidate(candidate.voice_id, candidate.key,
+            candidate.page_index, SAMPLE_PAGE_RESERVED, STREAM_BOUNDARY_RESERVED);
     }
 
     sample_page_load_target_t target;
@@ -705,6 +853,7 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
 
 void sample_stream_manager_service(uint32_t byte_budget)
 {
+    ++g_sample_stream_diag.service_calls;
     g_sample_stream_diag.scheduler_pending = g_sample_stream_manager_pending_count;
     g_sample_stream_diag.sd_pending = sd_block_device_async_pending_count();
     g_sample_stream_diag.sd_state = sd_block_device_async_hardware_state();
@@ -713,23 +862,33 @@ void sample_stream_manager_service(uint32_t byte_budget)
 
 uint8_t sample_stream_manager_has_pending_sd_work(void)
 {
+    ++g_sample_stream_diag.gate_polls;
     if (g_sample_stream_manager_pending_count != 0U)
     {
+        ++g_sample_stream_diag.gate_pending;
         return 1U;
     }
     for (uint8_t slot = 0U; slot < SAMPLE_PAGE_LEASE_SLOT_COUNT; ++slot)
     {
         uint8_t pending = 0U;
         (void)sample_stream_manager_candidate_for_slot(slot, 0, &pending);
-        if (pending != 0U) return 1U;
+        if (pending != 0U) {
+            ++g_sample_stream_diag.gate_pending;
+            return 1U;
+        }
     }
     sample_page_load_target_t prefill_target;
     if (sample_page_cache_get_reserved_load_target_domain_range(
         SAMPLE_AUDIO_DOMAIN_REC, 0U, SAMPLE_PAGE_CACHE_REC_ID_CAPACITY,
-        &prefill_target) != 0U) return 1U;
-    return sample_page_cache_get_reserved_load_target_domain_range(
+        &prefill_target) != 0U) {
+        ++g_sample_stream_diag.gate_pending;
+        return 1U;
+    }
+    const uint8_t prefill = sample_page_cache_get_reserved_load_target_domain_range(
         SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U, SAMPLE_CLASSIC_CAPACITY,
         &prefill_target);
+    if (prefill) ++g_sample_stream_diag.gate_pending;
+    return prefill;
 }
 
 uint8_t sample_stream_manager_io_in_flight(void)

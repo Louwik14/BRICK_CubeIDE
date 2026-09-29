@@ -9,6 +9,7 @@
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_port.h"
 #include "Sampler/sample_stream_manager.h"
+#include "Sampler/sample_stream_diag.h"
 #include "Sampler/sample_classic_audio_projection_control.h"
 #include "Storage/waveform_cache.h"
 #include "ff.h"
@@ -532,6 +533,7 @@ void sample_cache_service(uint32_t byte_budget)
     if ((g_sample_cache_stream_gate_held == 0U)
         && (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_STREAM) == 0U))
     {
+        ++g_sample_stream_diag.gate_acquire_fail;
         return;
     }
     g_sample_cache_stream_gate_held = 1U;

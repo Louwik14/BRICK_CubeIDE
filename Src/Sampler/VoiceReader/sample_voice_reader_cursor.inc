@@ -56,10 +56,14 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
             sample_stream_diag_need(diag_slot, state->key, frame_pos,
                 (ranges[0].page_count > 1U) ? page + 1U : page);
         }
-        (void)sample_page_lease_audio_publish(state->lease_slot,
-                                              state->key,
-                                              state->registration_epoch,
-                                              ranges);
+        const uint8_t published = sample_page_lease_audio_publish(state->lease_slot,
+                                                                  state->key,
+                                                                  state->registration_epoch,
+                                                                  ranges);
+        if (diag_slot < SAMPLE_STREAM_TARGET_MAX_VOICES)
+            sample_stream_diag_lease_audio(diag_slot, state->lease_slot, state->key,
+                page, (ranges[0].page_count > 1U) ? page + 1U : page,
+                ranges, published, g_sample_page_leases[state->lease_slot].seq);
         memcpy(state->lease_ranges, ranges, sizeof(ranges));
     }
 }
@@ -815,6 +819,15 @@ void sample_voice_reader_bind_loop_cache_incarnation(sample_voice_reader_t *read
                                 state->frame_pos);
         if (state->frames_per_page != 0U) {
             const uint32_t page = state->frame_pos / state->frames_per_page;
+            const sample_page_lease_t *const raw = &g_sample_page_leases[state->lease_slot];
+            sample_stream_diag_lease_audio(voice_id, state->lease_slot, state->key,
+                page, (state->lease_ranges[0].page_count > 1U) ? page + 1U : page,
+                state->lease_ranges,
+                (raw->seq != 0U && !(raw->seq & 1U) &&
+                 sample_audio_key_equal(&raw->key, &state->key) &&
+                 raw->registration_epoch == state->registration_epoch &&
+                 memcmp(raw->ranges, state->lease_ranges,
+                        sizeof(state->lease_ranges)) == 0), raw->seq);
             sample_stream_diag_need(voice_id, state->key, state->frame_pos,
                 (state->lease_ranges[0].page_count > 1U) ? page + 1U : page);
             if (state->audio_cursor.current_acquired)

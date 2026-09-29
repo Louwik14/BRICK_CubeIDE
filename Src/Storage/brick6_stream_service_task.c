@@ -3,6 +3,7 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
+#include "Sampler/sample_stream_diag.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Storage/sd_access_gate.h"
 #include "Platform/memory_layout.h"
@@ -35,6 +36,7 @@ void brick6_stream_service_task_poll(void)
     if ((sample_stream_manager_io_in_flight() == 0U)
         && (multi_sample_load_is_active() != 0U))
     {
+        ++g_sample_stream_diag.gate_deferred_load;
         return;
     }
 
