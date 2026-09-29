@@ -84,3 +84,37 @@ Lecture du prochain incident :
 
 Un échantillon isolé au-dessus du seuil suffit aujourd'hui à émettre RELEASE;
 la capture permet de distinguer ce cas d'un déplacement analogique durable.
+
+## Incident capturé avec relâchement d'une autre touche
+
+Dans `hall_capture.bin` (capture figée), la clé 14 est relâchée volontairement
+au tick 46132. Le masque held passe alors de `0x004241` à `0x000241` : les
+clés 0, 6 et 9 restent maintenues. Aucun autre front Hall n'apparaît avant
+le faux RELEASE de la clé 9 au tick 46355. La première hausse anormale
+enregistrée est celle de sa valeur ADC2 Hall B, mux 4 : environ 1280 jusqu'au
+tick 46338, 3691 au tick 46341, puis 22660 au tick 46355, au-dessus de son
+seuil release 22020. Les clés 0 et 6 (ADC1 Hall A, mux 3 et 7) montent à
+leur tour et franchissent leurs seuils aux ticks 46364 et 46366. Le masque
+reste `0x000241` pendant les premières hausses : aucun RELEASE antérieur
+n'a modifié leur état held.
+
+Le relâchement de la clé 14 précède la première hausse d'environ 209 ms.
+Cette capture établit une succession temporelle, pas une propagation
+logicielle directe. Les valeurs brutes montent progressivement sur plusieurs
+conversions, avec mux attendu, ODR et IDR concordants, compteurs de callbacks
+continus, erreurs HAL nulles et génération de calibration inchangée. Le
+potentiomètre volume reste saturé à 65535 et ne renseigne donc pas sur une
+éventuelle perturbation commune de la référence ADC.
+
+L'audit des écritures firmware ne trouve aucun chemin où un RELEASE modifie
+les valeurs brutes, les seuils ou l'état pressed d'une autre clé : le scan
+écrit `hall_raw[key]` et `hall_sample_count[key]`, puis le détecteur ne met
+à jour que les tableaux indexés par ce même `key`. Le masque de capture est
+recalculé en lisant les 24 états. La table des 24 correspondances ADC/mux
+est bornée et sans doublon. Le premier écart démontré est donc la conversion
+brute attribuée à la clé 9, en amont de la décision RELEASE. La capture seule
+ne départage pas une variation électrique ou magnétique réelle d'un défaut
+analogique d'acquisition. Pour la départager, mesurer simultanément au scope
+la sortie du capteur de la clé 9 à l'entrée ADC, son alimentation et sa masse
+pendant le relâchement de la clé 14, en conservant le déclenchement temporel
+du dump. Aucun correctif de seuil ou de filtrage ne découle de cette trace.
