@@ -11,6 +11,7 @@
 #include "adc.h"
 
 #define HALL_MUX_COUNT         8U
+#define HALL_MUX_SETTLE_DISCARD_PAIRS 12U
 
 _Static_assert(sizeof(hall_capture_record_t) == 56U,
                "Hall capture dump layout changed");
@@ -189,7 +190,7 @@ static void hall_adc_process_pair(uint8_t completing_adc)
         adc1_ready = 0U;
         adc2_ready = 0U;
 
-        hall_discard_count = 6U;
+        hall_discard_count = HALL_MUX_SETTLE_DISCARD_PAIRS;
         adc1_ready = 0U;
         adc2_ready = 0U;
     }
@@ -198,7 +199,7 @@ static void hall_adc_process_pair(uint8_t completing_adc)
 void hall_adc_init(void)
 {
     hall_mux_index = 0U;
-    hall_discard_count = 6U;
+    hall_discard_count = HALL_MUX_SETTLE_DISCARD_PAIRS;
     g_hall_capture_sequence = 0U;
     g_hall_capture_calibration_generation = 0U;
     g_hall_capture_frozen = 0U;
