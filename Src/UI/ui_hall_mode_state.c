@@ -3,6 +3,8 @@
 #include "ui_core_mute.h"
 #include "ui_core_pattern.h"
 #include "ui_macro_interaction.h"
+#include "ui_param.h"
+#include "ui_renderer_oled.h"
 #include "ui_core.h"
 #include "Seq/seq_edit.h"
 #include "Keyboard/keyboard_runtime.h"
@@ -43,7 +45,10 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
     }
 
     if (g_ui_hall_mode == UI_HALL_MODE_MACRO)
+    {
         ui_macro_interaction_leave();
+        ui_param_clear_value_flash();
+    }
     ui_track_overlay_on_context_changed();
     seq_edit_note_capture_reset();
     if ((g_ui_hall_mode == UI_HALL_MODE_KEYBOARD)
@@ -54,4 +59,5 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
     g_ui_hall_mode = mode;
     if (mode == UI_HALL_MODE_MACRO)
         ui_macro_interaction_enter();
+    ui_renderer_oled_invalidate();
 }

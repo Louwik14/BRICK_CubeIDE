@@ -148,17 +148,24 @@ static void ui_navigation_leave_mute(void)
     }
 }
 
+static void ui_navigation_leave_macro(void)
+{
+    if (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
+    {
+        ui_set_hall_mode(UI_HALL_MODE_SEQ);
+    }
+}
+
 void ui_navigation_request_ensemble_page(uint8_t page_id)
 {
     if (page_id == UI_PAGE_TEMPLATE_CFG)
     {
-        if (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
-            ui_set_hall_mode(UI_HALL_MODE_SEQ);
         ui_navigation_leave_mute();
         if (ui_page_audio_rec_is_open() != 0U)
         {
             ui_hall_mode_flow_leave_lowcost_modal_page();
         }
+        ui_navigation_leave_macro();
         g_ui_requested_ensemble_page = page_id;
         if (ui_page_get_id() != UI_PAGE_TEMPLATE_CFG)
         {
@@ -177,14 +184,14 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
         return;
     }
 
-    if (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
-        ui_set_hall_mode(UI_HALL_MODE_SEQ);
     ui_navigation_leave_mute();
 
     if (ui_page_audio_rec_is_open() != 0U)
     {
         ui_hall_mode_flow_leave_lowcost_modal_page();
     }
+
+    ui_navigation_leave_macro();
 
     g_ui_requested_ensemble_page = page_id;
     if ((page_id == UI_PAGE_MIDI_FX) || (page_id == UI_PAGE_AUDIO_FX))

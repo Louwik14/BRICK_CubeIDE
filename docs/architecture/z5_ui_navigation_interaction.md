@@ -32,7 +32,14 @@ leur contrat. MACRO est un mode Hall autonome : SHIFT + STEP 8 y entre,
 un tap y alterne PRESSURE/TOGGLE apres la fenetre de double tap, et deux taps
 ouvrent ASSIGN. Les 14 touches blanches du clavier Hall pilotent les macros;
 les dix noires passent par les raccourcis clavier SEQ existants. Les pads STEP
-conservent leur handler SEQ.
+conservent leur handler SEQ, sans projection LED STEP/TRIG en MACRO. Chaque
+scene LED reconstruit ses couches depuis zero, ce qui efface la projection du
+mode precedent. La navigation vers un autre ensemble ferme MACRO via
+`ui_set_hall_mode` apres la fermeture d'une eventuelle page modale REC : le
+mode Hall revient a SEQ et les gestes temporaires MACRO sont annules. Les
+flashes de valeur de l'edition MACRO sont effaces et la vue OLED est invalidee
+sur toute transition de mode Hall. Les transitions KBD et SEQ passent par la
+meme autorite de mode Hall et conservent leurs effets de sortie propres.
 
 Audio REC est une page modale Low-Cost, mais les boutons d'ensemble restent
 navigables lorsqu'une destination est disponible. La navigation standard ferme

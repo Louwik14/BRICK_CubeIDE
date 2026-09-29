@@ -33,15 +33,11 @@
 #include "led_remap.h"
 #include "led_anim.h"
 #include "led_layer.h"
-#include "Storage/project_control.h"
 #include "Storage/sample_capture.h"
 #include "UI/ui_core.h"
 #include "UI/ui_core_mute.h"
 #include "UI/ui_hall_mode_projection.h"
 #include "UI/ui_navigation.h"
-#include "UI/ui_macro_interaction.h"
-#include "App/Hall/hall_keymap.h"
-#include "Param/param_macro.h"
 #include "UI/ui_page_manager.h"
 #include "UI/ui_step_led_ownership.h"
 #include "UI/ui_track_led_projection.h"
@@ -147,42 +143,6 @@ static const led_rgb_color_t g_led_keyboard_omni_chord_colors[4] = {
     { 96U, 96U, 0U },
     { 80U, 0U, 128U },
 };
-
-static const led_rgb_color_t g_led_macro_colors[PERSIST_CONTROL_MACRO_COUNT] = {
-    { 128U, 48U, 0U },
-    { 128U, 88U, 0U },
-    { 112U, 128U, 0U },
-    { 56U, 128U, 0U },
-    { 0U, 128U, 24U },
-    { 0U, 128U, 88U },
-    { 0U, 112U, 128U },
-    { 0U, 56U, 128U },
-    { 0U, 0U, 128U },
-    { 56U, 0U, 128U },
-    { 104U, 0U, 128U },
-    { 128U, 0U, 96U },
-    { 128U, 0U, 40U },
-    { 128U, 24U, 48U }
-};
-
-
-static led_rgb_color_t led_macro_color(uint8_t macro)
-{
-    if (macro >= PERSIST_CONTROL_MACRO_COUNT)
-    {
-        return g_led_macro_colors[0U];
-    }
-
-    return g_led_macro_colors[macro];
-}
-
-static led_rgb_color_t led_scale_color(led_rgb_color_t color, uint8_t scale)
-{
-    color.r = (uint8_t)(((uint16_t)color.r * (uint16_t)scale) / 255U);
-    color.g = (uint8_t)(((uint16_t)color.g * (uint16_t)scale) / 255U);
-    color.b = (uint8_t)(((uint16_t)color.b * (uint16_t)scale) / 255U);
-    return color;
-}
 
 static button_id_t led_param_button_for_led(led_id_t led);
 
@@ -374,29 +334,6 @@ static void led_apply_pattern_hall_scene(uint8_t hall)
     }
 
     led_layer_set(LED_LAYER_UI, led, r, g, b);
-}
-
-static void led_apply_macro_hall(uint8_t hall)
-{
-    hall_key_metadata_t key;
-    if (hall_keymap_metadata(hall, &key) == 0U
-        || key.kind != HALL_KEY_KIND_WHITE || key.white_index == 0U) return;
-    const uint8_t macro = (uint8_t)(key.white_index - 1U);
-    if (macro >= PERSIST_CONTROL_MACRO_COUNT) return;
-    uint8_t scale = project_control_macros_view()->macros[macro].lock_count != 0U ? 140U : 35U;
-    if (ui_macro_interaction_get_mode() == UI_MACRO_ASSIGN)
-    {
-        uint8_t held;
-        if (ui_macro_interaction_get_held_macro(&held) != 0U && held == macro)
-            scale = 255U;
-    }
-    else
-    {
-        const float amount = param_macro_get_amount(macro);
-        if (amount > 0.0f) scale = (uint8_t)(140.0f + amount * 115.0f);
-    }
-    const led_rgb_color_t color = led_scale_color(led_macro_color(macro), scale);
-    led_layer_set(LED_LAYER_UI, led_remap_led_for_hall(hall), color.r, color.g, color.b);
 }
 
 static void led_apply_track_select_hall_scene(uint8_t hall)
@@ -598,8 +535,7 @@ static void led_apply_fixed_scene(void)
     }
     else if (hall_mode == UI_HALL_MODE_MACRO)
     {
-        for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
-            led_apply_macro_hall(hall);
+        /* No STEP/TRIG scene in MACRO. The layer reset above drops the prior Hall scene. */
     }
     else if (ui_page_patch_assign_is_open() != 0U)
     {

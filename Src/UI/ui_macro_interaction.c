@@ -43,6 +43,7 @@ void ui_macro_interaction_reset(void)
     g_held_track = 0xFFU;
     g_pressed_whites = 0U;
     g_pending_tap = 0U;
+    g_pending_tap_ms = 0U;
 }
 
 void ui_macro_interaction_enter(void)
@@ -55,6 +56,7 @@ void ui_macro_interaction_leave(void)
 {
     if (g_mode != UI_MACRO_ASSIGN) g_last_live = g_mode;
     ui_macro_interaction_reset();
+    g_mode = g_last_live;
 }
 
 ui_macro_mode_t ui_macro_interaction_get_mode(void)
