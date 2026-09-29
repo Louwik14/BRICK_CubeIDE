@@ -50,11 +50,11 @@ Le NOTE OFF verifie l'occurrence avant de fermer son `output_id`. Une collision
 entre KEY, MIDI, STEP et FX ne peut donc pas reassocier une autre voix.
 
 Le VCA par voix de Prism, Stack, Wave et FM relance son attaque sur chaque
-nouvelle allocation ou reutilisation physique. Le mode hard repart de zero;
-le mode soft repart du niveau courant. `ENV VCA` commande le VCA de note de
-track, pas cette enveloppe par voix. Le VCA de track garde son gate ouvert
-tant qu'une note reste tenue et ne relance son attaque qu'au passage de zero
-a une note tenue.
+nouvelle allocation ou reutilisation physique. `ENV VCA` regle le mode de
+retrigger de ces enveloppes et du VCA de note de track : ON (hard) repart de
+zero, OFF (soft) repart du niveau courant. Le VCA de track garde son gate
+ouvert tant qu'une note reste tenue et ne relance son attaque qu'au passage
+de zero a une note tenue.
 
 La configuration moteur reste canonique sur l'instance primaire de la track.
 L'adapter AUDIO porte le geste commun de projection vers tous les slots physiques:

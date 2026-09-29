@@ -299,6 +299,18 @@ void mixer_set_track_vca_note_enabled(uint32_t track_id, uint8_t enabled)
     mixer_track_filter_touch_config(filter);
 }
 
+void mixer_set_track_vca_retrigger_hard(uint32_t track_id, uint8_t hard)
+{
+    if (track_id >= MIXER_MAX_TRACKS)
+        return;
+    mixer_track_filter_t *const filter = &g_track_filters[track_id];
+    const uint8_t next = (hard != 0U) ? 1U : 0U;
+    if (filter->vca_retrigger_hard == next)
+        return;
+    filter->vca_retrigger_hard = next;
+    mixer_track_filter_touch_config(filter);
+}
+
 void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity)
 {
     (void)velocity;
