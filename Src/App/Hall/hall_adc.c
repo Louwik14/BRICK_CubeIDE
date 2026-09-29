@@ -20,6 +20,8 @@ _Static_assert(sizeof(hall_fixed_record_t) == 40U,
                "Hall fixed-mux dump layout changed");
 _Static_assert(sizeof(hall_direct_record_t) == 16U,
                "Hall direct ADC dump layout changed");
+_Static_assert(sizeof(hall_hold_record_t) == 24U,
+               "Hall continuous fixed-mux dump layout changed");
 _Static_assert((HALL_CAPTURE_CAPACITY & (HALL_CAPTURE_CAPACITY - 1U)) == 0U,
                "Hall capture ring capacity must be a power of two");
 
@@ -74,6 +76,21 @@ volatile uint32_t g_hall_direct_count __attribute__((used, externally_visible));
 volatile uint32_t g_hall_direct_error __attribute__((used, externally_visible));
 volatile uint8_t g_hall_direct_state __attribute__((used, externally_visible));
 volatile uint8_t g_hall_direct_restore_ok __attribute__((used, externally_visible));
+CONTROL_STATE_SDRAM volatile hall_hold_record_t
+    g_hall_hold_trace[HALL_HOLD_CAPACITY]
+    __attribute__((used, externally_visible));
+volatile uint32_t g_hall_hold_sequence __attribute__((used, externally_visible));
+volatile uint32_t g_hall_hold_trigger_tick __attribute__((used, externally_visible));
+volatile uint32_t g_hall_hold_held_at_lock __attribute__((used, externally_visible));
+volatile uint16_t g_hall_hold_baseline __attribute__((used, externally_visible));
+volatile uint16_t g_hall_hold_trigger_raw __attribute__((used, externally_visible));
+volatile uint8_t g_hall_hold_target_key __attribute__((used, externally_visible)) = 2U;
+volatile uint8_t g_hall_hold_target_mux __attribute__((used, externally_visible));
+volatile uint8_t g_hall_hold_target_adc __attribute__((used, externally_visible));
+volatile uint8_t g_hall_hold_mode_arm __attribute__((used, externally_visible)) = 1U;
+volatile uint8_t g_hall_hold_mode_active __attribute__((used, externally_visible));
+volatile uint8_t g_hall_hold_trace_frozen __attribute__((used, externally_visible));
+static uint8_t g_hall_hold_divider;
 static uint16_t g_hall_stable_baseline[HALL_KEY_COUNT];
 static uint16_t g_hall_stable_count[HALL_KEY_COUNT];
 static uint16_t g_hall_held_count[HALL_KEY_COUNT];
@@ -129,6 +146,7 @@ static void hall_mux_select(uint8_t index)
 
 static void hall_adc_probe_drift(uint8_t key, uint8_t channel, uint16_t raw)
 {
+    if (g_hall_hold_mode_active != 0U) return;
     if ((g_hall_fixed_active != 0U) || (g_hall_fixed_done != 0U)) return;
     if (hall_engine_is_pressed(key) == 0U)
     {
@@ -147,7 +165,22 @@ static void hall_adc_probe_drift(uint8_t key, uint8_t channel, uint16_t raw)
     {
         if (g_hall_stable_count[key] < UINT16_MAX) ++g_hall_stable_count[key];
     }
-    else if ((g_hall_held_count[key] >= 360U)
+    if ((g_hall_hold_mode_arm != 0U)
+        && (key == g_hall_hold_target_key)
+        && (g_hall_held_count[key] >= 360U)
+        && (g_hall_stable_count[key] >= 8U)
+        && ((uint32_t)raw <= (uint32_t)g_hall_stable_baseline[key] + 512U))
+    {
+        g_hall_hold_target_mux = hall_mux_index;
+        g_hall_hold_target_adc = channel;
+        g_hall_hold_baseline = g_hall_stable_baseline[key];
+        g_hall_hold_held_at_lock = g_hall_capture_held_mask;
+        g_hall_hold_divider = 39U;
+        g_hall_hold_mode_active = 1U;
+        return;
+    }
+    if (g_hall_hold_mode_arm != 0U) return;
+    if ((g_hall_held_count[key] >= 360U)
              && (g_hall_stable_count[key] >= 8U)
              && ((uint32_t)raw >= (uint32_t)g_hall_stable_baseline[key] + 2500U)
              && (raw < hall_engine_get_trig_hi(key)))
@@ -187,6 +220,47 @@ static void hall_adc_process_pair(uint8_t completing_adc)
     const uint16_t volume = adc1_dma[2U];
     const uint16_t adc1_dma_ndtr_after =
         (uint16_t)((DMA_Stream_TypeDef *)hadc1.DMA_Handle->Instance)->NDTR;
+
+    if (g_hall_hold_mode_active != 0U)
+    {
+        if (g_hall_hold_trace_frozen == 0U)
+        {
+            if (++g_hall_hold_divider >= 40U)
+            {
+                g_hall_hold_divider = 0U;
+                const uint32_t sequence = ++g_hall_hold_sequence;
+                volatile hall_hold_record_t *hold =
+                    &g_hall_hold_trace[(sequence - 1U) & (HALL_HOLD_CAPACITY - 1U)];
+                hold->sequence = 0U;
+                hold->tim5_tick = brick_media_clock_now_tick();
+                hold->raw_a = v1;
+                hold->raw_b = v2;
+                hold->raw_c = v3;
+                hold->adc1_callbacks = (uint16_t)g_hall_adc1_callbacks;
+                hold->adc2_callbacks = (uint16_t)g_hall_adc2_callbacks;
+                hold->mux_odr = hall_adc_gpio_mux(0U);
+                hold->mux_idr = hall_adc_gpio_mux(1U);
+                hold->completing_adc = completing_adc;
+                hold->reserved = 0U;
+                __DMB();
+                hold->sequence = sequence;
+                const uint16_t target_raw = (g_hall_hold_target_adc == 0U)
+                    ? v1 : ((g_hall_hold_target_adc == 1U) ? v2 : v3);
+                if ((g_hall_hold_trigger_tick == 0U)
+                    && ((uint32_t)target_raw >=
+                        (uint32_t)g_hall_hold_baseline + 2500U))
+                {
+                    g_hall_hold_trigger_tick = hold->tim5_tick;
+                    g_hall_hold_trigger_raw = target_raw;
+                }
+                if ((g_hall_hold_trigger_tick != 0U)
+                    && ((uint32_t)(hold->tim5_tick - g_hall_hold_trigger_tick)
+                        >= 1500000U))
+                    g_hall_hold_trace_frozen = 1U;
+            }
+        }
+        return;
+    }
 
     if (g_hall_fixed_active != 0U)
     {
@@ -294,7 +368,8 @@ static void hall_adc_process_pair(uint8_t completing_adc)
             record->sequence = trace_sequence;
         }
 
-        if (g_hall_fixed_active == 0U)
+        if ((g_hall_fixed_active == 0U)
+            && (g_hall_hold_mode_active == 0U))
         {
             hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);
             hall_mux_select(hall_mux_index);
@@ -303,7 +378,8 @@ static void hall_adc_process_pair(uint8_t completing_adc)
         adc1_ready = 0U;
         adc2_ready = 0U;
 
-        hall_discard_count = (g_hall_fixed_active != 0U)
+        hall_discard_count = ((g_hall_fixed_active != 0U)
+            || (g_hall_hold_mode_active != 0U))
             ? 0U : HALL_MUX_SETTLE_DISCARD_PAIRS;
         adc1_ready = 0U;
         adc2_ready = 0U;
@@ -340,6 +416,16 @@ void hall_adc_init(void)
     g_hall_direct_error = 0U;
     g_hall_direct_state = 0U;
     g_hall_direct_restore_ok = 0U;
+    g_hall_hold_sequence = 0U;
+    g_hall_hold_trigger_tick = 0U;
+    g_hall_hold_held_at_lock = 0U;
+    g_hall_hold_baseline = 0U;
+    g_hall_hold_trigger_raw = 0U;
+    g_hall_hold_target_mux = 0U;
+    g_hall_hold_target_adc = 0U;
+    g_hall_hold_mode_active = 0U;
+    g_hall_hold_trace_frozen = 0U;
+    g_hall_hold_divider = 0U;
 
     adc1_dma[0U] = 0U;
     adc1_dma[1U] = 0U;
