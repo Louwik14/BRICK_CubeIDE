@@ -34,7 +34,10 @@ void sample_capture_model_get_state(sample_capture_state_t *out_state)
 
 sample_capture_rec_led_state_t sample_capture_model_rec_led_state(void)
 {
-    if (g_sample_capture.state.armed_pending != 0U)
+    if ((g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_OFF)
+            && ((g_sample_capture.state.armed_pending != 0U)
+                || (g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_ARMED)
+                || (g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_WAIT_QUANT)))
         return SAMPLE_CAPTURE_REC_LED_WAITING;
     if ((g_sample_capture.state.recording != 0U)
             && (audio_recorder_client_is_recording(

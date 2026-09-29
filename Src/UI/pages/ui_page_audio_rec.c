@@ -84,15 +84,18 @@ static void ui_page_audio_rec_draw_live_meter(const sample_capture_state_t *stat
                               UI_AUDIO_REC_METER_Y + 1U,
                               fill_w, UI_AUDIO_REC_METER_H - 2U);
     }
-    if(state->arm == SAMPLE_CAPTURE_ARM_TRIG)
+    if((state->trig == SAMPLE_CAPTURE_TRIG_THRESHOLD)
+            || (state->trig == SAMPLE_CAPTURE_TRIG_THRESHOLD_PLAY))
     {
         const int16_t threshold_from_floor =
             (int16_t)state->threshold_dbfs + 60;
         const uint8_t marker_x = (uint8_t)(UI_AUDIO_REC_METER_X + 1U
-            + ((uint16_t)threshold_from_floor * inner_w) / 60U);
+            + (((uint16_t)threshold_from_floor * inner_w) + 30U) / 60U);
+        drv_display_set_draw_color(2U);
         drv_display_draw_line(marker_x, UI_AUDIO_REC_METER_Y - 1U,
                               marker_x,
                               UI_AUDIO_REC_METER_Y + UI_AUDIO_REC_METER_H);
+        drv_display_set_draw_color(1U);
     }
 }
 
