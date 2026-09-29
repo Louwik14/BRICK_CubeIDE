@@ -9,6 +9,9 @@
 #include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_scheduler.h"
 #include "Sampler/sample_stream_transport.h"
+#include "Sampler/sample_stream_diag.h"
+#include "Sampler/sample_page_cache_audio.h"
+#include "SD/sd_block_device.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
@@ -22,6 +25,233 @@ _Static_assert(SAMPLE_STREAM_IO_MAX_READERS <= SAMPLE_CLASSIC_CAPACITY,
                "active stream readers must be bounded below hot sample capacity");
 #endif
 static uint8_t g_sample_stream_manager_initialized;
+volatile sample_stream_diag_t g_sample_stream_diag __attribute__((used));
+
+static uint32_t sample_stream_diag_now(void) { return DWT->CYCCNT; }
+static void sample_stream_diag_max(volatile uint32_t *dst, uint32_t value)
+{ if (value > *dst) *dst = value; }
+
+static void sample_stream_diag_trace(uint32_t event, uint32_t slot,
+    sample_audio_key_t key, uint32_t page, uint32_t frame, uint32_t state, uint32_t extra)
+{
+    if (g_sample_stream_diag.frozen != 0U) return;
+    const uint32_t index = g_sample_stream_diag.trace_next++ & 63U;
+    volatile sample_stream_diag_trace_t *const t = &g_sample_stream_diag.trace[index];
+    t->sequence = g_sample_stream_diag.trace_next;
+    t->cycles = sample_stream_diag_now(); t->event = event; t->reader_slot = slot;
+    t->key = key; t->page = page; t->frame = frame; t->page_state = state;
+    t->extra = extra; t->active_readers = g_sample_stream_diag.active_readers;
+    t->scheduler_pending = g_sample_stream_diag.scheduler_pending;
+    t->sd_pending = sd_block_device_async_pending_count();
+    t->sd_state = sd_block_device_async_hardware_state();
+    if (g_sample_stream_diag.trace_count < 64U) ++g_sample_stream_diag.trace_count;
+}
+
+void sample_stream_diag_init(void)
+{
+    memset((void *)&g_sample_stream_diag, 0, sizeof(g_sample_stream_diag));
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    g_sample_stream_diag.magic = 0x53444731U;
+    g_sample_stream_diag.version = 1U;
+    g_sample_stream_diag.cycle_hz = SystemCoreClock;
+    for (uint32_t i = 0; i < SAMPLE_STREAM_TARGET_MAX_VOICES; ++i)
+        g_sample_stream_diag.reader[i].min_ready_distance = UINT32_MAX;
+}
+
+void sample_stream_diag_bind(uint8_t slot, sample_audio_key_t key, uint32_t epoch, uint32_t frame)
+{
+    if (slot >= SAMPLE_STREAM_TARGET_MAX_VOICES || key.domain != SAMPLE_AUDIO_DOMAIN_MULTI) return;
+    volatile sample_stream_diag_reader_t *const r = &g_sample_stream_diag.reader[slot];
+    if (r->active == 0U) ++g_sample_stream_diag.active_readers;
+    memset((void *)r, 0, sizeof(*r));
+    r->active = 1U; r->slot = slot; r->key = key; r->registration_epoch = epoch;
+    r->frame = frame; r->min_ready_distance = UINT32_MAX;
+}
+
+void sample_stream_diag_unbind(uint8_t slot)
+{
+    if (slot >= SAMPLE_STREAM_TARGET_MAX_VOICES) return;
+    volatile sample_stream_diag_reader_t *const r = &g_sample_stream_diag.reader[slot];
+    if (r->active != 0U && g_sample_stream_diag.active_readers != 0U)
+        --g_sample_stream_diag.active_readers;
+    r->active = 0U;
+}
+
+void sample_stream_diag_need(uint8_t slot, sample_audio_key_t key, uint32_t frame, uint32_t page)
+{
+    if (slot >= SAMPLE_STREAM_TARGET_MAX_VOICES || key.domain != SAMPLE_AUDIO_DOMAIN_MULTI) return;
+    volatile sample_stream_diag_reader_t *const r = &g_sample_stream_diag.reader[slot];
+    r->frame = frame; r->next_page = page;
+    if (r->need_page == page && r->t_need != 0U) return;
+    r->prev_need_page = r->need_page;
+    r->prev_t_need = r->t_need; r->prev_t_reserved = r->t_reserved;
+    r->prev_t_dma_start = r->t_dma_start; r->prev_t_dma_complete = r->t_dma_complete;
+    r->prev_t_ready = r->t_ready; r->prev_t_first_use = r->t_first_use;
+    r->prev_dma_owner = r->dma_owner;
+    r->need_page = page; r->t_need = sample_stream_diag_now();
+    r->t_reserved = 0U; r->t_dma_start = 0U; r->t_dma_complete = 0U;
+    r->t_ready = 0U; r->t_first_use = 0U;
+    r->dma_owner = 0U;
+    ++r->refills; ++g_sample_stream_diag.requests;
+}
+
+void sample_stream_diag_use(uint8_t slot, uint32_t frame, uint32_t page,
+                            uint32_t ready_distance, uint32_t generation)
+{
+    if (slot >= SAMPLE_STREAM_TARGET_MAX_VOICES) return;
+    volatile sample_stream_diag_reader_t *const r = &g_sample_stream_diag.reader[slot];
+    r->frame = frame;
+    if (r->pages_used == 0U || r->current_page != page) ++r->pages_used;
+    r->current_page = page; r->page_generation = generation;
+    if (ready_distance < r->min_ready_distance) r->min_ready_distance = ready_distance;
+    if (r->need_page == page && r->t_first_use == 0U) r->t_first_use = sample_stream_diag_now();
+    if (r->prev_need_page == page && r->prev_t_first_use == 0U) r->prev_t_first_use = sample_stream_diag_now();
+}
+
+void sample_stream_diag_fault(uint8_t slot, sample_audio_key_t key, uint32_t frame,
+                              uint32_t page, sample_page_state_t state, uint32_t event)
+{
+    volatile sample_stream_diag_t *const d = &g_sample_stream_diag;
+    if (event == STREAM_DIAG_AUDIO_MISS) ++d->audio_miss;
+    else if (event == STREAM_DIAG_AUDIO_NOT_READY) ++d->audio_not_ready;
+    else if (event == STREAM_DIAG_AUDIO_BAD_KEY) ++d->audio_bad_key;
+    else if (event == STREAM_DIAG_AUDIO_BAD_EPOCH) ++d->audio_bad_epoch;
+    if (event == STREAM_DIAG_AUDIO_MISS || event == STREAM_DIAG_AUDIO_NOT_READY ||
+        event == STREAM_DIAG_AUDIO_UNDERRUN) ++d->underruns;
+    if (slot < SAMPLE_STREAM_TARGET_MAX_VOICES) {
+        volatile sample_stream_diag_reader_t *const r = &d->reader[slot];
+        r->frame = frame;
+        if (event == STREAM_DIAG_AUDIO_MISS) ++r->misses;
+        else if (event == STREAM_DIAG_AUDIO_NOT_READY) ++r->not_ready;
+        if (event == STREAM_DIAG_AUDIO_MISS || event == STREAM_DIAG_AUDIO_NOT_READY ||
+            event == STREAM_DIAG_AUDIO_UNDERRUN) ++r->underruns;
+    }
+    if (d->frozen != 0U) return;
+    sample_stream_diag_trace(event, slot, key, page, frame, state, 0U);
+    d->frozen = 1U;
+    volatile sample_stream_diag_snapshot_t *const s = &d->first;
+    s->cycles = sample_stream_diag_now(); s->event = event; s->reader_slot = slot;
+    s->key = key; s->page = page; s->frame = frame; s->page_state = state;
+    s->prev_state = page ? sample_page_cache_audio_get_page_state_key(key, page - 1U) : SAMPLE_PAGE_FREE;
+    s->next_state = sample_page_cache_audio_get_page_state_key(key, page + 1U);
+    s->active_readers = d->active_readers; s->scheduler_pending = d->scheduler_pending;
+    s->sd_pending = sd_block_device_async_pending_count();
+    s->sd_state = sd_block_device_async_hardware_state();
+    sd_block_device_debug_snapshot_t sd; sd_block_device_debug_snapshot(&sd);
+    s->sd_owner = sd.owner_client; s->sd_operation = sd.operation;
+    s->sd_fault = sd.fault_latched; s->sd_irq_error = sd.irq_error;
+    if (slot < SAMPLE_STREAM_TARGET_MAX_VOICES) s->refill = d->reader[slot];
+    if (slot < SAMPLE_STREAM_TARGET_MAX_VOICES) {
+        const volatile sample_stream_diag_reader_t *const r = &d->reader[slot];
+        if (r->need_page == page) {
+            s->t_need = r->t_need; s->t_reserved = r->t_reserved;
+            s->t_dma_start = r->t_dma_start; s->t_dma_complete = r->t_dma_complete;
+            s->t_ready = r->t_ready; s->t_first_use = r->t_first_use;
+        } else if (r->prev_need_page == page) {
+            s->t_need = r->prev_t_need; s->t_reserved = r->prev_t_reserved;
+            s->t_dma_start = r->prev_t_dma_start; s->t_dma_complete = r->prev_t_dma_complete;
+            s->t_ready = r->prev_t_ready; s->t_first_use = r->prev_t_first_use;
+        }
+    }
+    s->reserved = d->reserved; s->loading = d->loading; s->ready = d->ready;
+    s->failed = d->failed; s->dma_starts = d->dma_starts;
+    s->dma_completions = d->dma_completions; s->dma_errors = d->dma_errors;
+    s->busy = d->busy; s->queue_full = d->queue_full;
+    __DMB(); s->valid = 1U;
+}
+
+void sample_stream_diag_page(sample_audio_key_t key, uint32_t page,
+    sample_page_state_t old_state, sample_page_state_t new_state, uint32_t generation)
+{
+    volatile sample_stream_diag_t *const d = &g_sample_stream_diag;
+    if (old_state == new_state) return;
+    if (old_state == SAMPLE_PAGE_RESERVED && d->reserved) --d->reserved;
+    if (old_state == SAMPLE_PAGE_LOADING && d->loading) --d->loading;
+    if (old_state == SAMPLE_PAGE_READY && d->ready) --d->ready;
+    if (old_state == SAMPLE_PAGE_FAILED && d->failed) --d->failed;
+    if (new_state == SAMPLE_PAGE_RESERVED) ++d->reserved;
+    if (new_state == SAMPLE_PAGE_LOADING) ++d->loading;
+    if (new_state == SAMPLE_PAGE_READY) ++d->ready;
+    if (new_state == SAMPLE_PAGE_FAILED) ++d->failed;
+    uint32_t event = 0U;
+    if (new_state == SAMPLE_PAGE_RESERVED) event = STREAM_DIAG_RESERVED;
+    if (new_state == SAMPLE_PAGE_LOADING) event = STREAM_DIAG_LOADING;
+    if (new_state == SAMPLE_PAGE_READY) event = STREAM_DIAG_READY;
+    if (new_state == SAMPLE_PAGE_FAILED) event = STREAM_DIAG_FAILED;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_TARGET_MAX_VOICES; ++i) {
+        volatile sample_stream_diag_reader_t *const r = &d->reader[i];
+        if (r->active == 0U || (r->need_page != page && r->prev_need_page != page) ||
+            sample_audio_key_equal((const sample_audio_key_t *)&r->key, &key) == 0U) continue;
+        const uint32_t now = sample_stream_diag_now();
+        const uint8_t prior = (r->prev_need_page == page && r->need_page != page);
+        if (new_state == SAMPLE_PAGE_RESERVED) {
+            if (prior) r->prev_t_reserved = now; else r->t_reserved = now;
+        }
+        if (new_state == SAMPLE_PAGE_READY) {
+            if (prior) r->prev_t_ready = now; else r->t_ready = now;
+            r->page_generation = generation;
+            const uint32_t need = prior ? r->prev_t_need : r->t_need;
+            const uint32_t complete = prior ? r->prev_t_dma_complete : r->t_dma_complete;
+            if (need) sample_stream_diag_max(&d->max_need_ready, now - need);
+            if (complete) sample_stream_diag_max(&d->max_complete_ready, now - complete);
+        }
+    }
+    if (event == STREAM_DIAG_FAILED || event == STREAM_DIAG_READY)
+        sample_stream_diag_trace(event, UINT32_MAX, key, page, 0U, new_state, generation);
+}
+
+void sample_stream_diag_scheduler(uint32_t event, uint8_t slot, sample_audio_key_t key,
+                                  uint32_t page, uint32_t extra)
+{
+    volatile sample_stream_diag_t *const d = &g_sample_stream_diag;
+    d->scheduler_owner = slot;
+    if (event == STREAM_DIAG_RESERVE_FAIL) ++d->reserve_fail;
+    if (event == STREAM_DIAG_DELAYED) ++d->delayed;
+    if (event == STREAM_DIAG_QUEUE_FULL) ++d->queue_full;
+    sample_stream_diag_trace(event, slot, key, page, 0U, 0U, extra);
+}
+
+void sample_stream_diag_dma(uint32_t event, uint32_t owner, uint32_t lba, uint32_t extra)
+{
+    volatile sample_stream_diag_t *const d = &g_sample_stream_diag;
+    if (event == STREAM_DIAG_DMA_START) ++d->dma_starts;
+    if (event == STREAM_DIAG_DMA_COMPLETE) ++d->dma_completions;
+    if (event == STREAM_DIAG_DMA_ERROR) ++d->dma_errors;
+    if (event == STREAM_DIAG_QUEUE_FULL) ++d->queue_full;
+    if (event == STREAM_DIAG_DELAYED) ++d->busy;
+    const uint32_t now = sample_stream_diag_now();
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_TARGET_MAX_VOICES; ++i) {
+        volatile sample_stream_diag_reader_t *const r = &d->reader[i];
+        if (owner == 0U || (r->dma_owner != owner && r->prev_dma_owner != owner)) continue;
+        const uint8_t prior = (r->prev_dma_owner == owner && r->dma_owner != owner);
+        volatile uint32_t *const start = prior ? &r->prev_t_dma_start : &r->t_dma_start;
+        volatile uint32_t *const complete = prior ? &r->prev_t_dma_complete : &r->t_dma_complete;
+        const uint32_t need = prior ? r->prev_t_need : r->t_need;
+        if (event == STREAM_DIAG_DMA_START && *start == 0U) {
+            *start = now;
+            if (need) sample_stream_diag_max(&d->max_need_dma, now - need);
+        }
+        if (event == STREAM_DIAG_DMA_COMPLETE) {
+            *complete = now;
+            if (*start) sample_stream_diag_max(&d->max_dma_complete, now - *start);
+        }
+    }
+    sample_stream_diag_trace(event, owner, sample_audio_key_classic(0U), lba,
+                             0U, sd_block_device_async_hardware_state(), extra);
+    (void)now;
+}
+
+void sample_stream_diag_dma_owner(uint32_t owner, sample_audio_key_t key, uint32_t page)
+{
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_TARGET_MAX_VOICES; ++i) {
+        volatile sample_stream_diag_reader_t *const r = &g_sample_stream_diag.reader[i];
+        if (r->active && sample_audio_key_equal((const sample_audio_key_t *)&r->key, &key)) {
+            if (r->need_page == page) r->dma_owner = owner;
+            if (r->prev_need_page == page) r->prev_dma_owner = owner;
+        }
+    }
+}
 typedef struct
 {
     sample_stream_scheduler_candidate_t candidate;
@@ -55,6 +285,7 @@ static void sample_stream_manager_init_storage_once(void)
 
     sample_stream_io_init();
     sample_stream_transport_init();
+    sample_stream_diag_init();
     g_sample_stream_manager_initialized = 1U;
 }
 
@@ -72,6 +303,7 @@ void sample_stream_manager_reset(void)
     memset(g_sample_stream_manager_pending_io, 0,
            sizeof(g_sample_stream_manager_pending_io));
     g_sample_stream_manager_pending_count = 0U;
+    g_sample_stream_diag.scheduler_pending = 0U;
     sample_stream_scheduler_init();
 }
 
@@ -216,6 +448,7 @@ static uint8_t sample_stream_manager_pick_next(
     {
         return 0U;
     }
+    g_sample_stream_diag.scheduler_owner = candidate.voice_id;
     const sample_page_state_t state = sample_page_cache_get_page_state_key(
         candidate.key, candidate.page_index);
     uint8_t reserved_here = 0U;
@@ -226,6 +459,8 @@ static uint8_t sample_stream_manager_pick_next(
                 candidate.page_index,
                 SAMPLE_PAGE_ALLOC_VOICE_WINDOW) == 0U)
         {
+            sample_stream_diag_scheduler(STREAM_DIAG_RESERVE_FAIL,
+                candidate.voice_id, candidate.key, candidate.page_index, state);
             return 0U;
         }
         reserved_here = 1U;
@@ -340,11 +575,13 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
                        g_sample_stream_manager_pending_count - 1U],
                    0, sizeof(g_sample_stream_manager_pending_io[0]));
             --g_sample_stream_manager_pending_count;
+            g_sample_stream_diag.scheduler_pending = g_sample_stream_manager_pending_count;
             pages_this_call = (finished != 0U) ? 1U : 0U;
             return;
         }
         if (g_sample_stream_manager_pending_count >= 2U)
         {
+            ++g_sample_stream_diag.delayed;
             return;
         }
     }
@@ -412,11 +649,14 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
         if (sample_stream_transport_submit(
                 &pending->command, &pending->transport_sequence) == 0U)
         {
+            sample_stream_diag_scheduler(STREAM_DIAG_QUEUE_FULL,
+                candidate.voice_id, candidate.key, candidate.page_index, 0U);
             (void)sample_stream_manager_finish_io(pending, &io_result);
             return;
         }
         pending->active = 1U;
         ++g_sample_stream_manager_pending_count;
+        g_sample_stream_diag.scheduler_pending = g_sample_stream_manager_pending_count;
         if (sample_stream_transport_take_result(
                 g_sample_stream_manager_pending_io[0].transport_sequence,
                 &io_result) == 0U)
@@ -431,6 +671,7 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
                 g_sample_stream_manager_pending_io[1];
         }
         --g_sample_stream_manager_pending_count;
+        g_sample_stream_diag.scheduler_pending = g_sample_stream_manager_pending_count;
         memset(&g_sample_stream_manager_pending_io[g_sample_stream_manager_pending_count],
                0, sizeof(g_sample_stream_manager_pending_io[0]));
         pending = &completed_pending;
@@ -460,6 +701,9 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
 
 void sample_stream_manager_service(uint32_t byte_budget)
 {
+    g_sample_stream_diag.scheduler_pending = g_sample_stream_manager_pending_count;
+    g_sample_stream_diag.sd_pending = sd_block_device_async_pending_count();
+    g_sample_stream_diag.sd_state = sd_block_device_async_hardware_state();
     sample_stream_manager_service_impl(byte_budget);
 }
 

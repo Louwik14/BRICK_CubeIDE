@@ -51,6 +51,11 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
     }
     if (memcmp(state->lease_ranges, ranges, sizeof(ranges)) != 0)
     {
+        const uint8_t diag_slot = sample_voice_reader_diag_slot(state);
+        if (diag_slot < SAMPLE_STREAM_TARGET_MAX_VOICES) {
+            sample_stream_diag_need(diag_slot, state->key, frame_pos,
+                (ranges[0].page_count > 1U) ? page + 1U : page);
+        }
         (void)sample_page_lease_audio_publish(state->lease_slot,
                                               state->key,
                                               state->registration_epoch,
@@ -241,6 +246,10 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
     state->audio_cursor.registration_epoch = span.registration_epoch;
     state->audio_cursor.current_acquired = 1U;
     state->audio_cursor.active = 1U;
+    const uint8_t diag_slot = sample_voice_reader_diag_slot(state);
+    if (diag_slot < SAMPLE_STREAM_TARGET_MAX_VOICES)
+        sample_stream_diag_use(diag_slot, frame_pos, page_index,
+            span.start_frame + span.frame_count - frame_pos, span.page_generation);
 #if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
     sample_voice_reader_capture_loop_page(state, &span);
 #endif
@@ -690,6 +699,8 @@ void sample_voice_reader_reset(sample_voice_reader_t *reader)
     }
 
     sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    const uint8_t diag_slot = sample_voice_reader_diag_slot(state);
+    if (diag_slot < SAMPLE_STREAM_TARGET_MAX_VOICES) sample_stream_diag_unbind(diag_slot);
 #if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
     sample_voice_reader_release_loop_cache(state);
 #endif
@@ -752,6 +763,8 @@ uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
     state->active = 1U;
     state->plan = *plan;
     state->plan_valid = 1U;
+    if (plan->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
+        sample_stream_diag_bind(reader_id, plan->key, plan->registration_epoch, plan->start_frame);
     sample_voice_reader_publish_lease(state, plan->start_frame);
 
     if (sample_voice_reader_acquire_audio_page(state, plan->start_frame) == 0U)

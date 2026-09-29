@@ -5,6 +5,9 @@
 #include <string.h>
 
 #include "Sampler/sample_stream_limits.h"
+#include "Sampler/sample_stream_diag.h"
+#include "Sampler/sample_page_cache_shared_contract.h"
+#include "Platform/intercore_cache.h"
 #include "Platform/memory_layout.h"
 
 #define SAMPLE_Q16_ONE (65536U)
@@ -52,6 +55,43 @@ void sample_voice_reader_init(void)
 #if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
     memset(g_sample_voice_loop_cache, 0, sizeof(g_sample_voice_loop_cache));
 #endif
+}
+
+static uint8_t sample_voice_reader_diag_slot(const sample_voice_reader_state_t *state)
+{
+    return (state->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI
+            && state->lease_slot >= SAMPLE_PAGE_LEASE_MULTI_BASE)
+        ? (uint8_t)(state->lease_slot - SAMPLE_PAGE_LEASE_MULTI_BASE) : UINT8_MAX;
+}
+
+static void sample_voice_reader_diag_fault(sample_voice_reader_state_t *state,
+                                           uint32_t frame)
+{
+    const uint8_t slot = sample_voice_reader_diag_slot(state);
+    if (slot >= SAMPLE_STREAM_TARGET_MAX_VOICES || state->frames_per_page == 0U) return;
+    const uint32_t page = frame / state->frames_per_page;
+    const sample_page_state_t page_state = sample_page_cache_audio_get_page_state_key(state->key, page);
+    sample_stream_diag_fault(slot, state->key, frame, page, page_state,
+        (page_state == SAMPLE_PAGE_FREE) ? STREAM_DIAG_AUDIO_MISS : STREAM_DIAG_AUDIO_NOT_READY);
+}
+
+static void sample_voice_reader_diag_check_cursor(sample_voice_reader_state_t *state)
+{
+    const uint8_t slot = sample_voice_reader_diag_slot(state);
+    if (slot >= SAMPLE_STREAM_TARGET_MAX_VOICES || state->audio_cursor.current_acquired == 0U) return;
+    const sample_page_ref_t *const ref = &state->audio_cursor.current_page_ref;
+    if (ref->slot_index >= SAMPLE_PAGE_MAX_COUNT) return;
+    const sample_page_shared_descriptor_t *const page = &g_sample_page_shared_descriptor[ref->slot_index];
+    intercore_cache_consume(page, sizeof(*page));
+    uint32_t event = 0U;
+    if (sample_audio_key_equal(&page->key, &ref->key) == 0U || page->page_index != ref->page_index)
+        event = STREAM_DIAG_AUDIO_BAD_KEY;
+    else if (page->generation != ref->page_generation ||
+             page->registration_epoch != ref->registration_epoch)
+        event = STREAM_DIAG_AUDIO_BAD_EPOCH;
+    else if (page->state != SAMPLE_PAGE_READY) event = STREAM_DIAG_AUDIO_NOT_READY;
+    if (event) sample_stream_diag_fault(slot, state->key, state->frame_pos,
+        ref->page_index, page->state, event);
 }
 
 

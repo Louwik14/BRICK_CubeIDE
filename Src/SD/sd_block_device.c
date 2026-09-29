@@ -10,6 +10,7 @@
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/rec_sd_trace.h"
+#include "Sampler/sample_stream_diag.h"
 
 #include "sdmmc.h"
 #include "stm32h7xx_hal.h"
@@ -109,6 +110,10 @@ void sd_block_device_async_init(void)
 static void sd_block_device_complete(sd_block_device_async_entry_t *entry,
                                      sd_block_device_result_t result)
 {
+    if (entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
+        sample_stream_diag_dma((result == SD_BLOCK_DEVICE_OK)
+            ? STREAM_DIAG_DMA_COMPLETE : STREAM_DIAG_DMA_ERROR,
+            entry->owner_generation, entry->lba, (uint32_t)result);
     if (result != SD_BLOCK_DEVICE_OK)
         rec_sd_trace_note_sd(REC_SD_TRACE_SD_IO, entry->lba,
             (rec_sd_trace_sd_meta_t){
@@ -363,6 +368,9 @@ static void sd_block_device_async_start_head(void)
         brick_sd_media_fault();
         sd_block_device_complete(entry, SD_BLOCK_DEVICE_DMA_START_FAIL);
     }
+    else if (entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
+        sample_stream_diag_dma(STREAM_DIAG_DMA_START,
+            entry->owner_generation, entry->lba, entry->sector_count);
 }
 
 static sd_block_device_result_t sd_block_device_validate_submit(
@@ -404,6 +412,7 @@ static sd_block_device_result_t sd_block_device_async_read_submit_internal(
     }
     if(g_sd_block_device_async_count >= 2U)
     {
+        sample_stream_diag_dma(STREAM_DIAG_QUEUE_FULL, owner_generation, lba, sector_count);
         return SD_BLOCK_DEVICE_QUEUE_FULL;
     }
 
