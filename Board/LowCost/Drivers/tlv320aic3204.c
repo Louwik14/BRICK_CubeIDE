@@ -8,6 +8,11 @@
 #define TLV_DEVICE_READY_TIMEOUT_MS 100U
 #define TLV_BLOCK_READY_TIMEOUT_MS 100U
 #define TLV_CODEC_STARTUP_WAIT_MS 5U
+#define TLV_HEADPHONE_SETTLE_TIMEOUT_MS 2000U
+/* P1_R20: 6 kohm charging resistance, 5 time constants (47 uF: about 1.41 s). */
+#define TLV_HEADPHONE_RPOP_6K 0x01U
+#define TLV_HEADPHONE_N5 0x09U
+#define TLV_HEADPHONE_STARTUP_VALUE ((TLV_HEADPHONE_N5 << 2) | TLV_HEADPHONE_RPOP_6K)
 
 enum
 {
@@ -46,6 +51,7 @@ enum
   TLV_P1_HPL_GAIN = 16,
   TLV_P1_HPR_GAIN = 17,
   TLV_P1_HEADPHONE_STARTUP = 20,
+  TLV_P1_DAC_GAIN_FLAGS = 63,
   TLV_P1_MICBIAS = 51,
   TLV_P1_LEFT_P_ROUTE = 52,
   TLV_P1_LEFT_M_ROUTE = 54,
@@ -466,7 +472,11 @@ static tlv320aic3204_status_t tlv_init(const tlv320aic3204_config_t *config)
   status = tlv_write_extended(config->i2c, config->address_7bit, 0U, TLV_RIGHT_AGC, 0x00U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
 
-  /* Keep the analog drivers muted until clocks, DACs and routes are live. */
+  /* Configure depop while HPL/HPR are still powered down. Never change it while powered. */
+  status = tlv_write_checked(config->i2c, config->address_7bit, 1U,
+                             TLV_P1_HEADPHONE_STARTUP, TLV_HEADPHONE_STARTUP_VALUE);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
+
   tlv_set_stage(TLV320AIC3204_STAGE_OUTPUT_MUTE);
   status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_GAIN, 0x40U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
@@ -478,15 +488,13 @@ static tlv320aic3204_status_t tlv_init(const tlv320aic3204_config_t *config)
   status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_ROUTE, 0x08U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   g_tlv_diag.output_routed = 1U;
-  status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HEADPHONE_STARTUP, 0x25U);
-  if (status != TLV320AIC3204_STATUS_OK) { return status; }
-
   tlv_set_stage(TLV320AIC3204_STAGE_DAC_ROUTE);
   status = tlv_write_checked(config->i2c, config->address_7bit, 0U, TLV_DAC_DATAPATH, 0xD4U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   g_tlv_diag.dac_routed = 1U;
   tlv_set_stage(TLV320AIC3204_STAGE_DAC_VOLUME);
-  status = tlv_write_checked(config->i2c, config->address_7bit, 0U, TLV_DAC_VOLUME_CTRL, 0x00U);
+  /* Keep the DACs muted while the headphone drivers charge their coupling caps. */
+  status = tlv_write_checked(config->i2c, config->address_7bit, 0U, TLV_DAC_VOLUME_CTRL, 0x0CU);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   status = tlv_write_checked(config->i2c, config->address_7bit, 0U, TLV_LEFT_DAC_VOL, 0x00U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
@@ -505,6 +513,13 @@ static tlv320aic3204_status_t tlv_init(const tlv320aic3204_config_t *config)
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   g_tlv_diag.dac_powered = 1U;
 
+  /* TI sequence: set the final HPL/HPR gain before powering their drivers. */
+  tlv_set_stage(TLV320AIC3204_STAGE_OUTPUT_UNMUTE);
+  status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_GAIN, 0x00U);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
+  status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_GAIN, 0x00U);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
+
   tlv_set_stage(TLV320AIC3204_STAGE_OUTPUT_POWER);
   status = tlv_write_checked(config->i2c,
                              config->address_7bit,
@@ -513,13 +528,22 @@ static tlv320aic3204_status_t tlv_init(const tlv320aic3204_config_t *config)
                              0x30U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   tlv_set_stage(TLV320AIC3204_STAGE_OUTPUT_READY);
+  /* On timeout, leave both DACs muted and report OUTPUT_READY/READY_TIMEOUT. */
+  status = tlv_wait_mask(config->i2c,
+                         config->address_7bit,
+                         1U,
+                         TLV_P1_DAC_GAIN_FLAGS,
+                         0xC0U,
+                         0xC0U,
+                         TLV_HEADPHONE_SETTLE_TIMEOUT_MS);
+  if (status != TLV320AIC3204_STATUS_OK) { return status; }
   status = tlv_wait_mask(config->i2c,
                          config->address_7bit,
                          0U,
                          TLV_DAC_FLAG_1,
                          0xAAU,
                          0xAAU,
-                         TLV_BLOCK_READY_TIMEOUT_MS);
+                         TLV_HEADPHONE_SETTLE_TIMEOUT_MS);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   g_tlv_diag.output_powered = 1U;
   tlv_set_stage(TLV320AIC3204_STAGE_ADC_READY);
@@ -533,9 +557,7 @@ static tlv320aic3204_status_t tlv_init(const tlv320aic3204_config_t *config)
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
 
   tlv_set_stage(TLV320AIC3204_STAGE_OUTPUT_UNMUTE);
-  status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPL_GAIN, 0x00U);
-  if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = tlv_write_checked(config->i2c, config->address_7bit, 1U, TLV_P1_HPR_GAIN, 0x00U);
+  status = tlv_write_checked(config->i2c, config->address_7bit, 0U, TLV_DAC_VOLUME_CTRL, 0x00U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   g_tlv_diag.output_unmuted = 1U;
   g_tlv_diag.dac_unmuted = 1U;
