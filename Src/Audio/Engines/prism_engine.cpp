@@ -363,6 +363,10 @@ void brick6_braids_runtime_sync_voice(uint8_t track_instance, uint8_t voice_inst
                 dst->osc[osc].voice.edit != src->osc[osc].voice.edit;
             dst->osc[osc].voice.edit = src->osc[osc].voice.edit;
             dst->osc[osc].phase_reset_enabled = src->osc[osc].phase_reset_enabled;
+            if (dst->osc[osc].phase_reset_enabled == 0U)
+            {
+                dst->osc[osc].phase_reset_pending = 0U;
+            }
             if (shape_changed)
             {
                 synth_waveform_audio_restart_instance(voice_instance);
@@ -873,11 +877,13 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
                 }
                 osc->oscillator.set_shape(
                     brick6_braids_runtime_shape_from_edit(osc->voice.edit));
-                if (osc->voice.trigger != 0U)
+                if (sync_block[0] != 0U)
                 {
+                    // Braids Strike also reinitializes phases in several digital models.
+                    // Only the phase reset latched at NOTE ON may issue a strike.
                     osc->oscillator.Strike();
-                    osc->voice.trigger = 0U;
                 }
+                osc->voice.trigger = 0U;
                 osc->pitch_current_q7 = pitch_target_q7[osc_index];
                 osc->parameter_timbre_current = parameter_timbre_target[osc_index];
                 osc->parameter_color_current = parameter_color_target[osc_index];

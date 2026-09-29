@@ -8,6 +8,10 @@ zero to a maximum positive offset of 24 semitones:
 
 This control is not audio-rate FM and does not cross-modulate the two Prism
 oscillators. `PHASE` is one global trigger phase-reset switch for both oscillators.
+When enabled, NOTE ON sends Braids a sync pulse and a strike. When disabled,
+NOTE ON sends neither: in particular, Braids' digital strike must not restart
+model-specific oscillator phases. Oscillator initialization belongs to runtime
+instance creation; changing a model may initialize that model's own state.
 
 `DETUNE` is the fixed bipolar pitch offset applied to OSC2 only (-24 to +24
 semitones). `DRIFT` adds an independent random pitch offset to each oscillator at NOTE ON.
