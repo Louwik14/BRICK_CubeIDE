@@ -27,7 +27,8 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                                        ui_hall_input_service_set_active_track_fn set_active_track,
                                        ui_hall_input_service_feedback_fn feedback)
 {
-    if ((mute_active != 0U) && (hall < SEQ_LANE_CAPACITY))
+    if ((mute_active != 0U) && (shift_down == 0U)
+        && (hall < SEQ_LANE_CAPACITY))
     {
         if ((was_pressed == 0U) && (pressed != 0U))
         {

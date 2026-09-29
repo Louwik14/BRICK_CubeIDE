@@ -156,8 +156,7 @@ static void ui_core_mute_apply_prepared_and_exit(ui_core_mute_set_hall_mode_fn s
 {
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
-        if ((entity_topology_is_active((brick_entity_id_t)track) == 0U)
-                || (track_runtime_has_capability(track, TRACK_CAPABILITY_MUTE) == 0U))
+        if (track_mute_is_available(track) == 0U)
         {
             continue;
         }
@@ -185,8 +184,7 @@ static void ui_core_mute_toggle_quick_track(uint8_t track)
 
 static void ui_core_mute_toggle_prepared_track(uint8_t track)
 {
-    if ((entity_topology_is_active((brick_entity_id_t)track) == 0U)
-            || (track_runtime_has_capability(track, TRACK_CAPABILITY_MUTE) == 0U))
+    if (track_mute_is_available(track) == 0U)
     {
         return;
     }
@@ -274,7 +272,7 @@ uint8_t ui_core_mute_get_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
         return 1U;
     }
 
-    if (entity_topology_is_active((brick_entity_id_t)hall) == 0U)
+    if (track_mute_is_available(hall) == 0U)
     {
         return 1U;
     }
@@ -401,6 +399,10 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < SEQ_LANE_CAPACITY))
     {
+        if (*io_shift_down != 0U)
+        {
+            return 0U;
+        }
         if (suppress_hall_note != 0)
         {
             suppress_hall_note(ev->id);
@@ -420,6 +422,10 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < SEQ_LANE_CAPACITY))
     {
+        if (*io_shift_down != 0U)
+        {
+            return 0U;
+        }
         return 1U;
     }
 

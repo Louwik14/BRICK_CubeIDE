@@ -1,6 +1,8 @@
 #include "ui_navigation.h"
 
 #include "ui_core.h"
+#include "ui_core_mute.h"
+#include "ui_hall_mode_state.h"
 #include "Track/track_runtime.h"
 #include "pages/ui_page_template_mix.h"
 #include "pages/ui_page_template_env.h"
@@ -138,10 +140,19 @@ static uint8_t ui_navigation_resolve_effective_ensemble_page(void)
     return UI_PAGE_TEMPLATE_CFG;
 }
 
+static void ui_navigation_leave_mute(void)
+{
+    if (ui_core_mute_is_active() != 0U)
+    {
+        ui_set_hall_mode(ui_core_mute_get_passthrough_hall_mode());
+    }
+}
+
 void ui_navigation_request_ensemble_page(uint8_t page_id)
 {
     if (page_id == UI_PAGE_TEMPLATE_CFG)
     {
+        ui_navigation_leave_mute();
         if (ui_page_audio_rec_is_open() != 0U)
         {
             ui_hall_mode_flow_leave_lowcost_modal_page();
@@ -163,6 +174,8 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
     {
         return;
     }
+
+    ui_navigation_leave_mute();
 
     if (ui_page_audio_rec_is_open() != 0U)
     {
@@ -207,6 +220,7 @@ void ui_navigation_request_page_with_availability(uint8_t page_id)
         return;
     }
 
+    ui_navigation_leave_mute();
     ui_page_set(page_id);
 }
 
