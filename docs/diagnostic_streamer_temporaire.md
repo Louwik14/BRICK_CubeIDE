@@ -12,6 +12,28 @@ Le chemin observé est : `sample_voice_reader_publish_lease` (AUDIO, position et
 Le backend écrit le FLOAT32 directement dans la page finale. Une page stéréo vaut
 64 KiB et 8192 frames.
 
+Le run matériel initial a montré que le diagnostic AUDIO restait vide. Le mode
+Stream de clip résout sa source par `sample_classic_audio_projection_resolve`
+(key CLASSIC, ou REC si la source est un enregistrement), puis appelle
+`sample_voice_reader_bind_play_plan` avec un reader physique `2 + track_id`.
+Le rendu stéréo 1x Release passe par
+`brick6_sampler_runtime_render_stream_fwd_1x_fast` et
+`sample_voice_reader_render_fwd_1x_ready_simple`. Ce kernel lit le
+`audio_cursor.current_base` déjà acquis et ne traverse pas
+`sample_voice_reader_prepare_multi_fwd_1x`, où se trouvait la vérification
+précédente. Le filtrage diagnostic limité à `SAMPLE_AUDIO_DOMAIN_MULTI`
+rejetait aussi tous les readers de clip. Le diagnostic mappe désormais les
+readers de clip 2..9 sur `reader[0..7]` et contrôle le curseur directement
+avant la lecture FLOAT32 dans le kernel rapide. À la frontière de page,
+`sample_voice_reader_acquire_audio_page` appelle
+`sample_page_cache_audio_resolve_page_key` ; son échec est capturé dans ce
+kernel. Le chemin segment et son voisin de page sont également capturés.
+
+Pour Multi Sample, `sample_voice_reader_bind_play_plan` reçoit
+`BRICK6_SAMPLER_CACHE_VOICE_NONE` (255) ; l'identité physique 0..7 n'arrive
+qu'à `sample_voice_reader_bind_loop_cache_incarnation`. Le diagnostic se lie
+donc aussi à cette fonction pour ce chemin.
+
 ## RAM et lecture GDB
 
 `g_sample_stream_diag` est un symbole global conservé avec LTO. Retrouver son adresse

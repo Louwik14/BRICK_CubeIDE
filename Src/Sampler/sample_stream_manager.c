@@ -61,7 +61,9 @@ void sample_stream_diag_init(void)
 
 void sample_stream_diag_bind(uint8_t slot, sample_audio_key_t key, uint32_t epoch, uint32_t frame)
 {
-    if (slot >= SAMPLE_STREAM_TARGET_MAX_VOICES || key.domain != SAMPLE_AUDIO_DOMAIN_MULTI) return;
+    if (slot >= SAMPLE_STREAM_TARGET_MAX_VOICES ||
+        (key.domain != SAMPLE_AUDIO_DOMAIN_MULTI && key.domain != SAMPLE_AUDIO_DOMAIN_CLASSIC
+         && key.domain != SAMPLE_AUDIO_DOMAIN_REC)) return;
     volatile sample_stream_diag_reader_t *const r = &g_sample_stream_diag.reader[slot];
     if (r->active == 0U) ++g_sample_stream_diag.active_readers;
     memset((void *)r, 0, sizeof(*r));
@@ -80,7 +82,9 @@ void sample_stream_diag_unbind(uint8_t slot)
 
 void sample_stream_diag_need(uint8_t slot, sample_audio_key_t key, uint32_t frame, uint32_t page)
 {
-    if (slot >= SAMPLE_STREAM_TARGET_MAX_VOICES || key.domain != SAMPLE_AUDIO_DOMAIN_MULTI) return;
+    if (slot >= SAMPLE_STREAM_TARGET_MAX_VOICES ||
+        (key.domain != SAMPLE_AUDIO_DOMAIN_MULTI && key.domain != SAMPLE_AUDIO_DOMAIN_CLASSIC
+         && key.domain != SAMPLE_AUDIO_DOMAIN_REC)) return;
     volatile sample_stream_diag_reader_t *const r = &g_sample_stream_diag.reader[slot];
     r->frame = frame; r->next_page = page;
     if (r->need_page == page && r->t_need != 0U) return;
