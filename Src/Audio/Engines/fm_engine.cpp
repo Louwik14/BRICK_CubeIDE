@@ -31,6 +31,7 @@ struct fm_voice_t
     int32_t operator_output_level_offset[kOperatorCount];
     uint8_t operator_level[kOperatorCount];
     float operator_frequency[kOperatorCount];
+    uint8_t operator_frequency_exact[kOperatorCount];
     uint8_t operator_coarse[kOperatorCount];
     uint8_t operator_fine[kOperatorCount];
     int8_t operator_detune[kOperatorCount];
@@ -295,7 +296,8 @@ static int32_t operator_log_frequency(const fm_voice_t *voice, uint8_t note, int
         if (step != 0) frequency *= (bipolar < 0.0f) ? (1.0f / (float)(step + 1))
                                                      : (float)(step + 1);
     }
-    if (voice->ratio != 0.5f && operator_is_carrier(voice->algorithm, op) == 0U)
+    const bool exact = voice->operator_frequency_exact[op] != 0U;
+    if (!exact && voice->ratio != 0.5f && operator_is_carrier(voice->algorithm, op) == 0U)
     {
         if (mode == 0) ratio_to_dx_frequency(frequency, &coarse, &fine);
         else fixed_to_dx_frequency(frequency, &coarse, &fine);
@@ -308,13 +310,20 @@ static int32_t operator_log_frequency(const fm_voice_t *voice, uint8_t note, int
         log_frequency = 50857777 + (int32_t)note * (kQ24 / 12);
         const double detune_ratio = 0.0209 * exp(-0.396 * ((double)log_frequency / kQ24)) / 7.0;
         log_frequency += (int32_t)(detune_ratio * log_frequency * (detune - 7));
-        log_frequency += kCoarseMul[coarse & 31];
-        if (fine != 0)
-            log_frequency += (int32_t)floor(24204406.323123 * log(1.0 + 0.01 * fine) + 0.5);
+        if (exact)
+            log_frequency += (int32_t)(log2f(frequency) * (float)kQ24);
+        else
+        {
+            log_frequency += kCoarseMul[coarse & 31];
+            if (fine != 0)
+                log_frequency += (int32_t)floor(24204406.323123 * log(1.0 + 0.01 * fine) + 0.5);
+        }
     }
     else
     {
-        log_frequency = (4458616 * ((coarse & 3) * 100 + fine)) >> 3;
+        log_frequency = exact
+            ? (int32_t)(log2f(440.0f * frequency) * (float)kQ24)
+            : (4458616 * ((coarse & 3) * 100 + fine)) >> 3;
         if (detune > 7)
             log_frequency += 13457 * (detune - 7);
     }
@@ -556,6 +565,7 @@ static void reset_voice(fm_voice_t *voice)
            sizeof(voice->operator_output_level_offset));
     memset(voice->operator_level, 0, sizeof(voice->operator_level));
     memset(voice->operator_frequency, 0, sizeof(voice->operator_frequency));
+    memset(voice->operator_frequency_exact, 0, sizeof(voice->operator_frequency_exact));
     memset(voice->operator_coarse, 0, sizeof(voice->operator_coarse));
     memset(voice->operator_fine, 0, sizeof(voice->operator_fine));
     memset(voice->operator_detune, 0, sizeof(voice->operator_detune));
@@ -949,8 +959,10 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
         {
             const float next = (value < 0.25f) ? 0.25f
                 : ((value > 16.0f) ? 16.0f : value);
-            if (voice->operator_frequency[op] == next) return;
+            if ((voice->operator_frequency[op] == next)
+                    && (voice->operator_frequency_exact[op] != 0U)) return;
             voice->operator_frequency[op] = next;
+            voice->operator_frequency_exact[op] = 1U;
             voice->dirty_frequency_value &= (uint8_t)~(1U << op);
             voice->dirty_frequency_code |= (uint8_t)(1U << op);
             break;
@@ -1051,8 +1063,13 @@ void brick6_fm_runtime_set_base_voice(uint8_t instance_id,
     {
         const int op = (int)brick_operator_to_msfa_index(brick_op);
         const track_tone_fm_operator_base_t *const source = &base->operators[brick_op];
+        const uint8_t exact = (source->coarse & 0x80U) != 0U;
+        const float exact_frequency = (float)(((uint16_t)(source->coarse & 0x7fU) * 100U)
+            + source->fine) * 0.01f;
         const uint8_t frequency_changed = (uint8_t)(
             (voice->operator_mode[op] != ((source->mode != 0U) ? 1U : 0U))
+            || (voice->operator_frequency_exact[op] != exact)
+            || (exact && voice->operator_frequency[op] != exact_frequency)
             || (voice->operator_coarse[op] != ((source->mode == 0U)
                 ? (uint8_t)(source->coarse & 31U) : (uint8_t)(source->coarse & 3U)))
             || (voice->operator_fine[op] != ((source->fine > 99U) ? 99U : source->fine))
@@ -1082,6 +1099,8 @@ void brick6_fm_runtime_set_base_voice(uint8_t instance_id,
         voice->operator_rate_scaling[op] = (source->rate_scaling > 7U) ? 7U : source->rate_scaling;
         voice->operator_level[op] = (source->output_level > 99U) ? 99U : source->output_level;
         voice->operator_mode[op] = (source->mode != 0U) ? 1U : 0U;
+        voice->operator_frequency_exact[op] = exact;
+        if (exact) voice->operator_frequency[op] = exact_frequency;
         voice->operator_coarse[op] = (voice->operator_mode[op] == 0U)
             ? (uint8_t)(source->coarse & 31U) : (uint8_t)(source->coarse & 3U);
         voice->operator_fine[op] = (source->fine > 99U) ? 99U : source->fine;
@@ -1095,7 +1114,8 @@ void brick6_fm_runtime_set_base_voice(uint8_t instance_id,
         {
             voice->dirty_frequency |= bit;
             voice->dirty_frequency_code &= (uint8_t)~bit;
-            voice->dirty_frequency_value |= bit;
+            if (!exact) voice->dirty_frequency_value |= bit;
+            else voice->dirty_frequency_value &= (uint8_t)~bit;
         }
         if (envelope_changed != 0U) voice->dirty_envelope |= bit;
         if (output_changed != 0U) voice->dirty_output_level |= bit;
@@ -1130,8 +1150,17 @@ uint8_t brick6_fm_runtime_get_base_voice(uint8_t instance_id,
         dst->rate_scaling = voice->operator_rate_scaling[op];
         dst->output_level = voice->operator_level[op];
         dst->mode = voice->operator_mode[op];
-        dst->coarse = voice->operator_coarse[op];
-        dst->fine = voice->operator_fine[op];
+        if (voice->operator_frequency_exact[op] != 0U)
+        {
+            const uint16_t code = (uint16_t)(voice->operator_frequency[op] * 100.0f + 0.5f);
+            dst->coarse = (uint8_t)(0x80U | (code / 100U));
+            dst->fine = (uint8_t)(code % 100U);
+        }
+        else
+        {
+            dst->coarse = voice->operator_coarse[op];
+            dst->fine = voice->operator_fine[op];
+        }
         dst->detune = voice->operator_detune[op];
         dst->velocity_sensitivity = voice->operator_velocity[op];
         dst->enabled = voice->operator_on[op];
@@ -1201,6 +1230,7 @@ void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destinatio
     for (int op = 0; op < kOperatorCount; ++op)
     {
         refresh_frequency[op] = (destination->operator_frequency[op] != source->operator_frequency[op])
+            || (destination->operator_frequency_exact[op] != source->operator_frequency_exact[op])
             || (destination->operator_coarse[op] != source->operator_coarse[op])
             || (destination->operator_fine[op] != source->operator_fine[op])
             || (destination->operator_detune[op] != source->operator_detune[op])
@@ -1239,6 +1269,7 @@ void brick6_fm_runtime_sync_voice(uint8_t source_instance_id, uint8_t destinatio
     memcpy(destination->pitch_levels, source->pitch_levels, sizeof(destination->pitch_levels));
     memcpy(destination->operator_level, source->operator_level, sizeof(destination->operator_level));
     memcpy(destination->operator_frequency, source->operator_frequency, sizeof(destination->operator_frequency));
+    memcpy(destination->operator_frequency_exact, source->operator_frequency_exact, sizeof(destination->operator_frequency_exact));
     memcpy(destination->operator_coarse, source->operator_coarse, sizeof(destination->operator_coarse));
     memcpy(destination->operator_fine, source->operator_fine, sizeof(destination->operator_fine));
     memcpy(destination->operator_detune, source->operator_detune, sizeof(destination->operator_detune));

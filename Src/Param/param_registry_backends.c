@@ -264,6 +264,8 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value)
         const uint8_t operator_id = (uint8_t)(offset / PARAM_FM_OPERATOR_PARAM_COUNT);
         const brick6_fm_operator_param_t operator_param =
             (brick6_fm_operator_param_t)(offset % PARAM_FM_OPERATOR_PARAM_COUNT);
+        if (operator_param == BRICK6_FM_OPERATOR_VEL) value /= 7.0f;
+        else if (operator_param == BRICK6_FM_OPERATOR_KEY) value /= 99.0f;
         brick6_fm_runtime_set_operator(ctx->program_route.instance_id, operator_id, operator_param, value);
         return 1U;
     }

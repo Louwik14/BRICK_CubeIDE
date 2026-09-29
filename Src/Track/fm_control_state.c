@@ -21,47 +21,24 @@ static float fm_clampf(float value, float minimum, float maximum)
 
 static float fm_operator_frequency(const track_tone_fm_operator_base_t *op)
 {
+    if ((op->coarse & 0x80U) != 0U)
+        return 0.01f * (float)(((uint16_t)(op->coarse & 0x7fU) * 100U) + op->fine);
     if (op->mode == 0U)
     {
         const float coarse = (op->coarse == 0U) ? 0.5f : (float)(op->coarse & 31U);
         return coarse * (1.0f + 0.01f * (float)op->fine);
     }
-    return 0.01f * (float)(((uint16_t)(op->coarse & 3U) * 100U) + op->fine);
+    return powf(10.0f, 0.01f * (float)(((uint16_t)(op->coarse & 3U) * 100U)
+        + op->fine)) / 440.0f;
 }
 
 static void fm_operator_set_frequency(track_tone_fm_operator_base_t *op,
                                       float value)
 {
     value = fm_clampf(value, 0.25f, 16.0f);
-    if (op->mode != 0U)
-    {
-        uint16_t code = (uint16_t)(value * 100.0f + 0.5f);
-        if (code > 399U) code = 399U;
-        op->coarse = (uint8_t)(code / 100U);
-        op->fine = (uint8_t)(code % 100U);
-        return;
-    }
-    float best_error = 1000.0f;
-    uint8_t best_coarse = 0U;
-    uint8_t best_fine = 0U;
-    for (uint8_t coarse = 0U; coarse < 32U; ++coarse)
-    {
-        const float base = (coarse == 0U) ? 0.5f : (float)coarse;
-        int16_t fine = (int16_t)(((value / base) - 1.0f) * 100.0f + 0.5f);
-        if (fine < 0) fine = 0;
-        if (fine > 99) fine = 99;
-        const float represented = base * (1.0f + 0.01f * (float)fine);
-        const float error = (represented > value)
-            ? represented - value : value - represented;
-        if (error < best_error)
-        {
-            best_error = error;
-            best_coarse = coarse;
-            best_fine = (uint8_t)fine;
-        }
-    }
-    op->coarse = best_coarse;
-    op->fine = best_fine;
+    const uint16_t code = (uint16_t)(value * 100.0f + 0.5f);
+    op->coarse = (uint8_t)(0x80U | (code / 100U));
+    op->fine = (uint8_t)(code % 100U);
 }
 
 void fm_control_state_make_default(fm_control_state_t *state)
@@ -193,7 +170,11 @@ uint8_t fm_control_state_validate(const fm_control_state_t *state)
                 || (v->right_depth > 99U) || (v->left_curve > 3U)
                 || (v->right_curve > 3U) || (v->rate_scaling > 7U)
                 || (v->output_level > 99U) || (v->mode > 1U)
-                || (v->coarse > 31U) || (v->fine > 99U)
+                || (((v->coarse & 0x80U) == 0U) && (v->coarse > 31U))
+                || (((v->coarse & 0x80U) != 0U)
+                    && (((((uint16_t)(v->coarse & 0x7fU) * 100U) + v->fine) < 25U)
+                        || ((((uint16_t)(v->coarse & 0x7fU) * 100U) + v->fine) > 1600U)))
+                || (v->fine > 99U)
                 || (v->detune < -7) || (v->detune > 7)
                 || (v->velocity_sensitivity > 7U) || (v->enabled > 1U))
             return 0U;
@@ -242,9 +223,9 @@ uint8_t fm_control_state_set_public_param(uint8_t entity,
             case 6U: base->rates[3] = (uint8_t)(value + 0.5f); break;
             case 7U: base->enabled = (value >= 0.5f) ? 1U : 0U; break;
             case 8U: base->mode = (value >= 0.5f) ? 1U : 0U; break;
-            case 9U: base->velocity_sensitivity = (uint8_t)(fm_clampf(value, 0.0f, 1.0f) * 7.0f + 0.5f); break;
+            case 9U: base->velocity_sensitivity = (uint8_t)(fm_clampf(value, 0.0f, 7.0f) + 0.5f); break;
             case 10U:
-                base->left_depth = (uint8_t)(fm_clampf(value, 0.0f, 1.0f) * 99.0f + 0.5f);
+                base->left_depth = (uint8_t)(fm_clampf(value, 0.0f, 99.0f) + 0.5f);
                 base->right_depth = base->left_depth;
                 break;
             default: break;
@@ -302,10 +283,10 @@ static uint8_t fm_control_state_get_public_param_from(
             case 6U: *out_value = (float)base->rates[3]; break;
             case 7U: *out_value = (float)base->enabled; break;
             case 8U: *out_value = (float)base->mode; break;
-            case 9U: *out_value = (float)base->velocity_sensitivity / 7.0f; break;
+            case 9U: *out_value = (float)base->velocity_sensitivity; break;
             case 10U:
                 *out_value = ((float)base->left_depth + (float)base->right_depth)
-                    / 198.0f;
+                    * 0.5f;
                 break;
             default: return 0U;
         }

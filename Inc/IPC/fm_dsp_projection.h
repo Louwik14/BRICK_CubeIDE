@@ -17,6 +17,8 @@ typedef struct
     uint8_t rate_scaling;
     uint8_t output_level;
     uint8_t mode;
+    /* Bit 7 marks a centi-unit frequency: (coarse & 0x7f) * 100 + fine.
+       Unmarked values retain the legacy DX coarse/fine representation. */
     uint8_t coarse;
     uint8_t fine;
     int8_t detune;
