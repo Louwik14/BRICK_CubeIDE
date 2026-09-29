@@ -30,5 +30,7 @@ void ui_navigation_remember_template_subpage(uint8_t page_id,
                                               uint8_t subset_index,
                                               uint8_t subpage_index);
 void ui_navigation_restore_current_template_subpage(void);
+void ui_navigation_remember_current_template_subpage(void);
+uint8_t ui_navigation_get_last_fx_page(void);
 
 #endif /* UI_NAVIGATION_H */

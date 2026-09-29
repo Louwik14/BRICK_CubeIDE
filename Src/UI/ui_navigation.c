@@ -34,6 +34,8 @@ static uint8_t g_ui_requested_ensemble_page = UI_PAGE_TEMPLATE_CFG;
  */
 #define UI_NAVIGATION_MAX_TEMPLATE_SUBSETS 4U
 static uint8_t g_ui_last_subpage_by_subset[UI_PAGE_COUNT][UI_NAVIGATION_MAX_TEMPLATE_SUBSETS];
+static uint8_t g_ui_last_subpage_valid[UI_PAGE_COUNT][UI_NAVIGATION_MAX_TEMPLATE_SUBSETS];
+static uint8_t g_ui_last_fx_page = UI_PAGE_MIDI_FX;
 
 static uint8_t ui_navigation_is_ensemble_page(uint8_t page_id)
 {
@@ -168,10 +170,19 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
     }
 
     g_ui_requested_ensemble_page = page_id;
+    if ((page_id == UI_PAGE_MIDI_FX) || (page_id == UI_PAGE_AUDIO_FX))
+    {
+        g_ui_last_fx_page = page_id;
+    }
     if (ui_page_get_id() != page_id)
     {
         ui_page_set(page_id);
     }
+}
+
+uint8_t ui_navigation_get_last_fx_page(void)
+{
+    return g_ui_last_fx_page;
 }
 
 void ui_navigation_request_page_with_availability(uint8_t page_id)
@@ -353,6 +364,22 @@ void ui_navigation_remember_template_subpage(uint8_t page_id,
     }
 
     g_ui_last_subpage_by_subset[page_id][subset_index] = subpage_index;
+    g_ui_last_subpage_valid[page_id][subset_index] = 1U;
+}
+
+void ui_navigation_remember_current_template_subpage(void)
+{
+    const uint8_t page_id = ui_page_get_id();
+    const ui_page_t *page = ui_page_get();
+    if ((ui_navigation_is_ensemble_page(page_id) == 0U)
+            || (page == 0) || (page->context == 0))
+    {
+        return;
+    }
+
+    const ui_template_page_state_t *state = (const ui_template_page_state_t *)page->context;
+    ui_navigation_remember_template_subpage(page_id, state->resolved_navigation_subset,
+                                             state->active_subpage);
 }
 
 void ui_navigation_restore_current_template_subpage(void)
@@ -371,9 +398,10 @@ void ui_navigation_restore_current_template_subpage(void)
 
     const ui_template_page_state_t *state = (const ui_template_page_state_t *)page->context;
     const uint8_t subset_index = state->navigation_subset;
-    const uint8_t last_subpage = (subset_index < UI_NAVIGATION_MAX_TEMPLATE_SUBSETS)
+    const uint8_t last_subpage = ((subset_index < UI_NAVIGATION_MAX_TEMPLATE_SUBSETS)
+            && (g_ui_last_subpage_valid[page_id][subset_index] != 0U))
             ? g_ui_last_subpage_by_subset[page_id][subset_index]
-            : 0U;
+            : state->active_subpage;
 
     g_ui_requested_ensemble_page = page_id;
     ui_template_page_select_nearest_subpage((ui_template_page_state_t *)page->context,

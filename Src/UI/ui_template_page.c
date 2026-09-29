@@ -149,20 +149,10 @@ static void ui_template_page_sync_resolved_family(ui_template_page_state_t *stat
 
     if (state->resolved_family != family)
     {
-        const uint8_t previous_subset = state->resolved_navigation_subset;
         const uint8_t previous_subpage = state->active_subpage;
-        if ((state->resolved_family != 0)
-                && (ui_template_page_state_is_active(state) != 0U)
-                && (previous_subpage < 4U))
-        {
-            ui_navigation_remember_template_subpage(ui_page_get_id(),
-                                                     previous_subset,
-                                                     previous_subpage);
-        }
         state->resolved_family = family;
         state->resolved_navigation_subset = state->navigation_subset;
-        state->active_subpage = ((state->preserve_subpage_on_family_change != 0U)
-                && (previous_subpage < 4U)
+        state->active_subpage = ((previous_subpage < 4U)
                 && (ui_template_page_is_subpage_selectable(state, previous_subpage) != 0U))
                 ? previous_subpage
                 : ui_template_page_get_first_selectable_subpage(state, family->default_subpage);

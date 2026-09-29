@@ -72,7 +72,14 @@ static void ui_hall_mode_flow_cycle_fx(void)
     }
     else
     {
-        ui_hall_mode_flow_open_midi_fx();
+        if (ui_navigation_get_last_fx_page() == UI_PAGE_AUDIO_FX)
+        {
+            ui_hall_mode_flow_open_audio_fx();
+        }
+        else
+        {
+            ui_hall_mode_flow_open_midi_fx();
+        }
     }
 }
 
