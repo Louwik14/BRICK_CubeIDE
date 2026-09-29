@@ -44,6 +44,7 @@ static void collect_reference_capture(const seq_engine_core_t *core,
 typedef struct {uint32_t source_id;uint8_t track,lane,active,order;} seq_live_lane_t;
 _Static_assert(sizeof(seq_live_lane_t)==8U,"live lane binding budget");
 static SEC_ATTR(".ram_d2_m4_sram3") seq_live_lane_t g_seq_live_lane[SEQ_ENGINE_LEDGER_CAPACITY];
+static SEQ_STATE_SDRAM uint32_t g_seq_ledger_source_id[SEQ_ENGINE_LEDGER_CAPACITY];
 static SEC_ATTR(".ram_d2_m4_sram3") uint8_t g_seq_live_source_count[SEQ_LANE_CAPACITY];
 _Static_assert(sizeof(g_seq_live_source_count)==SEQ_LANE_CAPACITY,
     "live source counters must remain one byte per track");
@@ -323,14 +324,41 @@ static uint8_t product_track_lane_count(uint8_t track)
    ?SEQ_LOGICAL_CAPACITY_GROUP_CHILD:0U);}
 
 static int16_t ledger_find(const seq_engine_core_t *core,uint8_t track,
-    uint32_t occurrence)
+    uint32_t occurrence,uint32_t source_id)
 {const uint8_t count=product_track_lane_count(track);
  for(uint8_t logical=0U;logical<count;++logical){const uint16_t lane=
       product_lane_from_track_slot(track,logical);
   if(lane<SEQ_ENGINE_LEDGER_CAPACITY
        &&((core->ledger_active>>lane)&UINT64_C(1))!=0U
-       &&core->ledger[lane].occurrence_id==occurrence)return(int16_t)lane;}
+       &&core->ledger[lane].occurrence_id==occurrence
+       &&g_seq_ledger_source_id[lane]==source_id)return(int16_t)lane;}
  return -1;}
+
+static uint8_t note_source_is_live(uint32_t source_id)
+{
+    const uint32_t ns=source_id&~NOTE_EVENT_OCCURRENCE_COUNTER_MASK;
+    return (uint8_t)(ns==NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY
+        ||ns==NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI);
+}
+
+static uint16_t g_seq_owner_serial;
+
+static uint16_t ledger_next_owner(const seq_engine_core_t *core)
+{
+    for (uint16_t attempt=0U;attempt<=SEQ_ENGINE_LEDGER_CAPACITY;++attempt){
+        g_seq_owner_serial=(uint16_t)((g_seq_owner_serial+1U)
+            &SEQ_ENGINE_NOTE_OWNER_MASK);
+        if(g_seq_owner_serial==0U)g_seq_owner_serial=1U;
+        uint8_t collision=0U;
+        for(uint8_t lane=0U;lane<SEQ_ENGINE_LEDGER_CAPACITY;++lane)
+            if(((core->ledger_active>>lane)&UINT64_C(1))!=0U
+                    &&(core->ledger[lane].owner_tag
+                        &SEQ_ENGINE_NOTE_OWNER_MASK)==g_seq_owner_serial)
+                collision=1U;
+        if(collision==0U)return g_seq_owner_serial;
+    }
+    return 0U;
+}
 
 static void ledger_release(seq_engine_core_t *core,uint8_t index)
 {if(index>=SEQ_ENGINE_LEDGER_CAPACITY
@@ -366,6 +394,7 @@ static uint8_t ledger_plan(const seq_engine_core_t *core,const note_event_t *eve
 static void ledger_commit(seq_engine_core_t *core,const note_event_t *event,
     const seq_ledger_plan_t *plan)
 {
+    const uint16_t owner=ledger_next_owner(core);
     if(plan->victim>=0)ledger_release(core,(uint8_t)plan->victim);
     core->ledger[(uint8_t)plan->target]=(seq_ledger_entry_t){
         .admitted_sample=event->sample_abs,
@@ -373,7 +402,10 @@ static void ledger_commit(seq_engine_core_t *core,const note_event_t *event,
             ?UINT64_MAX:event->sample_abs
                 +(event->duration_samples?event->duration_samples:1U),
         .occurrence_id=event->occurrence_id,.note=event->note,
-        .original=(uint8_t)(((event->flags&NOTE_EVENT_FLAG_GENERATED)==0U)?1U:0U)};
+        .original=(uint8_t)(((event->flags&NOTE_EVENT_FLAG_GENERATED)==0U)?1U:0U),
+        .owner_tag=(uint16_t)(owner
+            |(note_source_is_live(event->source_id)?SEQ_ENGINE_NOTE_LIVE:0U))};
+    g_seq_ledger_source_id[(uint8_t)plan->target]=event->source_id;
     core->ledger_active|=UINT64_C(1)<<(uint8_t)plan->target;
     ++core->ledger_count;++core->ledger_track_count[event->track];
 }
@@ -383,15 +415,18 @@ static void ledger_retire_outside_capacity(seq_engine_core_t *core,
 {
     for(uint8_t lane=0U;lane<SEQ_ENGINE_LEDGER_CAPACITY;++lane){
         if(((core->ledger_active>>lane)&UINT64_C(1))==0U)continue;
+        if((core->ledger[lane].owner_tag&SEQ_ENGINE_NOTE_LIVE)!=0U)continue;
         const uint8_t track=product_track_from_lane(lane);
         if(product_slot_from_lane(lane)<core->logical_capacity[track])continue;
         const seq_terminal_event_t terminal={.note={
             .occurrence_id=core->ledger[lane].occurrence_id,
+            .reserved=core->ledger[lane].owner_tag,
             .track=track,.note=core->ledger[lane].note,
             .logical_slot=product_slot_from_lane(lane)}};
-        if(terminal_push(out,0U,SEQ_ENGINE_EVENT_NOTE_OFF,&terminal)!=0U)
+        if(terminal_push(out,0U,SEQ_ENGINE_EVENT_NOTE_OFF,&terminal)!=0U){
             out->emitter_tracks|=(uint16_t)(1U<<track);
-        ledger_release(core,lane);
+            ledger_release(core,lane);
+        }
     }
 }
 
@@ -401,13 +436,15 @@ static void terminal_admit(const note_event_t *e,uint64_t record_sample_abs,
     uint64_t due=e->sample_abs;
     if(due<g_seq_fx_start||due>=g_seq_fx_end){seq_drop(g_seq_fx_core);return;}
     if(e->kind==NOTE_EVENT_KIND_OFF){const int16_t found=ledger_find(g_seq_fx_core,
-            e->track,e->occurrence_id);
+            e->track,e->occurrence_id,e->source_id);
         if(found<0){return;}
         const seq_terminal_event_t terminal={.note={
             .occurrence_id=e->occurrence_id,.track=e->track,.note=e->note,
+            .reserved=g_seq_fx_core->ledger[(uint8_t)found].owner_tag,
             .logical_slot=product_slot_from_lane((uint16_t)found)}};
         if(!terminal_push(g_seq_fx_block,(uint16_t)(due-g_seq_fx_start),
                 SEQ_ENGINE_EVENT_NOTE_OFF,&terminal)){
+            g_seq_fx_core->ledger[(uint8_t)found].due_off=g_seq_fx_end;
             seq_drop(g_seq_fx_core);return;}
         ledger_release(g_seq_fx_core,(uint8_t)found);
         const uint32_t ns=e->source_id&~NOTE_EVENT_OCCURRENCE_COUNTER_MASK;
@@ -427,12 +464,14 @@ static void terminal_admit(const note_event_t *e,uint64_t record_sample_abs,
     if(e->duration_samples==0U){seq_drop(g_seq_fx_core);return;}
     if(plan.victim>=0){const seq_ledger_entry_t old=g_seq_fx_core->ledger[(uint8_t)plan.victim];
         const seq_terminal_event_t terminal={.note={.occurrence_id=old.occurrence_id,
+            .reserved=old.owner_tag,
             .track=product_track_from_lane((uint16_t)plan.victim),.note=old.note,
             .logical_slot=product_slot_from_lane((uint16_t)plan.victim)}};
         (void)terminal_push(g_seq_fx_block,(uint16_t)(due-g_seq_fx_start),
             SEQ_ENGINE_EVENT_NOTE_OFF,&terminal);}
     ledger_commit(g_seq_fx_core,e,&plan);
     const seq_terminal_event_t terminal={.note={.occurrence_id=e->occurrence_id,
+        .reserved=g_seq_fx_core->ledger[(uint8_t)plan.target].owner_tag,
         .track=e->track,.note=e->note,.velocity=e->velocity,
         .logical_slot=plan.logical_slot}};
     (void)terminal_push(g_seq_fx_block,(uint16_t)(due-g_seq_fx_start),
@@ -460,7 +499,7 @@ static void fx_terminal(const note_event_t *event)
         g_seq_fx_pattern->samples_per_step_q16,&finalized);
     if(finalized.kind==NOTE_EVENT_KIND_OFF){
         const int16_t found=ledger_find(g_seq_fx_core,finalized.track,
-            finalized.occurrence_id);
+            finalized.occurrence_id,finalized.source_id);
         if(found<0)return;
         const uint64_t admitted=g_seq_fx_core->ledger[(uint8_t)found].admitted_sample;
         const uint64_t causal=(admitted<UINT64_MAX)?admitted+1U:UINT64_MAX;
@@ -591,7 +630,7 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
         ==NOTE_EVENT_RESULT_ACCEPTED);
     if(accepted!=0U){const uint16_t bit=(uint16_t)(1U<<admitted.track);
         core->emitter_tracks|=bit;out_block->emitter_tracks|=bit;}
-    if(admitted.kind==NOTE_EVENT_KIND_OFF&&binding>=0){
+    if(admitted.kind==NOTE_EVENT_KIND_OFF&&binding>=0&&accepted!=0U){
         g_seq_live_lane[(uint8_t)binding]=(seq_live_lane_t){0};
         if(g_seq_live_source_count[admitted.track]!=0U)
             --g_seq_live_source_count[admitted.track];
@@ -981,8 +1020,8 @@ static uint8_t collect_head_before(uint64_t due,uint32_t order,uint8_t rank,
 
 static void collect_source_head(const seq_engine_core_t *core,uint8_t track,
     uint64_t end,seq_collect_head_t *head)
-{*head=(seq_collect_head_t){0};const uint8_t quota=core->logical_capacity[track];
- for(uint8_t logical=0U;logical<quota;++logical){const uint16_t lane=
+{*head=(seq_collect_head_t){0};const uint8_t lane_count=product_track_lane_count(track);
+ for(uint8_t logical=0U;logical<lane_count;++logical){const uint16_t lane=
    product_lane_from_track_slot(track,logical);if(lane>=SEQ_PRODUCT_MAX_EMITTING_VOICES)continue;
   for(uint8_t bank=0U;bank<SEQ_PRODUCT_MAX_SOURCE_GENERATIONS;++bank){
    if(((core->source_active[bank]>>lane)&1U)==0U)continue;
@@ -1087,6 +1126,7 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
           continue;}
         if(kind==DUE_LEDGER){seq_ledger_entry_t l=core->ledger[selected_lane];
           const seq_terminal_event_t terminal={.note={.occurrence_id=l.occurrence_id,
+           .reserved=l.owner_tag,
            .track=track,.note=l.note,
            .logical_slot=product_slot_from_lane(selected_lane)}};
           if(!terminal_push(out,(uint16_t)((selected_due<start)?0U:selected_due-start),
@@ -1145,6 +1185,7 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
             const uint8_t track=product_track_from_lane(lane);
             const seq_terminal_event_t terminal={.note={
                 .occurrence_id=core->ledger[lane].occurrence_id,
+                .reserved=core->ledger[lane].owner_tag,
                 .track=track,.note=core->ledger[lane].note,
                 .logical_slot=product_slot_from_lane(lane)}};
             if(terminal_push(out,0U,SEQ_ENGINE_EVENT_NOTE_OFF,&terminal)!=0U)

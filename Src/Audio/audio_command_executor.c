@@ -1,5 +1,4 @@
 #include "Audio/audio_command_executor.h"
-#include "IPC/note_audit_trace.h"
 
 #include <string.h>
 
@@ -62,6 +61,7 @@ typedef struct
     uint32_t age;
     uint8_t note;
     uint8_t active;
+    uint16_t owner_tag;
 } audio_seq_output_t;
 
 static AUDIO_STATE_D3 audio_seq_output_t
@@ -373,9 +373,6 @@ static uint8_t audio_command_apply_transport(
     const control_audio_command_t *command)
 {
     const uint8_t kind = CONTROL_AUDIO_COMMAND_KIND(command);
-    note_audit_audio(NOTE_AUDIT_AUDIO_TRANSPORT, command->entity, 0U,
-                     kind, command->id,
-                     (uint32_t)command->effective_sample_time);
     if (kind == CONTROL_AUDIO_TRANSPORT_START)
     {
         audio_transport_runtime_set_running(1U);
@@ -405,9 +402,6 @@ static uint8_t audio_command_apply_record(const control_audio_command_t *command
 
 static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
 {
-    note_audit_audio(NOTE_AUDIT_AUDIO_PANIC, command->entity, 0U,
-                     CONTROL_AUDIO_COMMAND_KIND(command), command->id,
-                     command->value);
     if ((CONTROL_AUDIO_COMMAND_KIND(command) > CONTROL_AUDIO_PANIC_ENTITY)
             || ((CONTROL_AUDIO_COMMAND_KIND(command)
                     == CONTROL_AUDIO_PANIC_ENTITY)
@@ -655,9 +649,18 @@ void audio_command_executor_init(void)
     g_audio_seq_track_mask = 0U;
 }
 
-static void audio_command_executor_close_outputs(uint8_t track)
+static void audio_command_executor_close_step_outputs(uint8_t track)
 {
-    audio_command_executor_close_outputs_from(track, 0U);
+    audio_seq_output_t *const outputs = g_audio_seq_output[track];
+    for (uint8_t i = 0U; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
+    {
+        if ((outputs[i].active == 0U)
+                || ((outputs[i].owner_tag & SEQ_ENGINE_NOTE_LIVE) != 0U)) continue;
+        if (audio_note_engine_adapter_apply_output(track, outputs[i].note, 0U,
+                0U, outputs[i].id) == 0U)
+            Error_Handler();
+        outputs[i] = (audio_seq_output_t){0};
+    }
 }
 
 static void audio_command_executor_close_outputs_from(uint8_t track,
@@ -682,7 +685,7 @@ void audio_command_executor_seq_begin_block(uint16_t track_mask)
         const uint16_t bit = (uint16_t)(1U << track);
         if ((changed & bit) == 0U) continue;
         if ((track_mask & bit) == 0U)
-            audio_command_executor_close_outputs(track);
+            audio_command_executor_close_step_outputs(track);
     }
     g_audio_seq_track_mask = track_mask;
 }
@@ -714,7 +717,8 @@ static uint8_t audio_command_executor_apply_seq_event(
         /* Release is identity-qualified.  A later owner may already have
          * replaced this occurrence when several logical transitions collapse
          * onto one AUDIO boundary; an old OFF must never close that owner. */
-        if(outputs[target].occurrence_id!=event->note.occurrence_id)return 1U;
+        if(outputs[target].occurrence_id!=event->note.occurrence_id
+                ||outputs[target].owner_tag!=event->note.reserved)return 1U;
         const uint8_t ok=audio_note_engine_adapter_apply_output(event->note.track,
             outputs[target].note,0U,0U,outputs[target].id);
         outputs[target]=(audio_seq_output_t){0};return ok;
@@ -728,7 +732,8 @@ static uint8_t audio_command_executor_apply_seq_event(
      * conflict with the new SEQ reservation. */
     if(outputs[target].active!=0U)
     {
-        if(outputs[target].occurrence_id==event->note.occurrence_id)return 1U;
+        if(outputs[target].occurrence_id==event->note.occurrence_id
+                &&outputs[target].owner_tag==event->note.reserved)return 1U;
         if(audio_note_engine_adapter_apply_output(event->note.track,
                 outputs[target].note,0U,0U,outputs[target].id)==0U)
             return 0U;
@@ -745,7 +750,8 @@ static uint8_t audio_command_executor_apply_seq_event(
         return 0U;
     outputs[target] = (audio_seq_output_t){
         .id=output_id,.occurrence_id=event->note.occurrence_id,
-        .age=++g_audio_seq_age,.note=event->note.note,.active=1U};
+        .age=++g_audio_seq_age,.note=event->note.note,.active=1U,
+        .owner_tag=event->note.reserved};
     return 1U;
 }
 

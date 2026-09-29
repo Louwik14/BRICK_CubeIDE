@@ -7,7 +7,6 @@
  * Integration: point d'int�gration central des modules Src/Seq avec MIDI et engine_tasklet.
  */
 #include "Seq/seq_runtime.h"
-#include "IPC/note_audit_trace.h"
 
 #include <string.h>
 
@@ -208,8 +207,6 @@ static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic)
 {
-    note_audit_control(NOTE_AUDIT_PANIC, 0xFFU, 0U,
-                       emit_transport_stop_and_panic, 0U, 0U, 0U, 4U);
     midi_clock_timer_stop();
     const uint64_t stop_sample =
         control_music_output_first_unpublished_sample(

@@ -120,9 +120,10 @@ et refuse deterministement la nouvelle obligation.
 Hall, clavier et MIDI ne prennent aucune decision musicale terminale. Ils
 capturent/correlent l'identite physique puis soumettent un
 `seq_ingress_event_t` canonique a `seq_ingress_submit`; l'inbox conserve le
-sample de capture et demande un reveil
-urgent. SEQ applique Note FX, finalization et admission sur le premier bloc
-AUDIO encore publiable. Une note live directe est marquee
+sample de capture. Au service periodique suivant, SEQ applique Note FX,
+finalization et admission dans un bloc libre avant sa publication. Un bloc
+deja pret pour AUDIO n'est jamais repris en ecriture: sous burst, les
+evenements attendent le prochain bloc publiable. Une note live directe est marquee
 `LIVE_IMMEDIATE`: aucun Quantize, Timing ou Random temporel ne lui est applique;
 la Velocity Groove reste autorisee. Une occurrence future produite par
 ARP/Euclid est marquee `SCHEDULED` et traverse le finalizer complet. Une
@@ -146,7 +147,16 @@ l'identite d'occurrence et devient idempotent si cette occurrence a deja ete
 supplantee. Un ON installe l'owner demande dans le slot logique; si un ancien
 owner physique y subsiste, AUDIO le ferme et effectue le handoff avant d'ouvrir
 le nouveau. Le ledger SEQ est donc une reservation musicale, jamais une preuve
-de liberation physique, et AUDIO reste l'autorite unique du slot moteur. Les anciennes voies
+de liberation physique, et AUDIO reste l'autorite unique du slot moteur.
+Le bloc terminal conserve la provenance live de chaque sortie, y compris apres
+Note FX. Un bloc absent, disarme ou sans piste emettrice peut fermer les sorties
+de step, mais ne libere pas une sortie live deja admise. Son OFF correle reste
+recevable independamment du masque; si la publication de cet OFF depasse la
+capacite du bloc, le ledger le reporte au bloc suivant. Chaque admission
+recoit un jeton de proprietaire distinct des reservations actives: AUDIO
+verifie ce jeton et l'occurrence avant de fermer une sortie. Les handles AUDIO
+sont uniques parmi les sorties actives KEY, MIDI, STEP et FX.
+Les anciennes voies
 cooperative, shadow/compare et publication legacy/RT ne sont pas compilees.
 Live Rec est soumis seulement apres l'admission terminale; un candidat refuse
 n'est donc jamais enregistre. Le calendrier conserve cependant le timestamp et

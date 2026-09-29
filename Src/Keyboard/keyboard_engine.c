@@ -13,7 +13,6 @@
  ******************************************************************************/
 
 #include "Keyboard/keyboard_engine.h"
-#include "IPC/note_audit_trace.h"
 
 #include "Track/control_music_output.h"
 #include "Keyboard/keyboard_params.h"
@@ -199,8 +198,6 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
         }
         if (index < 0)
         {
-            note_audit_control(NOTE_AUDIT_INGRESS_FAIL, owner_track, note,
-                               1U, 0U, 0U, 0U, 0U);
             return;
         }
         const uint32_t counter = keyboard_engine_next_occurrence_id();
@@ -215,8 +212,6 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
                                                         provenance);
         if (index < 0)
         {
-            note_audit_control(NOTE_AUDIT_INGRESS_FAIL, owner_track, note,
-                               2U, 0U, 0U, 0U, 0U);
             return;
         }
         occurrence_id =
@@ -240,12 +235,7 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
         .kind = is_note_on ? NOTE_EVENT_KIND_ON : NOTE_EVENT_KIND_OFF,
         .provenance = (uint8_t)provenance
     };
-    const uint8_t accepted = seq_ingress_submit(&ingress);
-    note_audit_control(accepted ? NOTE_AUDIT_OCCURRENCE
-                                : NOTE_AUDIT_INGRESS_FAIL,
-                       owner_track, note, is_note_on, 0U, 0U,
-                       occurrence_id, ingress_serial);
-    if (accepted == 0U) return;
+    if (seq_ingress_submit(&ingress) == 0U) return;
 
     if (is_note_on != 0U)
     {
@@ -661,8 +651,6 @@ static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len
 
     if (is_all_notes_off != 0U)
     {
-        note_audit_control(NOTE_AUDIT_PANIC, channel, 0U, cc,
-                           0U, 0U, 0U, 1U);
         (void)control_music_output_panic_all(0U);
         seq_ingress_panic();
         keyboard_engine_clear_source_occurrences_silent();

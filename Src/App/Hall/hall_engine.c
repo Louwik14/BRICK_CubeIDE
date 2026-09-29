@@ -1,6 +1,4 @@
 #include "App/Hall/hall_engine.h"
-#include "App/Hall/hall_capture.h"
-#include "IPC/note_audit_trace.h"
 
 #include "Platform/brick_media_clock.h"
 #include "IPC/live_event.h"
@@ -67,7 +65,6 @@ static volatile uint8_t  hall_note_off_pending[HALL_KEY_COUNT];
 
 static volatile hall_button_t hall_buttons[HALL_KEY_COUNT];
 static volatile uint8_t hall_calibrated = 0U;
-static volatile uint32_t hall_press_start_ms[HALL_KEY_COUNT];
 static volatile hall_velocity_mode_t  g_velocity_mode = HALL_VEL_MODE_DV_PEAK;
 static volatile hall_velocity_profile_t g_velocity_profile = HALL_VEL_PROFILE_USER;
 static volatile hall_velocity_curve_t g_velocity_curve = HALL_VEL_CURVE_LOG;
@@ -104,26 +101,6 @@ static uint8_t hall_consume_flag(volatile uint8_t *flag)
 static void hall_publish_edge(uint8_t key, uint8_t pressed,
                               uint8_t velocity, uint32_t tim5_tick)
 {
-    uint32_t held = 0U;
-    uint8_t count = 0U;
-    for (uint8_t i = 0U; i < HALL_KEY_COUNT; ++i)
-    {
-        if (hall_pressed[i] == 0U) continue;
-        ++count;
-        if (i < 32U) held |= (uint32_t)(1UL << i);
-    }
-    g_hall_capture_held_mask = held;
-    if (pressed != 0U)
-        hall_press_start_ms[key] = HAL_GetTick();
-    else
-        hall_capture_note_release(key,
-            (uint32_t)(HAL_GetTick() - hall_press_start_ms[key]));
-    note_audit_control(NOTE_AUDIT_HALL_EDGE, key, velocity, pressed,
-                       count, (uint16_t)held,
-                       (uint32_t)hall_raw_current[key]
-                           | ((uint32_t)(pressed ? hall_trig_lo[key]
-                                                : hall_trig_hi[key]) << 16),
-                       held);
     if (live_event_submit_from_hall(key, pressed != 0U, velocity, tim5_tick))
     {
         if (pressed != 0U)
@@ -725,7 +702,6 @@ void hall_engine_init(void)
         hall_max[i] = 0U;
         hall_raw_current[i] = 0U;
         hall_sample_count_current[i] = 0U;
-        hall_press_start_ms[i] = 0U;
         hall_engine_reset_key_runtime(i);
     }
 
@@ -752,13 +728,7 @@ void hall_engine_set_calibration(const uint16_t *min_values,
         hall_max[i] = max_values[i];
         hall_engine_invalidate_key_state(i, 1U, tim5_tick);
         hall_update_triggers(i);
-        g_hall_capture_calibration[i].minimum = hall_min[i];
-        g_hall_capture_calibration[i].maximum = hall_max[i];
-        g_hall_capture_calibration[i].press = hall_trig_lo[i];
-        g_hall_capture_calibration[i].release = hall_trig_hi[i];
     }
-
-    ++g_hall_capture_calibration_generation;
 
     hall_velocity_capture_flush();
     hall_calibrated = 1U;

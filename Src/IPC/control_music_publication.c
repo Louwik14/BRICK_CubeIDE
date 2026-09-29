@@ -4,7 +4,6 @@
 #include <stddef.h>
 #include "ControlRT/control_rt_publication.h"
 #include "Platform/memory_layout.h"
-#include "IPC/note_audit_trace.h"
 
 CONTROL_STATE_SDRAM static control_audio_command_t
     g_music_publish_scratch[2U * (CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST
@@ -88,24 +87,11 @@ uint8_t control_music_publication_publish_merged_window(
             const uint16_t n = control_music_convert(&actions[*index],
                 &g_music_publish_scratch[emitted]);
             if (n == 0U) return 0U;
-            note_audit_control(NOTE_AUDIT_WINDOW,
-                               actions[*index].entity_id,
-                               actions[*index].note,
-                               control_music_action_kind(&actions[*index]),
-                               (uint8_t)emitted, 0U,
-                               actions[*index].output_handle,
-                               (uint32_t)actions[*index].due_sample);
             emitted = (uint16_t)(emitted + n);
             *index = next[*index];
         }
     }
     if ((internal_visited != internal_count)
             || (external_visited != external_count) || (emitted == 0U)) return 0U;
-    const uint8_t accepted = control_rt_publish_batch_scheduled(
-        g_music_publish_scratch, emitted);
-    if (accepted == 0U)
-        note_audit_control(NOTE_AUDIT_PUBLISH_FAIL, 0xFFU, 0U,
-                           2U, (uint8_t)emitted, 0U,
-                           internal_count, external_count);
-    return accepted;
+    return control_rt_publish_batch_scheduled(g_music_publish_scratch, emitted);
 }

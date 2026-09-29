@@ -14,7 +14,6 @@
  ******************************************************************************/
 
 #include "Keyboard/keyboard_runtime.h"
-#include "IPC/note_audit_trace.h"
 
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_params.h"
@@ -284,8 +283,6 @@ void keyboard_runtime_process_hall_timed(uint8_t hall_index, bool pressed,
 
 void keyboard_runtime_all_notes_off(void)
 {
-    note_audit_control(NOTE_AUDIT_PANIC, 0xFFU, 0U,
-                       0U, 0U, 0U, 0U, 5U);
     keyboard_runtime_reset_midi_state();
     ui_keyboard_app_all_notes_off();
     seq_edit_note_capture_reset();

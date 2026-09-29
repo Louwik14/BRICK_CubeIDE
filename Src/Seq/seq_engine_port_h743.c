@@ -5,8 +5,6 @@
 #include "Track/control_music_output.h"
 #include "Track/track_types.h"
 #include "Platform/memory_layout.h"
-#include "Platform/brick_media_clock.h"
-#include "IPC/note_audit_trace.h"
 #include "stm32h7xx.h"
 #include <limits.h>
 #include <string.h>
@@ -18,7 +16,6 @@ static volatile uint8_t g_slot_state[SEQ_ENGINE_BLOCK_SLOTS];
 static volatile uint64_t g_service_now, g_publish_until;
 static volatile uint64_t g_next_deadline = UINT64_MAX;
 static volatile uint8_t g_pending;
-static volatile uint8_t g_urgent_pending;
 static int8_t g_audio_slot = -1;
 static uint16_t g_audio_cursor;
 static uint8_t g_audio_offset,g_audio_class;
@@ -101,7 +98,7 @@ void seq_engine_irq_init(void)
     memset(g_terminal, 0, sizeof(g_terminal));
     memset((void *)g_slot_state, 0, sizeof(g_slot_state));
     g_audio_slot = -1; g_audio_cursor = SEQ_ENGINE_TERMINAL_INDEX_NONE;
-    g_audio_offset=0U;g_audio_class=0U;g_pending = 0U; g_urgent_pending=0U;
+    g_audio_offset=0U;g_audio_class=0U;g_pending = 0U;
     g_disarmed_tracks = 0U; g_audio_rearm_tracks=0U;
     g_disarm_generation = 0U;
     g_force_stopped = 0U; g_force_stop_preserve_live=0U;
@@ -141,7 +138,6 @@ void seq_engine_execution_replace(uint32_t generation)
     g_ingress_rate_window = UINT64_MAX;
     g_ingress_rate_count = 0U;
     g_pending = 0U;
-    g_urgent_pending = 0U;
     g_next_deadline = UINT64_MAX;
     g_execution_generation = generation;
     seq_engine_core_init(&g_core);
@@ -201,6 +197,10 @@ static uint8_t event_is_audible(const seq_terminal_block_t *block,uint8_t kind,
             || (kind == SEQ_ENGINE_EVENT_TRANSITION_PARAM))
         return (uint8_t)((block->lock_tracks
             & (uint16_t)(1U << track)) != 0U);
+    if ((kind == SEQ_ENGINE_EVENT_NOTE_ON
+            || kind == SEQ_ENGINE_EVENT_NOTE_OFF)
+            && (event->note.reserved & SEQ_ENGINE_NOTE_LIVE) != 0U)
+        return 1U;
     return (uint8_t)((active_track_mask(block)
         & (uint16_t)(1U << track)) != 0U);
 }
@@ -210,10 +210,7 @@ static uint8_t event_is_live_note(uint8_t kind,
 {
     if((event==0)||((kind!=SEQ_ENGINE_EVENT_NOTE_ON)
             &&(kind!=SEQ_ENGINE_EVENT_NOTE_OFF)))return 0U;
-    const uint32_t source=event->note.occurrence_id
-        &~NOTE_EVENT_OCCURRENCE_COUNTER_MASK;
-    return(uint8_t)((source==NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY)
-        ||(source==NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI));
+    return (uint8_t)((event->note.reserved & SEQ_ENGINE_NOTE_LIVE) != 0U);
 }
 
 static uint8_t audio_cursor_seek(seq_terminal_block_t *block)
@@ -389,28 +386,19 @@ uint8_t seq_ingress_submit(const seq_ingress_event_t *event)
     else if(rate_window<g_ingress_rate_window){__set_PRIMASK(primask);return 0U;}
     if((g_ingress_rate_count>=SEQ_INGRESS_EVENTS_PER_WINDOW_MAX)
             ||(g_ingress_count>=SEQ_ENGINE_INGRESS_CAPACITY)){
-        note_audit_control(NOTE_AUDIT_INGRESS_FAIL, event->track,
-                           event->note, event->kind, g_ingress_count, 0U,
-                           event->occurrence_id, g_ingress_rate_count);
         __set_PRIMASK(primask);return 0U;}
     g_ingress[g_ingress_head]=*event;
     g_ingress_head=(uint8_t)((g_ingress_head+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
     ++g_ingress_count;
     ++g_ingress_rate_count;
-    note_audit_control(NOTE_AUDIT_INGRESS, event->track, event->note,
-                       event->kind, g_ingress_count, 0U,
-                       event->occurrence_id, event->provenance);
-    g_urgent_pending=1U;
-    __set_PRIMASK(primask);NVIC_SetPendingIRQ(TIM4_IRQn);return 1U;
+    __set_PRIMASK(primask);return 1U;
 }
 
 void seq_ingress_panic(void)
 {
-    note_audit_control(NOTE_AUDIT_PANIC, 0xFFU, 0U, 0U,
-                       g_ingress_count, 0U, 0U, 3U);
     const uint32_t primask=__get_PRIMASK();__disable_irq();
     g_ingress_count=0U;g_ingress_head=0U;g_ingress_tail=0U;g_ingress_panic=1U;
-    __set_PRIMASK(primask);NVIC_SetPendingIRQ(TIM4_IRQn);
+    __set_PRIMASK(primask);
 }
 
 void seq_ingress_discard(void)
@@ -449,8 +437,6 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
     }
     while(g_ingress_count!=0U){
             const seq_ingress_event_t in=g_ingress[g_ingress_tail];
-            g_ingress_tail=(uint8_t)((g_ingress_tail+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
-            --g_ingress_count;
             uint64_t captured=in.capture_sample;
             const uint64_t due=(captured<start)?start:captured;
             const note_event_t event={.sample_abs=due,
@@ -462,61 +448,24 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
                 .velocity=in.velocity,.kind=in.kind,
                 .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE,
                 .timing_class=NOTE_EVENT_TIMING_LIVE_IMMEDIATE};
-            (void)seq_engine_core_submit_live(&g_core,&event,pattern,start,
-                    start+frames,block);
+            const uint8_t accepted=seq_engine_core_submit_live(&g_core,&event,
+                    pattern,start,start+frames,block);
+            if(accepted==0U&&in.kind==NOTE_EVENT_KIND_OFF)break;
+            g_ingress_tail=(uint8_t)((g_ingress_tail+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
+            --g_ingress_count;
     }
     seq_engine_route_midi_terminal(block, pattern, 0U);
     block->block_id = (uint32_t)(start / frames);
     g_next_deadline = start + frames; __DMB(); g_slot_state[slot] = SLOT_READY;
 }
 
-static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample)
-{
-    (void)now_sample;
-    for(uint8_t slot=0U;slot<SEQ_ENGINE_BLOCK_SLOTS;++slot){
-        const uint32_t primask=__get_PRIMASK();__disable_irq();
-        if((g_slot_state[slot]!=SLOT_READY)
-                ||(g_terminal[slot].start_sample!=publish_until_sample)){
-            __set_PRIMASK(primask);continue;}
-        g_slot_state[slot]=SLOT_WRITING;__DMB();__set_PRIMASK(primask);
-        seq_terminal_block_t *const block=&g_terminal[slot];
-        const uint16_t first_event=block->event_count;
-        const uint64_t end=block->start_sample+block->frames;
-        if(g_ingress_panic!=0U){g_ingress_panic=0U;
-            seq_engine_core_init(&g_core);}
-        const seq_pattern_t *const pattern=seq_engine_pattern_capture();
-        while(g_ingress_count!=0U){
-            const seq_ingress_event_t in=g_ingress[g_ingress_tail];
-            g_ingress_tail=(uint8_t)((g_ingress_tail+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
-            --g_ingress_count;
-            const uint64_t due=(in.capture_sample<block->start_sample)
-                ?block->start_sample:in.capture_sample;
-            const note_event_t event={.sample_abs=due,
-                .duration_samples=1U,
-                .source_id=in.occurrence_id,.occurrence_id=in.occurrence_id,
-                .source_generation=block->generation?block->generation:1U,
-                .group_id=in.occurrence_id,.track=in.track,
-                .note=in.note,
-                .velocity=in.velocity,.kind=in.kind,
-                .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE,
-                .timing_class=NOTE_EVENT_TIMING_LIVE_IMMEDIATE};
-            (void)seq_engine_core_submit_live(&g_core,&event,pattern,
-                    block->start_sample,end,block);
-        }
-        seq_engine_route_midi_terminal(block,pattern,first_event);
-        __DMB();g_slot_state[slot]=SLOT_READY;return;
-    }
-}
-
 void TIM4_IRQHandler(void)
 {
-if ((g_pending == 0U)&&(g_urgent_pending==0U)) {
+if (g_pending == 0U) {
 return;
     }
-    uint64_t now = g_service_now;const uint64_t until = g_publish_until;
-    const uint8_t urgent=g_urgent_pending,periodic=g_pending;
-    if(urgent!=0U)(void)brick_media_clock_now_sample(&now);
-    g_pending=0U;g_urgent_pending=0U;
-    if(periodic!=0U)seq_service(now,until);else seq_service_urgent(now,until);
-    if(g_urgent_pending!=0U)NVIC_SetPendingIRQ(TIM4_IRQn);
+    const uint64_t now = g_service_now;
+    const uint64_t until = g_publish_until;
+    g_pending=0U;
+    seq_service(now,until);
 }

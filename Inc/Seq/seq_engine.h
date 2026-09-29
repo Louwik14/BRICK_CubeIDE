@@ -68,6 +68,10 @@ typedef union __attribute__((packed)) {
     } param;
 } seq_terminal_event_t;
 
+/* Terminal ownership survives a missing or disarmed SEQ block. */
+#define SEQ_ENGINE_NOTE_LIVE UINT16_C(0x8000)
+#define SEQ_ENGINE_NOTE_OWNER_MASK UINT16_C(0x7FFF)
+
 _Static_assert(sizeof(seq_terminal_event_t) == 10U,
                "SEQ terminal payload budget");
 
@@ -131,7 +135,7 @@ typedef struct {
     uint32_t occurrence_id;
     uint8_t note;
     uint8_t original;
-    uint8_t reserved[2];
+    uint16_t owner_tag;
 } seq_ledger_entry_t;
 
 _Static_assert(sizeof(seq_ledger_entry_t) == 24U,
