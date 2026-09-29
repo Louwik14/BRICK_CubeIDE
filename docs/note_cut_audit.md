@@ -15,8 +15,8 @@ p/x *(unsigned int *)&g_note_audit_control_sequence
 p/x *(unsigned int *)&g_note_audit_audio_sequence
 p/x &g_note_audit_control
 p/x &g_note_audit_audio
-dump binary memory note_audit_control.bin (char *)&g_note_audit_control ((char *)&g_note_audit_control + 24576)
-dump binary memory note_audit_audio.bin (char *)&g_note_audit_audio ((char *)&g_note_audit_audio + 12288)
+dump binary memory note_audit_control.bin (char*)&g_note_audit_control ((char*)&g_note_audit_control+24576)
+dump binary memory note_audit_audio.bin (char*)&g_note_audit_audio ((char*)&g_note_audit_audio+12288)
 set logging enabled off
 ```
 
