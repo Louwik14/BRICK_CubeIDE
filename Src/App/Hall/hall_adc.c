@@ -1,5 +1,6 @@
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_capture.h"
+#include "App/Hall/hall_optimization_trial.h"
 
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_keymap.h"
@@ -11,7 +12,7 @@
 #include "adc.h"
 
 #define HALL_MUX_COUNT         8U
-#define HALL_MUX_SETTLE_DISCARD_PAIRS 12U
+#define HALL_MUX_SETTLE_DISCARD_PAIRS 6U
 
 _Static_assert(sizeof(hall_capture_record_t) == 56U,
                "Hall capture dump layout changed");
@@ -95,7 +96,7 @@ static void hall_mux_select(uint8_t index)
     board_surface_select_hall_mux(index);
 }
 
-static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
+static HALL_O0_NOIPA void hall_adc_queue_sample(uint8_t key, uint16_t raw)
 {
     const uint32_t sample_count = hall_sample_count[key] + 1U;
     const uint32_t tim5_tick = brick_media_clock_now_tick();
@@ -108,7 +109,7 @@ static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
     hall_engine_process_sample(key, raw, sample_count, tim5_tick);
 }
 
-static void hall_adc_process_pair(uint8_t completing_adc)
+static HALL_O0_NOIPA void hall_adc_process_pair(uint8_t completing_adc)
 {
     const uint16_t adc1_dma_ndtr_before =
         (uint16_t)((DMA_Stream_TypeDef *)hadc1.DMA_Handle->Instance)->NDTR;
@@ -275,7 +276,7 @@ uint32_t hall_adc_get_sample_count(uint8_t key)
     return hall_sample_count[key];
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+HALL_O0_NOIPA void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
     if (hadc == NULL)
     {

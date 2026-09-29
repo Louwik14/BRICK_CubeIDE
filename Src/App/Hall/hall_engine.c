@@ -1,5 +1,6 @@
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_capture.h"
+#include "App/Hall/hall_optimization_trial.h"
 #include "IPC/note_audit_trace.h"
 
 #include "Platform/brick_media_clock.h"
@@ -346,7 +347,7 @@ static void hall_engine_invalidate_key_state(uint8_t key, uint8_t emit_note_off,
     hall_reset_attack_runtime(key);
 }
 
-static void hall_update_triggers(uint8_t key)
+static HALL_O0_NOIPA void hall_update_triggers(uint8_t key)
 {
     uint32_t range;
     uint32_t half_hyst;
@@ -817,7 +818,7 @@ uint8_t hall_engine_user_velocity_profile_is_valid(void)
     return hall_user_velocity_profile_is_usable(&profile);
 }
 
-void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count,
+HALL_O0_NOIPA void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count,
                                 uint32_t tim5_tick)
 {
     uint16_t range;
