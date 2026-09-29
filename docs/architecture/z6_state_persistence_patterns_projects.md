@@ -200,6 +200,7 @@ sont pas appliquees au data-plane AUDIO.
 # Asset identity and FM ownership
 
 Persistent asset selections are typed canonical references `{kind, path}`.
+Quand un slot Multi est retire, l'admission des notes liee a ce slot est retiree aussi. A la publication du nouveau runtime READY, `project_control` reprojette les selections de pistes portant la meme reference canonique vers AUDIO et retablit leur liaison de notes. La reference affichee seule ne prouve pas que cette projection est active.
 Pool slots, logical ordinals and AUDIO handles are derived runtime data and are
 never serialized. Project save/load may derive a manifest from selections, but
 does not own an identity registry.
