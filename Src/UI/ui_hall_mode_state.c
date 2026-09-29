@@ -3,6 +3,7 @@
 #include "ui_core_mute.h"
 #include "ui_core_pattern.h"
 #include "ui_macro_interaction.h"
+#include "ui_core.h"
 #include "Seq/seq_edit.h"
 #include "Keyboard/keyboard_runtime.h"
 
@@ -42,6 +43,7 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
     }
 
     ui_macro_overlay_on_hall_mode_changed();
+    ui_track_overlay_on_context_changed();
     ui_macro_interaction_reset();
     seq_edit_note_capture_reset();
     if ((g_ui_hall_mode == UI_HALL_MODE_KEYBOARD)

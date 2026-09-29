@@ -129,6 +129,7 @@ uint8_t ui_get_mute_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led);
 void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state);
 uint8_t ui_core_request_undo(void);
 uint8_t ui_is_track_modifier_held(void);
+void ui_track_overlay_on_context_changed(void);
 uint8_t ui_macro_overlay_is_active(void);
 uint8_t ui_macro_overlay_is_latched(void);
 uint8_t ui_macro_overlay_get_submode(ui_macro_overlay_submode_t *out_submode);
