@@ -253,12 +253,11 @@ ui_mute_state_t ui_core_mute_get_state(void)
 
 uint8_t ui_core_mute_owns_track_hall(uint8_t hall, uint8_t shift_down)
 {
-    /* Quick mute toggles tracks while SHIFT is held; prepare yields SHIFT navigation. */
+    /* Only Quick Mute owns shifted track halls; other mute modes yield navigation. */
     return (uint8_t)((g_ui_core_mute.active != 0U)
         && (hall < SEQ_LANE_CAPACITY)
         && ((shift_down == 0U)
-            || (g_ui_core_mute.submode == UI_MUTE_SUBMODE_QUICK)
-            || (g_ui_core_mute.submode == UI_MUTE_SUBMODE_HOLD_QUICK)));
+            || (g_ui_core_mute.submode == UI_MUTE_SUBMODE_QUICK)));
 }
 
 uint8_t ui_core_mute_get_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
