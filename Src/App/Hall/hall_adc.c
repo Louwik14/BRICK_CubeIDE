@@ -13,6 +13,8 @@
 
 #define HALL_MUX_COUNT         8U
 #define HALL_MUX_SETTLE_DISCARD_PAIRS 6U
+/* Low-Cost Hall A: logical key 2 is mux address 4. Temporary meter probe. */
+#define HALL_MUX_FIXED_KEY_2_ADDRESS 4U
 
 _Static_assert(sizeof(hall_capture_record_t) == 88U,
                "Hall capture dump layout changed");
@@ -384,13 +386,6 @@ static void hall_adc_process_pair(uint8_t completing_adc)
             record->sequence = trace_sequence;
         }
 
-        if ((g_hall_fixed_active == 0U)
-            && (g_hall_hold_mode_active == 0U))
-        {
-            hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);
-            hall_mux_select(hall_mux_index);
-            ++g_hall_mux_generation;
-        }
         adc1_ready = 0U;
         adc2_ready = 0U;
         adc3_ready = 0U;
@@ -406,7 +401,7 @@ static void hall_adc_process_pair(uint8_t completing_adc)
 
 void hall_adc_init(void)
 {
-    hall_mux_index = 0U;
+    hall_mux_index = HALL_MUX_FIXED_KEY_2_ADDRESS;
     hall_discard_count = HALL_MUX_SETTLE_DISCARD_PAIRS;
     g_hall_capture_sequence = 0U;
     g_hall_capture_calibration_generation = 0U;
@@ -642,7 +637,7 @@ void hall_adc_service_direct_probe(void)
     adc2_ready = 0U;
     adc3_ready = 0U;
     hall_discard_count = HALL_MUX_SETTLE_DISCARD_PAIRS;
-    hall_mux_index = (uint8_t)((g_hall_fixed_mux + 1U) & 0x07U);
+    hall_mux_index = HALL_MUX_FIXED_KEY_2_ADDRESS;
     hall_mux_select(hall_mux_index);
     ++g_hall_mux_generation;
     if (board_surface_start_hall_adc_dma(adc1_dma, &adc2_dma,
