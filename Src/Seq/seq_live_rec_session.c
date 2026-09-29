@@ -80,6 +80,18 @@ static uint8_t seq_live_rec_session_track_accepts_source(seq_track_id_t track,
             || (track_source == TRACK_RUNTIME_MIDI_SOURCE_ALL)) ? 1U : 0U;
 }
 
+static uint8_t seq_live_rec_session_next_playback_step(seq_track_id_t track,
+                                                       uint8_t step)
+{
+    const uint8_t length = seq_model_get_track_playback_length(track);
+    if (seq_model_get_track_page_mask(track) == 0U)
+        return (uint8_t)((step + 1U) % length);
+    for (uint8_t candidate = (uint8_t)((step + 1U) % SEQ_MAX_STEPS);;
+         candidate = (uint8_t)((candidate + 1U) % SEQ_MAX_STEPS))
+        if (seq_model_is_step_in_track_playback_window(track, candidate) != 0U)
+            return candidate;
+}
+
 static void seq_live_rec_session_compute_step_and_mictim(seq_track_id_t track,
                                                          seq_step_id_t *io_step,
                                                          int8_t *out_mictim,
@@ -120,15 +132,7 @@ static void seq_live_rec_session_compute_step_and_mictim(seq_track_id_t track,
             micro = -24;
         }
 
-        const uint8_t length = seq_model_get_track_playback_length(track);
-
-        uint8_t next = (uint8_t)(*io_step + 1U);
-        if (next >= length)
-        {
-            next = 0U;
-        }
-
-        *io_step = next;
+        *io_step = seq_live_rec_session_next_playback_step(track, *io_step);
         *out_mictim = (int8_t)micro;
         return;
     }
@@ -139,15 +143,7 @@ static void seq_live_rec_session_compute_step_and_mictim(seq_track_id_t track,
         return;
     }
 
-    const uint8_t length = seq_model_get_track_playback_length(track);
-
-    uint8_t next = (uint8_t)(*io_step + 1U);
-    if (next >= length)
-    {
-        next = 0U;
-    }
-
-    *io_step = next;
+    *io_step = seq_live_rec_session_next_playback_step(track, *io_step);
     *out_mictim = -24;
 }
 
@@ -535,7 +531,7 @@ static void seq_live_rec_session_pattern_rec_start_now(void)
     seq_step_id_t steps[SEQ_MAX_STEPS];
     for (uint8_t i = 0U; i < length; ++i)
     {
-        steps[i] = (seq_step_id_t)i;
+        steps[i] = seq_model_map_playback_step(track, i);
     }
     seq_edit_clear_steps_without_undo(track, steps, length);
     seq_live_rec_session_reset_pending();
@@ -564,7 +560,8 @@ static void seq_live_rec_session_pattern_rec_on_step_advanced(const seq_runtime_
     }
 
     if ((g_seq_live_rec_pattern_pending_start != 0U)
-        && (runtime_state->play_step[g_seq_live_rec_pattern_track] == 0U))
+        && (runtime_state->play_step[g_seq_live_rec_pattern_track]
+            == seq_model_map_playback_step(g_seq_live_rec_pattern_track, 0U)))
     {
         seq_live_rec_session_pattern_rec_start_now();
     }
@@ -814,11 +811,10 @@ uint8_t seq_live_rec_session_live_rec_param_write(const seq_runtime_state_t *run
         return 0U;
     }
 
-    const uint8_t length = seq_model_get_track_playback_length(track);
     seq_step_id_t step = runtime_state->play_step[track];
-    if (step >= length)
+    if (seq_model_is_step_in_track_playback_window(track, step) == 0U)
     {
-        step = 0U;
+        step = seq_model_map_playback_step(track, 0U);
     }
 
     const seq_plock_op_status_t status = seq_edit_step_plock_upsert(track,

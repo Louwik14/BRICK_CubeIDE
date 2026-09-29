@@ -633,10 +633,10 @@ uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step)
     }
 
     g_seq_runtime.traversal_phase[track] = step;
-    g_seq_runtime.play_step[track] = seq_traversal_resolve(
+    g_seq_runtime.play_step[track] = seq_model_map_playback_step(track, seq_traversal_resolve(
         step, length, g_seq_runtime_control.track_direction[track],
         g_seq_runtime_control.track_rotate[track],
-        g_seq_runtime_control.groove_seed, track);
+        g_seq_runtime_control.groove_seed, track));
     if ((g_seq_runtime.running != 0U) && (step == 0U))
     {
         seq_engine_control_mark_dirty();
@@ -797,25 +797,15 @@ void seq_runtime_on_track_length_changed(seq_track_id_t track)
     }
 
     const uint8_t length = seq_model_get_track_playback_length(track);
-    if (g_seq_runtime.running != 0U)
-    {
-        /*
-         * Do not rebase the phase while transport is running: length is model
-         * authority, play_step remains the current musical cursor until the
-         * next scheduled pulse wraps it through the new playback window.
-         */
-        return;
-    }
-
     const uint8_t cycle = seq_traversal_cycle_length(
         length, g_seq_runtime_control.track_direction[track]);
     if (g_seq_runtime.traversal_phase[track] >= cycle)
         g_seq_runtime.traversal_phase[track] = 0U;
-    g_seq_runtime.play_step[track] = seq_traversal_resolve(
+    g_seq_runtime.play_step[track] = seq_model_map_playback_step(track, seq_traversal_resolve(
         g_seq_runtime.traversal_phase[track], length,
         g_seq_runtime_control.track_direction[track],
         g_seq_runtime_control.track_rotate[track],
-        g_seq_runtime_control.groove_seed, track);
+        g_seq_runtime_control.groove_seed, track));
     g_seq_runtime.prev_step[track] = g_seq_runtime.play_step[track];
     g_seq_runtime.prev_step_valid[track] = 0U;
 }
@@ -894,9 +884,9 @@ void seq_runtime_set_track_traversal(seq_track_id_t track,
     const uint8_t length = seq_model_get_track_playback_length(track);
     const uint8_t cycle = seq_traversal_cycle_length(length, direction);
     g_seq_runtime.traversal_phase[track] %= cycle;
-    g_seq_runtime.play_step[track] = seq_traversal_resolve(
+    g_seq_runtime.play_step[track] = seq_model_map_playback_step(track, seq_traversal_resolve(
         g_seq_runtime.traversal_phase[track], length, direction, rotate,
-        g_seq_runtime_control.groove_seed, track);
+        g_seq_runtime_control.groove_seed, track));
     seq_engine_control_mark_dirty();
 }
 

@@ -68,10 +68,78 @@
 #include "Keyboard/keyboard_runtime.h"
 #include "Mod/mod_lfo_v1_control.h"
 #include "Seq/seq_edit.h"
+#include "Seq/seq_model.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include "Storage/pattern_live_ram.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
+
+static uint8_t g_seq_page_held_mask;
+static uint8_t g_seq_page_gesture_mask;
+static uint8_t g_seq_page_last_tap;
+static uint32_t g_seq_page_last_tap_ms;
+
+static uint8_t ui_core_handle_seq_page_chord(const ui_event_t *ev)
+{
+    if (ev == 0) return 0U;
+    if (ev->id == (uint8_t)BTN_TRACK && ev->type == UI_EVENT_BUTTON_RELEASE)
+    {
+        g_seq_page_held_mask = 0U;
+        g_seq_page_gesture_mask = 0U;
+        g_seq_page_last_tap = 0U;
+        return 0U;
+    }
+    if (ev->id < (uint8_t)BTN_PAGE_1 || ev->id > (uint8_t)BTN_PAGE_4)
+        return 0U;
+    const uint8_t page = (uint8_t)(ev->id - (uint8_t)BTN_PAGE_1);
+    const uint8_t bit = (uint8_t)(1U << page);
+    if (ev->type == UI_EVENT_BUTTON_RELEASE)
+    {
+        const uint8_t was_held = (uint8_t)(g_seq_page_held_mask & bit);
+        g_seq_page_held_mask &= (uint8_t)~bit;
+        if (g_seq_page_held_mask == 0U) g_seq_page_gesture_mask = 0U;
+        return (uint8_t)(was_held != 0U);
+    }
+    if (button_down(BTN_TRACK) == 0U)
+    {
+        g_seq_page_held_mask = 0U;
+        g_seq_page_gesture_mask = 0U;
+        g_seq_page_last_tap = 0U;
+        return 0U;
+    }
+    if (ev->type != UI_EVENT_BUTTON_PRESS
+        || button_down(BTN_SHIFT) != 0U
+        || ui_get_hall_mode() != UI_HALL_MODE_SEQ
+        || ui_core_mute_is_active() != 0U)
+        return 0U;
+    const seq_track_id_t track = ui_get_active_lane();
+    if (seq_edit_track_sequence_is_locked(track) != 0U) return 0U;
+    const uint8_t held = g_seq_page_held_mask;
+    g_seq_page_held_mask |= bit;
+    const uint32_t now = HAL_GetTick();
+    seq_edit_set_page(track, page);
+    if ((held != 0U) && ((held & bit) == 0U))
+    {
+        g_seq_page_gesture_mask |= (uint8_t)(held | bit);
+        seq_model_set_track_page_mask(track, g_seq_page_gesture_mask);
+        seq_runtime_on_track_length_changed(track);
+        g_seq_page_last_tap = 0U;
+    }
+    else if ((g_seq_page_last_tap == bit)
+        && ((uint32_t)(now - g_seq_page_last_tap_ms) <= 300U))
+    {
+        seq_model_set_track_page_mask(track, bit);
+        seq_runtime_on_track_length_changed(track);
+        g_seq_page_last_tap = 0U;
+    }
+    else
+    {
+        g_seq_page_last_tap = bit;
+        g_seq_page_last_tap_ms = now;
+    }
+    return 1U;
+}
 
 typedef struct
 {
@@ -950,6 +1018,7 @@ void ui_core_tick(void)
         { ui_page_settings_handle_event, 1U, 1U },
         /* Intentionally before pattern/seq: global shortcuts can fully mask them. */
         { ui_core_handle_global_shortcuts, 1U, 1U },
+        { ui_core_handle_seq_page_chord, 1U, 1U },
         { ui_core_handle_pattern_mode_event, 1U, 1U },
         { ui_core_handle_macro_mode_event, 1U, 1U },
         { ui_core_handle_seq_mode_event, 1U, 1U },

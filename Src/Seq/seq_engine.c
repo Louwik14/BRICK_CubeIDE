@@ -1,6 +1,7 @@
 #include "Seq/seq_engine.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_traversal.h"
+#include "Seq/seq_model.h"
 #include "NoteFx/note_fx_engine.h"
 #include "Param/param_ids.h"
 #include "Param/param_registry.h"
@@ -11,6 +12,9 @@
 #include <limits.h>
 #include <stddef.h>
 #include <string.h>
+
+static uint8_t logical_step_for_fx(const seq_pattern_t *p, uint8_t track,
+                                   uint8_t physical);
 
 static SEC_ATTR(".ram_d2_m4_sram3") note_event_t g_seq_fx_a[NOTE_FX_BATCH_CAPACITY];
 static SEQ_STATE_SDRAM note_event_t g_seq_source_cohort[NOTE_FX_BATCH_CAPACITY];
@@ -645,7 +649,8 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
         if((div!=1U)&&(div!=2U)&&(div!=4U)&&(div!=8U))div=1U;
         const uint64_t phase=
             ((uint64_t)reference->track_div_phase[t]<<16U)+delta_q16;
-        pattern_position[t]=((uint32_t)reference->play_step[t]<<16U)
+        pattern_position[t]=((uint32_t)logical_step_for_fx(pattern,t,
+            reference->play_step[t])<<16U)
             +(uint32_t)(phase/div);}
     if(accepted!=0U){
         const uint8_t track=admitted.track;
@@ -754,9 +759,23 @@ static uint8_t next_phase(const seq_pattern_t *p, uint8_t track,
 static uint8_t resolve_step(const seq_pattern_t *p, uint8_t track,
     uint8_t phase)
 {
-    return seq_traversal_resolve(phase, p->track_length[track],
+    const uint8_t logical = seq_traversal_resolve(phase, p->track_length[track],
         p->track_direction[track], p->track_rotate[track],
         p->groove_seed, track);
+    return seq_model_map_page_step(p->track_page_mask[track], logical);
+}
+
+static uint8_t logical_step_for_fx(const seq_pattern_t *p, uint8_t track,
+                                   uint8_t physical)
+{
+    const uint8_t mask = p->track_page_mask[track];
+    if (mask == 0U) return physical;
+    const uint8_t page = (uint8_t)(physical / SEQ_STEPS_PER_PAGE);
+    uint8_t ordinal = 0U;
+    for (uint8_t candidate = 0U; candidate < page; ++candidate)
+        ordinal += (uint8_t)((mask >> candidate) & 1U);
+    return (uint8_t)(ordinal * SEQ_STEPS_PER_PAGE
+        + physical % SEQ_STEPS_PER_PAGE);
 }
 
 static void configure_fx_step(const seq_pattern_t *p,uint8_t track,
@@ -1102,7 +1121,8 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
         if((div!=1U)&&(div!=2U)&&(div!=4U)&&(div!=8U))div=1U;
         const uint64_t track_phase_q16=
             ((uint64_t)reference->track_div_phase[t]<<16U)+delta_q16;
-        pattern[t]=((uint32_t)reference->play_step[t]<<16U)
+        pattern[t]=((uint32_t)logical_step_for_fx(p,t,
+            reference->play_step[t])<<16U)
             +(uint32_t)(track_phase_q16/div);}
     enum {DUE_SOURCE=0,DUE_LEDGER,DUE_CALENDAR};
     for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track){
@@ -1198,8 +1218,12 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
         memcpy(core->traversal_phase,p->seed_traversal_phase,
             sizeof(core->traversal_phase));
         memcpy(core->track_div_phase,p->seed_div_phase,sizeof(core->track_div_phase));
-        for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t)
-            configure_fx_step(p,t,core->play_step[t]);
+        for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){
+            const uint8_t cycle=seq_traversal_cycle_length(
+                p->track_length[t],p->track_direction[t]);
+            core->traversal_phase[t]%=cycle;
+            core->play_step[t]=resolve_step(p,t,core->traversal_phase[t]);
+            configure_fx_step(p,t,core->play_step[t]);}
         }
     core->samples_per_step_q16=p->samples_per_step_q16;
     for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){uint8_t capacity=p->track_exec[t].logical_capacity;

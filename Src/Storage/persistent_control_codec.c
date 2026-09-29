@@ -190,7 +190,14 @@ static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity,uint
     }
     persist_control_sequence_t *s=&entity->sequence;
     codec_u8(io,&s->length);codec_u8(io,&s->division);
-    codec_u8(io,&s->direction);codec_i8(io,&s->rotate);
+    uint8_t packed_direction = (io->mode == CODEC_READ) ? 0U
+        : (uint8_t)((s->direction & 0x0FU) | (s->page_mask << 4U));
+    codec_u8(io,&packed_direction);
+    if (io->mode == CODEC_READ) {
+        s->direction = (uint8_t)(packed_direction & 0x0FU);
+        s->page_mask = (uint8_t)(packed_direction >> 4U);
+    }
+    codec_i8(io,&s->rotate);
     codec_u8(io,&s->timing.base);codec_u8(io,&s->timing.quantize);
     codec_bytes(io,(uint8_t *)s->timing.groove_name,SEQ_GROOVE_NAME_BYTES);
     codec_u8(io,&s->timing.timing);
@@ -512,6 +519,14 @@ persist_codec_result_t persist_codec_validate_pattern(const persist_control_patt
       if(codec_note_fx_state_valid(&x->note_fx,caps.note_fx_owner)==0U)return PERSIST_CODEC_INVALID_ENTITY;
       const seq_track_timing_config_t *const timing=&x->sequence.timing;
       if((x->sequence.length<1U)||(x->sequence.length>PERSIST_CONTROL_STEP_COUNT)||((x->sequence.division!=1U)&&(x->sequence.division!=2U)&&(x->sequence.division!=4U)&&(x->sequence.division!=8U))||(x->sequence.direction>=SEQ_DIRECTION_COUNT)||(x->sequence.rotate<-(int8_t)(SEQ_MAX_STEPS-1U))||(x->sequence.rotate>(int8_t)(SEQ_MAX_STEPS-1U))||(timing->base>=SEQ_TIMING_BASE_COUNT)||(timing->quantize>100U)||(memchr(timing->groove_name,'\0',SEQ_GROOVE_NAME_BYTES)==NULL)||(timing->timing>100U)||(timing->random>100U)||(timing->velocity < -100)||(timing->velocity > 100)||(timing->global>130U))return PERSIST_CODEC_INVALID_ENTITY;
+      if (x->sequence.page_mask > 0x0FU) return PERSIST_CODEC_INVALID_ENTITY;
+      if (x->sequence.page_mask != 0U) {
+          uint8_t count = 0U;
+          for (uint8_t page = 0U; page < SEQ_PAGE_COUNT; ++page)
+              count += (uint8_t)((x->sequence.page_mask >> page) & 1U);
+          if (x->sequence.length != (uint8_t)(count * SEQ_STEPS_PER_PAGE))
+              return PERSIST_CODEC_INVALID_ENTITY;
+      }
       if(x->modulation_present>1U||x->modulation_present!=caps.modulation_owner)return PERSIST_CODEC_INVALID_MODULATION;
       uint16_t locks=0U;for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t *st=&x->sequence.steps[s];if(st->trigger>1U||st->roll>=SEQ_STEP_ROLL_COUNT||(st->trigger==0U&&st->roll!=SEQ_STEP_ROLL_OFF)||(caps.sequence_owner==0U&&st->trigger!=0U)||st->play_count>caps.play_limit)return PERSIST_CODEC_INVALID_PLAY;for(uint8_t v=0U;v<st->play_count;++v)if(codec_play_value_valid(&st->play[v])==0U)return PERSIST_CODEC_INVALID_PLAY;if(st->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT||(caps.sequence_owner==0U&&st->lock_count!=0U))return PERSIST_CODEC_INVALID_PLOCK;locks=(uint16_t)(locks+st->lock_count);for(uint8_t i=0U;i<st->lock_count;++i){uint8_t tone_slot=0U;param_id_t id=0U;persist_param_descriptor_t d;if(persist_key_tone_slot_from_disk(st->locks[i].parameter,&tone_slot)!=0U){if((st->locks[i].kind!=PERSIST_VALUE_FLOAT32)||!isfinite(st->locks[i].value.f32)||(st->locks[i].value.f32<0.0f)||(st->locks[i].value.f32>1.0f))return PERSIST_CODEC_INVALID_PLOCK;}else if((persist_key_param_from_disk(st->locks[i].parameter,&id)==0U)||(persist_key_param_descriptor(id,&d)==0U)||(d.plockable==0U)||(codec_plock_value_valid(id,&st->locks[i])==0U))return PERSIST_CODEC_INVALID_PLOCK;for(uint8_t j=0U;j<i;++j)if(st->locks[j].parameter==st->locks[i].parameter)return PERSIST_CODEC_DUPLICATE;}}if(locks>SEQ_PLOCK_POOL_CAP_PER_TRACK)return PERSIST_CODEC_INVALID_PLOCK; }
     uint8_t record_mode=0U;if((codec_clock_valid(p->globals.clock_source_key)==0U)||(persist_key_record_start_from_disk(p->globals.record_start_key,&record_mode)==0U)||(persist_key_record_length_from_disk(p->globals.record_length_key,&record_mode)==0U))return PERSIST_CODEC_CAPACITY_EXCEEDED;

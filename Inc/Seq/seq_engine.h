@@ -195,6 +195,7 @@ typedef struct {
     uint32_t generation;
     uint64_t effective_sample;
     uint8_t track_length[SEQ_LANE_CAPACITY];
+    uint8_t track_page_mask[SEQ_LANE_CAPACITY];
     uint8_t track_div[SEQ_LANE_CAPACITY];
     uint8_t track_direction[SEQ_LANE_CAPACITY];
     int8_t track_rotate[SEQ_LANE_CAPACITY];

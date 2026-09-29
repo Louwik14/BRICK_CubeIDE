@@ -19,7 +19,7 @@ uint8_t seq_runtime_live_rec_param_resolve_write_step(seq_track_id_t track,
         return 0U;
     }
 
-    const uint8_t length = seq_model_get_track_playback_length(track);
-    *out_step = (play_step < length) ? play_step : 0U;
+    *out_step = (seq_model_is_step_in_track_playback_window(track, play_step) != 0U)
+        ? play_step : seq_model_map_playback_step(track, 0U);
     return 1U;
 }

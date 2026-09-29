@@ -99,7 +99,8 @@ typedef struct
     seq_step_t steps[SEQ_MAX_STEPS];
     uint8_t length_steps;
     uint8_t ui_page;
-    uint8_t reserved[2];
+    uint8_t page_mask; /* 0: legacy contiguous playback window */
+    uint8_t reserved;
 } seq_track_data_t;
 
 typedef enum
@@ -175,6 +176,10 @@ uint8_t seq_model_get_track_length(seq_track_id_t track);
 uint8_t seq_model_get_editable_step_capacity(void);
 uint8_t seq_model_is_step_editable_index(seq_step_id_t step);
 uint8_t seq_model_get_track_playback_length(seq_track_id_t track);
+uint8_t seq_model_get_track_page_mask(seq_track_id_t track);
+void seq_model_set_track_page_mask(seq_track_id_t track, uint8_t mask);
+uint8_t seq_model_map_playback_step(seq_track_id_t track, uint8_t logical_step);
+uint8_t seq_model_map_page_step(uint8_t mask, uint8_t logical_step);
 uint8_t seq_model_is_step_in_track_playback_window(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_is_active(seq_track_id_t track, seq_step_id_t step);
 /* Canonical musical-step predicate: an active trig on a note-emitting track

@@ -329,6 +329,8 @@ persist_codec_result_t persistent_pattern_control_capture(persist_control_patter
         if(!capture_product_state(e,d)||!capture_note_fx(e,&caps,d)
                 ||((caps.sequence_owner!=0U)&&!capture_sequence(e,d)))
             return PERSIST_CODEC_INVALID_ENTITY;
+        if (caps.sequence_owner != 0U)
+            d->sequence.page_mask = seq_model_get_track_page_mask(e);
         if(caps.modulation_owner)
         {
             d->modulation_present=1U;
@@ -502,6 +504,7 @@ static uint8_t persistent_sequence_changed(uint8_t e, const persist_control_enti
     uint8_t direction = (uint8_t)SEQ_DIRECTION_FWD;
     int8_t rotate = 0;
     if (seq_model_get_track_length(e) != x->sequence.length
+            || seq_model_get_track_page_mask(e) != x->sequence.page_mask
             || seq_runtime_get_track_div(e, &value) == 0U || value != x->sequence.division
             || seq_runtime_get_track_traversal(e, &direction, &rotate) == 0U
             || direction != x->sequence.direction || rotate != x->sequence.rotate
@@ -722,6 +725,11 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
             persist_debug_entity_failure(PERSIST_DBG_VALIDATION_SEQUENCE,
                 PERSIST_CODEC_INVALID_ENTITY,entity,saved);
             return PERSIST_CODEC_INVALID_ENTITY;
+        }
+        if ((caps.sequence_owner != 0U) && (saved->sequence.page_mask != 0U))
+        {
+            seq_model_set_track_page_mask(entity, saved->sequence.page_mask);
+            seq_runtime_on_track_length_changed(entity);
         }
         if (apply_note_fx(entity, group_active, saved) == 0U)
         {

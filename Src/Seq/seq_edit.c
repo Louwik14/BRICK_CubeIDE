@@ -620,6 +620,13 @@ void seq_edit_change_page(seq_track_id_t track, int8_t delta)
     seq_model_set_track_page(track, page);
 }
 
+void seq_edit_set_page(seq_track_id_t track, uint8_t page)
+{
+    if (seq_model_get_track_page(track) != page)
+        seq_edit_note_capture_reset();
+    seq_model_set_track_page(track, page);
+}
+
 uint8_t seq_edit_get_page(seq_track_id_t track)
 {
     return seq_model_get_track_page(track);

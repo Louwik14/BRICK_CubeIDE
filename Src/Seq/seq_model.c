@@ -305,24 +305,6 @@ static uint8_t seq_model_clamp_playback_length(uint8_t length_steps)
     return length_steps;
 }
 
-static uint8_t seq_model_page_count_for_length(uint8_t length_steps)
-{
-    const uint8_t length = seq_model_clamp_playback_length(length_steps);
-    uint8_t page_count = (uint8_t)((length + (SEQ_STEPS_PER_PAGE - 1U)) / SEQ_STEPS_PER_PAGE);
-    if (page_count > SEQ_PAGE_COUNT)
-    {
-        page_count = SEQ_PAGE_COUNT;
-    }
-    return page_count;
-}
-
-static uint8_t seq_model_clamp_ui_page_for_length(uint8_t page, uint8_t length_steps)
-{
-    const uint8_t page_count = seq_model_page_count_for_length(length_steps);
-    const uint8_t max_page = (page_count > 0U) ? (uint8_t)(page_count - 1U) : 0U;
-    return (page > max_page) ? max_page : page;
-}
-
 static uint8_t seq_model_step_is_valid(seq_step_id_t step)
 {
     return (step < seq_model_get_editable_step_capacity()) ? 1U : 0U;
@@ -699,7 +681,7 @@ void seq_model_set_track_page(seq_track_id_t track, uint8_t page)
     }
 
     g_seq_project.tracks[track].ui_page =
-        seq_model_clamp_ui_page_for_length(page, g_seq_project.tracks[track].length_steps);
+        (page < SEQ_PAGE_COUNT) ? page : (SEQ_PAGE_COUNT - 1U);
 }
 
 void seq_model_set_track_length(seq_track_id_t track, uint8_t length_steps)
@@ -710,9 +692,7 @@ void seq_model_set_track_length(seq_track_id_t track, uint8_t length_steps)
     }
 
     g_seq_project.tracks[track].length_steps = seq_model_clamp_playback_length(length_steps);
-    g_seq_project.tracks[track].ui_page =
-        seq_model_clamp_ui_page_for_length(g_seq_project.tracks[track].ui_page,
-                                           g_seq_project.tracks[track].length_steps);
+    g_seq_project.tracks[track].page_mask = 0U;
     seq_engine_control_mark_dirty();
 }
 
@@ -741,14 +721,56 @@ uint8_t seq_model_get_track_playback_length(seq_track_id_t track)
     return seq_model_clamp_playback_length(g_seq_project.tracks[track].length_steps);
 }
 
+uint8_t seq_model_get_track_page_mask(seq_track_id_t track)
+{
+    return (seq_model_track_is_valid(track) != 0U)
+        ? (uint8_t)(g_seq_project.tracks[track].page_mask & 0x0FU) : 0U;
+}
+
+void seq_model_set_track_page_mask(seq_track_id_t track, uint8_t mask)
+{
+    if (seq_model_track_is_valid(track) == 0U) return;
+    mask &= 0x0FU;
+    if (mask == 0U) return;
+    uint8_t count = 0U;
+    for (uint8_t page = 0U; page < SEQ_PAGE_COUNT; ++page)
+        count += (uint8_t)((mask >> page) & 1U);
+    g_seq_project.tracks[track].page_mask = mask;
+    g_seq_project.tracks[track].length_steps = (uint8_t)(count * SEQ_STEPS_PER_PAGE);
+    seq_engine_control_mark_dirty();
+}
+
+uint8_t seq_model_map_page_step(uint8_t mask, uint8_t logical_step)
+{
+    mask &= 0x0FU;
+    if (mask == 0U) return logical_step;
+    uint8_t ordinal = (uint8_t)(logical_step / SEQ_STEPS_PER_PAGE);
+    for (uint8_t page = 0U; page < SEQ_PAGE_COUNT; ++page)
+    {
+        if ((mask & (uint8_t)(1U << page)) == 0U) continue;
+        if (ordinal == 0U)
+            return (uint8_t)(page * SEQ_STEPS_PER_PAGE
+                + logical_step % SEQ_STEPS_PER_PAGE);
+        --ordinal;
+    }
+    return 0U;
+}
+
+uint8_t seq_model_map_playback_step(seq_track_id_t track, uint8_t logical_step)
+{
+    return seq_model_map_page_step(seq_model_get_track_page_mask(track), logical_step);
+}
+
 uint8_t seq_model_is_step_in_track_playback_window(seq_track_id_t track, seq_step_id_t step)
 {
-    if (seq_model_track_is_valid(track) == 0U)
+    if ((seq_model_track_is_valid(track) == 0U) || (step >= SEQ_MAX_STEPS))
     {
         return 0U;
     }
 
-    return (step < seq_model_get_track_playback_length(track)) ? 1U : 0U;
+    const uint8_t mask = seq_model_get_track_page_mask(track);
+    return (mask != 0U) ? (uint8_t)((mask >> (step / SEQ_STEPS_PER_PAGE)) & 1U)
+        : (uint8_t)(step < seq_model_get_track_playback_length(track));
 }
 
 uint8_t seq_model_step_is_active(seq_track_id_t track, seq_step_id_t step)

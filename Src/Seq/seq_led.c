@@ -23,30 +23,12 @@
 #define SEQ_LED_LENGTH_FLASH_YELLOW_R 255U
 #define SEQ_LED_LENGTH_FLASH_YELLOW_G 255U
 
-static uint8_t seq_led_page_count_for_track(uint8_t track)
-{
-    uint8_t length = seq_model_get_track_length(track);
-    if (length == 0U)
-    {
-        length = 1U;
-    }
-
-    uint8_t page_count = (uint8_t)((length + (SEQ_STEPS_PER_PAGE - 1U)) / SEQ_STEPS_PER_PAGE);
-    if (page_count == 0U)
-    {
-        page_count = 1U;
-    }
-    if (page_count > SEQ_PAGE_COUNT)
-    {
-        page_count = SEQ_PAGE_COUNT;
-    }
-
-    return page_count;
-}
-
 static void seq_led_render_page_indicators(uint8_t track, uint8_t active_page)
 {
-    const uint8_t page_count = seq_led_page_count_for_track(track);
+    const uint8_t mask = seq_model_get_track_page_mask(track);
+    const uint8_t length = seq_model_get_track_length(track);
+    const uint8_t page_count = (uint8_t)((length + SEQ_STEPS_PER_PAGE - 1U)
+        / SEQ_STEPS_PER_PAGE);
     uint8_t running = 0U, engine_step = 0U;
     (void)seq_engine_playhead_view(track, &running, &engine_step);
     uint8_t playhead_page = SEQ_PAGE_COUNT;
@@ -64,11 +46,9 @@ static void seq_led_render_page_indicators(uint8_t track, uint8_t active_page)
             continue;
         }
 
-        if (page >= page_count)
-        {
-            led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, 0U, 0U);
-        }
-        else if ((page == active_page) && (running != 0U) && (playhead_page < page_count) && (playhead_page != active_page))
+        const uint8_t selected = mask != 0U
+            ? (uint8_t)((mask >> page) & 1U) : (uint8_t)(page < page_count);
+        if ((page == active_page) && (running != 0U) && (playhead_page != active_page))
         {
             led_layer_set(LED_LAYER_SEQ_STATE, led, SEQ_LED_PAGE_SCROLL_R, SEQ_LED_PAGE_SCROLL_G, 0U);
         }
@@ -80,9 +60,13 @@ static void seq_led_render_page_indicators(uint8_t track, uint8_t active_page)
         {
             led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, SEQ_LED_GREEN_G, 0U);
         }
-        else
+        else if (selected != 0U)
         {
             led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, 0U, SEQ_LED_PAGE_DIM_B);
+        }
+        else
+        {
+            led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, 0U, 0U);
         }
     }
 }

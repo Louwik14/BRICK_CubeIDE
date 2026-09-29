@@ -84,6 +84,7 @@ typedef struct
 {
     uint8_t present;
     uint8_t length;
+    uint8_t page_mask;
     uint8_t division;
     uint8_t direction;
     int8_t rotate;
@@ -609,6 +610,7 @@ static uint8_t ui_track_clipboard_capture_sequence(
     if (entity_topology_can_sequence(&topology) == 0U) return 1U;
     out->present = 1U;
     out->length = seq_model_get_track_length(track);
+    out->page_mask = seq_model_get_track_page_mask(track);
     if ((seq_runtime_get_track_div(track, &out->division) == 0U)
             || (seq_runtime_get_track_traversal(track, &out->direction,
                                                 &out->rotate) == 0U)
@@ -1045,6 +1047,8 @@ static uint8_t ui_track_clipboard_restore_sequence(
     if (ok != 0U)
     {
         seq_model_set_track_length(target, seq->length);
+        if (seq->page_mask != 0U)
+            seq_model_set_track_page_mask(target, seq->page_mask);
         seq_runtime_restore_track_div(target, seq->division);
         seq_runtime_set_track_traversal(target, seq->direction, seq->rotate);
         seq_runtime_set_track_timing(target, &seq->timing);

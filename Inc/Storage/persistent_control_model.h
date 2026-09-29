@@ -232,6 +232,7 @@ typedef struct
     uint8_t division;
     uint8_t direction;
     int8_t rotate;
+    uint8_t page_mask;
     seq_track_timing_config_t timing;
     persist_control_step_t steps[PERSIST_CONTROL_STEP_COUNT];
 } persist_control_sequence_t;

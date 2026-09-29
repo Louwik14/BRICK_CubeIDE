@@ -155,6 +155,7 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
         pattern->track_direction[track] = direction;
         pattern->track_rotate[track] = rotate;
         pattern->track_length[track] = seq_model_get_track_playback_length(track);
+        pattern->track_page_mask[track] = seq_model_get_track_page_mask(track);
         seq_timing_compile(&g_build_timing[track],
             g_build_seed.samples_per_step_q16, track,
             seq_runtime_get_groove_seed(),
