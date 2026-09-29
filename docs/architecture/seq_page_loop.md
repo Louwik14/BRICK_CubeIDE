@@ -1,10 +1,12 @@
 # Sequencer page loops
 
-`TRACK + PAGE 1–4` opens that physical page for editing, including pages beyond
-the current LEN. A single tap leaves playback unchanged. While TRACK remains
+`SHIFT + PAGE 1–4` opens that physical page for editing, including pages beyond
+the current LEN. A single tap leaves playback unchanged. While SHIFT remains
 held, pressing another PAGE before releasing the first creates a Page Loop;
 further PAGE presses add pages. A double tap on one PAGE within 300 ms selects
-that page alone. Existing TRACK shortcuts retain priority over this gesture.
+that page alone. The command is dispatched before modal, settings, navigation,
+and page handlers, so it has the same priority in SEQ, KBD, Patch, and Browser.
+Local SHIFT + PAGE actions yield to this global command.
 
 Each track stores a four bit page mask. Zero means the legacy contiguous
 `1..LEN` playback window. A nonzero mask plays selected physical pages in

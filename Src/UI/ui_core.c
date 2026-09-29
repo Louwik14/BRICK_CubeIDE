@@ -83,7 +83,7 @@ static uint32_t g_seq_page_last_tap_ms;
 static uint8_t ui_core_handle_seq_page_chord(const ui_event_t *ev)
 {
     if (ev == 0) return 0U;
-    if (ev->id == (uint8_t)BTN_TRACK && ev->type == UI_EVENT_BUTTON_RELEASE)
+    if (ev->id == (uint8_t)BTN_SHIFT && ev->type == UI_EVENT_BUTTON_RELEASE)
     {
         g_seq_page_held_mask = 0U;
         g_seq_page_gesture_mask = 0U;
@@ -101,20 +101,16 @@ static uint8_t ui_core_handle_seq_page_chord(const ui_event_t *ev)
         if (g_seq_page_held_mask == 0U) g_seq_page_gesture_mask = 0U;
         return (uint8_t)(was_held != 0U);
     }
-    if (button_down(BTN_TRACK) == 0U)
+    if (button_down(BTN_SHIFT) == 0U)
     {
         g_seq_page_held_mask = 0U;
         g_seq_page_gesture_mask = 0U;
         g_seq_page_last_tap = 0U;
         return 0U;
     }
-    if (ev->type != UI_EVENT_BUTTON_PRESS
-        || button_down(BTN_SHIFT) != 0U
-        || ui_get_hall_mode() != UI_HALL_MODE_SEQ
-        || ui_core_mute_is_active() != 0U)
+    if (ev->type != UI_EVENT_BUTTON_PRESS)
         return 0U;
     const seq_track_id_t track = ui_get_active_lane();
-    if (seq_edit_track_sequence_is_locked(track) != 0U) return 0U;
     const uint8_t held = g_seq_page_held_mask;
     g_seq_page_held_mask |= bit;
     const uint32_t now = HAL_GetTick();
@@ -1028,7 +1024,6 @@ void ui_core_tick(void)
         { ui_page_settings_handle_event, 1U, 1U },
         /* Intentionally before pattern/seq: global shortcuts can fully mask them. */
         { ui_core_handle_global_shortcuts, 1U, 1U },
-        { ui_core_handle_seq_page_chord, 1U, 1U },
         { ui_core_handle_pattern_mode_event, 1U, 1U },
         { ui_core_handle_macro_mode_event, 1U, 1U },
         { ui_core_handle_seq_mode_event, 1U, 1U },
@@ -1094,6 +1089,10 @@ void ui_core_tick(void)
 
         /* Must stay first: updates shift/track modifier state consumed by later stages. */
         ui_core_handle_track_selection_event(&ev);
+
+        /* SHIFT + PAGE is a global command, including while a modal owns PAGE. */
+        if (ui_core_handle_seq_page_chord(&ev) != 0U)
+            goto next_event;
 
         if (ui_page_name_edit_is_open() != 0U)
         {
