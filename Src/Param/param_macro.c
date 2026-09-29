@@ -207,7 +207,9 @@ uint8_t param_macro_lock_target_is_supported(uint8_t track, param_id_t param)
             || (policy.display_to_canonical == NULL)
             || (policy.automation > PARAM_AUTOMATION_LINEAR_U16)
             || (track_runtime_get_effective_param_status(track, param)
-                != TRACK_RUNTIME_PARAM_ALLOWED))
+                != TRACK_RUNTIME_PARAM_ALLOWED)
+            || ((param_registry_track_temp_is_applicable(param, track) == 0U)
+                && (param_backend_is_midi_cc_id(param) == 0U)))
         return 0U;
 
     {

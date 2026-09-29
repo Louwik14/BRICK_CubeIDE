@@ -15,6 +15,7 @@ static ui_macro_mode_t g_mode = UI_MACRO_LIVE_PRESSURE;
 static ui_macro_mode_t g_last_live = UI_MACRO_LIVE_PRESSURE;
 static uint8_t g_held_macro = 0xFFU;
 static uint8_t g_held_track = 0xFFU;
+static uint16_t g_pressed_whites;
 static uint8_t g_pending_tap;
 static uint32_t g_pending_tap_ms;
 
@@ -40,6 +41,7 @@ void ui_macro_interaction_reset(void)
     param_macro_reset();
     g_held_macro = 0xFFU;
     g_held_track = 0xFFU;
+    g_pressed_whites = 0U;
     g_pending_tap = 0U;
 }
 
@@ -51,9 +53,6 @@ void ui_macro_interaction_enter(void)
 
 void ui_macro_interaction_leave(void)
 {
-    if (g_pending_tap != 0U && g_mode != UI_MACRO_ASSIGN)
-        g_mode = g_mode == UI_MACRO_LIVE_PRESSURE
-            ? UI_MACRO_LIVE_TOGGLE : UI_MACRO_LIVE_PRESSURE;
     if (g_mode != UI_MACRO_ASSIGN) g_last_live = g_mode;
     ui_macro_interaction_reset();
 }
@@ -108,6 +107,7 @@ void ui_macro_interaction_note_hall_press(uint8_t hall)
 {
     uint8_t macro;
     if (ui_macro_white_index(hall, &macro) == 0U) return;
+    g_pressed_whites |= (uint16_t)(1U << macro);
     if (g_mode == UI_MACRO_ASSIGN)
     {
         g_held_macro = macro;
@@ -124,6 +124,7 @@ void ui_macro_interaction_note_hall_release(uint8_t hall)
 {
     uint8_t macro;
     if (ui_macro_white_index(hall, &macro) == 0U) return;
+    g_pressed_whites &= (uint16_t)~(1U << macro);
     if (g_mode == UI_MACRO_ASSIGN && g_held_macro == macro)
     {
         g_held_macro = 0xFFU;
@@ -137,7 +138,8 @@ void ui_macro_interaction_service_hall(uint8_t hall, uint8_t pressed)
 {
     uint8_t macro;
     if (g_mode != UI_MACRO_LIVE_PRESSURE
-        || ui_macro_white_index(hall, &macro) == 0U) return;
+        || ui_macro_white_index(hall, &macro) == 0U
+        || (g_pressed_whites & (uint16_t)(1U << macro)) == 0U) return;
     const float amount = (pressed != 0U)
         ? (float)hall_engine_get_value(hall) / 100.0f : 0.0f;
     (void)param_macro_set_amount(macro, amount);

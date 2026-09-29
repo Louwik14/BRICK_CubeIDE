@@ -448,6 +448,12 @@ void keyboard_input_process_hall(uint8_t hall_index, bool pressed, uint8_t veloc
     keyboard_input_process_lowcost_key(hall_index, pressed, velocity);
 }
 
+uint8_t keyboard_input_hall_macro_owned(uint8_t hall_index)
+{
+    return hall_index < LOWCOST_KEY_COUNT
+        ? g_lowcost_key_macro_owned[hall_index] : 0U;
+}
+
 void keyboard_input_process_hall_timed(uint8_t hall_index, bool pressed,
                                        uint8_t velocity, uint32_t capture_tick,
                                        uint32_t ingress_serial)

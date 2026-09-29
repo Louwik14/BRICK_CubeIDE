@@ -15,6 +15,7 @@
 #include "Storage/boot_context_sd.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_control.h"
+#include "UI/ui_macro_interaction.h"
 #include "Storage/persistence_debug.h"
 #include "Storage/asset_ref.h"
 #include "App/name_contract.h"
@@ -1484,6 +1485,7 @@ void project_product_load_service(void)
             pattern_live_publish_active(restore->metadata.active_pattern_bank,
                 restore->metadata.active_pattern);
             persistent_pattern_control_sync_ui_after_commit();
+            ui_macro_interaction_reset();
         }
         if (ok == 0U)
             PROJECT_PRODUCT_FATAL("PROJECT_PATTERN_APPLY_FAILED",

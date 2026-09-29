@@ -13,6 +13,7 @@ void keyboard_input_process_hall(uint8_t hall_index, bool pressed, uint8_t veloc
 void keyboard_input_process_hall_timed(uint8_t hall_index, bool pressed,
                                        uint8_t velocity, uint32_t capture_tick,
                                        uint32_t ingress_serial);
+uint8_t keyboard_input_hall_macro_owned(uint8_t hall_index);
 
 #ifdef __cplusplus
 }

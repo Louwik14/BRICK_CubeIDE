@@ -3,6 +3,7 @@
 #include "App/Hall/hall_engine.h"
 #include "IPC/live_event.h"
 #include "Keyboard/keyboard_runtime.h"
+#include "Keyboard/keyboard_input.h"
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_patch_assign.h"
 #include "ui_core.h"
@@ -81,7 +82,8 @@ void hall_keyboard_bridge_process(void)
         {
             hall_key_metadata_t meta;
             if (hall_keymap_metadata(key, &meta) != 0U
-                && meta.kind == HALL_KEY_KIND_WHITE)
+                && meta.kind == HALL_KEY_KIND_WHITE
+                && keyboard_input_hall_macro_owned(key) != 0U)
                 ui_macro_interaction_service_hall(key, hall_engine_is_pressed(key));
         }
     }
