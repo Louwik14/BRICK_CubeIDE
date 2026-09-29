@@ -251,6 +251,16 @@ ui_mute_state_t ui_core_mute_get_state(void)
     return state;
 }
 
+uint8_t ui_core_mute_owns_track_hall(uint8_t hall, uint8_t shift_down)
+{
+    /* Quick mute toggles tracks while SHIFT is held; prepare yields SHIFT navigation. */
+    return (uint8_t)((g_ui_core_mute.active != 0U)
+        && (hall < SEQ_LANE_CAPACITY)
+        && ((shift_down == 0U)
+            || (g_ui_core_mute.submode == UI_MUTE_SUBMODE_QUICK)
+            || (g_ui_core_mute.submode == UI_MUTE_SUBMODE_HOLD_QUICK)));
+}
+
 uint8_t ui_core_mute_get_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
 {
     if ((out_led == 0) || (hall >= HALL_UI_LANE_COUNT))
@@ -399,7 +409,7 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < SEQ_LANE_CAPACITY))
     {
-        if (*io_shift_down != 0U)
+        if (ui_core_mute_owns_track_hall(ev->id, *io_shift_down) == 0U)
         {
             return 0U;
         }
@@ -422,7 +432,7 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < SEQ_LANE_CAPACITY))
     {
-        if (*io_shift_down != 0U)
+        if (ui_core_mute_owns_track_hall(ev->id, *io_shift_down) == 0U)
         {
             return 0U;
         }
