@@ -1,7 +1,9 @@
 # Test Hall avec mux figé pendant l'activité physique des autres touches
 
-La touche cible est la clé 2 par défaut (`g_hall_hold_target_key`). On peut
-changer ce global avec GDB avant le test, pour une clé de 0 à 23. Maintenir
+La touche cible est la clé 2 par défaut (`g_hall_hold_target_key`). Ce mode
+est désarmé par défaut depuis le test ADC1 sans Volume : mettre
+`g_hall_hold_mode_arm` à 1 avec GDB pour le réutiliser. On peut changer
+la cible avec GDB avant le test, pour une clé de 0 à 23. Maintenir
 la touche cible au moins une seconde jusqu'à ce que
 `g_hall_hold_mode_active = 1`. Le firmware conserve alors son adresse mux
 indéfiniment et n'alimente plus le détecteur Hall avec les autres voies :

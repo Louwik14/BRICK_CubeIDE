@@ -123,6 +123,7 @@ extern volatile uint8_t g_hall_hold_target_key;
 extern volatile uint8_t g_hall_hold_target_mux;
 extern volatile uint8_t g_hall_hold_target_adc;
 extern volatile uint8_t g_hall_hold_mode_arm;
+extern volatile uint8_t g_hall_fixed_probe_arm;
 extern volatile uint8_t g_hall_hold_mode_active;
 extern volatile uint8_t g_hall_hold_trace_frozen;
 

@@ -87,7 +87,8 @@ volatile uint16_t g_hall_hold_trigger_raw __attribute__((used, externally_visibl
 volatile uint8_t g_hall_hold_target_key __attribute__((used, externally_visible)) = 2U;
 volatile uint8_t g_hall_hold_target_mux __attribute__((used, externally_visible));
 volatile uint8_t g_hall_hold_target_adc __attribute__((used, externally_visible));
-volatile uint8_t g_hall_hold_mode_arm __attribute__((used, externally_visible)) = 1U;
+volatile uint8_t g_hall_hold_mode_arm __attribute__((used, externally_visible));
+volatile uint8_t g_hall_fixed_probe_arm __attribute__((used, externally_visible));
 volatile uint8_t g_hall_hold_mode_active __attribute__((used, externally_visible));
 volatile uint8_t g_hall_hold_trace_frozen __attribute__((used, externally_visible));
 static uint8_t g_hall_hold_divider;
@@ -179,7 +180,7 @@ static void hall_adc_probe_drift(uint8_t key, uint8_t channel, uint16_t raw)
         g_hall_hold_mode_active = 1U;
         return;
     }
-    if (g_hall_hold_mode_arm != 0U) return;
+    if (g_hall_fixed_probe_arm == 0U) return;
     if ((g_hall_held_count[key] >= 360U)
              && (g_hall_stable_count[key] >= 8U)
              && ((uint32_t)raw >= (uint32_t)g_hall_stable_baseline[key] + 2500U)

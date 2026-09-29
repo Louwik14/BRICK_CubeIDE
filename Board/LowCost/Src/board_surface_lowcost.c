@@ -9,6 +9,8 @@ static board_surface_snapshot_t g_surface_snapshot;
 static volatile uint16_t *g_adc1_mailbox;
 static volatile uint8_t g_master_volume_valid;
 
+/* Diagnostic: ADC1 scans Hall A and Hall C only. Keep boot gain at the
+ * previously observed full-scale volume while the potentiometer is absent. */
 static uint32_t read_shift_register_bits(void)
 {
     uint32_t raw = 0U;
@@ -48,7 +50,7 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
 
     hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
     hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
-    hadc1.Init.NbrOfConversion = 3U;
+    hadc1.Init.NbrOfConversion = 2U;
     if (HAL_ADC_Init(&hadc1) != HAL_OK)
     {
         return 0U;
@@ -80,15 +82,9 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
         return 0U;
     }
 
-    sConfig.Channel = ADC_CHANNEL_5;
-    sConfig.Rank = ADC_REGULAR_RANK_3;
-    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-    {
-        return 0U;
-    }
-
     g_adc1_mailbox = adc1_mailbox;
     g_master_volume_valid = 0U;
+    g_adc1_mailbox[2U] = UINT16_MAX;
 
     if (hadc1.DMA_Handle == NULL)
     {
@@ -100,7 +96,7 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
         return 0U;
     }
 
-    if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_mailbox, 3U) != HAL_OK)
+    if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_mailbox, 2U) != HAL_OK)
     {
         g_adc1_mailbox = 0;
         g_master_volume_valid = 0U;
