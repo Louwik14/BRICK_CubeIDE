@@ -53,8 +53,8 @@ Le VCA par voix de Prism, Stack, Wave et FM relance son attaque sur chaque
 nouvelle allocation ou reutilisation physique. `ENV VCA` regle le mode de
 retrigger de ces enveloppes et du VCA de note de track : ON (hard) repart de
 zero, OFF (soft) repart du niveau courant. Le VCA de track garde son gate
-ouvert tant qu'une note reste tenue et ne relance son attaque qu'au passage
-de zero a une note tenue.
+ouvert tant qu'une note reste tenue, mais chaque NOTE ON relance son attaque;
+seul le dernier NOTE OFF lance le release.
 
 La configuration moteur reste canonique sur l'instance primaire de la track.
 L'adapter AUDIO porte le geste commun de projection vers tous les slots physiques:

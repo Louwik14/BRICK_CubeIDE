@@ -327,12 +327,11 @@ void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t veloc
     {
         filter->vca_note_count++;
     }
-    if (filter->vca_note_active == 0U)
-    {
-        filter->vca_note_active = 1U;
-        filter->vca_gate = 1U;
-        env_adsr_retrigger(&filter->vca_env, filter->vca_retrigger_hard != 0U);
-    }
+    /* A new note is a retrigger even while another note holds the gate.
+     * The held-note count only decides when the final NOTE OFF releases it. */
+    filter->vca_note_active = 1U;
+    filter->vca_gate = 1U;
+    env_adsr_retrigger(&filter->vca_env, filter->vca_retrigger_hard != 0U);
 }
 
 void mixer_track_vca_note_off(uint32_t track_id, uint8_t midi_note)
