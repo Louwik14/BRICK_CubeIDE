@@ -598,7 +598,6 @@ static void led_apply_fixed_scene(void)
     }
     else if (hall_mode == UI_HALL_MODE_MACRO)
     {
-        seq_led_render_active_track_page(ui_get_active_lane());
         for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
             led_apply_macro_hall(hall);
     }

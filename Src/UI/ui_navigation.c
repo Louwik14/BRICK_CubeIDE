@@ -152,6 +152,8 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
 {
     if (page_id == UI_PAGE_TEMPLATE_CFG)
     {
+        if (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
+            ui_set_hall_mode(UI_HALL_MODE_SEQ);
         ui_navigation_leave_mute();
         if (ui_page_audio_rec_is_open() != 0U)
         {
@@ -175,6 +177,8 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
         return;
     }
 
+    if (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
+        ui_set_hall_mode(UI_HALL_MODE_SEQ);
     ui_navigation_leave_mute();
 
     if (ui_page_audio_rec_is_open() != 0U)
