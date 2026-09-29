@@ -44,6 +44,27 @@ typedef struct {
 
 #define HALL_CAPTURE_CAPACITY 4096U
 
+typedef struct {
+    uint32_t sequence;
+    uint32_t tim5_tick;
+    uint32_t adc1_callback_tick;
+    uint32_t adc2_callback_tick;
+    uint32_t adc1_callbacks;
+    uint32_t adc2_callbacks;
+    uint16_t raw_a;
+    uint16_t raw_b;
+    uint16_t raw_c;
+    uint16_t adc1_ndtr_before;
+    uint16_t adc1_ndtr_after;
+    uint16_t adc2_ndtr;
+    uint8_t mux_odr;
+    uint8_t mux_idr;
+    uint8_t completing_adc;
+    uint8_t reserved;
+} hall_fixed_record_t;
+
+#define HALL_FIXED_CAPACITY 128U
+
 extern volatile hall_capture_record_t g_hall_capture[HALL_CAPTURE_CAPACITY];
 extern volatile hall_capture_calibration_t
     g_hall_capture_calibration[HALL_KEY_COUNT];
@@ -53,6 +74,14 @@ extern volatile uint8_t g_hall_capture_frozen;
 extern volatile uint8_t g_hall_capture_release_keys[3];
 extern volatile uint32_t g_hall_capture_release_ticks[3];
 extern volatile uint32_t g_hall_capture_held_mask;
+extern volatile hall_fixed_record_t g_hall_fixed_trace[HALL_FIXED_CAPACITY];
+extern volatile uint32_t g_hall_fixed_count;
+extern volatile uint8_t g_hall_fixed_done;
+extern volatile uint8_t g_hall_fixed_key;
+extern volatile uint8_t g_hall_fixed_mux;
+extern volatile uint8_t g_hall_fixed_adc;
+extern volatile uint16_t g_hall_fixed_baseline;
+extern volatile uint16_t g_hall_fixed_trigger_raw;
 
 void hall_capture_note_release(uint8_t key, uint32_t held_ms);
 
