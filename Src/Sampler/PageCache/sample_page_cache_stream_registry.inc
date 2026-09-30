@@ -137,6 +137,10 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
         }
     }
 
+    sample_page_lease_active_snapshot_t lease_snapshot;
+    if (sample_page_lease_control_snapshot_active(&lease_snapshot) == 0U)
+        return 0;
+
     for (uint32_t scan = 0U; scan < range_count; ++scan)
     {
         const uint32_t cursor_offset =
@@ -146,7 +150,8 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
         const uint32_t i = range_start + ((cursor_offset + scan) % range_count);
         sample_page_desc_t *const page = &g_sample_page_desc[i];
         if ((page->state != SAMPLE_PAGE_READY)
-            || (sample_page_cache_page_is_contractual(page) != 0U)
+            || (sample_page_cache_page_is_contractual_snapshot(
+                    page, &lease_snapshot) != 0U)
             || (sample_page_cache_key_slot(page->key) >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
             || (sample_page_cache_can_evict_for_request(key, page->key) == 0U))
         {

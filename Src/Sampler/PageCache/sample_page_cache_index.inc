@@ -215,6 +215,19 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
     page->state = state;
 }
 
+static uint8_t sample_page_cache_page_is_contractual_snapshot(
+    const sample_page_desc_t *page,
+    const sample_page_lease_active_snapshot_t *lease_snapshot)
+{
+    if (page == 0) return 0U;
+    return ((page->static_resident != 0U)
+            || (sample_page_lease_control_snapshot_protects(
+                    lease_snapshot,
+                    page->key,
+                    page->registration_epoch,
+                    page->page_index) != 0U)) ? 1U : 0U;
+}
+
 static uint8_t sample_page_cache_claim_for_recycle(sample_page_desc_t *page)
 {
     PERF_START(recycle_start);
