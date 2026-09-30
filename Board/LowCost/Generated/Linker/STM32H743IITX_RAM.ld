@@ -333,6 +333,16 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
+  .audio_shifter_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    KEEP(*(.audio_shifter_sdram))
+    KEEP(*(.audio_shifter_sdram*))
+    . = ALIGN(32);
+  } >SDRAM
+  ASSERT(SIZEOF(.audio_shifter_sdram) == 96K,
+         "Shifter delay SDRAM footprint changed")
+
   .sdram (NOLOAD) :
   {
     . = ALIGN(32);

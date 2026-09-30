@@ -530,6 +530,16 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
+  .audio_shifter_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __audio_shifter_sdram_start__ = .;
+    KEEP(*(.audio_shifter_sdram))
+    KEEP(*(.audio_shifter_sdram*))
+    . = ALIGN(32);
+    __audio_shifter_sdram_end__ = .;
+  } >SDRAM
+
   .sdram (NOLOAD) :
   {
     . = ALIGN(32);
@@ -600,6 +610,12 @@ SECTIONS
          "Sample page pool starts outside cacheable SDRAM")
   ASSERT(__sdram_page_pool_end__ <= __sdram_cacheable_end__,
          "Sample page pool exceeds cacheable SDRAM")
+  ASSERT(__audio_shifter_sdram_start__ >= __sdram_cacheable_start__,
+         "Shifter delay starts outside cacheable SDRAM")
+  ASSERT(__audio_shifter_sdram_end__ <= __sdram_general_end__,
+         "Shifter delay exceeds cacheable general SDRAM")
+  ASSERT(SIZEOF(.audio_shifter_sdram) == 96K,
+         "Shifter delay SDRAM footprint changed")
   ASSERT(ADDR(.sdram_audio_cold) + SIZEOF(.sdram_audio_cold) <= __sdram_general_end__,
          "General SDRAM sections exceed reserved Recorder ring")
   ASSERT(ADDR(.sdram_ui) + SIZEOF(.sdram_ui) <= __sdram_general_end__,

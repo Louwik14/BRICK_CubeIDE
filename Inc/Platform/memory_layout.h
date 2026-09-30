@@ -133,4 +133,7 @@
 /* Dedicated SDRAM arena for audio history buffers with direct IRQ access. */
 #define AUDIO_HISTORY_SDRAM SEC_ATTR(".audio_history_sdram") ALIGN32
 
+/* CPU-only shifter delay lines: cacheable write-back SDRAM, never DMA-owned. */
+#define AUDIO_SHIFTER_SDRAM SEC_ATTR(".audio_shifter_sdram") ALIGN32
+
 #endif /* MEMORY_LAYOUT_H */

@@ -141,11 +141,11 @@ static brick6_sampler_clip_slot_t *brick6_sampler_runtime_clip_ensure_slot(uint8
         g_sampler_clip_runtime[track_id].clip_slot_index = i;
         float *const delay_l = (i == 0U) ? g_sampler_clip_shifter_delay_d1[0]
                                : (i == 1U) ? g_sampler_clip_shifter_delay_general[0]
-                               : (i == 2U) ? g_sampler_clip_shifter_delay_recorder[0]
-                                           : g_sampler_clip_shifter_delay_recorder[2];
+                               : (i == 2U) ? g_sampler_clip_shifter_delay_sdram[0]
+                                           : g_sampler_clip_shifter_delay_sdram[2];
         float *const delay_r = (i == 0U) ? g_sampler_clip_shifter_delay_d1[1]
                                : (i == 1U) ? g_sampler_clip_shifter_delay_general[1]
-                               : (i == 2U) ? g_sampler_clip_shifter_delay_recorder[1]
+                               : (i == 2U) ? g_sampler_clip_shifter_delay_sdram[1]
                                            : g_sampler_clip_shifter_delay_recorder_ring;
         brick6_clip_shifter_init(&g_sampler_clip_slots[i].shifter, delay_l, delay_r);
         return &g_sampler_clip_slots[i];
