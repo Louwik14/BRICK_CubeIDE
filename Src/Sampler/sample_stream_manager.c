@@ -232,7 +232,6 @@ static uint8_t sample_stream_manager_pick_next(
         return 0U;
     }
     PERF_END(PERF_CPU_MANAGER_PICK, perf_start);
-    PERF_COUNT(PERF_N_PAGES_REQUESTED);
     const sample_page_state_t state = sample_page_cache_get_page_state_key(
         candidate.key, candidate.page_index);
     uint8_t reserved_here = 0U;
@@ -411,6 +410,10 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
         {
             continue;
         }
+        /* One counted request is one reader-slot need that has won cache
+         * ownership and entered LOADING. Candidate scans and retries are not
+         * requests. Static presocle prefill is deliberately excluded. */
+        PERF_COUNT(PERF_N_PAGES_REQUESTED);
         sample_stream_io_command_t io_command;
         PERF_START(command_start);
         if (sample_stream_io_command_init(&io_command,

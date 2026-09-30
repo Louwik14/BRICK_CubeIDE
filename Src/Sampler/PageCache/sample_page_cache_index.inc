@@ -207,16 +207,6 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
         }
     }
 
-    if ((state == SAMPLE_PAGE_READY) && (page->state != SAMPLE_PAGE_READY))
-    {
-        PERF_COUNT(PERF_N_PAGES_READY);
-        if (page->key.domain == SAMPLE_AUDIO_DOMAIN_CLASSIC)
-            PERF_COUNT(PERF_N_CLASSIC_READY);
-        else if (page->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
-            PERF_COUNT(PERF_N_MULTI_READY);
-        else if (page->key.domain == SAMPLE_AUDIO_DOMAIN_REC)
-            PERF_COUNT(PERF_N_REC_READY);
-    }
     if ((state == SAMPLE_PAGE_FAILED) && (page->state != SAMPLE_PAGE_FAILED))
         PERF_COUNT(PERF_N_PAGE_FAILED);
     if (state == SAMPLE_PAGE_READY)

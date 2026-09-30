@@ -198,6 +198,7 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
         && (sample_audio_key_equal(&page->key, &token->key) != 0U));
     uint8_t completed = valid;
     uint8_t became_ready = 0U;
+    sample_audio_domain_t ready_domain = SAMPLE_AUDIO_DOMAIN_CLASSIC;
     if (valid != 0U)
     {
         const uint8_t cancelled = page->load_cancel_requested;
@@ -222,10 +223,23 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
         became_ready = (uint8_t)(final_state == SAMPLE_PAGE_READY);
         if (became_ready != 0U)
         {
+            ready_domain = page->key.domain;
         }
     }
     sample_page_cache_unlock(primask);
-    (void)became_ready;
+    if (became_ready != 0U)
+    {
+        /* Count only a validated LOADING -> READY completion. Generic READY
+         * state restoration (for example EVICTING -> READY when protected)
+         * is not a physical page completion. */
+        PERF_COUNT(PERF_N_PAGES_READY);
+        if (ready_domain == SAMPLE_AUDIO_DOMAIN_CLASSIC)
+            PERF_COUNT(PERF_N_CLASSIC_READY);
+        else if (ready_domain == SAMPLE_AUDIO_DOMAIN_MULTI)
+            PERF_COUNT(PERF_N_MULTI_READY);
+        else if (ready_domain == SAMPLE_AUDIO_DOMAIN_REC)
+            PERF_COUNT(PERF_N_REC_READY);
+    }
     return completed;
 }
 

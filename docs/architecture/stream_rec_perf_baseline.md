@@ -15,6 +15,25 @@ The snapshot writes only elapsed time; it does not freeze concurrent writers. Ha
 
 CPU spans bracket executed code only. They must not be interpreted as asynchronous I/O duration. DWT also counts interrupt cycles that happen inside a bracket. DMA launch can nest inside synchronous submission; the decoder excludes its span from the sampled Streamer sum. The Recorder `rec_service` span includes `rec_prepare` and `rec_pack`; do not sum those spans as disjoint work. The retained `rec_pack` slot now measures direct source binding and, only for the final partial sector, its bounded 512-byte copy/padding; its layout is unchanged for baseline compatibility. Recorder AUDIO keeps the existing total, conversion and peak-meter slots for diagnostic ABI stability; native FLOAT32 capture leaves the conversion slot and frame counter at zero, while the peak span reads the float bus directly. REC_SOURCE FLOAT32 pages use the normal direct path. Its scratch/copy and PCM24-to-FLOAT spans remain reserved for legacy PCM24 recordings only. The SD driver `stream_dma`/`rec_write_dma` wall spans run from successful DMA launch to completion IRQ; `stream_submit_to_dma` and `rec_submit_to_dma` include queue delay. Unsigned subtraction handles CYCCNT wrap for individual intervals under one wrap (~8.9 seconds at 480 MHz).
 
-`pages_requested` counts manager candidates, including retries, rather than unique AUDIO need edges. `stream_request_to_ready` begins at manager submission preparation and ends after page publication; it excludes earlier AUDIO need time. `stream_dma_to_io_finalize` ends before cache publication, so it is a lower bound for DMA completion to READY. The read count and byte count come from successful physical Streamer backend completions, including sector alignment overhead. DMA wall times in the common SD block driver may include other clients if they operate during the test. Recorder write count and bytes are successful data descriptor completions, excluding filesystem metadata writes; `rec_write_dma` can include filesystem writes. `cache_ready_observations` and `cache_loading_observations` are manager scan observations, not unique pages. `cache_miss` counts manager candidates in FREE/FAILED state. `audio_page_missing` counts failed primary reader acquisitions; it is not a full underrun counter. The ring high water and minimum free are sampled on successful AUDIO pushes. A near full event means under one eighth of ring capacity remains.
+`pages_requested` compte les besoins issus des quatre slots reader qui ont gagne
+une reservation cache et effectue la transition vers `LOADING`; les scans,
+retries et prechargements statiques du pre-socle n'y figurent pas.
+`pages_ready` et ses ventilations comptent uniquement une completion validee
+`LOADING -> READY`, jamais une restauration `EVICTING -> READY` ni une
+allocation RAM rendue READY sans lecture. `stream_request_to_ready` commence
+apres cette prise en charge et finit apres publication de la page; il exclut le
+temps anterieur de publication du lease. `stream_dma_to_io_finalize` finit avant
+la publication cache et constitue donc une borne basse DMA-vers-READY. Le
+nombre et le volume de reads proviennent des completions reussies du backend
+physique Streamer, sur octets alignes secteurs. Les temps DMA du block driver
+commun peuvent inclure d'autres clients actifs pendant le banc. Recorder write
+count/bytes proviennent des completions de descripteurs data, hors metadata
+filesystem; `rec_write_dma` peut inclure les ecritures filesystem.
+`cache_ready_observations` et `cache_loading_observations` restent des
+observations de scans manager, pas des pages uniques. `cache_miss` compte un
+besoin reader observe en `FREE/FAILED`. `audio_page_missing` compte les echecs
+d'acquisition primaire reader, pas tous les underruns. Les niveaux du ring sont
+echantillonnes lors des pushes AUDIO reussis; near-full signifie moins d'un
+huitieme de capacite libre.
 
 The main baseline omits a unique per reader breakdown, exact AUDIO need-to-I/O delay, late page classification, and exact attribution of scheduler CPU outside the measured functions. Zero-valued spans indicate no probe for that stage or no occurrence. The decoder does not claim a total CPU percentage; nested spans and unmeasured paths prevent that inference. There is no allocation, logging, SD diagnostic write or event ring in this instrumentation.
