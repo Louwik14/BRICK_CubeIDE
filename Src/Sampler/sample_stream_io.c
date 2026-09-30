@@ -5,6 +5,7 @@
 
 #include "Sampler/sample_stream_backend_physical.h"
 #include "Sampler/sample_stream_limits.h"
+#include "Platform/stream_rec_perf.h"
 #include "Storage/wav_audio_codec.h"
 #include "SD/sd_block_device.h"
 #include "SD/sd_scheduler_runtime.h"
@@ -46,6 +47,7 @@ typedef struct
     const uint8_t *source;
     uint32_t media_epoch;
     uint32_t order;
+    uint32_t perf_dma_done_cycles;
     uint8_t state;
     uint8_t active;
     uint8_t physical_active;
@@ -186,6 +188,7 @@ static void sample_stream_io_finalize(sample_stream_io_async_t *async)
             async->result.load_result = SAMPLE_PAGE_LOAD_DECODE_FAILED;
             return;
         }
+        PERF_START(decode_start);
         uint32_t remaining = target.frame_count;
         /* Decode from the end so expanding 6-byte PCM frames to 8-byte float
          * frames cannot overwrite source bytes that have not been copied. */
@@ -202,6 +205,9 @@ static void sample_stream_io_finalize(sample_stream_io_async_t *async)
                 &target.frames_interleaved[first * 2U], count);
             remaining = first;
         }
+        PERF_END(PERF_CPU_REC_SOURCE_CONVERT, decode_start);
+        PERF_COUNT(PERF_N_REC_SOURCE_PAGES);
+        PERF_ACCUM(PERF_N_REC_SOURCE_FRAMES, target.frame_count);
         return;
     }
     async->result.load_result = SAMPLE_PAGE_LOAD_UNSUPPORTED_SAMPLE;
@@ -216,6 +222,7 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
 
 uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
 {
+    PERF_START(begin_start);
     sample_stream_io_async_t *async = 0;
     if (command == 0)
     {
@@ -334,6 +341,7 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
         {
             async->physical_active = 1U;
             async->state = SAMPLE_STREAM_IO_JOB_DMA;
+            PERF_END(PERF_CPU_STREAM_IO_BEGIN, begin_start);
             return 1U;
         }
         async->result.load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
@@ -394,7 +402,13 @@ static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
     if (async != 0)
     {
         async->state = SAMPLE_STREAM_IO_JOB_FINALIZING;
+        PERF_START(finalize_start);
         sample_stream_io_finalize(async);
+        PERF_END(PERF_CPU_STREAM_IO_FINALIZE, finalize_start);
+        if ((async->result.load_result == SAMPLE_PAGE_LOAD_OK)
+            && (async->perf_dma_done_cycles != 0U))
+            brick_perf_wall(PERF_WALL_STREAM_DMA_IO_FINALIZE,
+                            brick_perf_now() - async->perf_dma_done_cycles);
         *out_result = async->result;
         memset(async, 0, sizeof(*async));
         return 1U;
@@ -422,6 +436,7 @@ static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
             return 0U;
         }
         async->physical_active = 0U;
+        async->perf_dma_done_cycles = brick_perf_now();
         async->result.load_result = physical_result;
         if (physical_result == SAMPLE_PAGE_LOAD_OK)
         {

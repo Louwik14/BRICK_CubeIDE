@@ -1260,6 +1260,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     uint32_t audio_rec_peak_abs_pcm24 = 0U;
     if(audio_rec_bus_active != 0U)
     {
+        PERF_START(rec_convert_start);
         for(uint32_t i = 0U; i < frames; ++i)
         {
             const uint32_t out = i * AUDIO_RECORDER_CHANNELS;
@@ -1281,6 +1282,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 audio_rec_bus_i32[out + 1U] = pcm_r;
             }
         }
+        if (audio_rec_capture_active != 0U)
+            PERF_END(PERF_CPU_AUDIO_CONVERT, rec_convert_start);
         if(audio_rec_capture_active != 0U)
         {
             (void)audio_recorder_capture_audio_push(

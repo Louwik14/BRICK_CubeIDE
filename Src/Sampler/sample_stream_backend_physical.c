@@ -1,4 +1,5 @@
 #include "Sampler/sample_stream_backend_physical.h"
+#include "Platform/stream_rec_perf.h"
 
 #include <string.h>
 
@@ -340,11 +341,13 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
         sample_stream_backend_physical_invalidate_span(async);
         return SD_SCHEDULER_START_ERROR;
     }
+    PERF_START(read_start);
     const sd_block_device_result_t result = sd_block_device_async_read_submit(
         span.lba, span.sector_count,
         &async->buffer[async->buffer_sectors
                         * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE],
         async->owner_generation);
+    PERF_END(PERF_CPU_STREAM_READ_START, read_start);
     if ((result == SD_BLOCK_DEVICE_BUSY)
             || (result == SD_BLOCK_DEVICE_QUEUE_FULL))
     {
@@ -390,11 +393,13 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
         }
         return SD_SCHEDULER_POLL_ACTIVE;
     }
+    PERF_START(read_complete);
     sample_stream_backend_physical_async_t *const async =
         sample_stream_backend_physical_find_generation(
             completion.owner_generation);
     if(async == 0)
     {
+        PERF_END(PERF_CPU_STREAM_READ_COMPLETE, read_complete);
         return (sd_block_device_async_pending_count() != 0U)
             ? SD_SCHEDULER_POLL_ACTIVE : SD_SCHEDULER_POLL_ERROR;
     }
@@ -408,9 +413,15 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
         sample_stream_backend_physical_invalidate_span(async);
         async->failed = 1U;
         async->completed = 1U;
+        PERF_END(PERF_CPU_STREAM_READ_COMPLETE, read_complete);
         return (sd_block_device_async_pending_count() != 0U)
             ? SD_SCHEDULER_POLL_ACTIVE : SD_SCHEDULER_POLL_ERROR;
     }
+    const uint32_t physical_bytes = completion.sector_count * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE;
+    PERF_COUNT(PERF_N_READS);
+    PERF_ACCUM(PERF_N_READ_BYTES, physical_bytes);
+    PERF_MIN_NONZERO(PERF_N_READ_MIN_BYTES, physical_bytes);
+    PERF_MAX(PERF_N_READ_MAX_BYTES, physical_bytes);
     async->active_lba = 0U;
     async->active_sector_count = 0U;
     async->active_buffer = 0;
@@ -423,6 +434,7 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
         sample_stream_backend_physical_invalidate_span(async);
         async->failed = 1U;
         async->completed = 1U;
+        PERF_END(PERF_CPU_STREAM_READ_COMPLETE, read_complete);
         return (sd_block_device_async_pending_count() != 0U)
             ? SD_SCHEDULER_POLL_ACTIVE : SD_SCHEDULER_POLL_ERROR;
     }
@@ -431,10 +443,12 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
     }
     if (async->logical_queued < async->source_bytes)
     {
+        PERF_END(PERF_CPU_STREAM_READ_COMPLETE, read_complete);
         return (sd_block_device_async_pending_count() != 0U)
             ? SD_SCHEDULER_POLL_ACTIVE : SD_SCHEDULER_POLL_COMPLETED;
     }
     async->completed = 1U;
+    PERF_END(PERF_CPU_STREAM_READ_COMPLETE, read_complete);
     return (sd_block_device_async_pending_count() != 0U)
         ? SD_SCHEDULER_POLL_ACTIVE : SD_SCHEDULER_POLL_COMPLETED;
 }

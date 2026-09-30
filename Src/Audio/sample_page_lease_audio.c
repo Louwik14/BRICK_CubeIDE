@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "stm32h7xx.h"
+#include "Platform/stream_rec_perf.h"
 
 void sample_page_lease_audio_init(void)
 {
@@ -20,6 +21,7 @@ uint8_t sample_page_lease_audio_publish(uint8_t slot,
     if ((sample_audio_key_equal(&lease->key, &key) != 0U)
         && (lease->registration_epoch == registration_epoch)
         && (memcmp(lease->ranges, ranges, sizeof(lease->ranges)) == 0)) return 1U;
+    PERF_START(lease_start);
     uint32_t seq = lease->seq;
     if ((seq & 1U) != 0U) ++seq;
     lease->seq = seq + 1U;
@@ -31,6 +33,8 @@ uint8_t sample_page_lease_audio_publish(uint8_t slot,
     __DMB();
     lease->seq = seq + 2U;
     __DMB();
+    PERF_END(PERF_CPU_READER_LEASE, lease_start);
+    PERF_COUNT(PERF_N_LEASE_PUBLISH);
     return 1U;
 }
 

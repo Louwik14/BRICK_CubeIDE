@@ -27,6 +27,7 @@
 #include "Audio/audio_waveform_capture_audio.h"
 #include "Audio/audio_io.h"
 #include "Audio/audio_rec_level_producer.h"
+#include "Platform/stream_rec_perf.h"
 #include "Audio/sd_preview_audio.h"
 #include "IPC/control_audio_command.h"
 

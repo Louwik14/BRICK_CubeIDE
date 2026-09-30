@@ -9,11 +9,40 @@
 #include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_scheduler.h"
 #include "Sampler/sample_stream_transport.h"
+#include "Platform/stream_rec_perf.h"
+#include "IPC/audio_recorder_capture_contract.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
 #define SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY (3U)
 #define SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED (6U)
+
+#if BRICK_PERF_DIAG
+static uint32_t g_perf_reset_tick;
+/* DTCM is CPU-only and debugger-visible without D-cache writeback. */
+AUDIO_HOT volatile brick_stream_rec_perf_t g_stream_rec_perf
+    __attribute__((used, externally_visible));
+void __attribute__((used, externally_visible)) brick_perf_diag_reset(void)
+{
+    /* Call with playback and recording stopped, then run the workload. */
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    g_perf_reset_tick = HAL_GetTick();
+    memset((void *)&g_stream_rec_perf, 0, sizeof(g_stream_rec_perf));
+    g_stream_rec_perf.magic = 0x46505242U;
+    g_stream_rec_perf.version = 2U;
+    g_stream_rec_perf.size = sizeof(g_stream_rec_perf);
+    g_stream_rec_perf.cpu_hz = SystemCoreClock;
+}
+void __attribute__((used, externally_visible)) brick_perf_diag_snapshot(void)
+{
+    /* Call after stopping the workload; all counter writes have ceased. */
+    g_stream_rec_perf.count[PERF_N_TEST_ELAPSED_MS] =
+        (uint32_t)(HAL_GetTick() - g_perf_reset_tick);
+    g_stream_rec_perf.count[PERF_N_REC_RING_FILL] =
+        g_audio_recorder_capture.head_cursor - g_audio_recorder_capture.tail_cursor;
+}
+#endif
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CLASSIC_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
@@ -28,6 +57,7 @@ typedef struct
     sample_page_load_target_t target;
     sample_stream_io_command_t command;
     uint32_t transport_sequence;
+    uint32_t perf_request_cycles;
     uint8_t active;
 } sample_stream_manager_pending_io_t;
 SDRAM_STREAM_SERVICE static sample_stream_manager_pending_io_t
@@ -106,6 +136,7 @@ static uint8_t sample_stream_manager_finish_io(
     sample_stream_manager_pending_io_t *pending,
     sample_stream_io_result_t *io_result)
 {
+    PERF_START(perf_start);
     if ((pending == 0) || (io_result == 0))
     {
         return 0U;
@@ -119,6 +150,10 @@ static uint8_t sample_stream_manager_finish_io(
     {
         return 0U;
     }
+    if (pending->perf_request_cycles != 0U)
+        brick_perf_wall(PERF_WALL_STREAM_REQUEST_READY,
+                        brick_perf_now() - pending->perf_request_cycles);
+    PERF_END(PERF_CPU_MANAGER_FINISH, perf_start);
     return 1U;
 }
 
@@ -172,10 +207,10 @@ static uint8_t sample_stream_manager_candidate_for_slot(
             const uint32_t page_index = range->first_page + offset;
             const sample_page_state_t state =
                 sample_page_cache_get_page_state_key(lease.key, page_index);
-            if (state == SAMPLE_PAGE_READY) continue;
+            if (state == SAMPLE_PAGE_READY) { PERF_COUNT(PERF_N_CACHE_READY); continue; }
 
             if (out_pending != 0) *out_pending = 1U;
-            if (state == SAMPLE_PAGE_LOADING) return 0U;
+            if (state == SAMPLE_PAGE_LOADING) { PERF_COUNT(PERF_N_CACHE_LOADING); return 0U; }
             if (out_candidate == 0) return 0U;
 
             memset(out_candidate, 0, sizeof(*out_candidate));
@@ -205,6 +240,7 @@ static uint8_t sample_stream_manager_pick_next(
     sample_page_load_target_t *out_target,
     sample_stream_scheduler_candidate_t *out_candidate)
 {
+    PERF_START(perf_start);
     if ((out_target == 0) || (out_candidate == 0))
     {
         return 0U;
@@ -216,18 +252,25 @@ static uint8_t sample_stream_manager_pick_next(
     {
         return 0U;
     }
+    PERF_END(PERF_CPU_MANAGER_PICK, perf_start);
+    PERF_COUNT(PERF_N_PAGES_REQUESTED);
     const sample_page_state_t state = sample_page_cache_get_page_state_key(
         candidate.key, candidate.page_index);
     uint8_t reserved_here = 0U;
     if ((state == SAMPLE_PAGE_FREE) || (state == SAMPLE_PAGE_FAILED))
     {
+        PERF_COUNT(PERF_N_CACHE_MISS);
+        PERF_START(reserve_start);
         if (sample_page_cache_reserve_page_key_alloc(
                 candidate.key,
                 candidate.page_index,
                 SAMPLE_PAGE_ALLOC_VOICE_WINDOW) == 0U)
         {
+            PERF_COUNT(PERF_N_CACHE_ALLOC_FAIL);
             return 0U;
         }
+        PERF_END(PERF_CPU_CACHE_RESERVE, reserve_start);
+        PERF_COUNT(PERF_N_CACHE_ALLOC);
         reserved_here = 1U;
     }
 
@@ -301,6 +344,7 @@ static uint8_t sample_stream_manager_submit_prefill(
     memset(pending, 0, sizeof(*pending));
     pending->target = target;
     pending->command = command;
+    pending->perf_request_cycles = brick_perf_now();
     if (sample_stream_transport_submit(
             &pending->command, &pending->transport_sequence) == 0U)
     {
@@ -389,6 +433,7 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
             continue;
         }
         sample_stream_io_command_t io_command;
+        PERF_START(command_start);
         if (sample_stream_io_command_init(&io_command,
                                           &load_token,
                                           &target,
@@ -398,6 +443,7 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
                                                    SAMPLE_PAGE_FINISH_ERROR);
             continue;
         }
+        PERF_END(PERF_CPU_STREAM_COMMAND, command_start);
         io_command.deadline_margin_us = UINT32_MAX;
         sample_stream_manager_pending_io_t *pending =
             &g_sample_stream_manager_pending_io[g_sample_stream_manager_pending_count];
@@ -405,12 +451,16 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
         pending->candidate = candidate;
         pending->target = target;
         pending->command = io_command;
+        pending->perf_request_cycles = brick_perf_now();
         sample_stream_io_result_t io_result;
         memset(&io_result, 0, sizeof(io_result));
         io_result.token = load_token;
         io_result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-        if (sample_stream_transport_submit(
-                &pending->command, &pending->transport_sequence) == 0U)
+        PERF_START(submit_start);
+        const uint8_t submitted = sample_stream_transport_submit(
+                &pending->command, &pending->transport_sequence);
+        PERF_END(PERF_CPU_STREAM_SUBMIT, submit_start);
+        if (submitted == 0U)
         {
             (void)sample_stream_manager_finish_io(pending, &io_result);
             return;

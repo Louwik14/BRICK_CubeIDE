@@ -46,6 +46,14 @@ endif()
 # Target
 # --------------------------------------------------------------------------
 add_executable(${CMAKE_PROJECT_NAME})
+option(BRICK_PERF_DIAG "Instrument the H743 Streamer/Recorder baseline" ON)
+if(BRICK_PERF_DIAG)
+    target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
+        "LINKER:--undefined=brick_perf_diag_reset"
+        "LINKER:--undefined=brick_perf_diag_snapshot")
+else()
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BRICK_PERF_DIAG=0)
+endif()
 
 # CubeMX-generated base
 add_subdirectory(cmake/stm32cubemx)

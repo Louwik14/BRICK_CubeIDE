@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "stm32h7xx.h"
+#include "Platform/stream_rec_perf.h"
 
 uint8_t sample_page_lease_control_read(uint8_t slot,
                                        sample_page_lease_t *out)
@@ -30,6 +31,7 @@ uint8_t sample_page_lease_control_protects(sample_audio_key_t key,
                                            uint32_t registration_epoch,
                                            uint32_t page_index)
 {
+    PERF_COUNT(PERF_N_LEASE_CHECK);
     sample_page_lease_t lease;
     for (uint8_t slot = 0U; slot < SAMPLE_PAGE_LEASE_SLOT_COUNT; ++slot)
     {

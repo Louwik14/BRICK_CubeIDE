@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <string.h>
+#include "Platform/stream_rec_perf.h"
 
 #define GENERIC_RECORDER_SECTOR_BYTES (512U)
 
@@ -319,11 +320,13 @@ static uint8_t generic_recorder_prepare_descriptor(generic_recorder_t *recorder,
     descriptor->valid_bytes = valid_bytes;
     descriptor->media_epoch = snapshot.media_epoch;
     descriptor->extent_index = span.extent_index;
+    PERF_START(pack_start);
     generic_recorder_pack(recorder,
                           descriptor->buffer,
                           descriptor->logical_offset,
                           valid_bytes,
                           dma_bytes);
+    PERF_END(PERF_CPU_REC_PACK, pack_start);
     descriptor->state = GENERIC_RECORDER_DESCRIPTOR_READY;
     recorder->assigned_tail += valid_bytes;
     return 1U;
@@ -497,9 +500,11 @@ void generic_recorder_service(generic_recorder_t *recorder)
     {
         return;
     }
+    PERF_START(service_start);
     recorder_file_reservation_map_snapshot_t snapshot;
     if (generic_recorder_snapshot(recorder, &snapshot) == 0U)
     {
+        PERF_END(PERF_CPU_REC_SERVICE, service_start);
         return;
     }
     const uint64_t accepted_tail = generic_recorder_accepted_snapshot(recorder);
@@ -511,7 +516,9 @@ void generic_recorder_service(generic_recorder_t *recorder)
     {
         recorder->extension_pending = 1U;
     }
+    PERF_START(prepare_start);
     (void)generic_recorder_prepare_descriptor(recorder, accepted_tail);
+    PERF_END(PERF_CPU_REC_PREPARE, prepare_start);
     if ((recorder->state == GENERIC_RECORDER_DRAINING)
         && (recorder->committed_tail == accepted_tail)
         && (recorder->assigned_tail == accepted_tail)
@@ -519,6 +526,7 @@ void generic_recorder_service(generic_recorder_t *recorder)
     {
         recorder->state = GENERIC_RECORDER_FINALIZABLE;
     }
+    PERF_END(PERF_CPU_REC_SERVICE, service_start);
 }
 
 void generic_recorder_abort(generic_recorder_t *recorder)
@@ -590,6 +598,7 @@ static sd_scheduler_start_result_t generic_recorder_write_start(
     descriptor->active_dma_bytes = dma_bytes;
     descriptor->active_valid_bytes =
         (remaining_valid < dma_bytes) ? remaining_valid : dma_bytes;
+    PERF_START(write_start);
     const generic_recorder_transport_start_t result = recorder->config.transport.start(
         recorder->config.transport.context,
         candidate->lba,
@@ -597,6 +606,7 @@ static sd_scheduler_start_result_t generic_recorder_write_start(
         candidate->write_buffer,
         recorder->generation,
         recorder->media_epoch);
+    PERF_END(PERF_CPU_REC_WRITE_START, write_start);
     if (result == GENERIC_RECORDER_TRANSPORT_BUSY)
     {
         descriptor->active_dma_bytes = 0U;
@@ -634,6 +644,7 @@ static sd_scheduler_poll_result_t generic_recorder_write_poll(void *context)
     {
         return SD_SCHEDULER_POLL_ACTIVE;
     }
+    PERF_START(write_complete);
     if (result == GENERIC_RECORDER_TRANSPORT_RECOVERY_ABORT)
     {
         return SD_SCHEDULER_POLL_RECOVERY_ABORT;
@@ -665,6 +676,10 @@ static sd_scheduler_poll_result_t generic_recorder_write_poll(void *context)
         recorder->state = GENERIC_RECORDER_ERROR;
         return SD_SCHEDULER_POLL_ERROR;
     }
+    PERF_COUNT(PERF_N_REC_WRITES);
+    PERF_ACCUM(PERF_N_REC_WRITE_BYTES, descriptor->active_dma_bytes);
+    PERF_MIN_NONZERO(PERF_N_REC_WRITE_MIN_BYTES, descriptor->active_dma_bytes);
+    PERF_MAX(PERF_N_REC_WRITE_MAX_BYTES, descriptor->active_dma_bytes);
     descriptor->sent_dma_bytes += descriptor->active_dma_bytes;
     descriptor->sent_valid_bytes += descriptor->active_valid_bytes;
     generic_recorder_critical_enter(recorder);
@@ -672,6 +687,7 @@ static sd_scheduler_poll_result_t generic_recorder_write_poll(void *context)
     generic_recorder_critical_exit(recorder);
     descriptor->active_dma_bytes = 0U;
     descriptor->active_valid_bytes = 0U;
+    PERF_END(PERF_CPU_REC_WRITE_COMPLETE, write_complete);
     if (descriptor->sent_dma_bytes == descriptor->dma_bytes)
     {
         if (descriptor->sent_valid_bytes != descriptor->valid_bytes)

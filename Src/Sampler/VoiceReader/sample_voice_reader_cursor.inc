@@ -20,6 +20,7 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
 {
     if ((state == 0) || (state->lease_valid == 0U)
         || (state->frames_per_page == 0U)) return;
+    PERF_START(need_start);
 
     const uint32_t page = frame_pos / state->frames_per_page;
     sample_page_lease_range_t ranges[2] = {0};
@@ -49,6 +50,7 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
             count = SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES;
         ranges[1].page_count = (uint8_t)count;
     }
+    PERF_END(PERF_CPU_READER_NEED, need_start);
     if (memcmp(state->lease_ranges, ranges, sizeof(ranges)) != 0)
     {
         (void)sample_page_lease_audio_publish(state->lease_slot,
@@ -199,6 +201,7 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
     }
 
     sample_voice_reader_publish_lease(state, frame_pos);
+    PERF_START(resolve_start);
     const sample_audio_format_t expected_format = sample_audio_format_or_stereo(state->format);
     sample_page_span_t span;
     const uint32_t page_index =
@@ -215,8 +218,12 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
     }
     if (acquired == 0U)
     {
+        PERF_COUNT(PERF_N_AUDIO_PAGE_MISSING);
+        PERF_END(PERF_CPU_READER_RESOLVE, resolve_start);
         return 0U;
     }
+    PERF_END(PERF_CPU_READER_RESOLVE, resolve_start);
+    PERF_COUNT(PERF_N_CACHE_HIT);
 
     if (sample_audio_format_or_stereo(span.format) != expected_format)
     {

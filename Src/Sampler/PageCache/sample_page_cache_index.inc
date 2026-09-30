@@ -207,6 +207,18 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
         }
     }
 
+    if ((state == SAMPLE_PAGE_READY) && (page->state != SAMPLE_PAGE_READY))
+    {
+        PERF_COUNT(PERF_N_PAGES_READY);
+        if (page->key.domain == SAMPLE_AUDIO_DOMAIN_CLASSIC)
+            PERF_COUNT(PERF_N_CLASSIC_READY);
+        else if (page->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
+            PERF_COUNT(PERF_N_MULTI_READY);
+        else if (page->key.domain == SAMPLE_AUDIO_DOMAIN_REC)
+            PERF_COUNT(PERF_N_REC_READY);
+    }
+    if ((state == SAMPLE_PAGE_FAILED) && (page->state != SAMPLE_PAGE_FAILED))
+        PERF_COUNT(PERF_N_PAGE_FAILED);
     if (state == SAMPLE_PAGE_READY)
     {
         const float *const payload = sample_page_cache_data_resolve(page);
@@ -220,6 +232,7 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
 
 static uint8_t sample_page_cache_claim_for_recycle(sample_page_desc_t *page)
 {
+    PERF_START(recycle_start);
     if (page == 0) return 0U;
     uint32_t primask = sample_page_cache_lock();
     if ((page->state != SAMPLE_PAGE_READY)
@@ -248,6 +261,9 @@ static uint8_t sample_page_cache_claim_for_recycle(sample_page_desc_t *page)
     sample_page_cache_set_state(page, (leased != 0U) ? SAMPLE_PAGE_READY
                                                      : SAMPLE_PAGE_FREE);
     sample_page_cache_unlock(primask);
+    PERF_END(PERF_CPU_CACHE_RECYCLE, recycle_start);
+    if (leased != 0U) PERF_COUNT(PERF_N_CACHE_PROTECTED);
+    else PERF_COUNT(PERF_N_CACHE_RECYCLE);
     return (leased == 0U) ? 1U : 0U;
 }
 

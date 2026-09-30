@@ -80,6 +80,7 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 - [hall_calibration_persistence.md](hall_calibration_persistence.md): calibration globale SD chargee en RAM au boot.
 - [stream_need_contract.md](stream_need_contract.md): Sampler RAM, Wavetable, Multi, streaming, page-cache et transport I/O.
 - [recorder_sd.md](recorder_sd.md): bus AUDIO REC unique, Recorder, REC_SOURCE A/B, export cooperatif et lecture Streamer.
+- [stream_rec_perf_baseline.md](stream_rec_perf_baseline.md): protocole et limites de la baseline CPU/DMA Streamer et Recorder H743.
 - [m4_m7_functional_command_contract.md](m4_m7_functional_command_contract.md): FIFO fonctionnelle unique et consumer AUDIO.
 - [m7_m4_physical_return_contract.md](m7_m4_physical_return_contract.md): retours physiques minimaux, diagnostic et ownership des data planes.
 # Optimisation Release

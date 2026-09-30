@@ -1,0 +1,20 @@
+# Streamer / Recorder performance baseline (H743)
+
+Format DTCM `g_stream_rec_perf`: magic `0x46505242` (`BRPF` little endian), version 2, fixed size in the header. DTCM avoids stale GDB reads of dirty D-cache lines; call reset before reading because this section is NOLOAD. The one object contains a clock frequency, CPU spans (`calls`, `max`, `total` cycles), wall spans with the same fields, and 64 bit counters. `BRICK_PERF_DIAG=1` is the reference build default. The decoder is `tools/decode_stream_rec_perf.py`.
+
+## Procedure
+
+1. Stop playback and recording. Call `brick_perf_diag_reset()` from GDB. This enables DWT/CYCCNT, clears counters and captures `SystemCoreClock` and the HAL tick.
+2. Run a defined workload. Stop playback and recording before reading the data.
+3. Call `brick_perf_diag_snapshot()` to capture test elapsed milliseconds. Dump the entire object with `x/Nwx &g_stream_rec_perf`, where `N=sizeof(g_stream_rec_perf)/4` for this ELF.
+4. Save the GDB text and run `python tools/decode_stream_rec_perf.py dump.txt`. The decoder checks magic, version, size and truncation. The address comes from the ELF, never from the decoder.
+
+The snapshot writes only elapsed time; it does not freeze concurrent writers. Halt all activity for a coherent dump. A reset while active invalidates the measurement, but does not reset Streamer/Recorder state.
+
+## Meaning
+
+CPU spans bracket executed code only. They must not be interpreted as asynchronous I/O duration. DWT also counts interrupt cycles that happen inside a bracket. DMA launch can nest inside synchronous submission; the decoder excludes its span from the sampled Streamer sum. The Recorder `rec_service` span includes `rec_prepare` and `rec_pack`; do not sum those spans as disjoint work. The mixer `audio_float_to_pcm24` span brackets its conversion loop during capture; the same loop also computes the peak meter. `rec_source_pcm24_to_float` brackets both the bounded scratch copy and PCM24 decode. The SD driver `stream_dma`/`rec_write_dma` wall spans run from successful DMA launch to completion IRQ; `stream_submit_to_dma` and `rec_submit_to_dma` include queue delay. Unsigned subtraction handles CYCCNT wrap for individual intervals under one wrap (~8.9 seconds at 480 MHz).
+
+`pages_requested` counts manager candidates, including retries, rather than unique AUDIO need edges. `stream_request_to_ready` begins at manager submission preparation and ends after page publication; it excludes earlier AUDIO need time. `stream_dma_to_io_finalize` ends before cache publication, so it is a lower bound for DMA completion to READY. The read count and byte count come from successful physical Streamer backend completions, including sector alignment overhead. DMA wall times in the common SD block driver may include other clients if they operate during the test. Recorder write count and bytes are successful data descriptor completions, excluding filesystem metadata writes; `rec_write_dma` can include filesystem writes. `cache_ready_observations` and `cache_loading_observations` are manager scan observations, not unique pages. `cache_miss` counts manager candidates in FREE/FAILED state. `audio_page_missing` counts failed primary reader acquisitions; it is not a full underrun counter. The ring high water and minimum free are sampled on successful AUDIO pushes. A near full event means under one eighth of ring capacity remains.
+
+The main baseline omits a unique per reader breakdown, exact AUDIO need-to-I/O delay, late page classification, and exact attribution of scheduler CPU outside the measured functions. Zero-valued spans indicate no probe for that stage or no occurrence. The decoder does not claim a total CPU percentage; nested spans and unmeasured paths prevent that inference. There is no allocation, logging, SD diagnostic write or event ring in this instrumentation.
