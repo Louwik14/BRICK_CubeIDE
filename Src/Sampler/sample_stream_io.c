@@ -188,7 +188,10 @@ static void sample_stream_io_finalize(sample_stream_io_async_t *async)
             async->result.load_result = SAMPLE_PAGE_LOAD_DECODE_FAILED;
             return;
         }
-        PERF_START(decode_start);
+#if BRICK_PERF_DIAG
+        uint32_t scratch_cycles = 0U;
+        uint32_t conversion_cycles = 0U;
+#endif
         uint32_t remaining = target.frame_count;
         /* Decode from the end so expanding 6-byte PCM frames to 8-byte float
          * frames cannot overwrite source bytes that have not been copied. */
@@ -197,15 +200,26 @@ static void sample_stream_io_finalize(sample_stream_io_async_t *async)
             const uint32_t count = (remaining > SAMPLE_STREAM_IO_REC_DECODE_FRAMES)
                 ? SAMPLE_STREAM_IO_REC_DECODE_FRAMES : remaining;
             const uint32_t first = remaining - count;
+            PERF_START(scratch_start);
             memcpy(g_sample_stream_io_rec_decode,
                    &async->source[first * SAMPLE_STREAM_IO_REC_BYTES_PER_FRAME],
                    count * SAMPLE_STREAM_IO_REC_BYTES_PER_FRAME);
+            #if BRICK_PERF_DIAG
+            scratch_cycles += brick_perf_now() - scratch_start;
+            #endif
+            PERF_START(conversion_start);
             wav_audio_codec_decode_pcm24_stereo_block(
                 g_sample_stream_io_rec_decode,
                 &target.frames_interleaved[first * 2U], count);
+            #if BRICK_PERF_DIAG
+            conversion_cycles += brick_perf_now() - conversion_start;
+            #endif
             remaining = first;
         }
-        PERF_END(PERF_CPU_REC_SOURCE_CONVERT, decode_start);
+#if BRICK_PERF_DIAG
+        brick_perf_add(PERF_CPU_REC_SOURCE_SCRATCH, scratch_cycles);
+        brick_perf_add(PERF_CPU_REC_SOURCE_CONVERT, conversion_cycles);
+#endif
         PERF_COUNT(PERF_N_REC_SOURCE_PAGES);
         PERF_ACCUM(PERF_N_REC_SOURCE_FRAMES, target.frame_count);
         return;

@@ -1249,6 +1249,11 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         }
     }
 
+#if BRICK_PERF_DIAG
+    const uint8_t rec_audio_perf_active = audio_rec_capture_active;
+    const uint32_t rec_audio_total_start =
+        (rec_audio_perf_active != 0U) ? brick_perf_now() : 0U;
+#endif
     const uint8_t audio_rec_overdub_enabled = (uint8_t)(
         (audio_rec_capture_active != 0U)
         && ((audio_rec_projection.source_flags
@@ -1260,7 +1265,51 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     uint32_t audio_rec_peak_abs_pcm24 = 0U;
     if(audio_rec_bus_active != 0U)
     {
-        PERF_START(rec_convert_start);
+#if BRICK_PERF_DIAG
+        if(audio_rec_capture_active != 0U)
+        {
+            PERF_START(rec_convert_start);
+            for(uint32_t i = 0U; i < frames; ++i)
+            {
+                const uint32_t out = i * AUDIO_RECORDER_CHANNELS;
+                audio_rec_bus_i32[out] = mixer_rec_float_to_pcm24(audio_rec_bus_l[i]);
+                audio_rec_bus_i32[out + 1U] = mixer_rec_float_to_pcm24(audio_rec_bus_r[i]);
+            }
+            PERF_END(PERF_CPU_AUDIO_CONVERT, rec_convert_start);
+            PERF_ACCUM(PERF_N_AUDIO_CONVERT_FRAMES, frames);
+
+            PERF_START(rec_peak_start);
+            for(uint32_t i = 0U; i < frames; ++i)
+            {
+                const uint32_t out = i * AUDIO_RECORDER_CHANNELS;
+                const int32_t pcm_l = audio_rec_bus_i32[out];
+                const int32_t pcm_r = audio_rec_bus_i32[out + 1U];
+                const uint32_t abs_l = (pcm_l < 0) ? (uint32_t)(-pcm_l) : (uint32_t)pcm_l;
+                const uint32_t abs_r = (pcm_r < 0) ? (uint32_t)(-pcm_r) : (uint32_t)pcm_r;
+                if(abs_l > audio_rec_peak_abs_pcm24)
+                    audio_rec_peak_abs_pcm24 = abs_l;
+                if(abs_r > audio_rec_peak_abs_pcm24)
+                    audio_rec_peak_abs_pcm24 = abs_r;
+            }
+            PERF_END(PERF_CPU_AUDIO_PEAK, rec_peak_start);
+            (void)audio_recorder_capture_audio_push(
+                AUDIO_RECORDER_CLIENT_AUDIO_REC, audio_rec_bus_i32, frames);
+        }
+        else
+        {
+            for(uint32_t i = 0U; i < frames; ++i)
+            {
+                const int32_t pcm_l = mixer_rec_float_to_pcm24(audio_rec_bus_l[i]);
+                const int32_t pcm_r = mixer_rec_float_to_pcm24(audio_rec_bus_r[i]);
+                const uint32_t abs_l = (pcm_l < 0) ? (uint32_t)(-pcm_l) : (uint32_t)pcm_l;
+                const uint32_t abs_r = (pcm_r < 0) ? (uint32_t)(-pcm_r) : (uint32_t)pcm_r;
+                if(abs_l > audio_rec_peak_abs_pcm24)
+                    audio_rec_peak_abs_pcm24 = abs_l;
+                if(abs_r > audio_rec_peak_abs_pcm24)
+                    audio_rec_peak_abs_pcm24 = abs_r;
+            }
+        }
+#else
         for(uint32_t i = 0U; i < frames; ++i)
         {
             const uint32_t out = i * AUDIO_RECORDER_CHANNELS;
@@ -1269,28 +1318,28 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             const uint32_t abs_l = (pcm_l < 0) ? (uint32_t)(-pcm_l) : (uint32_t)pcm_l;
             const uint32_t abs_r = (pcm_r < 0) ? (uint32_t)(-pcm_r) : (uint32_t)pcm_r;
             if(abs_l > audio_rec_peak_abs_pcm24)
-            {
                 audio_rec_peak_abs_pcm24 = abs_l;
-            }
             if(abs_r > audio_rec_peak_abs_pcm24)
-            {
                 audio_rec_peak_abs_pcm24 = abs_r;
-            }
             if(audio_rec_capture_active != 0U)
             {
                 audio_rec_bus_i32[out] = pcm_l;
                 audio_rec_bus_i32[out + 1U] = pcm_r;
             }
         }
-        if (audio_rec_capture_active != 0U)
-            PERF_END(PERF_CPU_AUDIO_CONVERT, rec_convert_start);
         if(audio_rec_capture_active != 0U)
         {
             (void)audio_recorder_capture_audio_push(
                 AUDIO_RECORDER_CLIENT_AUDIO_REC, audio_rec_bus_i32, frames);
         }
+#endif
     }
     audio_rec_level_producer_publish(audio_rec_peak_abs_pcm24);
+#if BRICK_PERF_DIAG
+    if(rec_audio_perf_active != 0U)
+        brick_perf_add(PERF_CPU_AUDIO_TOTAL,
+                       brick_perf_now() - rec_audio_total_start);
+#endif
 
     if(track_count > 0U)
     {

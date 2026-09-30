@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decode `x/Nwx &g_stream_rec_perf` output from GDB (ABI v2)."""
+"""Decode `x/Nwx &g_stream_rec_perf` output from GDB (ABI v3)."""
 import argparse
 import re
 import struct
@@ -7,12 +7,14 @@ import sys
 from pathlib import Path
 
 CPU = (
-    "audio_float_to_pcm24", "audio_ring_copy", "reader_need", "reader_lease",
+    "audio_total", "audio_float_to_pcm24", "audio_peak_meter",
+    "audio_ring_copy", "reader_need", "reader_lease",
     "reader_resolve", "manager_pick", "manager_finish", "cache_reserve",
     "cache_recycle", "stream_command", "stream_submit", "stream_io_begin",
     "stream_io_finalize", "stream_read_start", "stream_read_complete",
     "stream_dma_launch", "rec_dma_launch",
-    "rec_source_pcm24_to_float", "rec_pack", "rec_prepare", "rec_service",
+    "rec_source_scratch_copy", "rec_source_pcm24_to_float",
+    "rec_pack", "rec_prepare", "rec_service",
     "rec_write_start", "rec_write_complete",
 )
 WALL = ("stream_request_to_ready", "stream_submit_to_dma", "stream_dma",
@@ -23,14 +25,15 @@ COUNT = (
     "cache_loading_observations", "cache_miss", "cache_alloc", "cache_recycle",
     "cache_protected", "cache_alloc_fail", "page_failed", "lease_publish",
     "lease_check", "audio_page_missing", "reads", "read_bytes",
-    "read_min_bytes", "read_max_bytes", "rec_frames", "rec_pcm_bytes",
+    "read_min_bytes", "read_max_bytes", "rec_frames",
+    "audio_converted_frames", "rec_pcm_bytes",
     "rec_write_bytes", "rec_writes", "rec_write_min_bytes",
     "rec_write_max_bytes", "rec_ring_fill", "rec_ring_max",
     "rec_ring_min_free", "rec_ring_near_full", "rec_overflow",
     "rec_source_pages", "rec_source_frames", "test_elapsed_ms",
 )
 MAGIC = 0x46505242
-VERSION = 2
+VERSION = 3
 SIZE = 16 + 16 * (len(CPU) + len(WALL)) + 8 * len(COUNT)
 
 
@@ -90,7 +93,8 @@ def main():
                   "manager_finish", "cache_reserve", "cache_recycle", "stream_command",
                   "stream_submit", "stream_io_begin", "stream_io_finalize",
                   "stream_read_start", "stream_read_complete", "stream_dma_launch"]
-    rec_cpu = ["audio_float_to_pcm24", "audio_ring_copy", "rec_pack", "rec_prepare",
+    rec_cpu = ["audio_total", "audio_float_to_pcm24", "audio_peak_meter",
+               "audio_ring_copy", "rec_pack", "rec_prepare",
                "rec_service", "rec_write_start", "rec_write_complete", "rec_dma_launch"]
     print(f"BRICK stream/rec perf v{VERSION}; CPU {hz} Hz; {SIZE} bytes")
     print("\nSTREAMER\n--------")
@@ -106,18 +110,26 @@ def main():
     for name in stream_cpu:
         if cpu[name][0]: print(f"CPU {name}: {cycles(name)}")
     for name in WALL[:4]: print(f"wall {name}: {latency(name)}")
-    print("\nRECORDER\n--------")
-    for name in COUNT[21:32]: print(f"{name}: {counts[name]}")
-    frames = counts["rec_frames"]
+    print("\nRECORDER AUDIO\n--------------")
+    for name in ("rec_frames", "audio_converted_frames", "rec_pcm_bytes"):
+        print(f"{name}: {counts[name]}")
+    frames = counts["audio_converted_frames"]
+    for name in ("audio_total", "audio_float_to_pcm24", "audio_peak_meter", "audio_ring_copy"):
+        print(f"CPU {name}: {cycles(name)}")
     print(f"FLOAT_to_PCM24_cycles/frame: {cpu['audio_float_to_pcm24'][1] / frames if frames else 0:.2f}")
-    for name in rec_cpu:
+    print("\nRECORDER STORAGE\n----------------")
+    for name in COUNT[24:33]: print(f"{name}: {counts[name]}")
+    for name in rec_cpu[4:]:
         if cpu[name][0]: print(f"CPU {name}: {cycles(name)}")
     print(f"wall rec_write_dma: {latency('rec_write_dma')}")
     print(f"wall rec_submit_to_dma: {latency('rec_submit_to_dma')}")
     print("\nREC_SOURCE\n----------")
-    for name in COUNT[32:34]: print(f"{name}: {counts[name]}")
+    for name in COUNT[33:35]: print(f"{name}: {counts[name]}")
+    print(f"CPU rec_source_scratch_copy: {cycles('rec_source_scratch_copy')}")
+    pages = counts["rec_source_pages"]
+    print(f"scratch_copy_cycles/page: {cpu['rec_source_scratch_copy'][1] / pages if pages else 0:.1f}")
     total = cpu["rec_source_pcm24_to_float"][1]
-    print(f"PCM24_to_FLOAT_cycles/page: {total / counts['rec_source_pages'] if counts['rec_source_pages'] else 0:.1f}")
+    print(f"PCM24_to_FLOAT_cycles/page: {total / pages if pages else 0:.1f}")
     print(f"PCM24_to_FLOAT_cycles/frame: {total / counts['rec_source_frames'] if counts['rec_source_frames'] else 0:.2f}")
     print(f"CPU rec_source_pcm24_to_float: {cycles('rec_source_pcm24_to_float')}")
 

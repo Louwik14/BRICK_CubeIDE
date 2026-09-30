@@ -12,7 +12,8 @@
 typedef struct { uint32_t calls; uint32_t max; uint64_t total; } brick_perf_span_t;
 
 enum {
-    PERF_CPU_AUDIO_CONVERT, PERF_CPU_AUDIO_RING,
+    PERF_CPU_AUDIO_TOTAL, PERF_CPU_AUDIO_CONVERT, PERF_CPU_AUDIO_PEAK,
+    PERF_CPU_AUDIO_RING,
     PERF_CPU_READER_NEED, PERF_CPU_READER_LEASE, PERF_CPU_READER_RESOLVE,
     PERF_CPU_MANAGER_PICK, PERF_CPU_MANAGER_FINISH,
     PERF_CPU_CACHE_RESERVE, PERF_CPU_CACHE_RECYCLE,
@@ -20,7 +21,7 @@ enum {
     PERF_CPU_STREAM_IO_BEGIN, PERF_CPU_STREAM_IO_FINALIZE,
     PERF_CPU_STREAM_READ_START, PERF_CPU_STREAM_READ_COMPLETE,
     PERF_CPU_STREAM_DMA_LAUNCH, PERF_CPU_REC_DMA_LAUNCH,
-    PERF_CPU_REC_SOURCE_CONVERT,
+    PERF_CPU_REC_SOURCE_SCRATCH, PERF_CPU_REC_SOURCE_CONVERT,
     PERF_CPU_REC_PACK, PERF_CPU_REC_PREPARE, PERF_CPU_REC_SERVICE,
     PERF_CPU_REC_WRITE_START, PERF_CPU_REC_WRITE_COMPLETE,
     PERF_CPU_COUNT
@@ -39,6 +40,7 @@ enum {
     PERF_N_PAGE_FAILED, PERF_N_LEASE_PUBLISH, PERF_N_LEASE_CHECK,
     PERF_N_AUDIO_PAGE_MISSING, PERF_N_READS, PERF_N_READ_BYTES,
     PERF_N_READ_MIN_BYTES, PERF_N_READ_MAX_BYTES, PERF_N_REC_FRAMES,
+    PERF_N_AUDIO_CONVERT_FRAMES,
     PERF_N_REC_PCM_BYTES, PERF_N_REC_WRITE_BYTES, PERF_N_REC_WRITES,
     PERF_N_REC_WRITE_MIN_BYTES, PERF_N_REC_WRITE_MAX_BYTES,
     PERF_N_REC_RING_FILL, PERF_N_REC_RING_MAX, PERF_N_REC_RING_MIN_FREE,
@@ -59,7 +61,7 @@ _Static_assert(sizeof(brick_perf_span_t) == 16, "perf span ABI");
 _Static_assert(offsetof(brick_stream_rec_perf_t, cpu) == 16, "perf header ABI");
 _Static_assert(offsetof(brick_stream_rec_perf_t, count) == 16 + 16 * (PERF_CPU_COUNT + PERF_WALL_COUNT), "perf count ABI");
 _Static_assert((sizeof(brick_stream_rec_perf_t) % 4) == 0, "word dump ABI");
-_Static_assert(sizeof(brick_stream_rec_perf_t) == 760, "perf v2 size ABI");
+_Static_assert(sizeof(brick_stream_rec_perf_t) == 816, "perf v3 size ABI");
 _Static_assert(_Alignof(brick_stream_rec_perf_t) >= 8, "perf 64-bit alignment ABI");
 
 #if BRICK_PERF_DIAG

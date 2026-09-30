@@ -30,7 +30,7 @@ void __attribute__((used, externally_visible)) brick_perf_diag_reset(void)
     g_perf_reset_tick = HAL_GetTick();
     memset((void *)&g_stream_rec_perf, 0, sizeof(g_stream_rec_perf));
     g_stream_rec_perf.magic = 0x46505242U;
-    g_stream_rec_perf.version = 2U;
+    g_stream_rec_perf.version = 3U;
     g_stream_rec_perf.size = sizeof(g_stream_rec_perf);
     g_stream_rec_perf.cpu_hz = SystemCoreClock;
 }
