@@ -68,11 +68,8 @@ typedef struct
     sample_stream_physical_extent_t physical_extents[RECORDER_FILE_RESERVATION_MAX_EXTENTS];
     char path[RECORDER_FILE_RESERVATION_PATH_MAX];
     char job_final_path[RECORDER_FILE_RESERVATION_PATH_MAX];
-    volatile uint32_t publish_sequence;
-    volatile uint64_t published_reserved_file_bytes;
-    volatile uint64_t published_valid_file_bytes;
-    volatile uint32_t published_media_epoch;
-    volatile uint16_t published_extent_count;
+    uint32_t map_media_epoch;
+    uint8_t map_valid;
     uint16_t extent_count;
     uint32_t header_bytes;
     uint64_t reserved_bytes;

@@ -1285,7 +1285,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             }
             PERF_END(PERF_CPU_AUDIO_PEAK, rec_peak_start);
             (void)audio_recorder_capture_audio_push(
-                AUDIO_RECORDER_CLIENT_AUDIO_REC, audio_rec_bus_interleaved, frames);
+                audio_rec_bus_interleaved, frames);
         }
         else
         {
@@ -1314,7 +1314,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         if(audio_rec_capture_active != 0U)
         {
             (void)audio_recorder_capture_audio_push(
-                AUDIO_RECORDER_CLIENT_AUDIO_REC, audio_rec_bus_interleaved, frames);
+                audio_rec_bus_interleaved, frames);
         }
 #endif
     }

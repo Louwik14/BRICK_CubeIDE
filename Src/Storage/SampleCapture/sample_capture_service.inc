@@ -32,8 +32,7 @@ static void sample_capture_terminal_cleanup_service(void)
         return;
 
     audio_recorder_status_t status;
-    if (audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                         &status) == 0U)
+    if (audio_recorder_get_status(&status) == 0U)
         return;
     if ((status.state != AUDIO_RECORDER_STATE_PREPARED)
             && (status.state != AUDIO_RECORDER_STATE_TAKE_READY)
@@ -41,7 +40,7 @@ static void sample_capture_terminal_cleanup_service(void)
         return;
 
     const audio_recorder_lifecycle_result_t discarded =
-        audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+        audio_recorder_discard();
     if ((discarded == AUDIO_RECORDER_LIFECYCLE_OK)
             && (g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_STOPPING))
         g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
@@ -55,12 +54,11 @@ static uint8_t sample_capture_service_pending_admission(void)
         return 1U;
 
     audio_recorder_status_t status;
-    if ((audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                          &status) != 0U)
+    if ((audio_recorder_get_status(&status) != 0U)
             && (status.state == AUDIO_RECORDER_STATE_PREPARED))
     {
         const audio_recorder_lifecycle_result_t discarded =
-            audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+            audio_recorder_discard();
         if (discarded == AUDIO_RECORDER_LIFECYCLE_NOT_NOW) return 0U;
         if (discarded == AUDIO_RECORDER_LIFECYCLE_ERROR)
         {
@@ -204,8 +202,7 @@ void sample_capture_model_service(void)
     if (sample_capture_service_pending_admission() == 0U) return;
 
     audio_recorder_status_t status;
-    if(audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                        &status) == 0U)
+    if(audio_recorder_get_status(&status) == 0U)
     {
         return;
     }
@@ -280,8 +277,7 @@ void sample_capture_model_service(void)
             && (status.frames_received >= g_sample_capture.state.planned_frames))
     {
         sample_capture_set_capture_enabled(0U);
-        if (audio_recorder_request_stop_client(
-                AUDIO_RECORDER_CLIENT_AUDIO_REC) != 0U)
+        if (audio_recorder_request_stop() != 0U)
             g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_STOPPING;
     }
 
@@ -347,8 +343,7 @@ void sample_capture_control_on_transport_stop(uint64_t sample_time)
             && (g_sample_capture.state.len_bars == 0U))
     {
         sample_capture_set_capture_enabled(0U);
-        (void)audio_recorder_request_stop_client_at(
-            AUDIO_RECORDER_CLIENT_AUDIO_REC, sample_time);
+        (void)audio_recorder_request_stop_at(sample_time);
         g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_STOPPING;
     }
 }

@@ -4,22 +4,16 @@
 
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/audio_recorder_wav.h"
-#include "Storage/generic_recorder_adapters.h"
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
-#include "IPC/audio_recorder_capture_contract.h"
+#include "Recorder/audio_recorder_ring.h"
 #include "Storage/rec_source_waveform.h"
 #include "Storage/rec_sd_trace.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
 #include "main.h"
 
-#define AUDIO_RECORDER_MAXIMUM_WRITE_BYTES SD_SCHEDULER_SEQUENTIAL_DATA_BYTES
-#define AUDIO_RECORDER_MINIMUM_WRITE_BYTES SD_SCHEDULER_SEQUENTIAL_DATA_BYTES
 #define AUDIO_RECORDER_INITIAL_RESERVE_BYTES (2U * 1024U * 1024U)
-#define AUDIO_RECORDER_EXTENSION_BYTES (2U * 1024U * 1024U)
-#define AUDIO_RECORDER_RESERVATION_LOW_US (3000000U)
-#define AUDIO_RECORDER_RESERVATION_CRITICAL_US (1000000U)
 
 typedef enum
 {
@@ -44,7 +38,7 @@ typedef enum
 
 typedef struct
 {
-    generic_recorder_t recorder;
+    audio_recorder_writer_t recorder;
     recorder_file_reservation_t reservation;
     sd_scheduler_provider_t recorder_filesystem_provider;
     audio_recorder_storage_phase_t phase;
@@ -60,7 +54,7 @@ typedef struct
     char final_path[AUDIO_RECORDER_PATH_MAX];
 } audio_recorder_storage_runtime_t;
 
-/* FatFs, callbacks and generic-recorder state are STORAGE-only. */
+/* FatFs, callbacks and writer state are STORAGE-only. */
 STORAGE_STATE_SDRAM static audio_recorder_storage_runtime_t g_audio_recorder_storage;
 RECORDER_SCRATCH_SDRAM static uint8_t g_audio_recorder_tail_buffer[512U];
 static uint8_t g_trace_storage_phase;
@@ -78,7 +72,7 @@ static void trace_storage_change(void)
         (uint32_t)final_phase | ((uint32_t)g_audio_recorder_storage.error << 8U)
             | ((uint32_t)g_audio_recorder_storage.recorder.state << 16U)
             | ((uint32_t)g_audio_recorder_storage.recorder.error << 24U),
-        g_audio_recorder_capture.head_cursor,
+        g_audio_recorder_ring_state.produced_frames,
         g_audio_recorder_storage.recorder.generation, 0U,
         (rec_sd_trace_sd_meta_t){
             .requester = SD_ACCESS_CLIENT_SCHEDULED_RECORDER,
@@ -92,15 +86,15 @@ static void trace_storage_change(void)
 }
 
 static audio_recorder_error_t audio_recorder_storage_map_error(
-    generic_recorder_error_t error)
+    audio_recorder_writer_error_t error)
 {
-    if (error == GENERIC_RECORDER_ERROR_RING_FULL)
+    if (error == AUDIO_RECORDER_WRITER_ERROR_RING_FULL)
         return AUDIO_RECORDER_ERROR_RING_OVERFLOW;
-    if (error == GENERIC_RECORDER_ERROR_NO_SPACE)
+    if (error == AUDIO_RECORDER_WRITER_ERROR_NO_SPACE)
         return AUDIO_RECORDER_ERROR_NO_SPACE;
-    if (error == GENERIC_RECORDER_ERROR_MEDIA_CHANGED)
+    if (error == AUDIO_RECORDER_WRITER_ERROR_MEDIA_CHANGED)
         return AUDIO_RECORDER_ERROR_MEDIA_CHANGED;
-    if (error == GENERIC_RECORDER_ERROR_NONE)
+    if (error == AUDIO_RECORDER_WRITER_ERROR_NONE)
         return AUDIO_RECORDER_ERROR_NONE;
     return AUDIO_RECORDER_ERROR_SD_IO;
 }
@@ -138,24 +132,9 @@ static uint8_t audio_recorder_storage_filesystem_peek(
 static uint8_t audio_recorder_storage_start_writer(
     audio_recorder_storage_runtime_t *runtime)
 {
-    generic_recorder_config_t config;
-    memset(&config, 0, sizeof(config));
-    config.ring_interleaved = g_audio_recorder_capture_ring;
-    config.ring_capacity_frames = AUDIO_RECORDER_CAPTURE_RING_FRAMES;
-    config.bytes_per_frame = AUDIO_RECORDER_BYTES_PER_FRAME;
-    config.tail_buffer = g_audio_recorder_tail_buffer;
-    config.maximum_write_bytes = AUDIO_RECORDER_MAXIMUM_WRITE_BYTES;
-    config.minimum_write_bytes = AUDIO_RECORDER_MINIMUM_WRITE_BYTES;
-    config.sample_rate_hz = AUDIO_RECORDER_SAMPLE_RATE_HZ;
-    config.channels = AUDIO_RECORDER_CHANNELS;
-    config.reserved_header_bytes = AUDIO_RECORDER_WAV_HEADER_BYTES;
-    config.extension_bytes = AUDIO_RECORDER_EXTENSION_BYTES;
-    config.reservation_low_margin_us = AUDIO_RECORDER_RESERVATION_LOW_US;
-    config.reservation_critical_margin_us = AUDIO_RECORDER_RESERVATION_CRITICAL_US;
-    config.estimated_write_us_per_sector = 250U;
-    config.transport = generic_recorder_sd_block_device_adapter();
-    config.reservation = generic_recorder_fatfs_reservation_adapter(&runtime->reservation);
-    return generic_recorder_begin(&runtime->recorder, &config);
+    return audio_recorder_writer_begin(&runtime->recorder,
+        g_audio_recorder_ring, g_audio_recorder_tail_buffer,
+        &runtime->reservation);
 }
 
 static sd_scheduler_start_result_t audio_recorder_storage_preparation_step(
@@ -207,7 +186,7 @@ static sd_scheduler_start_result_t audio_recorder_storage_preparation_step(
                 return SD_SCHEDULER_START_ERROR;
             if (audio_recorder_storage_start_writer(runtime) == 0U)
                 return SD_SCHEDULER_START_ERROR;
-            g_audio_recorder_capture.tail_cursor = 0U;
+            g_audio_recorder_ring_state.released_frames = 0U;
             runtime->prepare_phase = AUDIO_RECORDER_PREP_DONE;
             runtime->phase = AUDIO_RECORDER_STORAGE_PREPARED;
             sd_access_gate_set_recorder_fs_logical_active(0U);
@@ -539,16 +518,16 @@ void audio_recorder_storage_init(void)
 {
     memset(&g_audio_recorder_storage, 0,
            sizeof(g_audio_recorder_storage));
-    generic_recorder_init(&g_audio_recorder_storage.recorder);
-    g_audio_recorder_capture.tail_cursor = 0U;
+    audio_recorder_writer_init(&g_audio_recorder_storage.recorder);
+    g_audio_recorder_ring_state.released_frames = 0U;
     recorder_file_reservation_init(&g_audio_recorder_storage.reservation);
     g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_IDLE;
     g_trace_storage_phase = AUDIO_RECORDER_STORAGE_IDLE;
     g_trace_final_phase = AUDIO_RECORDER_FINAL_NONE;
     const sd_scheduler_provider_t write_provider =
-        generic_recorder_write_provider(&g_audio_recorder_storage.recorder);
+        audio_recorder_writer_write_provider(&g_audio_recorder_storage.recorder);
     g_audio_recorder_storage.recorder_filesystem_provider =
-        generic_recorder_filesystem_provider(&g_audio_recorder_storage.recorder);
+        audio_recorder_writer_filesystem_provider(&g_audio_recorder_storage.recorder);
     const sd_scheduler_provider_t filesystem_provider = {
         .context = &g_audio_recorder_storage,
         .peek = audio_recorder_storage_filesystem_peek,
@@ -585,7 +564,7 @@ audio_recorder_lifecycle_result_t audio_recorder_storage_prepare(
         return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
     (void)strcpy(g_audio_recorder_storage.temporary_path, temporary_rec_path);
     (void)strcpy(g_audio_recorder_storage.final_path, final_wav_path);
-    generic_recorder_init(&g_audio_recorder_storage.recorder);
+    audio_recorder_writer_init(&g_audio_recorder_storage.recorder);
     recorder_file_reservation_init(&g_audio_recorder_storage.reservation);
     g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_NONE;
     g_audio_recorder_storage.final_phase = AUDIO_RECORDER_FINAL_NONE;
@@ -606,7 +585,7 @@ audio_recorder_lifecycle_result_t audio_recorder_storage_cancel(void)
     if (g_audio_recorder_storage.phase == AUDIO_RECORDER_STORAGE_IDLE)
         return AUDIO_RECORDER_LIFECYCLE_OK;
 
-    generic_recorder_abort(&g_audio_recorder_storage.recorder);
+    audio_recorder_writer_abort(&g_audio_recorder_storage.recorder);
     if (g_audio_recorder_storage.reservation.open != 0U)
     {
         const recorder_file_reservation_result_t closed =
@@ -640,7 +619,7 @@ audio_recorder_lifecycle_result_t audio_recorder_storage_cancel(void)
 
 void audio_recorder_storage_release(void)
 {
-    generic_recorder_init(&g_audio_recorder_storage.recorder);
+    audio_recorder_writer_init(&g_audio_recorder_storage.recorder);
     recorder_file_reservation_init(&g_audio_recorder_storage.reservation);
     g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_IDLE;
     g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_NONE;
@@ -656,16 +635,16 @@ void audio_recorder_storage_service(uint32_t session_id,
     audio_recorder_storage_runtime_t *const runtime =
         &g_audio_recorder_storage;
     const uint8_t capture_started = (uint8_t)((session_id != 0U)
-        && (g_audio_recorder_capture.started_session == session_id));
+        && (g_audio_recorder_ring_state.started_session == session_id));
     if (capture_started != 0U) __DMB();
     trace_storage_change();
     if (((capture_is_active != 0U) && (capture_started != 0U))
             || (runtime->phase == AUDIO_RECORDER_STORAGE_FINALIZING)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY))
     {
-        const uint32_t published_frames = g_audio_recorder_capture.head_cursor;
+        const uint32_t published_frames = g_audio_recorder_ring_state.produced_frames;
         __DMB();
-        rec_source_waveform_capture_service(g_audio_recorder_capture_ring,
+        rec_source_waveform_capture_service(g_audio_recorder_ring,
             AUDIO_RECORDER_CAPTURE_RING_FRAMES, published_frames);
     }
     if ((runtime->phase == AUDIO_RECORDER_STORAGE_IDLE)
@@ -679,8 +658,8 @@ void audio_recorder_storage_service(uint32_t session_id,
                 && (runtime->recorder.media_epoch != current_epoch)))
     {
         runtime->error = AUDIO_RECORDER_ERROR_MEDIA_CHANGED;
-        runtime->recorder.error = GENERIC_RECORDER_ERROR_MEDIA_CHANGED;
-        runtime->recorder.state = GENERIC_RECORDER_ERROR;
+        runtime->recorder.error = AUDIO_RECORDER_WRITER_ERROR_MEDIA_CHANGED;
+        runtime->recorder.state = AUDIO_RECORDER_WRITER_ERROR;
         runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
         sd_access_gate_set_recorder_fs_logical_active(0U);
         trace_storage_change();
@@ -688,7 +667,7 @@ void audio_recorder_storage_service(uint32_t session_id,
     }
     if ((capture_is_active != 0U) && (capture_started != 0U))
     {
-        const uint32_t accepted_frames = g_audio_recorder_capture.head_cursor;
+        const uint32_t accepted_frames = g_audio_recorder_ring_state.produced_frames;
         __DMB();
         const uint64_t accepted_tail =
             (uint64_t)accepted_frames * AUDIO_RECORDER_BYTES_PER_FRAME;
@@ -700,44 +679,45 @@ void audio_recorder_storage_service(uint32_t session_id,
         const uint32_t waveform_frames = rec_source_waveform_captured_frames();
         const uint32_t recyclable_frames = (committed_frames < waveform_frames)
             ? committed_frames : waveform_frames;
+        runtime->recorder.released_frames = recyclable_frames;
         __DMB();
-        g_audio_recorder_capture.tail_cursor = recyclable_frames;
-        if (g_audio_recorder_capture.capture_fault
+        g_audio_recorder_ring_state.released_frames = recyclable_frames;
+        if (g_audio_recorder_ring_state.capture_fault
                 != AUDIO_RECORDER_ERROR_NONE)
         {
             runtime->error = (audio_recorder_error_t)
-                g_audio_recorder_capture.capture_fault;
+                g_audio_recorder_ring_state.capture_fault;
             runtime->recorder.error =
                 (runtime->error == AUDIO_RECORDER_ERROR_RING_OVERFLOW)
-                ? GENERIC_RECORDER_ERROR_RING_FULL
-                : GENERIC_RECORDER_ERROR_TRANSPORT;
-            runtime->recorder.state = GENERIC_RECORDER_ERROR;
+                ? AUDIO_RECORDER_WRITER_ERROR_RING_FULL
+                : AUDIO_RECORDER_WRITER_ERROR_TRANSPORT;
+            runtime->recorder.state = AUDIO_RECORDER_WRITER_ERROR;
         }
-        if ((g_audio_recorder_capture.closed_session == session_id)
-                && (runtime->recorder.state == GENERIC_RECORDER_CAPTURING))
+        if ((g_audio_recorder_ring_state.closed_session == session_id)
+                && (runtime->recorder.state == AUDIO_RECORDER_WRITER_CAPTURING))
         {
-            (void)generic_recorder_request_stop(&runtime->recorder);
+            (void)audio_recorder_writer_request_stop(&runtime->recorder);
             runtime->phase = AUDIO_RECORDER_STORAGE_DRAINING;
         }
     }
 
-    generic_recorder_service(&runtime->recorder);
-    if ((runtime->recorder.state == GENERIC_RECORDER_ERROR)
-            || (runtime->recorder.state == GENERIC_RECORDER_ABORTED))
+    audio_recorder_writer_service(&runtime->recorder);
+    if ((runtime->recorder.state == AUDIO_RECORDER_WRITER_ERROR)
+            || (runtime->recorder.state == AUDIO_RECORDER_WRITER_ABORTED))
     {
         if (runtime->error == AUDIO_RECORDER_ERROR_NONE)
             runtime->error = audio_recorder_storage_map_error(
                 runtime->recorder.error);
         runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
     }
-    else if ((runtime->recorder.state == GENERIC_RECORDER_DRAINING)
+    else if ((runtime->recorder.state == AUDIO_RECORDER_WRITER_DRAINING)
             && (runtime->phase != AUDIO_RECORDER_STORAGE_DRAINING))
     {
         runtime->error = audio_recorder_storage_map_error(
             runtime->recorder.error);
         runtime->phase = AUDIO_RECORDER_STORAGE_DRAINING;
     }
-    else if ((runtime->recorder.state == GENERIC_RECORDER_FINALIZABLE)
+    else if ((runtime->recorder.state == AUDIO_RECORDER_WRITER_FINALIZABLE)
             && (runtime->final_phase == AUDIO_RECORDER_FINAL_NONE))
     {
         runtime->phase = AUDIO_RECORDER_STORAGE_FINALIZING;
@@ -745,7 +725,7 @@ void audio_recorder_storage_service(uint32_t session_id,
         sd_access_gate_set_recorder_fs_logical_active(1U);
     }
     sd_scheduler_runtime_service();
-    generic_recorder_service(&runtime->recorder);
+    audio_recorder_writer_service(&runtime->recorder);
     trace_storage_change();
 }
 
@@ -759,10 +739,9 @@ audio_recorder_error_t audio_recorder_storage_error(void)
     return g_audio_recorder_storage.error;
 }
 
-void audio_recorder_storage_get_status(generic_recorder_status_t *status)
+uint64_t audio_recorder_storage_assigned_tail(void)
 {
-    if (status != 0) generic_recorder_get_status(
-        &g_audio_recorder_storage.recorder, status);
+    return g_audio_recorder_storage.recorder.assigned_tail;
 }
 
 uint64_t audio_recorder_storage_committed_tail(void)

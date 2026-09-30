@@ -159,14 +159,8 @@ static FF_META_STEP_RESULT recorder_file_job_continuation_step(
 
 static void recorder_file_publish(recorder_file_reservation_t *session)
 {
-    session->publish_sequence++;
-    __DMB();
-    session->published_extent_count = session->extent_count;
-    session->published_reserved_file_bytes = session->fs_state.reserved_bytes;
-    session->published_valid_file_bytes = session->fs_state.valid_bytes;
-    session->published_media_epoch = sd_access_media_epoch();
-    __DMB();
-    session->publish_sequence++;
+    session->map_media_epoch = sd_access_media_epoch();
+    session->map_valid = 1U;
 }
 
 static uint8_t recorder_file_import_extents(recorder_file_reservation_t *session,
@@ -1020,23 +1014,14 @@ uint8_t recorder_file_reservation_map_snapshot(
     {
         return 0U;
     }
-    for(uint8_t attempt = 0U; attempt < 3U; ++attempt)
-    {
-        const uint32_t before = session->publish_sequence;
-        if((before == 0U) || ((before & 1U) != 0U)) continue;
-        out_snapshot->extents = session->physical_extents;
-        out_snapshot->reserved_file_bytes = session->published_reserved_file_bytes;
-        out_snapshot->valid_file_bytes = session->published_valid_file_bytes;
-        out_snapshot->media_epoch = session->published_media_epoch;
-        out_snapshot->extent_count = session->published_extent_count;
-        out_snapshot->sector_size = RECORDER_FILE_RESERVATION_SECTOR_BYTES;
-        __DMB();
-        if(before == session->publish_sequence)
-        {
-            return 1U;
-        }
-    }
-    return 0U;
+    if(session->map_valid == 0U) return 0U;
+    out_snapshot->extents = session->physical_extents;
+    out_snapshot->reserved_file_bytes = session->fs_state.reserved_bytes;
+    out_snapshot->valid_file_bytes = session->fs_state.valid_bytes;
+    out_snapshot->media_epoch = session->map_media_epoch;
+    out_snapshot->extent_count = session->extent_count;
+    out_snapshot->sector_size = RECORDER_FILE_RESERVATION_SECTOR_BYTES;
+    return 1U;
 }
 
 uint8_t recorder_file_reservation_map_resolve(

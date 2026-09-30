@@ -114,8 +114,8 @@ uint8_t audio_rec_overdub_mix(uint8_t enabled,
                 | ((uint32_t)produced << 16U),
             g_audio_rec_overdub_reader.plan.key.object_id,
             g_audio_rec_overdub_reader.plan.key.generation);
-        audio_recorder_capture_audio_fault(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                           AUDIO_RECORDER_ERROR_OVERDUB_UNDERRUN);
+        audio_recorder_capture_audio_fault(
+            AUDIO_RECORDER_ERROR_OVERDUB_UNDERRUN);
         return 0U;
     }
     return 1U;

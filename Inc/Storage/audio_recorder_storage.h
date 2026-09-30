@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#include "IPC/audio_recorder_capture.h"
+#include "Recorder/audio_recorder_ring.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/recorder_file_reservation.h"
 
@@ -10,12 +10,8 @@
 extern "C" {
 #endif
 
-/*
- * Local CM4 CONTROL -> STORAGE facade.  This is not an inter-core ABI:
- * paths, FatFs objects, callbacks, buffers and physical maps remain private
- * to the Storage implementation.  The only future inter-core data plane is
- * audio_recorder_capture_contract.h.
- */
+/* Local CONTROL -> STORAGE facade. Paths, FatFs objects, callbacks, buffers
+ * and physical maps remain private to the Storage implementation. */
 typedef enum
 {
     AUDIO_RECORDER_STORAGE_IDLE = 0,
@@ -52,7 +48,7 @@ void audio_recorder_storage_service(uint32_t session_id,
 
 audio_recorder_storage_phase_t audio_recorder_storage_phase(void);
 audio_recorder_error_t audio_recorder_storage_error(void);
-void audio_recorder_storage_get_status(generic_recorder_status_t *status);
+uint64_t audio_recorder_storage_assigned_tail(void);
 uint64_t audio_recorder_storage_committed_tail(void);
 uint8_t audio_recorder_storage_get_map_copy(
     audio_recorder_storage_map_copy_t *map);

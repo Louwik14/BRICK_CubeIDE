@@ -3,8 +3,8 @@
 #include "Board/board_audio_input.h"
 
 #include "IPC/control_audio_rec_bus.h"
-#include "IPC/control_audio_timing.h"
-#include "IPC/control_music_publication.h"
+#include "ControlRT/control_audio_timing.h"
+#include "ControlRT/control_music_publication.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_runtime.h"
 #include "IPC/audio_rec_level_reader.h"
@@ -130,8 +130,7 @@ static void sample_capture_trace(rec_sd_trace_event_t event, uint32_t detail,
                                  uint64_t sample)
 {
     audio_recorder_status_t status;
-    const uint8_t status_valid = audio_recorder_get_status_client(
-        AUDIO_RECORDER_CLIENT_AUDIO_REC, &status);
+    const uint8_t status_valid = audio_recorder_get_status(&status);
     const uint32_t rec = (status_valid != 0U)
         ? (uint32_t)status.state : 0xFFU;
     const uint32_t storage = (uint32_t)audio_recorder_storage_phase();

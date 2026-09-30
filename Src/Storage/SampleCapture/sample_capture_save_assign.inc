@@ -41,7 +41,7 @@ uint8_t sample_capture_model_return_to_audio_rec(void)
     sample_capture_publish_rec_bus();
 
     const audio_recorder_lifecycle_result_t discarded =
-        audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+        audio_recorder_discard();
     if (discarded == AUDIO_RECORDER_LIFECYCLE_NOT_NOW)
     {
         g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_STOPPING;
@@ -127,7 +127,7 @@ static void sample_capture_save_finish(void)
 {
     sample_capture_save_job_t *const job = &g_sample_capture.save_job;
     sample_capture_copy_path(g_sample_capture.state.final_path, job->final_path);
-    (void)audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+    (void)audio_recorder_discard();
     sample_capture_reset_take_transients(1U);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_SAVED;
     g_sample_capture.state.save_pending = 0U;

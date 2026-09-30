@@ -29,16 +29,24 @@ les fichiers temporaires `.REC`, ni la finalisation, ni l'alternance A/B.
 mixer AUDIO, sources routées après leur traitement pertinent
   -> bus REC stéréo float
   -> entrelacement FLOAT32 natif
-  -> ring AUDIO -> STORAGE de 12 032 frames (~250,67 ms)
-  -> generic_recorder, descripteurs directs de 32 KiB
+  -> ring monocoeur AUDIO -> STORAGE de 12 032 frames (~250,67 ms)
+  -> audio_recorder_writer, descripteurs directs de 32 KiB
   -> extents physiques pré-réservés
   -> scheduler SD partagé
   -> SDMMC DMA directement depuis le ring
 ```
 
-Le head du ring appartient à AUDIO. Le tail accepté/committé appartient à
-STORAGE. AUDIO ne fait aucun appel FatFs et n'attend jamais la carte. Un vrai
-dépassement head-tail ferme la capture avec `AUDIO_RECORDER_ERROR_RING_OVERFLOW`.
+Le writer Recorder est privé à STORAGE. Il résout directement la réservation,
+les providers du scheduler et la soumission/completion du block device, sans
+adaptateur, vtable ni callback de transport.
+
+`produced_frames` appartient à AUDIO; `released_frames` appartient à STORAGE.
+Les deux curseurs et le framing de session sont un contrat SPSC local entre
+l'IRQ AUDIO et la superloop, pas une ABI inter-coeur. AUDIO ne fait aucun appel
+FatFs et n'attend jamais la carte. Un vrai dépassement produced-released ferme
+la capture avec `AUDIO_RECORDER_ERROR_RING_OVERFLOW`. La marge donnée au
+scheduler utilise ce même tail recyclable, qui attend à la fois la completion
+DMA et la consommation waveform.
 Chaque descripteur de 32 KiB représente environ 85,3 ms d'audio FLOAT32. Le
 ring est un multiple exact de secteurs et reste protégé jusqu'au commit DMA ;
 seul le dernier secteur partiel passe par un buffer de terminaison de 512 octets.
@@ -269,7 +277,7 @@ Codes `event` : 1 armement, 2 trigger, 3 préparation, 4 demande START,
 17 attente/refus du scheduler SD, 18 erreur bloc/disque SD,
 19 erreur FatFs/métadonnées. Pour Storage,
 `detail` contient la sous-phase finale (octet 0), l'erreur Recorder (octet 1),
-l'état du writer générique (octet 2) et son erreur (octet 3).
+l'état du writer Recorder (octet 2) et son erreur (octet 3).
 Pour Overdub, une liaison refusée
 porte la raison 1 (source), 2 (plan) ou 3 (reader) ; la faute porte l'erreur
 dans l'octet 0, `underrun` dans l'octet 1 et le nombre de frames produites
@@ -347,7 +355,7 @@ FatFs principaux sont `0 OK, 1 DISK_ERR, 2 INT_ERR, 3 NOT_READY,
 
 Le message UI `SD I/O` regroupe plusieurs origines : FatFs au montage ou
 au choix du slot, échec de préparation ou de finalisation du fichier,
-erreur du writer/transport, et prise finalisée avec zéro frame. Un gate
+erreur du writer/block device, et prise finalisée avec zéro frame. Un gate
 occupé renvoie normalement `NOT_NOW` et doit laisser la préparation en
 attente. Corréler la séquence des événements 3, 8, 15 à 19 pour distinguer
 le cas réel sur le matériel.
@@ -365,7 +373,7 @@ restent sectorielles afin de conserver les points d'arbitrage.
 
 La récupération, la préparation, le drain et la finalisation du Recorder sont
 des machines d'état progressées par `audio_recorder_service()` et
-`generic_recorder_service()`. Les opérations FatFs sont exécutées hors IRQ.
+`audio_recorder_writer_service()`. Les opérations FatFs sont exécutées hors IRQ.
 
 La granularité canonique des gros transferts séquentiels est une page de
 32 KiB: une lecture Streamer contiguë, un buffer PCM Recorder ou une phase de

@@ -1,6 +1,6 @@
 #include "Storage/project_load_quiesce.h"
 
-#include "IPC/live_event.h"
+#include "ControlRT/live_event.h"
 #include "ControlRT/control_rt_publication.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_runtime.h"
@@ -29,8 +29,7 @@ static uint8_t g_resource_mutation_ingress_holds;
 static uint8_t project_load_recorder_busy(void)
 {
     audio_recorder_status_t status;
-    if (audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                         &status) == 0U)
+    if (audio_recorder_get_status(&status) == 0U)
         return 0U;
     if ((status.state != AUDIO_RECORDER_STATE_IDLE)
         && (status.state != AUDIO_RECORDER_STATE_FAILED)

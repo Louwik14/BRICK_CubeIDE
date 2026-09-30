@@ -319,13 +319,12 @@ static audio_recorder_lifecycle_result_t sample_capture_prepare_session(void)
     }
 
     audio_recorder_status_t previous;
-    if ((audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                          &previous) != 0U)
+    if ((audio_recorder_get_status(&previous) != 0U)
             && ((previous.state == AUDIO_RECORDER_STATE_TAKE_READY)
                 || (previous.state == AUDIO_RECORDER_STATE_FAILED)))
     {
         const audio_recorder_lifecycle_result_t closed =
-            audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+            audio_recorder_discard();
         if (closed != AUDIO_RECORDER_LIFECYCLE_OK) return closed;
     }
 
@@ -338,8 +337,7 @@ static audio_recorder_lifecycle_result_t sample_capture_prepare_session(void)
 
     const uint32_t frame_limit = sample_capture_len_to_frames(g_sample_capture.state.len_bars);
     const audio_recorder_lifecycle_result_t prepared =
-        audio_recorder_prepare_client_cooperative(
-            AUDIO_RECORDER_CLIENT_AUDIO_REC,
+        audio_recorder_prepare_cooperative(
             g_sample_capture.state.temp_path,
             rec_source_building_final_path(),
             frame_limit);
@@ -385,8 +383,7 @@ static uint8_t sample_capture_ready_mono_at(const rec_source_snapshot_t *source,
 static uint8_t sample_capture_start_prepared_at(uint64_t sample_time)
 {
     audio_recorder_status_t status;
-    if((audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                         &status) == 0U)
+    if((audio_recorder_get_status(&status) == 0U)
             || (status.state != AUDIO_RECORDER_STATE_PREPARED))
     {
         sample_capture_trace_start_rejected(0x100U, sample_time);
@@ -397,8 +394,7 @@ static uint8_t sample_capture_start_prepared_at(uint64_t sample_time)
         sample_capture_trace_start_rejected(0x200U, sample_time);
         return 0U;
     }
-    if(audio_recorder_start_client_at(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                      sample_time) == 0U)
+    if(audio_recorder_start_at(sample_time) == 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SAMPLE_ACTIVE);
         sample_capture_trace_start_rejected(0x300U, sample_time);
@@ -429,8 +425,7 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
 
     const char *path = 0;
     uint32_t frames = 0U;
-    if(audio_recorder_get_last_take_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                           &path, &frames) == 0U)
+    if(audio_recorder_get_last_take(&path, &frames) == 0U)
     {
         return;
     }

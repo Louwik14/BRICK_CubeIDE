@@ -40,8 +40,7 @@ sample_capture_rec_led_state_t sample_capture_model_rec_led_state(void)
                 || (g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_WAIT_QUANT)))
         return SAMPLE_CAPTURE_REC_LED_WAITING;
     if ((g_sample_capture.state.recording != 0U)
-            && (audio_recorder_client_is_recording(
-                AUDIO_RECORDER_CLIENT_AUDIO_REC) != 0U))
+            && (audio_recorder_is_recording() != 0U))
         return SAMPLE_CAPTURE_REC_LED_ACTIVE;
     return SAMPLE_CAPTURE_REC_LED_OFF;
 }
@@ -109,14 +108,12 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         if(g_sample_capture.state.recording != 0U)
         {
             sample_capture_set_capture_enabled(0U);
-            (void)audio_recorder_request_stop_client(
-                AUDIO_RECORDER_CLIENT_AUDIO_REC);
+            (void)audio_recorder_request_stop();
             g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_STOPPING;
         }
         else
         {
-            (void)audio_recorder_cancel_prepared_client(
-                AUDIO_RECORDER_CLIENT_AUDIO_REC);
+            (void)audio_recorder_cancel_prepared();
             if(g_sample_capture.state.take_valid == 0U)
                 g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
         }
@@ -130,10 +127,10 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
     if((arm != SAMPLE_CAPTURE_ARM_OFF)
             && (g_sample_capture.state.save_pending != 0U)) return 0U;
 
-    if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_AUDIO_REC) != 0U)
+    if (audio_recorder_is_active() != 0U)
     {
         const audio_recorder_lifecycle_result_t discarded =
-            audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+            audio_recorder_discard();
         if (discarded == AUDIO_RECORDER_LIFECYCLE_NOT_NOW)
             return 0U;
         if (discarded == AUDIO_RECORDER_LIFECYCLE_ERROR)

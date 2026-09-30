@@ -4,9 +4,9 @@
 
 #include "SD/sd_block_device.h"
 #include "SD/sd_scheduler.h"
-#include "Storage/generic_recorder.h"
+#include "Storage/audio_recorder_writer.h"
 #include "Storage/audio_recorder_format.h"
-#include "IPC/audio_recorder_capture.h"
+#include "Recorder/audio_recorder_ring.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,31 +46,22 @@ typedef enum
 void audio_recorder_init(void);
 void audio_recorder_service(void);
 uint8_t audio_recorder_is_active(void);
-uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
-                                      const char *temporary_rec_path,
-                                      const char *final_wav_path,
-                                      uint32_t frame_limit);
-audio_recorder_lifecycle_result_t audio_recorder_prepare_client_cooperative(
-    audio_recorder_client_t client,
+uint8_t audio_recorder_prepare(const char *temporary_rec_path,
+                               const char *final_wav_path,
+                               uint32_t frame_limit);
+audio_recorder_lifecycle_result_t audio_recorder_prepare_cooperative(
     const char *temporary_rec_path,
     const char *final_wav_path,
     uint32_t frame_limit);
-uint8_t audio_recorder_start_client_at(audio_recorder_client_t client,
-                                       uint64_t sample_time);
-uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client);
-audio_recorder_lifecycle_result_t audio_recorder_discard_client(
-    audio_recorder_client_t client);
-uint8_t audio_recorder_request_stop_client(audio_recorder_client_t client);
-uint8_t audio_recorder_request_stop_client_at(audio_recorder_client_t client,
-                                              uint64_t sample_time);
+uint8_t audio_recorder_start_at(uint64_t sample_time);
+uint8_t audio_recorder_cancel_prepared(void);
+audio_recorder_lifecycle_result_t audio_recorder_discard(void);
+uint8_t audio_recorder_request_stop(void);
+uint8_t audio_recorder_request_stop_at(uint64_t sample_time);
 
-uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,
-                                         audio_recorder_status_t *status);
-uint8_t audio_recorder_get_last_take_client(audio_recorder_client_t client,
-                                            const char **path,
-                                            uint32_t *frames);
-uint8_t audio_recorder_client_is_active(audio_recorder_client_t client);
-uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client);
+uint8_t audio_recorder_get_status(audio_recorder_status_t *status);
+uint8_t audio_recorder_get_last_take(const char **path, uint32_t *frames);
+uint8_t audio_recorder_is_recording(void);
 
 
 #ifdef __cplusplus
