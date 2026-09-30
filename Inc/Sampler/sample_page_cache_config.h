@@ -154,6 +154,9 @@ static inline uint8_t sample_page_slot_is_voice_window_pool(uint32_t slot)
 #if (SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES != 36U)
 #error "Runtime reserve must cover 9 active readers x 4 pages"
 #endif
+#if (SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT > 64U)
+#error "Runtime FREE/READY bitmaps require at most 64 pages"
+#endif
 #if (SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES != 340U)
 #error "Global page cache must retain 340 physical pages"
 #endif

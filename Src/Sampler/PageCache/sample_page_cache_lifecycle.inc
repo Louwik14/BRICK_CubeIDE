@@ -15,6 +15,8 @@ void sample_page_cache_reset(void)
     memset(g_sample_page_reserved_count, 0, sizeof(g_sample_page_reserved_count));
     g_sample_page_free_cursor = 0U;
     g_sample_page_evict_cursor = 0U;
+    g_sample_page_runtime_free_bitmap = 0U;
+    g_sample_page_runtime_ready_bitmap = 0U;
     for (uint32_t i = 0U; i < SAMPLE_PAGE_CACHE_MAX_SAMPLES; ++i)
     {
         g_sample_page_last_slot[i] = UINT16_MAX;

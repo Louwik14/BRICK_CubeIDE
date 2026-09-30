@@ -154,16 +154,18 @@ static uint8_t sample_stream_manager_candidate_for_slot(
     for (uint8_t role = 0U; role < SAMPLE_PAGE_LEASE_PAGE_COUNT; ++role)
     {
         if ((lease.valid_mask & SAMPLE_PAGE_LEASE_VALID(role)) == 0U) continue;
-        const uint32_t page_index = lease.pages[role];
+        const sample_reader_window_role_t *const window = &lease.roles[role];
+        const uint32_t page_index = window->page_index;
         uint8_t duplicate = 0U;
         for (uint8_t previous = 0U; previous < role; ++previous)
         {
             if (((lease.valid_mask & SAMPLE_PAGE_LEASE_VALID(previous)) != 0U)
-                && (lease.pages[previous] == page_index)) duplicate = 1U;
+                && (lease.roles[previous].page_index == page_index)) duplicate = 1U;
         }
         if (duplicate != 0U) continue;
+        if (window->resolved != 0U) { ++page_rank; continue; }
         const sample_page_state_t state =
-            sample_page_cache_get_page_state_key(lease.key, page_index);
+            sample_page_cache_get_page_state_key(window->key, page_index);
         if (state == SAMPLE_PAGE_READY) { PERF_COUNT(PERF_N_CACHE_READY); ++page_rank; continue; }
 
         if (out_pending != 0) *out_pending = 1U;
@@ -171,7 +173,7 @@ static uint8_t sample_stream_manager_candidate_for_slot(
         if (out_candidate == 0) return 0U;
 
         memset(out_candidate, 0, sizeof(*out_candidate));
-        out_candidate->key = lease.key;
+        out_candidate->key = window->key;
         out_candidate->page_index = page_index;
         out_candidate->registration_epoch = lease.registration_epoch;
         out_candidate->voice_id = slot;
@@ -214,40 +216,20 @@ static uint8_t sample_stream_manager_pick_next(
         return 0U;
     }
     PERF_END(PERF_CPU_MANAGER_PICK, perf_start);
-    const sample_page_state_t state = sample_page_cache_get_page_state_key(
-        candidate.key, candidate.page_index);
-    uint8_t reserved_here = 0U;
-    if ((state == SAMPLE_PAGE_FREE) || (state == SAMPLE_PAGE_FAILED))
-    {
-        PERF_COUNT(PERF_N_CACHE_MISS);
-        PERF_START(reserve_start);
-        if (sample_page_cache_reserve_page_key_alloc(
-                candidate.key,
-                candidate.page_index,
-                SAMPLE_PAGE_ALLOC_VOICE_WINDOW) == 0U)
-        {
-            PERF_COUNT(PERF_N_CACHE_ALLOC_FAIL);
-            return 0U;
-        }
-        PERF_END(PERF_CPU_CACHE_RESERVE, reserve_start);
-        PERF_COUNT(PERF_N_CACHE_ALLOC);
-        reserved_here = 1U;
-    }
-
     sample_page_load_target_t target;
-    if (sample_page_cache_get_load_target_key(candidate.key,
-                                              candidate.page_index,
-                                              &target) == 0U)
+    PERF_COUNT(PERF_N_CACHE_MISS);
+    PERF_START(reserve_start);
+    if (sample_page_cache_reserve_page_target_key_alloc(
+            candidate.key,
+            candidate.page_index,
+            SAMPLE_PAGE_ALLOC_VOICE_WINDOW,
+            &target) == 0U)
     {
-        if (reserved_here != 0U)
-        {
-            (void)sample_page_cache_cancel_reserved_page_key(
-                candidate.key,
-                candidate.page_index,
-                SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
-        }
+        PERF_COUNT(PERF_N_CACHE_ALLOC_FAIL);
         return 0U;
     }
+    PERF_END(PERF_CPU_CACHE_RESERVE, reserve_start);
+    PERF_COUNT(PERF_N_CACHE_ALLOC);
     if ((candidate.registration_epoch != 0U)
         && (target.registration_epoch != candidate.registration_epoch))
     {

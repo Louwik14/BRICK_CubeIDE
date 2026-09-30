@@ -197,6 +197,11 @@ uint8_t sample_page_cache_reserve_page_key(sample_audio_key_t key, uint32_t page
 uint8_t sample_page_cache_reserve_page_key_alloc(sample_audio_key_t key,
                                                  uint32_t page_index,
                                                  sample_page_alloc_type_t alloc_type);
+uint8_t sample_page_cache_reserve_page_target_key_alloc(
+    sample_audio_key_t key,
+    uint32_t page_index,
+    sample_page_alloc_type_t alloc_type,
+    sample_page_load_target_t *out_target);
 uint8_t sample_page_cache_reserve_page_ref(uint16_t sample_id,
                                            uint32_t page_index,
                                            sample_page_ref_t *out_ref);

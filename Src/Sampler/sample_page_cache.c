@@ -59,6 +59,8 @@ SDRAM_PAGE_META static sample_page_sample_desc_t
 static CTRL_STATE uint16_t g_sample_page_reserved_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_free_cursor;
 static CTRL_STATE uint16_t g_sample_page_evict_cursor;
+static CTRL_STATE uint64_t g_sample_page_runtime_free_bitmap;
+static CTRL_STATE uint64_t g_sample_page_runtime_ready_bitmap;
 /* Zero-initialized outside the NOLOAD page metadata.  Boot may not inspect
  * payload_cpu_clean until reset has established every descriptor. */
 static uint8_t g_sample_page_payload_clean_contract_active;

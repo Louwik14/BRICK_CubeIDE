@@ -13,7 +13,10 @@ static float *sample_page_cache_data_resolve(const sample_page_desc_t *page)
 static uint8_t sample_page_cache_page_is_leased(const sample_page_desc_t *page)
 {
     return ((page != 0)
-            && (sample_page_lease_control_protects(page->key,
+            && (sample_page_lease_control_protects(
+                                                   (uint16_t)(page - g_sample_page_desc),
+                                                   page->generation,
+                                                   page->key,
                                                    page->registration_epoch,
                                                    page->page_index) != 0U)) ? 1U : 0U;
 }
@@ -89,7 +92,10 @@ static uint8_t sample_page_cache_page_is_contractual(const sample_page_desc_t *p
     }
 
     return ((page->static_resident != 0U)
-            || (sample_page_lease_control_protects(page->key,
+            || (sample_page_lease_control_protects(
+                                                   (uint16_t)(page - g_sample_page_desc),
+                                                   page->generation,
+                                                   page->key,
                                                    page->registration_epoch,
                                                    page->page_index) != 0U)) ? 1U : 0U;
 }
@@ -263,6 +269,21 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
         return;
     }
 
+    const uint32_t slot_index = (uint32_t)(page - g_sample_page_desc);
+    if ((slot_index >= SAMPLE_PAGE_VOICE_WINDOW_POOL_START)
+        && (slot_index < (SAMPLE_PAGE_VOICE_WINDOW_POOL_START
+                          + SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT)))
+    {
+        const uint64_t bit = UINT64_C(1)
+            << (slot_index - SAMPLE_PAGE_VOICE_WINDOW_POOL_START);
+        g_sample_page_runtime_free_bitmap &= ~bit;
+        g_sample_page_runtime_ready_bitmap &= ~bit;
+        if (state == SAMPLE_PAGE_FREE)
+            g_sample_page_runtime_free_bitmap |= bit;
+        else if (state == SAMPLE_PAGE_READY)
+            g_sample_page_runtime_ready_bitmap |= bit;
+    }
+
     const uint16_t key_slot = sample_page_cache_key_slot(page->key);
     if ((key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES) && (page->state != state))
     {
@@ -292,6 +313,8 @@ static uint8_t sample_page_cache_page_is_contractual_snapshot(
     return ((page->static_resident != 0U)
             || (sample_page_lease_control_snapshot_protects(
                     lease_snapshot,
+                    (uint16_t)(page - g_sample_page_desc),
+                    page->generation,
                     page->key,
                     page->registration_epoch,
                     page->page_index) != 0U)) ? 1U : 0U;
@@ -315,7 +338,9 @@ static uint8_t sample_page_cache_claim_for_recycle(sample_page_desc_t *page)
     sample_page_cache_set_state(page, SAMPLE_PAGE_EVICTING);
     sample_page_cache_unlock(primask);
 
-    const uint8_t leased = sample_page_lease_control_protects(key, epoch, page_index);
+    const uint8_t leased = sample_page_lease_control_protects(
+        (uint16_t)(page - g_sample_page_desc), generation,
+        key, epoch, page_index);
     primask = sample_page_cache_lock();
     if ((page->state != SAMPLE_PAGE_EVICTING)
         || (page->generation != generation)

@@ -21,15 +21,15 @@ void sample_page_lease_audio_init(void)
 uint8_t sample_page_lease_audio_publish(uint8_t slot,
                                        sample_audio_key_t key,
                                        uint32_t registration_epoch,
-                                       const uint32_t pages[SAMPLE_PAGE_LEASE_PAGE_COUNT],
+                                       const sample_reader_window_role_t roles[SAMPLE_PAGE_LEASE_PAGE_COUNT],
                                        uint8_t valid_mask)
 {
-    if ((slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT) || (pages == NULL)) return 0U;
+    if ((slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT) || (roles == NULL)) return 0U;
     sample_page_lease_t *const lease = &g_sample_page_leases[slot];
     if ((sample_audio_key_equal(&lease->key, &key) != 0U)
         && (lease->registration_epoch == registration_epoch)
         && (lease->valid_mask == valid_mask)
-        && (memcmp(lease->pages, pages, sizeof(lease->pages)) == 0)) return 1U;
+        && (memcmp(lease->roles, roles, sizeof(lease->roles)) == 0)) return 1U;
     PERF_START(lease_start);
     uint32_t seq = lease->seq;
     if ((seq & 1U) != 0U) ++seq;
@@ -37,7 +37,7 @@ uint8_t sample_page_lease_audio_publish(uint8_t slot,
     __DMB();
     lease->key = key;
     lease->registration_epoch = registration_epoch;
-    memcpy(lease->pages, pages, sizeof(lease->pages));
+    memcpy(lease->roles, roles, sizeof(lease->roles));
     lease->valid_mask = valid_mask;
     __DMB();
     lease->seq = seq + 2U;
@@ -57,7 +57,7 @@ uint8_t sample_page_lease_audio_publish(uint8_t slot,
 void sample_page_lease_audio_clear(uint8_t slot)
 {
     if (slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT) return;
-    const uint32_t empty[SAMPLE_PAGE_LEASE_PAGE_COUNT] = {0};
+    const sample_reader_window_role_t empty[SAMPLE_PAGE_LEASE_PAGE_COUNT] = {0};
     const sample_audio_key_t key = { SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U };
     (void)sample_page_lease_audio_publish(slot, key, 0U, empty, 0U);
 }

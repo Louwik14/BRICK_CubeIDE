@@ -44,10 +44,20 @@ typedef enum
 
 typedef struct
 {
+    sample_audio_key_t key;
+    uint32_t page_index;
+    uint32_t page_generation;
+    uint16_t slot_index;
+    uint8_t resolved;
+    uint8_t reserved;
+} sample_reader_window_role_t;
+
+typedef struct
+{
     volatile uint32_t seq;
     sample_audio_key_t key;
     uint32_t registration_epoch;
-    uint32_t pages[SAMPLE_PAGE_LEASE_PAGE_COUNT];
+    sample_reader_window_role_t roles[SAMPLE_PAGE_LEASE_PAGE_COUNT];
     uint8_t valid_mask;
     uint8_t reserved[3];
 } sample_page_lease_t;

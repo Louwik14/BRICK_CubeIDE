@@ -23,7 +23,7 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
     PERF_START(need_start);
 
     const uint32_t page = frame_pos / state->frames_per_page;
-    uint32_t pages[SAMPLE_PAGE_LEASE_PAGE_COUNT] = {0};
+    sample_reader_window_role_t roles[SAMPLE_PAGE_LEASE_PAGE_COUNT] = {0};
     uint8_t valid_mask = 0U;
     const uint32_t window_end = (state->plan_valid != 0U
                                  && state->plan.loop_mode == SAMPLE_PLAY_LOOP_FORWARD
@@ -34,11 +34,13 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
                                    ? ((window_end - 1U)
                                       / state->frames_per_page)
                                    : page;
-    pages[SAMPLE_PAGE_LEASE_CURRENT] = page;
+    roles[SAMPLE_PAGE_LEASE_CURRENT].key = state->key;
+    roles[SAMPLE_PAGE_LEASE_CURRENT].page_index = page;
     valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_CURRENT);
     if (page < last_page)
     {
-        pages[SAMPLE_PAGE_LEASE_NEXT] = page + 1U;
+        roles[SAMPLE_PAGE_LEASE_NEXT].key = state->key;
+        roles[SAMPLE_PAGE_LEASE_NEXT].page_index = page + 1U;
         valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_NEXT);
     }
     if ((state->plan_valid != 0U)
@@ -47,26 +49,137 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
     {
         const uint32_t loop_page = state->plan.loop_begin / state->frames_per_page;
         const uint32_t last = (state->plan.loop_end - 1U) / state->frames_per_page;
-        pages[SAMPLE_PAGE_LEASE_LOOP_START] = loop_page;
+        roles[SAMPLE_PAGE_LEASE_LOOP_START].key = state->key;
+        roles[SAMPLE_PAGE_LEASE_LOOP_START].page_index = loop_page;
         valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_LOOP_START);
         if (loop_page < last)
         {
-            pages[SAMPLE_PAGE_LEASE_LOOP_START_NEXT] = loop_page + 1U;
+            roles[SAMPLE_PAGE_LEASE_LOOP_START_NEXT].key = state->key;
+            roles[SAMPLE_PAGE_LEASE_LOOP_START_NEXT].page_index = loop_page + 1U;
             valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_LOOP_START_NEXT);
         }
     }
     PERF_END(PERF_CPU_READER_NEED, need_start);
-    if ((state->lease_valid_mask != valid_mask)
-        || (memcmp(state->lease_pages, pages, sizeof(pages)) != 0))
+    for (uint8_t role = 0U; role < SAMPLE_PAGE_LEASE_PAGE_COUNT; ++role)
+    {
+        if ((valid_mask & SAMPLE_PAGE_LEASE_VALID(role)) == 0U) continue;
+        const sample_page_lease_t *const published =
+            &g_sample_page_leases[state->lease_slot];
+        for (uint8_t old = 0U; old < SAMPLE_PAGE_LEASE_PAGE_COUNT; ++old)
+        {
+            const sample_reader_window_role_t *const previous =
+                &published->roles[old];
+            if (((published->valid_mask & SAMPLE_PAGE_LEASE_VALID(old)) != 0U)
+                && (previous->resolved != 0U)
+                && (previous->page_index == roles[role].page_index)
+                && (sample_audio_key_equal(&previous->key, &roles[role].key) != 0U))
+            {
+                roles[role].slot_index = previous->slot_index;
+                roles[role].page_generation = previous->page_generation;
+                roles[role].resolved = 1U;
+                break;
+            }
+        }
+    }
+    const sample_page_lease_t *const published =
+        &g_sample_page_leases[state->lease_slot];
+    if ((published->valid_mask != valid_mask)
+        || (memcmp(published->roles, roles, sizeof(roles)) != 0))
     {
         (void)sample_page_lease_audio_publish(state->lease_slot,
                                               state->key,
                                               state->registration_epoch,
-                                              pages,
+                                              roles,
                                               valid_mask);
-        memcpy(state->lease_pages, pages, sizeof(pages));
-        state->lease_valid_mask = valid_mask;
     }
+}
+
+static void sample_voice_reader_publish_window_state(
+    sample_voice_reader_state_t *state,
+    const sample_reader_window_role_t roles[SAMPLE_PAGE_LEASE_PAGE_COUNT],
+    uint8_t valid_mask)
+{
+    (void)sample_page_lease_audio_publish(state->lease_slot,
+                                          state->key,
+                                          state->registration_epoch,
+                                          roles,
+                                          valid_mask);
+}
+
+static uint8_t sample_voice_reader_window_role_for_page(
+    sample_voice_reader_state_t *state, uint32_t page_index)
+{
+    const sample_page_lease_t *const published =
+        &g_sample_page_leases[state->lease_slot];
+    for (uint8_t role = 0U; role < SAMPLE_PAGE_LEASE_PAGE_COUNT; ++role)
+    {
+        if (((published->valid_mask & SAMPLE_PAGE_LEASE_VALID(role)) != 0U)
+            && (published->roles[role].page_index == page_index)
+            && (sample_audio_key_equal(&published->roles[role].key,
+                                       &state->key) != 0U))
+            return role;
+    }
+    return UINT8_MAX;
+}
+
+static uint8_t sample_voice_reader_resolve_window_page(
+    sample_voice_reader_state_t *state, uint32_t page_index,
+    sample_page_span_t *out_span)
+{
+    const uint8_t role_index =
+        sample_voice_reader_window_role_for_page(state, page_index);
+    sample_page_lease_t published = g_sample_page_leases[state->lease_slot];
+    sample_reader_window_role_t *const role =
+        (role_index < SAMPLE_PAGE_LEASE_PAGE_COUNT)
+            ? &published.roles[role_index] : 0;
+    if ((role != 0) && (role->resolved != 0U))
+    {
+        const sample_page_ref_t ref = {
+            .key = state->key,
+            .page_index = page_index,
+            .page_generation = role->page_generation,
+            .format = state->format,
+            .stride_floats = state->stride_floats,
+            .frames_per_page = state->frames_per_page,
+            .registration_epoch = state->registration_epoch,
+            .slot_index = role->slot_index,
+        };
+        if (sample_page_cache_audio_resolve_page_ref_key(
+                state->key, &ref, out_span) != 0U) return 1U;
+        role->resolved = 0U;
+        role->page_generation = 0U;
+        role->slot_index = 0U;
+        sample_voice_reader_publish_window_state(
+            state, published.roles, published.valid_mask);
+    }
+
+    sample_page_span_t span;
+    if (sample_page_cache_audio_resolve_page_key(
+            state->key, page_index, &span) == 0U) return 0U;
+    if (role == 0) return 0U;
+    role->slot_index = (uint16_t)span.slot_index;
+    role->page_generation = span.page_generation;
+    role->resolved = 1U;
+    sample_voice_reader_publish_window_state(
+        state, published.roles, published.valid_mask);
+    const sample_page_ref_t ref = {
+        .key = state->key,
+        .page_index = page_index,
+        .page_generation = span.page_generation,
+        .format = state->format,
+        .stride_floats = state->stride_floats,
+        .frames_per_page = state->frames_per_page,
+        .registration_epoch = state->registration_epoch,
+        .slot_index = span.slot_index,
+    };
+    if (sample_page_cache_audio_resolve_page_ref_key(
+            state->key, &ref, out_span) != 0U) return 1U;
+    role->resolved = 0U;
+    role->page_generation = 0U;
+    role->slot_index = 0U;
+    sample_voice_reader_publish_window_state(
+        state, published.roles, published.valid_mask);
+    return 0U;
 }
 
 static void sample_voice_reader_release_audio_cursor(sample_voice_reader_state_t *state)
@@ -94,8 +207,8 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
     sample_page_span_t span;
     const uint32_t page_index =
         sample_audio_format_page_index_from_frame(expected_format, frame_pos);
-    const uint8_t acquired = sample_page_cache_audio_resolve_page_key(
-        state->key, page_index, &span);
+    const uint8_t acquired = sample_voice_reader_resolve_window_page(
+        state, page_index, &span);
     if (acquired == 0U)
     {
         PERF_COUNT(PERF_N_AUDIO_PAGE_MISSING);
@@ -155,7 +268,7 @@ static uint8_t sample_voice_reader_acquire_neighbor_page(sample_voice_reader_sta
     }
 
     sample_page_span_t span;
-    if (sample_page_cache_audio_resolve_page_key(state->key, page_index, &span) == 0U)
+    if (sample_voice_reader_resolve_window_page(state, page_index, &span) == 0U)
     {
         return 0U;
     }

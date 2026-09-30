@@ -424,6 +424,16 @@ uint8_t sample_page_cache_reserve_page_key_alloc(sample_audio_key_t key,
                                                  uint32_t page_index,
                                                  sample_page_alloc_type_t alloc_type)
 {
+    return sample_page_cache_reserve_page_target_key_alloc(
+        key, page_index, alloc_type, 0);
+}
+
+uint8_t sample_page_cache_reserve_page_target_key_alloc(
+    sample_audio_key_t key,
+    uint32_t page_index,
+    sample_page_alloc_type_t alloc_type,
+    sample_page_load_target_t *out_target)
+{
     uint32_t insert_index = UINT32_MAX;
     sample_page_desc_t *page = sample_page_cache_find_page_mut_key_hint(
         key, page_index, &insert_index);
@@ -456,6 +466,24 @@ uint8_t sample_page_cache_reserve_page_key_alloc(sample_audio_key_t key,
     }
 
     page->last_touch = ++g_sample_page_cache_state.touch_counter;
+    if (out_target != 0)
+    {
+        float *const data = sample_page_cache_data_resolve(page);
+        if ((page->state != SAMPLE_PAGE_RESERVED) || (data == 0)) return 0U;
+        memset(out_target, 0, sizeof(*out_target));
+        out_target->key = page->key;
+        out_target->sample_id = page->sample_id;
+        out_target->slot_index = (uint16_t)(page - g_sample_page_desc);
+        out_target->page_index = page->page_index;
+        out_target->start_frame = page->start_frame;
+        out_target->frame_count = page->frame_count;
+        out_target->format = page->format;
+        out_target->stride_floats = page->stride_floats;
+        out_target->frames_per_page = page->frames_per_page;
+        out_target->registration_epoch = page->registration_epoch;
+        out_target->page_generation = page->generation;
+        out_target->frames_interleaved = data;
+    }
     return 1U;
 }
 
