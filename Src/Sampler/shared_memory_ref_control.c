@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "Sampler/sample_page_cache_config.h"
-#include "Sampler/sample_page_cache_shared_contract.h"
+#include "Sampler/sample_page_cache_backing.h"
 
 uint8_t shared_memory_ref_make_page_pool(uint16_t first_page_slot,
                                          uint32_t byte_offset,
@@ -32,5 +32,5 @@ void *shared_memory_ref_control_resolve_page_pool(
     if ((ref == NULL) || (ref->region != AUDIO_SHARED_REGION_SAMPLE_PAGE_POOL)
         || (ref->offset > pool_bytes)
         || (ref->length > (pool_bytes - ref->offset))) return NULL;
-    return &((uint8_t *)g_sample_page_shared_data)[ref->offset];
+    return &((uint8_t *)g_sample_page_data)[ref->offset];
 }

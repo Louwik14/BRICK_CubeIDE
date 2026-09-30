@@ -7,8 +7,8 @@ reservations, etats, eviction et validation des completions Storage. AUDIO
 possede uniquement les lecteurs, positions DSP et leases. CONTROL possede
 l'output musical et garantit START pour une configuration/asset/workload
 produit legaux. Storage possede SD, fichiers, maps physiques et lecture. Les
-commandes et completions de pages sont tokenisees, bornes et sans
-pointeur.
+jobs locaux et completions de pages sont tokenises et bornes. Il n'existe plus
+de mailbox ni d'ABI de transport entre le manager Stream et l'I/O.
 
 Une page suit `FREE -> RESERVED -> LOADING -> READY`, `EVICTING`, ou `FAILED`. Une page LOADING n'est ni recyclable ni evictable. Pour recycler, STORAGE publie d'abord `EVICTING`, relit l'union des leases, restaure `READY` si la page est protegee, sinon passe `FREE`. AUDIO etend son lease avant resolution puis revalide `READY/key/registration_epoch/generation`. La completion valide key, slot, page generation, registration epoch et token; une completion tardive ne devient jamais visible.
 
@@ -21,8 +21,8 @@ sont `CURRENT`, `NEXT`, `LOOP_START` et `LOOP_START_NEXT`; les doublons de pages
 sont admis et ne consomment qu'une page physique. Les lecteurs Streamer et
 OVERDUB possedent chacun leur lease et peuvent partager les memes pages immuables.
 
-Le scheduler M4 sert directement les slots absents des lecteurs actifs en
-round-robin. AUDIO est l'unique producteur du besoin; M4 ne derive aucun
+Le scheduler STORAGE du M7 sert directement les slots absents des lecteurs
+actifs en round-robin. AUDIO est l'unique producteur du besoin; STORAGE ne derive aucun
 lookahead et il n'existe pas de loop cache parallele. Une page par lecteur et
 par passe; aucune horloge
 STREAM, low-water dynamique ou prediction temporelle ne conditionne le service.
@@ -39,10 +39,10 @@ workload est une rupture de contrat, pas une admission tardive.
 
 Le service Storage traite une commande bornee hors IRQ. Le quantum de lecture reste 32 KiB et chaque page fait 64 KiB. Le backend physique resout des extents vers une FIFO DMA bornee et lit le payload FLOAT32 directement dans la page finale; FatFs reste le fallback cold-path vers cette meme page. Read-ahead ne change ni ordre, besoins ni lifecycle.
 
-Le transport contient geometrie source, format et token. STORAGE remplit le
-payload partage et publie READY; AUDIO invalide avant lecture. H743
-et H747 conservent le meme contrat: M4 possede metadata et I/O, M7 possede les
-credits de lecture.
+Le job I/O local contient geometrie source, format et token. STORAGE remplit le
+payload puis publie READY; AUDIO conserve les credits de lecture. La
+maintenance cache du block device reste la frontiere CPU/DMA et ne constitue
+pas un transport AUDIO/STORAGE.
 
 ## Catalogue Classic unique
 
@@ -56,7 +56,7 @@ ne constituent pas un second catalogue produit.
 
 ## Multi, Sampler RAM et Wavetable
 
-Le bulk Multi prepare uniquement la page 0 et utilise le cache, le transport et
+Le bulk Multi prepare uniquement la page 0 et utilise le cache, l'I/O locale et
 le scheduler communs, par lots de 64 KiB. La boucle immutable est ensuite
 exprimee par les deux slots `LOOP_START`; Multi ne possede ni profondeur, ni
 cache de boucle, ni FatFs, decodeur ou arbitre SD parallele propres.
@@ -83,7 +83,12 @@ compteurs UI du catalogue global ne sont pas une mesure des descripteurs
 physiques du page-cache: le teardown doit donc maintenir ces deux plans
 coherents, et non corriger seulement les compteurs publies.
 
-Le registre compact de leases Stream est fixe, pointer-free, seqlocke et place explicitement dans la fenetre IPC partagee SRAM3/D2. Les snapshots de besoins, pins, use-counts et refcounts de pages ont ete supprimes. REC_SOURCE publie seulement une generation immutable READY; AUDIO conserve ses playheads et ses leases.
+Le registre compact de leases Stream est fixe, seqlocke et place en SRAM D2
+cacheable locale au M7. Le seqlock et ses `DMB` synchronisent l'IRQ AUDIO avec
+le service STORAGE cooperatif; ils ne constituent pas un ABI inter-core. Les
+snapshots de besoins, pins, use-counts et refcounts de pages ont ete supprimes.
+REC_SOURCE publie seulement une generation immutable READY; AUDIO conserve ses
+playheads et ses leases.
 
 ## Format audio
 

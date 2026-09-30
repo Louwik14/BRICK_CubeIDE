@@ -28,21 +28,16 @@ uint8_t sample_page_cache_audio_resolve_page_key(sample_audio_key_t key,
 
     const sample_page_desc_t *const page =
         sample_page_cache_audio_find_page_key(key, page_index);
-    if ((page == 0) || (page->state != SAMPLE_PAGE_READY)) return 0U;
+    if (page == 0) return 0U;
+    const sample_page_state_t state = page->state;
+    __DMB();
+    if (state != SAMPLE_PAGE_READY) return 0U;
     const sample_page_desc_t snapshot = *page;
     float *const payload = sample_page_cache_data_resolve(&snapshot);
     if (payload == 0) return 0U;
-    intercore_cache_consume(page, sizeof(*page));
-    if ((page->state != SAMPLE_PAGE_READY)
-        || (page->generation != snapshot.generation)
-        || (page->page_index != snapshot.page_index)
-        || (page->registration_epoch != snapshot.registration_epoch)
-        || (sample_audio_key_equal(&page->key, &snapshot.key) == 0U))
-    {
-        return 0U;
-    }
-    intercore_cache_consume(payload, (size_t)snapshot.frame_count
-        * snapshot.stride_floats * sizeof(float));
+    if ((snapshot.generation == 0U)
+        || (snapshot.page_index != page_index)
+        || (sample_audio_key_equal(&snapshot.key, &key) == 0U)) return 0U;
     out_span->frames_interleaved = payload;
     out_span->frame_count = snapshot.frame_count;
     out_span->start_frame = snapshot.start_frame;
@@ -78,33 +73,25 @@ uint8_t sample_page_cache_audio_resolve_page_ref_key(sample_audio_key_t key,
     memset(out_span, 0, sizeof(*out_span));
 
     const sample_page_desc_t *const page = &g_sample_page_desc[ref->slot_index];
-    intercore_cache_consume(page, sizeof(*page));
-    if ((sample_audio_key_equal(&page->key, &key) == 0U)
-        || (page->page_index != ref->page_index)
-        || (page->generation != ref->page_generation) || (page->state != SAMPLE_PAGE_READY)
+    const sample_page_state_t state = page->state;
+    __DMB();
+    const sample_page_desc_t snapshot = *page;
+    if ((state != SAMPLE_PAGE_READY)
+        || (sample_audio_key_equal(&snapshot.key, &key) == 0U)
+        || (snapshot.page_index != ref->page_index)
+        || (snapshot.generation != ref->page_generation)
         || (sample_audio_key_equal(&ref->key, &key) == 0U)
         || (sample_audio_format_is_valid(ref->format) == 0U)
-        || (page->format != ref->format)
+        || (snapshot.format != ref->format)
         || ((ref->registration_epoch != 0U)
-            && (page->registration_epoch != ref->registration_epoch))
-        || (ref->stride_floats != page->stride_floats)
-        || (ref->frames_per_page != page->frames_per_page))
+            && (snapshot.registration_epoch != ref->registration_epoch))
+        || (ref->stride_floats != snapshot.stride_floats)
+        || (ref->frames_per_page != snapshot.frames_per_page))
     {
         return 0U;
     }
-    const sample_page_desc_t snapshot = *page;
     float *const payload = sample_page_cache_data_resolve(&snapshot);
     if (payload == 0) return 0U;
-    intercore_cache_consume(page, sizeof(*page));
-    if ((page->state != SAMPLE_PAGE_READY)
-        || (page->generation != snapshot.generation)
-        || (page->registration_epoch != snapshot.registration_epoch)
-        || (sample_audio_key_equal(&page->key, &snapshot.key) == 0U))
-    {
-        return 0U;
-    }
-    intercore_cache_consume(payload, (size_t)snapshot.frame_count
-        * snapshot.stride_floats * sizeof(float));
     out_span->frames_interleaved = payload;
     out_span->frame_count = snapshot.frame_count;
     out_span->start_frame = snapshot.start_frame;

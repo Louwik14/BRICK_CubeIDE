@@ -20,7 +20,7 @@
 #define SAMPLE_STREAM_IO_SECTOR_BYTES (512U)
 #define SAMPLE_STREAM_IO_REC_BYTES_PER_FRAME (6U)
 #define SAMPLE_STREAM_IO_REC_DECODE_FRAMES (512U)
-#define SAMPLE_STREAM_IO_JOB_COUNT (2U)
+#define SAMPLE_STREAM_IO_JOB_COUNT SAMPLE_STREAM_IO_JOB_CAPACITY
 
 _Static_assert((SAMPLE_PAGE_FRAMES * SAMPLE_STREAM_IO_REC_BYTES_PER_FRAME
                 + (2U * (SAMPLE_STREAM_IO_SECTOR_BYTES - 1U)))
@@ -109,17 +109,6 @@ void sample_stream_io_init(void)
 void sample_stream_io_reset(void)
 {
     sample_stream_io_cancel();
-}
-
-void sample_stream_io_release_key(sample_audio_key_t key)
-{
-    /* Physical transport has no persistent FatFs reader to release. */
-    (void)key;
-}
-
-uint32_t sample_stream_io_active_reader_count(void)
-{
-    return 0U;
 }
 
 uint8_t sample_stream_io_set_read_chunk_kib(sample_stream_read_chunk_kib_t chunk_kib)
@@ -229,13 +218,6 @@ static void sample_stream_io_finalize(sample_stream_io_async_t *async)
 
 uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
 {
-    /* A Storage worker must never resolve or write the M7 page-cache. */
-    (void)command;
-    return 0U;
-}
-
-uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
-{
     PERF_START(begin_start);
     sample_stream_io_async_t *async = 0;
     if (command == 0)
@@ -272,6 +254,7 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
     async->command = *command;
     async->result.token = command->token;
     async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+    async->result.request_cycles = brick_perf_now();
     async->target = (sample_page_load_target_t){
         .key = command->target.key,
         .page_index = command->target.page_index,
@@ -465,6 +448,57 @@ uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
 {
     const uint8_t result = sample_stream_io_poll_impl(out_result);
     return result;
+}
+
+uint32_t sample_stream_io_active_job_count(void)
+{
+    uint32_t count = 0U;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_JOB_COUNT; ++i)
+        if (g_sample_stream_io_async[i].active != 0U) ++count;
+    return count;
+}
+
+uint8_t sample_stream_io_key_busy(sample_audio_key_t key)
+{
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_JOB_COUNT; ++i)
+        if ((g_sample_stream_io_async[i].active != 0U)
+            && (sample_audio_key_equal(
+                    &g_sample_stream_io_async[i].command.token.key,
+                    &key) != 0U)) return 1U;
+    return 0U;
+}
+
+void sample_stream_io_execute_local(const sample_stream_io_command_t *command,
+                                    sample_stream_io_result_t *out_result)
+{
+    if (out_result == NULL) return;
+    memset(out_result, 0, sizeof(*out_result));
+    out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+    if (command == NULL) return;
+    out_result->token = command->token;
+
+    /* Bulk callers own the Storage service while using this blocking helper.
+     * Refuse to steal a completion from the cooperative Stream manager. */
+    if (sample_stream_io_active_job_count() != 0U) return;
+
+    if (sample_stream_io_begin(command) == 0U) return;
+    do
+    {
+        sd_scheduler_runtime_service();
+    } while (sample_stream_io_poll(out_result) == 0U);
+
+    if ((out_result->token.slot_index != command->token.slot_index)
+        || (out_result->token.page_generation
+            != command->token.page_generation)
+        || (out_result->token.registration_epoch
+            != command->token.registration_epoch)
+        || (out_result->token.page_index != command->token.page_index)
+        || (sample_audio_key_equal(&out_result->token.key,
+                                   &command->token.key) == 0U))
+    {
+        out_result->token = command->token;
+        out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+    }
 }
 
 void sample_stream_io_cancel(void)

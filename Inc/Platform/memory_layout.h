@@ -39,6 +39,8 @@
 
 /* Read-mostly audio LUTs moved out of D1 without using SDRAM. */
 #define AUDIO_LUT_D2 SEC_ATTR(".ram_d2_local_cacheable")
+/* Cacheable state shared only between M7 IRQ and cooperative services. */
+#define STREAM_LOCAL_D2 SEC_ATTR(".ram_d2_local_cacheable") ALIGN32
 
 /* Sequencer runtime/model state placed in internal D2 (non-SDRAM). */
 #define SEQ_STATE_D2 SEC_ATTR(".ram_d2_m4")
@@ -102,11 +104,7 @@
 #define SDRAM_PAGE_POOL SEC_ATTR(".sdram_sample_page_pool") ALIGN32
 #define SDRAM_PAGE_META SEC_ATTR(".sdram_page_meta") ALIGN32
 #define SDRAM_PAGE_INDEX SEC_ATTR(".sdram_page_index") ALIGN32
-/* STREAM/Sample payload is shared cacheable bulk storage. Publication uses
- * explicit intercore cache clean/invalidate; metadata remains M4-owned. */
-#define AUDIO_SHARED_PAGE_PAYLOAD_SDRAM SDRAM_PAGE_POOL
-#define CONTROL_STREAM_META_SDRAM SDRAM_PAGE_META
-#define CONTROL_STREAM_INDEX_SDRAM SDRAM_PAGE_INDEX
+/* Monocore STREAM metadata and DMA-visible sample payload. */
 #define SDRAM_STREAM_SERVICE SEC_ATTR(".sdram_stream_service") ALIGN32
 #define SDRAM_STREAM_SCRATCH SEC_ATTR(".sdram_stream_scratch") ALIGN32
 #define SDRAM_MULTI_POOL SEC_ATTR(".sdram_multi_pool") ALIGN32

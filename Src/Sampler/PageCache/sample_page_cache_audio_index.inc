@@ -1,5 +1,5 @@
-/* AUDIO-side lookup. CONTROL owns the cacheable index/descriptor bytes; AUDIO
- * only consumes published snapshots after extending its lease. */
+/* AUDIO-side lookup of STORAGE-owned local metadata. AUDIO extends its lease
+ * before entering this function. */
 static sample_page_desc_t *sample_page_cache_audio_find_page_key(
     sample_audio_key_t key, uint32_t page_index)
 {
@@ -10,10 +10,11 @@ static sample_page_desc_t *sample_page_cache_audio_find_page_key(
     if (last_slot < SAMPLE_PAGE_MAX_COUNT)
     {
         sample_page_desc_t *const page = &g_sample_page_desc[last_slot];
-        intercore_cache_consume(page, sizeof(*page));
+        const sample_page_state_t state = page->state;
+        __DMB();
         if ((sample_audio_key_equal(&page->key, &key) != 0U)
             && (page->page_index == page_index)
-            && (page->state != SAMPLE_PAGE_FREE))
+            && (state != SAMPLE_PAGE_FREE))
             return page;
     }
 
@@ -22,19 +23,21 @@ static sample_page_desc_t *sample_page_cache_audio_find_page_key(
     {
         sample_page_index_entry_t *const entry =
             &g_sample_page_index[(start + probe) % SAMPLE_PAGE_INDEX_SIZE];
-        intercore_cache_consume(entry, sizeof(*entry));
-        if (entry->used == 0U) return 0;
-        if ((entry->used == 1U)
+        const uint8_t used = entry->used;
+        __DMB();
+        if (used == 0U) return 0;
+        if ((used == 1U)
             && (sample_audio_key_equal(&entry->key, &key) != 0U)
             && (entry->page_index == page_index)
             && (entry->slot_index < SAMPLE_PAGE_MAX_COUNT))
         {
             sample_page_desc_t *const page =
                 &g_sample_page_desc[entry->slot_index];
-            intercore_cache_consume(page, sizeof(*page));
+            const sample_page_state_t state = page->state;
+            __DMB();
             if ((sample_audio_key_equal(&page->key, &key) != 0U)
                 && (page->page_index == page_index)
-                && (page->state != SAMPLE_PAGE_FREE))
+                && (state != SAMPLE_PAGE_FREE))
                 return page;
             return 0;
         }

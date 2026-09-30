@@ -5,8 +5,6 @@
 #include "Sampler/sample_page_cache.h"
 #include "IPC/shared_memory_ref_control.h"
 #include "Sampler/sample_stream_fatfs_map.h"
-#include "Sampler/sample_stream_publish.h"
-#include "Sampler/sample_stream_transport.h"
 
 uint8_t sample_page_cache_port_alloc_shared(
     uint32_t bytes, sample_page_loader_allocation_t *out)
@@ -173,7 +171,11 @@ uint8_t sample_page_cache_port_reserve(sample_audio_key_t key,
 
 uint8_t sample_page_cache_port_complete(const sample_stream_io_result_t *result)
 {
-    return sample_stream_publish_result(result);
+    if (result == NULL) return 0U;
+    return sample_page_cache_finish_loading(
+        &result->token,
+        (result->load_result == SAMPLE_PAGE_LOAD_OK)
+            ? SAMPLE_PAGE_FINISH_READY : SAMPLE_PAGE_FINISH_ERROR);
 }
 
 void sample_page_cache_port_abort(const sample_stream_io_command_t *command)

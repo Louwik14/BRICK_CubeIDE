@@ -62,9 +62,7 @@ set(audio_forbidden_dependencies
     "/Inc/Sampler/sample_stream_fatfs_map.h"
     "/Inc/Sampler/sample_stream_io.h"
     "/Inc/Sampler/sample_stream_manager.h"
-    "/Inc/Sampler/sample_stream_publish.h"
     "/Inc/Sampler/sample_stream_scheduler.h"
-    "/Inc/Sampler/sample_stream_transport.h"
     "/Inc/SD/"
     "/App/Middlewares/Third_Party/FatFs/"
     "_control.h")

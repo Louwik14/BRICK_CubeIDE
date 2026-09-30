@@ -6,9 +6,7 @@
 
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_io.h"
-#include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_scheduler.h"
-#include "Sampler/sample_stream_transport.h"
 #include "Platform/stream_rec_perf.h"
 #include "IPC/audio_recorder_capture_contract.h"
 #include "Platform/memory_layout.h"
@@ -51,18 +49,6 @@ _Static_assert(SAMPLE_STREAM_IO_MAX_READERS <= SAMPLE_CLASSIC_CAPACITY,
                "active stream readers must be bounded below hot sample capacity");
 #endif
 static uint8_t g_sample_stream_manager_initialized;
-typedef struct
-{
-    sample_stream_scheduler_candidate_t candidate;
-    sample_page_load_target_t target;
-    sample_stream_io_command_t command;
-    uint32_t transport_sequence;
-    uint32_t perf_request_cycles;
-    uint8_t active;
-} sample_stream_manager_pending_io_t;
-SDRAM_STREAM_SERVICE static sample_stream_manager_pending_io_t
-    g_sample_stream_manager_pending_io[2];
-static uint8_t g_sample_stream_manager_pending_count;
 static uint8_t sample_stream_manager_candidate_for_slot(
     uint8_t slot,
     sample_stream_scheduler_candidate_t *out_candidate,
@@ -72,7 +58,6 @@ static uint8_t sample_stream_manager_probe_candidate(
     uint8_t slot,
     sample_stream_scheduler_candidate_t *out_candidate);
 static uint8_t sample_stream_manager_finish_io(
-    sample_stream_manager_pending_io_t *pending,
     sample_stream_io_result_t *io_result);
 static uint8_t sample_stream_manager_submit_prefill(
     sample_audio_domain_t domain, uint16_t capacity);
@@ -84,7 +69,6 @@ static void sample_stream_manager_init_storage_once(void)
     }
 
     sample_stream_io_init();
-    sample_stream_transport_init();
     g_sample_stream_manager_initialized = 1U;
 }
 
@@ -98,10 +82,6 @@ void sample_stream_manager_reset(void)
 {
     sample_stream_manager_init_storage_once();
     sample_stream_io_reset();
-    sample_stream_transport_init();
-    memset(g_sample_stream_manager_pending_io, 0,
-           sizeof(g_sample_stream_manager_pending_io));
-    g_sample_stream_manager_pending_count = 0U;
     sample_stream_scheduler_init();
 }
 
@@ -118,41 +98,33 @@ void sample_stream_manager_release_key(sample_audio_key_t key)
         if ((sample_page_lease_control_read(slot, &lease) != 0U)
             && (sample_audio_key_equal(&lease.key, &key) != 0U)) return;
     }
-    (void)sample_stream_transport_request_release(key);
     (void)sample_page_cache_cancel_reserved_key(key, SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY);
 }
 
 uint8_t sample_stream_manager_key_busy(sample_audio_key_t key)
 {
-    for (uint8_t i = 0U; i < g_sample_stream_manager_pending_count; ++i)
-        if ((g_sample_stream_manager_pending_io[i].active != 0U)
-                && (sample_audio_key_equal(
-                    &g_sample_stream_manager_pending_io[i].target.key,
-                    &key) != 0U)) return 1U;
-    return 0U;
+    return sample_stream_io_key_busy(key);
 }
 
 static uint8_t sample_stream_manager_finish_io(
-    sample_stream_manager_pending_io_t *pending,
     sample_stream_io_result_t *io_result)
 {
     PERF_START(perf_start);
-    if ((pending == 0) || (io_result == 0))
+    if (io_result == 0)
     {
         return 0U;
     }
-    if (io_result->load_result != SAMPLE_PAGE_LOAD_OK)
-    {
-        (void)sample_stream_publish_result(io_result);
-        return 0U;
-    }
-    if (sample_stream_publish_result(io_result) == 0U)
+    const sample_page_finish_result_t finish =
+        (io_result->load_result == SAMPLE_PAGE_LOAD_OK)
+            ? SAMPLE_PAGE_FINISH_READY : SAMPLE_PAGE_FINISH_ERROR;
+    if (sample_page_cache_finish_loading(&io_result->token, finish) == 0U)
     {
         return 0U;
     }
-    if (pending->perf_request_cycles != 0U)
+    if (io_result->load_result != SAMPLE_PAGE_LOAD_OK) return 0U;
+    if (io_result->request_cycles != 0U)
         brick_perf_wall(PERF_WALL_STREAM_REQUEST_READY,
-                        brick_perf_now() - pending->perf_request_cycles);
+                        brick_perf_now() - io_result->request_cycles);
     PERF_END(PERF_CPU_MANAGER_FINISH, perf_start);
     return 1U;
 }
@@ -216,11 +188,10 @@ static uint8_t sample_stream_manager_probe_candidate(
 }
 
 static uint8_t sample_stream_manager_pick_next(
-    sample_page_load_target_t *out_target,
-    sample_stream_scheduler_candidate_t *out_candidate)
+    sample_page_load_target_t *out_target)
 {
     PERF_START(perf_start);
-    if ((out_target == 0) || (out_candidate == 0))
+    if (out_target == 0)
     {
         return 0U;
     }
@@ -275,7 +246,6 @@ static uint8_t sample_stream_manager_pick_next(
             SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
         return 0U;
     }
-    *out_candidate = candidate;
     *out_target = target;
     return 1U;
 }
@@ -284,7 +254,7 @@ static uint8_t sample_stream_manager_submit_prefill(
     sample_audio_domain_t domain, uint16_t capacity)
 {
     sample_page_load_target_t target;
-    if ((g_sample_stream_manager_pending_count >= 2U)
+    if ((sample_stream_io_active_job_count() >= SAMPLE_STREAM_IO_JOB_CAPACITY)
         || (sample_page_cache_get_reserved_load_target_domain_range(
                 domain, 0U, capacity, &target) == 0U))
     {
@@ -317,21 +287,12 @@ static uint8_t sample_stream_manager_submit_prefill(
         return 0U;
     }
     command.deadline_margin_us = UINT32_MAX;
-    sample_stream_manager_pending_io_t *const pending =
-        &g_sample_stream_manager_pending_io[g_sample_stream_manager_pending_count];
-    memset(pending, 0, sizeof(*pending));
-    pending->target = target;
-    pending->command = command;
-    pending->perf_request_cycles = brick_perf_now();
-    if (sample_stream_transport_submit(
-            &pending->command, &pending->transport_sequence) == 0U)
+    if (sample_stream_io_begin(&command) == 0U)
     {
         (void)sample_page_cache_finish_loading(
             &token, SAMPLE_PAGE_FINISH_ERROR);
         return 0U;
     }
-    pending->active = 1U;
-    ++g_sample_stream_manager_pending_count;
     return 1U;
 }
 
@@ -342,30 +303,16 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
         return;
     }
 
-    uint32_t pages_this_call = 0U;
-
-    if (g_sample_stream_manager_pending_count != 0U)
+    if (sample_stream_io_active_job_count() != 0U)
     {
         sample_stream_io_result_t pending_result;
-        if (sample_stream_transport_take_result(
-                g_sample_stream_manager_pending_io[0].transport_sequence,
-                &pending_result) != 0U)
+        if (sample_stream_io_poll(&pending_result) != 0U)
         {
-            const uint8_t finished = sample_stream_manager_finish_io(
-                &g_sample_stream_manager_pending_io[0], &pending_result);
-            if (g_sample_stream_manager_pending_count > 1U)
-            {
-                g_sample_stream_manager_pending_io[0] =
-                    g_sample_stream_manager_pending_io[1];
-            }
-            memset(&g_sample_stream_manager_pending_io[
-                       g_sample_stream_manager_pending_count - 1U],
-                   0, sizeof(g_sample_stream_manager_pending_io[0]));
-            --g_sample_stream_manager_pending_count;
-            pages_this_call = (finished != 0U) ? 1U : 0U;
+            (void)sample_stream_manager_finish_io(&pending_result);
             return;
         }
-        if (g_sample_stream_manager_pending_count >= 2U)
+        if (sample_stream_io_active_job_count()
+                >= SAMPLE_STREAM_IO_JOB_CAPACITY)
         {
             return;
         }
@@ -377,8 +324,7 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
     {
         sample_page_load_target_t target;
         sample_page_stream_info_t stream_info;
-        sample_stream_scheduler_candidate_t candidate;
-        if (sample_stream_manager_pick_next(&target, &candidate) == 0U)
+        if (sample_stream_manager_pick_next(&target) == 0U)
         {
             break;
         }
@@ -405,7 +351,6 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
         }
 
         sample_page_load_token_t load_token;
-        uint32_t consumed = target.frame_count * stream_info.info.block_align;
         if (sample_page_cache_begin_loading(&target, &load_token) == 0U)
         {
             continue;
@@ -427,61 +372,19 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
         }
         PERF_END(PERF_CPU_STREAM_COMMAND, command_start);
         io_command.deadline_margin_us = UINT32_MAX;
-        sample_stream_manager_pending_io_t *pending =
-            &g_sample_stream_manager_pending_io[g_sample_stream_manager_pending_count];
-        memset(pending, 0, sizeof(*pending));
-        pending->candidate = candidate;
-        pending->target = target;
-        pending->command = io_command;
-        pending->perf_request_cycles = brick_perf_now();
         sample_stream_io_result_t io_result;
         memset(&io_result, 0, sizeof(io_result));
         io_result.token = load_token;
         io_result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
         PERF_START(submit_start);
-        const uint8_t submitted = sample_stream_transport_submit(
-                &pending->command, &pending->transport_sequence);
+        const uint8_t submitted = sample_stream_io_begin(&io_command);
         PERF_END(PERF_CPU_STREAM_SUBMIT, submit_start);
         if (submitted == 0U)
         {
-            (void)sample_stream_manager_finish_io(pending, &io_result);
+            (void)sample_stream_manager_finish_io(&io_result);
             return;
         }
-        pending->active = 1U;
-        ++g_sample_stream_manager_pending_count;
-        if (sample_stream_transport_take_result(
-                g_sample_stream_manager_pending_io[0].transport_sequence,
-                &io_result) == 0U)
-        {
-            return;
-        }
-        sample_stream_manager_pending_io_t completed_pending =
-            g_sample_stream_manager_pending_io[0];
-        if (g_sample_stream_manager_pending_count > 1U)
-        {
-            g_sample_stream_manager_pending_io[0] =
-                g_sample_stream_manager_pending_io[1];
-        }
-        --g_sample_stream_manager_pending_count;
-        memset(&g_sample_stream_manager_pending_io[g_sample_stream_manager_pending_count],
-               0, sizeof(g_sample_stream_manager_pending_io[0]));
-        pending = &completed_pending;
-        pending->active = 0U;
-        if (io_result.read_bytes > consumed)
-        {
-            consumed = io_result.read_bytes;
-        }
-        if (sample_stream_manager_finish_io(pending, &io_result) == 0U)
-        {
-            return;
-        }
-        ++pages_this_call;
-
-        if (consumed >= byte_budget)
-        {
-            break;
-        }
-        byte_budget -= consumed;
+        return;
 
     }
     if (sample_stream_manager_submit_prefill(
@@ -497,7 +400,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
 
 uint8_t sample_stream_manager_has_pending_sd_work(void)
 {
-    if (g_sample_stream_manager_pending_count != 0U)
+    if (sample_stream_io_active_job_count() != 0U)
     {
         return 1U;
     }
@@ -518,5 +421,5 @@ uint8_t sample_stream_manager_has_pending_sd_work(void)
 
 uint8_t sample_stream_manager_io_in_flight(void)
 {
-    return (g_sample_stream_manager_pending_count != 0U) ? 1U : 0U;
+    return (sample_stream_io_active_job_count() != 0U) ? 1U : 0U;
 }

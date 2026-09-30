@@ -3,7 +3,11 @@
 #include <string.h>
 
 #include "stm32h7xx.h"
+#include "Platform/memory_layout.h"
 #include "Platform/stream_rec_perf.h"
+
+STREAM_LOCAL_D2 sample_page_lease_t
+    g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];
 
 void sample_page_lease_audio_init(void)
 {

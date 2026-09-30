@@ -6,7 +6,7 @@ void sample_page_cache_init(void)
 
 void sample_page_cache_reset(void)
 {
-    sample_stream_transport_reset_storage_maps();
+    sample_stream_physical_map_pool_reset();
     memset(&g_sample_page_cache_state, 0, sizeof(g_sample_page_cache_state));
     memset(g_sample_page_sample_desc, 0, sizeof(g_sample_page_sample_desc));
     memset(g_sample_page_index, 0, sizeof(g_sample_page_index));
@@ -61,7 +61,7 @@ void sample_page_cache_clear_key(sample_audio_key_t key)
         }
     }
 
-    sample_stream_transport_release_map(
+    sample_stream_physical_map_release(
         &g_sample_page_sample_desc[key_slot].stream_safe.physical_map);
     memset(&g_sample_page_sample_desc[key_slot], 0, sizeof(g_sample_page_sample_desc[key_slot]));
     g_sample_page_sample_desc[key_slot].key = key;

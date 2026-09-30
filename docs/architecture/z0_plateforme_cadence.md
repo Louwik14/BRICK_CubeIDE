@@ -62,36 +62,42 @@ finales et PANIC emprunte la meme FIFO; aucune generation musicale, queue
 prioritaire ou plan fonctionnel de restore ne traverse la frontiere. L'etat
 restore est valide puis republie par CONTROL avec le contrat final.
 
-Sur H743, les objets IPC resident dans la moitie haute de SRAM4 `0x38008000..0x3800FFFF`, shareable et non-cacheable; les registres Stream fixes resident dans la fenetre IPC partagee SRAM3/D2, et la projection complete du Recorder dans la zone SDRAM partagee non-cacheable. Le snapshot AUDIO unique de 73920 octets reside dans `.sdram_audio_state_snapshot`, en SDRAM cacheable partagee avec clean producteur et invalidate consommateur sur H747. `DMB` ordonne la publication mais ne remplace pas le protocole d'ownership. La zone Recorder de 256 KiB est shareable non-cacheable; les buffers DMA SAI sont en D2 non-cacheable.
+Sur H743, les objets IPC restants resident dans la moitie haute de SRAM4
+`0x38008000..0x3800FFFF`, shareable et non-cacheable. Le Streamer n'en fait
+plus partie: leases et index rapide sont locaux au M7 en D2 cacheable,
+metadata et payloads restent dans leurs arenas SDRAM. La maintenance cache des
+pages Stream appartient uniquement a la frontiere CPU/DMA. La projection
+complete du Recorder reste dans la zone SDRAM partagee non-cacheable. Le
+snapshot AUDIO unique de 73920 octets reside dans
+`.sdram_audio_state_snapshot`. `DMB` ordonne les publications IRQ/superloop
+mais ne remplace pas le protocole d'ownership. La zone Recorder de 256 KiB est
+shareable non-cacheable; les buffers DMA SAI sont en D2 non-cacheable.
 
 Les principaux sens sont:
 
 ```text
 CONTROL -> AUDIO : FIFO unique PROGRAM, PARAM, NOTE, TRANSPORT, RECORD, PANIC et requetes visuelles typees; data planes volumineux separes
-AUDIO -> CONTROL : niveau REC, waveforms audio/synth et diagnostic Audio; plus les retours physiques STREAM/Recorder hors IPC fonctionnel
-Storage <-> AUDIO : registration, token, completion de page et payloads bornes
+AUDIO -> CONTROL : niveau REC, waveforms audio/synth et diagnostic Audio; plus les retours physiques Recorder hors IPC fonctionnel
+Storage <-> AUDIO : leases locaux, etats/generations de page et payloads bornes
 ```
 
 Preview est un ring PCM SPSC M4->M7: CONTROL possede payload/`write_count`, AUDIO `read_count` et le gain/active local applique par PARAM. Recorder est le ring inverse: AUDIO possede payload/`head_cursor`/fermeture/fault, CONTROL uniquement `tail_cursor`, writer et erreurs SD. Le Streamer AUDIO date son DSP avec la media clock TIM5 canonique. Le transport et le REC bus sont des runtimes AUDIO locaux alimentes par TRANSPORT/PARAM; aucun snapshot parallele n'en revient. FILTER POS affiche la valeur CONTROL canonique; aucune valeur DSP n'est une autorite UI.
 
 Au boot, `track_state` est initialise avant la projection finale `track_runtime`; le bridge Hall/keyboard et son focus sont ensuite initialises et synchronises depuis cette autorite canonique. PLAY/PAUSE ou une reconfiguration moteur ne font pas partie du protocole d'activation Hall.
 
-## Memoire et migration H747
+## Memoire et port monocoeur H743 vers RT1172
 
 Les budgets DTCM, D1, D2, SRAM2, SRAM3, SRAM4, ITCM et SDRAM sont controles par les linkers; toute croissance d'une region proche de sa limite exige un budget explicite. Les voix et etats chauds restent en DTCM; les arenas AUDIO volumineuses resident en SDRAM selon leur contrat cache.
 
-La migration H747 conserve les payloads et protocoles. Restent physiques: deux images CM7/CM4, boot/HSEM, clocks, linkers, MPU des deux coeurs, repartition IRQ/DMA et initialisation FMC/SDRAM unique. M7 recoit SAI/audio; M4 recoit USB/UI/MIDI/SD/display. M7 est l'unique owner de l'initialisation TIM5 et de son overflow; le petit etat d'extension (`sequence`, `wrap_count`, `tick_hz`) est place a une adresse SRAM partagee coherente et lu par seqlock depuis M4. Aucun anchor periodique ni mailbox temporelle M7 vers M4 n'est requis.
+La cible H743 puis RT1172 utilise une seule image M7. Le port conserve les
+owners logiques, les priorites IRQ, les generations et les protocoles DMA,
+mais aucun boot HSEM, image M4, mailbox ou protocole de caches prives. Le port
+RT1172 devra fournir les placements RAM, attributs MPU/cache, hooks DMA et la
+media clock equivalents; le Streamer ne demande aucune adaptation inter-core.
 
-La cible USB Audio H747 place TinyUSB, l'IRQ USB et l'ingress Audio OUT sur M4.
-Le M4 publie le paquet recu dans le meme ring IPC SPSC pointer-free; l'IRQ AUDIO
-du M7 lit ce ring avant mixer/DSP. L'IRQ USB M4 ne preemptera donc plus
-directement l'IRQ AUDIO M7. Ce port n'est pas valide hardware: placement du
-ring, attributs MPU/cache sur les deux coeurs, barrieres de publication et
-contention memoire inter-coeurs devront etre revalides.
+## Ownership logique du build monocoeur
 
-## Ownership de build prepare pour H747
-
-Le build H743 classe chaque unite dans un seul ensemble: `DOMAIN_CONTROL`,
+Le build classe chaque unite dans un seul ensemble logique: `DOMAIN_CONTROL`,
 `DOMAIN_STORAGE`, `DOMAIN_AUDIO`, `DOMAIN_CONTRACTS`, `SHARED_BACKING` ou
 `PLATFORM_H743`. Il n'existe plus de domaine de transition mixte. UI,
 sequenceur et etat Param canonique appartiennent a CONTROL; le refill Stream,
@@ -106,11 +112,12 @@ policy. L'initialisation reste chez le writer proprietaire. `PLATFORM_H743`
 porte seulement les seams de composition mono-coeur, le hardware
 board et le staging/remap LED physique. Boutons, encodeurs et logique produit LED
 appartiennent a CONTROL. Les backings diagnostic/waveform, FIFO, Recorder,
-Preview, page-cache et projections Sampler appartiennent a `SHARED_BACKING`.
-Le page-cache n'y est pas masque: `sample_page_cache.c` possede les
+Preview et projections Sampler appartiennent a `SHARED_BACKING`. Le backing du
+page-cache Stream est local au domaine Sampler monocoeur.
+`sample_page_cache.c` possede les
 metadonnees, index, reservations et publications READY dans `DOMAIN_STORAGE`;
-`sample_page_cache_audio.c` possede les credits et acces AUDIO. Le port H747
-ne change que leur placement physique. Les appels CONTROL vers AUDIO ne passent
+`sample_page_cache_audio.c` possede les credits et acces AUDIO. Ces unites sont
+exclues du compile-check Cortex-M4 historique. Les appels CONTROL vers AUDIO ne passent
 que par `Inc/IPC`; le compile-check Cortex-M4 interdit toute dependance vers
 `Inc/Audio`, `Src/Audio` et les DSP tiers. Le firewall CONTRACTS refuse en plus
 les headers prives CONTROL/AUDIO et les anciennes APIs owner-specific sorties de

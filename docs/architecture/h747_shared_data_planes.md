@@ -1,5 +1,10 @@
 # Contrat des data planes CONTROL/AUDIO/STORAGE
 
+> Historique pour les data planes encore partages. Depuis la simplification
+> monocoeur, les sections relatives au Streamer M7/M4 sont remplacees par
+> `stream_need_contract.md`: leases, metadata, scheduler et I/O Stream sont
+> locaux au meme M7 sur H743 et RT1172.
+
 Ce document est l'inventaire normatif des donnees volumineuses partagees. La
 FIFO fonctionnelle n'est pas un data plane. Les adresses C obtenues apres
 resolution locale d'un ID ne font jamais partie de l'ABI M4/M7.
@@ -11,7 +16,7 @@ resolution locale d'un ID ne font jamais partie de l'ABI M4/M7.
 | Sample RAM | M4 loader -> M7 voices | payload dans le page pool; registry non-cacheable `AUDIO_SHARED_REGISTRY_SDRAM`; map ID dans `D2_IPC` | `global_slot`, `ram_slot`, generation et `{region, offset, length}` | payload clean, descriptor immutable, DMB, map `global_slot -> ram_slot` | stop PROGRAM/PARAM, fin des credits lecteurs, withdraw generation, puis pages libres |
 | Wavetable/mipmaps | M4 loader -> M7 Wave | payload dans le page pool; registry non-cacheable de 16 896 octets | slot, generation et refs `{region, offset, length}` par bande; aucun `float *` partage | payload clean, descriptor/bandes, DMB, `ready` publie en dernier | stop des voix + fence fonctionnelle, remove generation, puis pages libres |
 | Multi | M4 loader/projection -> M7 Sampler | projection non-cacheable `AUDIO_SHARED_MULTI_SDRAM` (47 104 octets) + instruments compacts `D2_IPC` | zones et sources numeriques, IDs sample/instrument, offsets fichier; aucun path/pointeur | samples/zones immutables, DMB, instrument `ready` publie en dernier | stop instrument + fin des credits page, withdraw, puis catalogue/pages recyclables |
-| STREAM pages | M4 Storage -> M7 readers | payload cacheable `.sdram_sample_page_pool`, 24 641 536 octets | descriptor M4 avec `data_offset`; token I/O pointer-free; resolution locale seulement | decode dans page, clean payload, clean descriptor, etat `READY` en dernier | un lease seqlocke par lecteur; `EVICTING` puis relecture de leur union avant recyclage |
+| STREAM pages | STORAGE M7 -> AUDIO IRQ M7 | payload cacheable `.sdram_sample_page_pool`, 24 641 536 octets | backing et tokens locaux | maintenance CPU/DMA, `DMB`, etat `READY` en dernier | un lease seqlocke par lecteur; `EVICTING` puis relecture de leur union avant recyclage |
 | Preview PCM | M4 Preview -> M7 MAIN | ring non-cacheable `AUDIO_STORAGE_SHARED_SDRAM`, 2048 x 2 floats (16 384) + deux curseurs `D3_IPC` | samples seulement, aucun pointeur | payload, DMB, `write_count` M4 | M7 publie uniquement `read_count`; active/gain sont AUDIO-locaux via PARAM, sans epoch ni reset croise |
 | Recorder FLOAT32 | M7 AUDIO -> M4 Storage/SD | ring cacheable `SDRAM_RECORDER_RING`, 12 032 x 2 x 32 bits (96 256) + layout 20 octets `D3_IPC` | `head_cursor`, `started_session`, `tail_cursor`, `closed_session`, `capture_fault`; aucun config/etat fonctionnel partage | AUDIO remet le curseur a zero, DMB, publie `started_session`; puis H743: FLOAT32, DMB, `head_cursor`; H747: clean FLOAT32, DMB, `head_cursor`. STORAGE ignore les curseurs avant le START de la session courante. | M4 ecrit seulement `tail_cursor` apres commit du DMA direct depuis le ring |
 | REC_SOURCE | M4 Recorder -> M7 Streamer | workspaces A/B et pages STREAM existantes | snapshot `{key, frame_count, registration_epoch}`; aucun pointeur | building prechauffe puis publication atomique current | ancienne generation retiree apres extinction des leases |
@@ -54,13 +59,12 @@ clean/invalidate explicite.
 
 ## Synchronisation
 
-Les compteurs SPSC ont un seul writer par direction. Le page cache separe
-physiquement les metadata M4 dans `sample_page_cache.c` des resolutions
-lecteurs M7 dans `sample_page_cache_audio.c`. M7 ne modifie jamais un
-descriptor: il publie d'abord son lease, puis revalide le descriptor. M4
-recycle seulement apres `EVICTING` et une relecture stable de tous les leases.
-Les sections PRIMASK restantes dans `sample_page_cache.c` serialisent seulement
-des writers M4 locaux; elles ne fournissent aucune exclusion inter-core. Le
+Les compteurs SPSC ont un seul writer par direction. Pour le Streamer,
+`sample_page_cache.c` et `sample_page_cache_audio.c` partagent un backing local
+M7. AUDIO publie d'abord son lease; STORAGE recycle seulement apres
+`EVICTING` et une relecture stable de tous les leases. Les sections PRIMASK
+serialisent les transitions avec l'IRQ AUDIO; aucune exclusion inter-core ni
+maintenance de cache inter-core ne subsiste sur ce chemin. Le
 Recorder n'installe plus de callback `__disable_irq()` dans le generic recorder.
 
 STREAM conserve sa politique de besoins/credits et son scheduler. Recorder,
@@ -99,9 +103,9 @@ M7 publie une seule classe de protection physique: un lease par lecteur,
 pin, use-count, owner token ou snapshot de voix ne subsiste.
 
 Il ne publie ni low-water, ni deadline, ni vitesse ni wake. Les quatre slots
-sont le besoin I/O explicite; M4 les consomme sans lookahead derive et possede
-scheduler, reservations et lectures SD.
-`STREAM M7->M4 = LEASES/BESOINS PHYSIQUES UNIQUEMENT : OUI`.
+sont le besoin I/O explicite; le service STORAGE du meme M7 les consomme sans
+lookahead derive et possede scheduler, reservations et lectures SD.
+`STREAM inter-core : AUCUN`.
 
 Les slots ne decrivent aucune phase musicale. Ils changent seulement lorsque
 l'ensemble des pages encore lisibles change: bind, entree de page, wrap,

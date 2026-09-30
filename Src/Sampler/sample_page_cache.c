@@ -1,16 +1,13 @@
 #include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_page_cache_shared_contract.h"
+#include "Sampler/sample_page_cache_backing.h"
 
 #include <string.h>
 
 #include "Platform/memory_layout.h"
-#include "Platform/cache_maintenance.h"
-#include "Platform/intercore_cache.h"
 #include "Storage/audio_recorder.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "Sampler/sample_page_lease_control.h"
 #include "Sampler/sample_stream_manager.h"
-#include "Sampler/sample_stream_transport.h"
 #include "Platform/stream_rec_perf.h"
 #include "Storage/waveform_service.h"
 #include "SD/sd_block_device.h"
@@ -22,7 +19,7 @@ _Static_assert((SAMPLE_PAGE_SLOT_FLOAT_CAPACITY * sizeof(float)) == SAMPLE_PAGE_
                "sample page slot must remain exactly one physical page");
 #endif
 
-typedef sample_page_shared_descriptor_t sample_page_desc_t;
+typedef sample_page_backing_descriptor_t sample_page_desc_t;
 
 typedef struct
 {
@@ -51,18 +48,16 @@ typedef struct
     uint8_t physical_only;
 } sample_page_sample_desc_t;
 
-typedef sample_page_shared_index_entry_t sample_page_index_entry_t;
+typedef sample_page_backing_index_entry_t sample_page_index_entry_t;
 
 static CTRL_STATE sample_page_cache_state_t g_sample_page_cache_state;
-CONTROL_STREAM_META_SDRAM static sample_page_sample_desc_t g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
+SDRAM_PAGE_META static sample_page_sample_desc_t
+    g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_reserved_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_free_cursor;
 static CTRL_STATE uint16_t g_sample_page_evict_cursor;
 
-#define g_sample_page_desc g_sample_page_shared_descriptor
-#define g_sample_page_data g_sample_page_shared_data
-#define g_sample_page_last_slot g_sample_page_shared_last_slot
-#define g_sample_page_index g_sample_page_shared_index
+#define g_sample_page_desc g_sample_page_descriptor
 
 
 /* CONTROL-owned index, registry, lifecycle and reservations

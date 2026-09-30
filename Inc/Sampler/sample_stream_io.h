@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+#define SAMPLE_STREAM_IO_JOB_CAPACITY (2U)
+
 typedef struct
 {
     sample_audio_key_t key;
@@ -36,6 +38,7 @@ typedef struct
     sample_page_load_result_t load_result;
     uint32_t source_bytes;
     uint32_t read_bytes;
+    uint32_t request_cycles;
 } sample_stream_io_result_t;
 
 typedef enum
@@ -48,13 +51,14 @@ typedef enum
 
 void sample_stream_io_init(void);
 void sample_stream_io_reset(void);
-void sample_stream_io_release_key(sample_audio_key_t key);
-uint32_t sample_stream_io_active_reader_count(void);
 uint8_t sample_stream_io_set_read_chunk_kib(sample_stream_read_chunk_kib_t chunk_kib);
 sample_stream_read_chunk_kib_t sample_stream_io_get_read_chunk_kib(void);
 uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command);
-uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command);
 uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result);
+uint32_t sample_stream_io_active_job_count(void);
+uint8_t sample_stream_io_key_busy(sample_audio_key_t key);
+void sample_stream_io_execute_local(const sample_stream_io_command_t *command,
+                                    sample_stream_io_result_t *out_result);
 void sample_stream_io_cancel(void);
 uint8_t sample_stream_io_command_init(sample_stream_io_command_t *out_command,
                                       const sample_page_load_token_t *token,

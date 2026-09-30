@@ -3,7 +3,6 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
-#include "Sampler/sample_stream_transport.h"
 #include "Storage/sd_access_gate.h"
 #include "Platform/memory_layout.h"
 #include "SD/sd_scheduler_runtime.h"
@@ -23,9 +22,8 @@ void brick6_stream_service_task_init(void)
 
 void brick6_stream_service_task_poll(void)
 {
-    /* H743 local worker adapter. On H747 this whole service belongs to M4. */
+    /* Monocore Storage service: advance DMA, then consume/submit local jobs. */
     sd_scheduler_runtime_service();
-    sample_stream_transport_worker_poll();
     const uint8_t pending = brick6_stream_service_task_update_gate();
     if (pending == 0U)
     {
@@ -40,6 +38,5 @@ void brick6_stream_service_task_poll(void)
 
     sample_cache_service(BRICK6_STREAM_SERVICE_BYTE_BUDGET);
     sd_scheduler_runtime_service();
-    sample_stream_transport_worker_poll();
     brick6_stream_service_task_update_gate();
 }

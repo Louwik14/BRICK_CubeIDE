@@ -1,5 +1,8 @@
 # Contrat physique AUDIO vers CONTROL
 
+> Historique hors Streamer. Le Streamer est desormais entierement local au M7;
+> son contrat courant est defini par `stream_need_contract.md`.
+
 ## Verdict architectural
 
 La musique est strictement M4 vers M7 par la FIFO fonctionnelle unique. Les
@@ -46,7 +49,7 @@ CONTROL. La valeur DSP privee n'est plus publiee ni relue par UI/CONTROL.
 | Sample RAM | M4/Storage | M7/AUDIO | slot retire apres fence `tail`; token de load protege les completions SD tardives |
 | Wavetable/mipmaps | M4/Storage | M7/AUDIO | projection immutable; pages liberees apres fence `tail`; generation de load/registry physique conservee |
 | Multi descriptors/pages | M4/Storage | M7/AUDIO | `RETIRING` bloque toute nouvelle programmation; la projection reste resolvable jusqu'au `MULTI_RESOURCE_STOP`, puis le slot n'est libere qu'apres franchissement wrap-safe du `head` capture par `tail` et extinction des leases |
-| STREAM pages | M4/Storage | M7/AUDIO | cache partage; un lease par lecteur, union M4, `EVICTING` puis relecture; aucun pin/use-count/refcount |
+| STREAM pages | M7/STORAGE | M7/AUDIO | backing local; un lease seqlocke par lecteur, `EVICTING` puis relecture; aucun transport inter-core |
 | Preview PCM | M4/Storage | M7/AUDIO | ring SPSC separe; reutilisation par consumer tail |
 | Recorder FLOAT32 | M7/AUDIO | M4/Storage | ring SPSC; M7 head `accepted_frames`, M4 tail `released_frames`; stop fixe le head final |
 | REC_SOURCE | M4/Storage | M7/AUDIO | snapshot immutable current; generation A/B retiree apres extinction des leases |

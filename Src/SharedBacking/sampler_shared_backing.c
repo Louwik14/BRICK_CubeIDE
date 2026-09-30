@@ -5,23 +5,9 @@
 #include "IPC/sampler_ram_audio_projection_contract.h"
 #include "IPC/sampler_ram_playhead_contract.h"
 #include "Platform/memory_layout.h"
-#include "Sampler/sample_page_cache_shared_contract.h"
-#include "Sampler/sample_page_lease.h"
 
 /* Physical storage only.  Initialization and publication remain in the
  * STORAGE/AUDIO owners declared by the contracts above. */
-D2_IPC sample_page_lease_t
-    g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];
-
-CONTROL_STREAM_META_SDRAM sample_page_shared_descriptor_t
-    g_sample_page_shared_descriptor[SAMPLE_PAGE_MAX_COUNT];
-AUDIO_SHARED_PAGE_PAYLOAD_SDRAM float g_sample_page_shared_data
-    [SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_SLOT_FLOAT_CAPACITY];
-D2_IPC volatile uint16_t
-    g_sample_page_shared_last_slot[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
-CONTROL_STREAM_INDEX_SDRAM sample_page_shared_index_entry_t
-    g_sample_page_shared_index[SAMPLE_PAGE_INDEX_SIZE];
-
 AUDIO_STATE_SHARED_SDRAM sample_classic_audio_source_t
     g_sample_classic_audio_source[SAMPLE_CLASSIC_CAPACITY];
 AUDIO_STATE_SHARED_SDRAM rec_source_projection_t g_rec_source_projection;
@@ -44,10 +30,6 @@ D2_IPC sampler_ram_playhead_slot_t
 AUDIO_STATE_SHARED_SDRAM audio_wavetable_registry_slot_t
     g_audio_wavetable_registry[WAVETABLE_POOL_MAX_SLOTS];
 
-_Static_assert(sizeof(sample_page_shared_descriptor_t) == 60U,
-               "Page descriptor ABI changed");
-_Static_assert(sizeof(sample_page_shared_index_entry_t) == 20U,
-               "Page index ABI changed");
 _Static_assert(sizeof(sample_classic_audio_snapshot_t) == 28U,
                "Classic snapshot ABI changed");
 _Static_assert(sizeof(sample_classic_audio_source_t) == 60U,

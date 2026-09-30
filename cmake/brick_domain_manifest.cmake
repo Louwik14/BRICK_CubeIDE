@@ -208,15 +208,14 @@ set(DOMAIN_STORAGE
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sd_access_gate.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_cache.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache_backing.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache_port.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_lease_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_backend_physical.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_fatfs_map.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_io.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_manager.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_publish.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_scheduler.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_transport.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/brick6_stream_service_task.c"
 )
 

@@ -3,7 +3,6 @@
 #include "Storage/wav_convert.h"
 #include "ControlRT/audio_state_snapshot_control.h"
 #include "Storage/audio_recorder.h"
-#include "Sampler/sample_stream_transport.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/persistent_fatfs_io.h"

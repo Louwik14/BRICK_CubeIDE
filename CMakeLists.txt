@@ -226,7 +226,6 @@ set(DOMAIN_CONTRACT_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_reader_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_page_cache_config.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_page_cache_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_page_cache_shared_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_page_lease.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Track/entity_types.h")
 
@@ -281,10 +280,23 @@ source_group("Domains/CONTRACTS" FILES ${DOMAIN_CONTRACTS} ${DOMAIN_CONTRACT_HEA
 source_group("Domains/SHARED_BACKING" FILES ${SHARED_BACKING})
 source_group("Domains/PLATFORM_H743" FILES ${PLATFORM_H743})
 
-# CONTROL and STORAGE are compiled for their future Cortex-M4 ISA and their
-# transitive include graphs are rejected when they reach AUDIO-private surfaces.
+# Legacy CONTROL/STORAGE portability checks exclude the monocore Streamer,
+# whose AUDIO IRQ and cooperative STORAGE service now share one M7 image.
 set(DOMAIN_CONTROL_CM4 ${DOMAIN_CONTROL_BUILD} ${DOMAIN_STORAGE_BUILD})
 list(FILTER DOMAIN_CONTROL_CM4 INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
+set(STREAMER_MONOCORE_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_cache.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache_backing.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache_port.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_lease_control.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_backend_physical.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_fatfs_map.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_io.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_manager.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_scheduler.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/brick6_stream_service_task.c")
+list(REMOVE_ITEM DOMAIN_CONTROL_CM4 ${STREAMER_MONOCORE_SOURCES})
 
 # --------------------------------------------------------------------------
 # Include directories

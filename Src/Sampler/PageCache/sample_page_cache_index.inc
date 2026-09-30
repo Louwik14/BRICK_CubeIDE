@@ -134,8 +134,8 @@ static void sample_page_cache_index_put_key(sample_audio_key_t key, uint32_t pag
         if ((entry->used == 1U) && (sample_audio_key_equal(&entry->key, &key) != 0U)
             && (entry->page_index == page_index))
         {
+            __DMB();
             entry->slot_index = slot_index;
-            intercore_cache_publish(entry, sizeof(*entry));
             return;
         }
         if ((entry->used == 2U) && (first_deleted == UINT32_MAX))
@@ -146,11 +146,11 @@ static void sample_page_cache_index_put_key(sample_audio_key_t key, uint32_t pag
         {
             sample_page_index_entry_t *const dst =
                 (first_deleted != UINT32_MAX) ? &g_sample_page_index[first_deleted] : entry;
-            dst->used = 1U;
             dst->key = key;
-    dst->page_index = page_index;
-    dst->slot_index = slot_index;
-    intercore_cache_publish(dst, sizeof(*dst));
+            dst->page_index = page_index;
+            dst->slot_index = slot_index;
+            __DMB();
+            dst->used = 1U;
             return;
         }
     }
@@ -158,11 +158,11 @@ static void sample_page_cache_index_put_key(sample_audio_key_t key, uint32_t pag
     if (first_deleted != UINT32_MAX)
     {
         sample_page_index_entry_t *const dst = &g_sample_page_index[first_deleted];
-        dst->used = 1U;
         dst->key = key;
         dst->page_index = page_index;
         dst->slot_index = slot_index;
-        intercore_cache_publish(dst, sizeof(*dst));
+        __DMB();
+        dst->used = 1U;
     }
 }
 
@@ -181,7 +181,7 @@ static void sample_page_cache_index_remove_key(sample_audio_key_t key, uint32_t 
             && (entry->page_index == page_index))
         {
             entry->used = 2U;
-            intercore_cache_publish(entry, sizeof(*entry));
+            __DMB();
             return;
         }
     }
@@ -209,15 +209,10 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
 
     if ((state == SAMPLE_PAGE_FAILED) && (page->state != SAMPLE_PAGE_FAILED))
         PERF_COUNT(PERF_N_PAGE_FAILED);
-    if (state == SAMPLE_PAGE_READY)
-    {
-        const float *const payload = sample_page_cache_data_resolve(page);
-        const size_t payload_bytes = (size_t)page->frame_count
-            * page->stride_floats * sizeof(float);
-        intercore_cache_publish(payload, payload_bytes);
-    }
+    /* Publish descriptor and CPU/DMA-visible payload before the state edge.
+     * DMA cache maintenance remains owned by sd_block_device. */
+    __DMB();
     page->state = state;
-    intercore_cache_publish(page, sizeof(*page));
 }
 
 static uint8_t sample_page_cache_claim_for_recycle(sample_page_desc_t *page)

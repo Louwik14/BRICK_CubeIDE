@@ -7,7 +7,7 @@
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_port.h"
 #include "Sampler/sample_stream_manager.h"
-#include "Sampler/sample_stream_transport.h"
+#include "Sampler/sample_stream_io.h"
 #include "Sampler/sample_cache.h"
 #include "Storage/project_control.h"
 #include "Seq/seq_runtime.h"
@@ -761,7 +761,7 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
     for (uint32_t i = 0U; i < target_count; ++i)
     {
         sample_stream_io_result_t result;
-        sample_stream_transport_execute_monocore(&commands[i], &result);
+        sample_stream_io_execute_local(&commands[i], &result);
         const uint8_t published = sample_page_cache_port_complete(&result);
         if ((result.load_result != SAMPLE_PAGE_LOAD_OK) || (published == 0U))
         {
@@ -854,12 +854,10 @@ void multi_sample_service_load(uint32_t byte_budget)
 
     if ((ok != 0U) && (plan->pages_remaining == 0U))
     {
-        sample_stream_io_release_key(sample_audio_key_multi(plan->sample_id));
         g_multi_bulk.current_plan++;
     }
     if (ok == 0U)
     {
-        sample_stream_io_release_key(sample_audio_key_multi(plan->sample_id));
         multi_loader_set_error(MULTI_SAMPLE_LOAD_PAGE_ERROR, plan->sample_id);
     }
 }
@@ -901,11 +899,6 @@ uint8_t multi_sample_cancel_load(void)
         return 0U;
     }
 
-    if (g_multi_bulk.current_plan < g_multi_bulk.plan_count)
-    {
-        sample_stream_io_release_key(sample_audio_key_multi(
-            g_multi_bulk_plans[g_multi_bulk.current_plan].sample_id));
-    }
     multi_loader_set_error(MULTI_SAMPLE_LOAD_CANCELLED,
                            (g_multi_bulk.current_plan < g_multi_bulk.plan_count)
                                ? g_multi_bulk_plans[g_multi_bulk.current_plan].sample_id
