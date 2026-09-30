@@ -20,7 +20,7 @@
 #include "Audio/Engines/wavetable_engine.h"
 #include "Audio/Engines/audio_engine_dispatch.h"
 #include "Audio/audio_rec_bus_runtime.h"
-#include "IPC/audio_recorder_capture.h"
+#include "Recorder/audio_recorder_ring.h"
 #include "Audio/audio_recorder_capture_audio.h"
 #include "Audio/live_parameter_audio_runtime.h"
 #include "Audio/audio_waveform_capture_audio.h"
@@ -394,10 +394,9 @@ static uint8_t audio_command_apply_record(const control_audio_command_t *command
         return 0U;
     if (CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_RECORD_START)
     {
-        return audio_recorder_capture_audio_start(command->entity,
-            command->id, command->value);
+        return audio_recorder_capture_audio_start(command->id, command->value);
     }
-    return audio_recorder_capture_audio_stop(command->entity, command->id);
+    return audio_recorder_capture_audio_stop(command->id);
 }
 
 static uint8_t audio_command_apply_panic(const control_audio_command_t *command)

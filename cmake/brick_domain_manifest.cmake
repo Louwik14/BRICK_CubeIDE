@@ -203,8 +203,7 @@ set(DOMAIN_STORAGE
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/sd_scheduler_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_recorder_wav.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_recorder_storage.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/generic_recorder.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/generic_recorder_adapters.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_recorder_writer.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/recorder_file_reservation.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sd_access_gate.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_cache.c"
@@ -339,7 +338,7 @@ set(DOMAIN_CONTRACTS ${DOMAIN_CONTRACT_UNITS})
 set(SHARED_BACKING
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_boot_diagnostic.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_rec_level_layout.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_recorder_capture.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Recorder/audio_recorder_ring.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_waveform_layout.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/sd_preview_ring.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/synth_waveform_layout.c"

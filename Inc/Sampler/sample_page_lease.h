@@ -53,6 +53,7 @@ typedef struct
 } sample_page_lease_t;
 
 extern sample_page_lease_t g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];
+extern volatile uint32_t g_sample_page_lease_active_mask[2];
 
 static inline uint8_t sample_page_lease_classic_slot(uint8_t reader)
 {

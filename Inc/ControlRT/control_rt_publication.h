@@ -49,8 +49,8 @@ uint8_t control_rt_publish_param_now(uint8_t entity, uint16_t param_id,
 uint8_t control_rt_publish_note(uint8_t entity, uint8_t kind,
                                 uint32_t output_id, uint8_t note,
                                 uint8_t velocity, uint64_t sample_time);
-uint8_t control_rt_publish_record(uint8_t kind, uint32_t session_id,
-                                  uint32_t config, uint8_t client,
+uint8_t control_rt_publish_record(uint8_t kind, uint32_t value,
+                                  uint32_t session_id,
                                   uint64_t sample_time);
 uint8_t control_rt_publish_panic(uint8_t kind, uint8_t entity,
                                  uint64_t sample_time);

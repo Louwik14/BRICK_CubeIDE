@@ -30,7 +30,8 @@ STREAM, low-water dynamique ou prediction temporelle ne conditionne le service.
 Le contrat produit garantit un pre-socle d'une page 0 READY, soit 8192 frames
 stereo. Au demarrage cette page est `CURRENT`: elle ne s'ajoute pas a la
 fenetre runtime. Chaque reader garantit au plus quatre pages physiques
-distinctes, pour 24 readers, soit 96 pages reservees. Les limites
+distinctes, pour 8 readers musicaux et un reader overdub reserve, soit 36 pages
+reservees (32 + 4). Les limites
 Classic/Multi/REC_SOURCE sont publiees avant jeu. Il n'existe ni READY par
 note, ni ACK START, ni retry, rollback ou fallback musical. Un underrun dans ce
 workload est une rupture de contrat, pas une admission tardive.

@@ -195,8 +195,6 @@ set(DOMAIN_CONTRACT_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Mod/mod_lfo_types.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Mod/mod_destination_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_rec_bus_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_recorder_capture.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_recorder_capture_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_rec_level_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_boot_diagnostic.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_boot_diagnostic_layout.h"

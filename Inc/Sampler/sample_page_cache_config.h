@@ -49,10 +49,16 @@
 #define SAMPLE_PAGE_CACHE_ID_CAPACITY         (SAMPLE_PAGE_CACHE_REC_ID_BASE \
                                                + SAMPLE_PAGE_CACHE_REC_ID_CAPACITY)
 #define SAMPLE_PAGE_CACHE_MAX_SAMPLES         (SAMPLE_PAGE_CACHE_ID_CAPACITY)
-/* 15 forward Stream lanes + 8 Multi physical voices + REC overdub. */
-#define SAMPLE_PAGE_CACHE_GUARANTEED_READERS  SAMPLE_STREAM_IO_MAX_READERS
+/* Identifier capacity remains independent; runtime guarantees eight shared
+ * musical readers plus the dedicated Recorder overdub reader. */
+#define SAMPLE_PAGE_CACHE_MUSICAL_RESERVE_PAGES \
+    (SAMPLE_STREAM_TARGET_MAX_VOICES * SAMPLE_PAGE_READER_WINDOW_PAGES)
+#define SAMPLE_PAGE_CACHE_OVERDUB_RESERVE_PAGES \
+    (SAMPLE_STREAM_RESERVED_OVERDUB_READERS * SAMPLE_PAGE_READER_WINDOW_PAGES)
+#define SAMPLE_PAGE_CACHE_GUARANTEED_READERS SAMPLE_STREAM_ACTIVE_READER_CAPACITY
 #define SAMPLE_PAGE_PRODUCT_READER_RESERVE_PAGES \
-    (SAMPLE_PAGE_CACHE_GUARANTEED_READERS * SAMPLE_PAGE_READER_WINDOW_PAGES)
+    (SAMPLE_PAGE_CACHE_MUSICAL_RESERVE_PAGES \
+     + SAMPLE_PAGE_CACHE_OVERDUB_RESERVE_PAGES)
 #define SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES SAMPLE_PAGE_PRODUCT_READER_RESERVE_PAGES
 #define SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES \
     (SAMPLE_PAGE_MAX_COUNT - SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES)
@@ -139,11 +145,17 @@ static inline uint8_t sample_page_slot_is_voice_window_pool(uint32_t slot)
 #if (SAMPLE_PAGE_READER_WINDOW_PAGES != 4U)
 #error "Streamer reader window must expose four page roles"
 #endif
-#if (SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES != 96U)
-#error "Runtime reserve must cover 24 readers x 4 pages"
+#if (SAMPLE_PAGE_CACHE_MUSICAL_RESERVE_PAGES != 32U)
+#error "Musical runtime reserve must cover 8 readers x 4 pages"
 #endif
-#if (SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES != 280U)
-#error "Global page cache must retain 280 physical pages"
+#if (SAMPLE_PAGE_CACHE_OVERDUB_RESERVE_PAGES != 4U)
+#error "Recorder overdub reserve must cover one reader x 4 pages"
+#endif
+#if (SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES != 36U)
+#error "Runtime reserve must cover 9 active readers x 4 pages"
+#endif
+#if (SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES != 340U)
+#error "Global page cache must retain 340 physical pages"
 #endif
 #if (SAMPLE_CLASSIC_CAPACITY > SAMPLE_PAGE_CACHE_ID_CAPACITY)
 #error "sample cache hot capacity must fit in page-cache id capacity"

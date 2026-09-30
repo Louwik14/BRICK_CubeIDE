@@ -5,6 +5,15 @@
 #include "stm32h7xx.h"
 #include "Platform/stream_rec_perf.h"
 
+void sample_page_lease_control_active_slots(uint32_t out_mask[2])
+{
+    if (out_mask == NULL) return;
+    __DMB();
+    out_mask[0] = g_sample_page_lease_active_mask[0];
+    out_mask[1] = g_sample_page_lease_active_mask[1];
+    __DMB();
+}
+
 uint8_t sample_page_lease_control_read(uint8_t slot,
                                        sample_page_lease_t *out)
 {

@@ -66,23 +66,24 @@ Sur H743, les objets IPC restants resident dans la moitie haute de SRAM4
 `0x38008000..0x3800FFFF`, shareable et non-cacheable. Le Streamer n'en fait
 plus partie: leases et index rapide sont locaux au M7 en D2 cacheable,
 metadata et payloads restent dans leurs arenas SDRAM. La maintenance cache des
-pages Stream appartient uniquement a la frontiere CPU/DMA. La projection
-complete du Recorder reste dans la zone SDRAM partagee non-cacheable. Le
+pages Stream appartient uniquement a la frontiere CPU/DMA. Le ring Recorder
+reste dans son arena SDRAM cacheable et son etat SPSC local reside en DTCM. La
 transaction AUDIO reside dans la SDRAM CONTROL cacheable locale. Elle ne porte
 ni generation, ni checksum, ni magic, ni maintenance de cache inter-coeur.
 `DMB` ordonne sa publication vers l'IRQ et le franchissement du `tail` protege
-sa duree de vie. La zone Recorder de 256 KiB est shareable non-cacheable; les
-buffers DMA SAI sont en D2 non-cacheable.
+sa duree de vie. La zone historique
+`.sdram_recorder` de 256 KiB reste shareable non-cacheable pour les autres
+registries; les buffers DMA SAI sont en D2 non-cacheable.
 
 Les principaux sens sont:
 
 ```text
 CONTROL -> AUDIO : FIFO unique PROGRAM, PARAM, NOTE, TRANSPORT, RECORD, PANIC et requetes visuelles typees; data planes volumineux separes
-AUDIO -> CONTROL : niveau REC, waveforms audio/synth et diagnostic Audio; plus les retours physiques Recorder hors IPC fonctionnel
-Storage <-> AUDIO : leases locaux, etats/generations de page et payloads bornes
+AUDIO -> CONTROL : niveau REC, waveforms audio/synth et diagnostic Audio
+Storage <-> AUDIO : rings et leases locaux, etats/generations de page et payloads bornes
 ```
 
-Preview est un ring PCM SPSC M4->M7: CONTROL possede payload/`write_count`, AUDIO `read_count` et le gain/active local applique par PARAM. Recorder est le ring inverse: AUDIO possede payload/`head_cursor`/fermeture/fault, CONTROL uniquement `tail_cursor`, writer et erreurs SD. Le Streamer AUDIO date son DSP avec la media clock TIM5 canonique. Le transport et le REC bus sont des runtimes AUDIO locaux alimentes par TRANSPORT/PARAM; aucun snapshot parallele n'en revient. FILTER POS affiche la valeur CONTROL canonique; aucune valeur DSP n'est une autorite UI.
+Preview est un ring PCM SPSC M4->M7: CONTROL possede payload/`write_count`, AUDIO `read_count` et le gain/active local applique par PARAM. Recorder est monocoeur: AUDIO IRQ possede payload/`produced_frames`/fermeture/fault, STORAGE superloop possede `released_frames`, writer et erreurs SD. Le Streamer AUDIO date son DSP avec la media clock TIM5 canonique. Le transport et le REC bus sont des runtimes AUDIO locaux alimentes par TRANSPORT/PARAM; aucun snapshot parallele n'en revient. FILTER POS affiche la valeur CONTROL canonique; aucune valeur DSP n'est une autorite UI.
 
 Au boot, `track_state` est initialise avant la projection finale `track_runtime`; le bridge Hall/keyboard et son focus sont ensuite initialises et synchronises depuis cette autorite canonique. PLAY/PAUSE ou une reconfiguration moteur ne font pas partie du protocole d'activation Hall.
 

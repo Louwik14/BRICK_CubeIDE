@@ -385,6 +385,12 @@ void sample_voice_reader_reset(sample_voice_reader_t *reader)
     sample_voice_reader_release_audio_cursor(state);
     if (state->lease_valid != 0U)
         sample_page_lease_audio_clear(state->lease_slot);
+    if (state->musical_credit != 0U)
+    {
+        if (g_sample_voice_reader_musical_credits != 0U)
+            --g_sample_voice_reader_musical_credits;
+        state->musical_credit = 0U;
+    }
     memset(state, 0, sizeof(*state));
 }
 
@@ -458,6 +464,24 @@ uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
         return 0U;
     }
 
+    return 1U;
+}
+
+uint8_t sample_voice_reader_bind_musical_play_plan(sample_voice_reader_t *reader,
+                                                   const sample_play_plan_t *plan,
+                                                   uint8_t reader_id)
+{
+    if (reader == 0)
+        return 0U;
+    const sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    if ((state->musical_credit == 0U)
+        && (g_sample_voice_reader_musical_credits
+            >= SAMPLE_STREAM_TARGET_MAX_VOICES))
+        return 0U;
+    if (sample_voice_reader_bind_play_plan(reader, plan, reader_id) == 0U)
+        return 0U;
+    sample_voice_reader_state(reader)->musical_credit = 1U;
+    ++g_sample_voice_reader_musical_credits;
     return 1U;
 }
 

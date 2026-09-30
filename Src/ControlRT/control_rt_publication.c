@@ -9,7 +9,6 @@
 #include "Track/track_runtime.h"
 #include "Track/entity_types.h"
 #include "Param/param_ids.h"
-#include "IPC/audio_recorder_capture_contract.h"
 #include "IPC/audio_rec_bus_contract.h"
 #include "IPC/audio_wave_table_projection.h"
 #include "ControlRT/audio_state_transaction.h"
@@ -169,8 +168,7 @@ static uint8_t control_rt_command_is_structural(
             return kind <= CONTROL_AUDIO_TRANSPORT_LOCATE;
         case CONTROL_AUDIO_COMMAND_RECORD:
             if (kind > CONTROL_AUDIO_RECORD_START) return 0U;
-            return (uint8_t)((command->entity == AUDIO_RECORDER_CLIENT_AUDIO_REC)
-                && (command->id != 0U)
+            return (uint8_t)((command->entity == 0U) && (command->id != 0U)
                 && ((kind == CONTROL_AUDIO_RECORD_STOP)
                     || (command->value != 0U)));
         case CONTROL_AUDIO_COMMAND_PANIC:
@@ -639,12 +637,12 @@ uint8_t control_rt_publish_note(uint8_t entity, uint8_t kind,
     return control_rt_publish(&c);
 }
 
-uint8_t control_rt_publish_record(uint8_t kind, uint32_t session_id,
-                                  uint32_t config, uint8_t client,
+uint8_t control_rt_publish_record(uint8_t kind, uint32_t value,
+                                  uint32_t session_id,
                                   uint64_t sample_time)
 {
     const control_audio_command_t c = { .effective_sample_time = sample_time,
-        .value = session_id, .id = (uint16_t)config, .entity = client,
+        .value = value, .id = (uint16_t)session_id, .entity = 0U,
         .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_RECORD,
             kind) };
     return control_rt_publish(&c);

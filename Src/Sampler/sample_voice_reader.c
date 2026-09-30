@@ -29,10 +29,14 @@ typedef struct
     sample_play_plan_t plan;
     sample_audio_cursor_t audio_cursor;
     uint8_t plan_valid;
+    uint8_t musical_credit;
 } sample_voice_reader_state_t;
+
+static uint8_t g_sample_voice_reader_musical_credits;
 
 void sample_voice_reader_init(void)
 {
+    g_sample_voice_reader_musical_credits = 0U;
 }
 
 

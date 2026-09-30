@@ -8,7 +8,7 @@
 #include "Sampler/sample_stream_io.h"
 #include "Sampler/sample_stream_scheduler.h"
 #include "Platform/stream_rec_perf.h"
-#include "IPC/audio_recorder_capture_contract.h"
+#include "Recorder/audio_recorder_ring.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
@@ -38,15 +38,16 @@ void __attribute__((used, externally_visible)) brick_perf_diag_snapshot(void)
     g_stream_rec_perf.count[PERF_N_TEST_ELAPSED_MS] =
         (uint32_t)(HAL_GetTick() - g_perf_reset_tick);
     g_stream_rec_perf.count[PERF_N_REC_RING_FILL] =
-        g_audio_recorder_capture.head_cursor - g_audio_recorder_capture.tail_cursor;
+        g_audio_recorder_ring_state.produced_frames
+            - g_audio_recorder_ring_state.released_frames;
 }
 #endif
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CLASSIC_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
                "stream manager hot scan range must fit in page-cache ids");
-_Static_assert(SAMPLE_STREAM_IO_MAX_READERS <= SAMPLE_CLASSIC_CAPACITY,
-               "active stream readers must be bounded below hot sample capacity");
+_Static_assert(SAMPLE_STREAM_IO_MAX_READERS == 9U,
+               "active readers are eight musical plus Recorder overdub");
 #endif
 static uint8_t g_sample_stream_manager_initialized;
 static uint8_t sample_stream_manager_candidate_for_slot(
@@ -57,6 +58,10 @@ static uint8_t sample_stream_manager_probe_candidate(
     void *context,
     uint8_t slot,
     sample_stream_scheduler_candidate_t *out_candidate);
+typedef struct
+{
+    uint32_t active_mask[2];
+} sample_stream_manager_probe_context_t;
 static uint8_t sample_stream_manager_finish_io(
     sample_stream_io_result_t *io_result);
 static uint8_t sample_stream_manager_submit_prefill(
@@ -183,7 +188,11 @@ static uint8_t sample_stream_manager_probe_candidate(
     uint8_t slot,
     sample_stream_scheduler_candidate_t *out_candidate)
 {
-    (void)context;
+    const sample_stream_manager_probe_context_t *const probe_context = context;
+    if ((probe_context == NULL)
+        || ((probe_context->active_mask[slot >> 5U]
+             & (UINT32_C(1) << (slot & 31U))) == 0U))
+        return 0U;
     return sample_stream_manager_candidate_for_slot(slot, out_candidate, 0);
 }
 
@@ -197,8 +206,10 @@ static uint8_t sample_stream_manager_pick_next(
     }
 
     sample_stream_scheduler_candidate_t candidate;
+    sample_stream_manager_probe_context_t probe_context;
+    sample_page_lease_control_active_slots(probe_context.active_mask);
     if (sample_stream_scheduler_pick(
-            sample_stream_manager_probe_candidate, 0, &candidate) == 0U)
+            sample_stream_manager_probe_candidate, &probe_context, &candidate) == 0U)
     {
         return 0U;
     }
@@ -404,8 +415,12 @@ uint8_t sample_stream_manager_has_pending_sd_work(void)
     {
         return 1U;
     }
+    uint32_t active_mask[2];
+    sample_page_lease_control_active_slots(active_mask);
     for (uint8_t slot = 0U; slot < SAMPLE_PAGE_LEASE_SLOT_COUNT; ++slot)
     {
+        if ((active_mask[slot >> 5U]
+             & (UINT32_C(1) << (slot & 31U))) == 0U) continue;
         uint8_t pending = 0U;
         (void)sample_stream_manager_candidate_for_slot(slot, 0, &pending);
         if (pending != 0U) return 1U;

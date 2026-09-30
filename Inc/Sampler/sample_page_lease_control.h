@@ -9,3 +9,4 @@ uint8_t sample_page_lease_control_protects(sample_audio_key_t key,
                                            uint32_t page_index);
 uint8_t sample_page_lease_control_references_key(sample_audio_key_t key);
 uint8_t sample_page_lease_control_all_released(void);
+void sample_page_lease_control_active_slots(uint32_t out_mask[2]);

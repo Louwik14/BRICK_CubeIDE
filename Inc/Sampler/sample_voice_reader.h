@@ -84,6 +84,7 @@ typedef struct
     sample_play_plan_t plan;
     sample_audio_cursor_t audio_cursor;
     uint8_t plan_valid;
+    uint8_t musical_credit;
 } sample_voice_reader_t;
 
 void sample_voice_reader_init(void);
@@ -95,6 +96,9 @@ void sample_voice_reader_bind(sample_voice_reader_t *reader,
 uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
                                            const sample_play_plan_t *plan,
                                            uint8_t reader_id);
+uint8_t sample_voice_reader_bind_musical_play_plan(sample_voice_reader_t *reader,
+                                                   const sample_play_plan_t *plan,
+                                                   uint8_t reader_id);
 void sample_voice_reader_set_step(sample_voice_reader_t *reader, float step);
 void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos);
 void sample_voice_reader_update_frame_pos(sample_voice_reader_t *reader, uint32_t frame_pos);

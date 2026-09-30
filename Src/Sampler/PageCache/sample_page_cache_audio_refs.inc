@@ -166,39 +166,26 @@ uint8_t sample_page_cache_get_reserved_load_target_domain_range(
     {
         return 0U;
     }
-    for (uint16_t offset_id = 0U; offset_id < object_count; ++offset_id)
+    const uint32_t range_end = (uint32_t)first_object_id + object_count;
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
     {
-        const sample_audio_key_t slot_key = {
-            .domain = domain,
-            .object_id = (uint16_t)(first_object_id + offset_id),
-        };
-        const uint16_t key_slot = sample_page_cache_key_slot(slot_key);
-        if (key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
-        {
+        sample_page_desc_t *const page = &g_sample_page_desc[i];
+        if ((page->state != SAMPLE_PAGE_RESERVED)
+            || (page->key.domain != domain)
+            || (page->key.object_id < first_object_id)
+            || ((uint32_t)page->key.object_id >= range_end))
             continue;
-        }
+
+        const uint16_t key_slot = sample_page_cache_key_slot(page->key);
+        if (key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+            continue;
 
         sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-        if (sample->valid == 0U)
-        {
+        if ((sample->valid == 0U)
+            || (sample_audio_key_equal(&sample->key, &page->key) == 0U))
             continue;
-        }
-        const sample_audio_key_t key = sample->key;
-        if ((key.domain != slot_key.domain)
-                || (key.object_id != slot_key.object_id)) continue;
-
-        for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
-        {
-            sample_page_desc_t *const page = &g_sample_page_desc[i];
-            if ((sample_audio_key_equal(&page->key, &key) == 0U)
-                || (page->state != SAMPLE_PAGE_RESERVED))
-            {
-                continue;
-            }
-
-            return sample_page_cache_get_load_target_key(
-                key, page->page_index, out_target);
-        }
+        return sample_page_cache_get_load_target_key(
+            page->key, page->page_index, out_target);
     }
     return 0U;
 }

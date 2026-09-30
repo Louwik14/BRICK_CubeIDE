@@ -13,18 +13,14 @@ aucune decision musicale:
   capacite SPSC seulement, jamais preuve generique de retrait de ressource;
 - credit STREAM compact par voix: page courante, longueur de fenetre et bornes
   de loop forward;
-- Recorder FLOAT32: ring stereo natif, head de frames produites, tail de frames
-  liberees, session I/O et longueur exacte au stop;
 - niveau REC, waveform audio et waveform synth, chacun avec publisher AUDIO et reader CONTROL separes;
 - diagnostic Audio: boot/error et, pour la charge CPU, uniquement `{valid, avg_permille}`. Le couper
   ne modifie aucune commande, voix, page ou decision CONTROL.
 
-Les retours physiques restent limites au `tail` FIFO, aux credits STREAM et au
-PCM/framing Recorder. Les projections sont limitees au niveau
-REC, aux deux waveforms et au diagnostic Audio. Les boundaries Recorder ne
-necessitent aucun evenement AUDIO vers CONTROL separe: CONTROL publie
-directement le RECORD date; le head final et le framing de session sont des
-faits physiques.
+Les retours physiques restent limites au `tail` FIFO et aux data planes encore
+reellement separes. Les projections sont limitees au niveau REC, aux deux
+waveforms et au diagnostic Audio. Le ring Recorder et son framing sont locaux
+au M7 entre IRQ AUDIO et superloop STORAGE.
 
 ## Cadence et boot
 
@@ -52,7 +48,7 @@ CONTROL. La valeur DSP privee n'est plus publiee ni relue par UI/CONTROL.
 | Multi descriptors/pages | M4/Storage | M7/AUDIO | `RETIRING` bloque toute nouvelle programmation; la projection reste resolvable jusqu'au `MULTI_RESOURCE_STOP`, puis le slot n'est libere qu'apres franchissement wrap-safe du `head` capture par `tail` et extinction des leases |
 | STREAM pages | M7/STORAGE | M7/AUDIO | backing local; un lease seqlocke par lecteur, `EVICTING` puis relecture; aucun transport inter-core |
 | Preview PCM | M4/Storage | M7/AUDIO | ring SPSC separe; reutilisation par consumer tail |
-| Recorder FLOAT32 | M7/AUDIO | M4/Storage | ring SPSC; M7 head `accepted_frames`, M4 tail `released_frames`; stop fixe le head final |
+| Recorder FLOAT32 | M7/AUDIO IRQ | M7/Storage | ring SPSC local; AUDIO publie `produced_frames`, STORAGE `released_frames`; stop fixe le head final |
 | REC_SOURCE | M4/Storage | M7/AUDIO | snapshot immutable current; generation A/B retiree apres extinction des leases |
 
 Les tokens/generations conserves appartiennent aux loads SD, registrations de
@@ -61,6 +57,5 @@ ne valident jamais PROGRAM/PARAM/NOTE et ne reconstruisent aucun etat musical.
 
 ## Compatibilite
 
-H743 utilise exactement les memes contrats via les adaptateurs locaux. H747
-place M4 et M7 de part et d'autre des memes structures pointer-free. Aucun
-handshake, peripheral ou service H747-only n'est requis au nominal.
+Le Recorder et le Streamer sont des data planes monocoeur. Ils ne font plus
+partie du contrat de compatibilite physique M4/M7 ni d'une ABI pointer-free.

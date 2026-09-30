@@ -520,7 +520,8 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     const uint8_t start_fade = brick6_sampler_runtime_begin_declick_tail(track_id, voice);
     sample_voice_reader_reset(&voice->reader);
 
-    if (sample_voice_reader_bind_play_plan(&voice->reader, &play_plan, cache_voice_id) == 0U)
+    if (sample_voice_reader_bind_musical_play_plan(
+            &voice->reader, &play_plan, cache_voice_id) == 0U)
     {
         sample_voice_reader_reset(&voice->reader);
         if (use_shifter != 0U)

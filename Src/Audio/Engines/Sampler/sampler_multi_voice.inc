@@ -587,9 +587,9 @@ brick6_sampler_runtime_start_multi_renderer(uint8_t track_id,
         return BRICK6_SAMPLER_NOTE_INVARIANT;
     }
     sample_voice_reader_reset(&multi_voice->reader);
-    if (sample_voice_reader_bind_play_plan(&multi_voice->reader,
-                                           &common_plan,
-                                           physical_voice_id) == 0U)
+    if (sample_voice_reader_bind_musical_play_plan(&multi_voice->reader,
+                                                   &common_plan,
+                                                   physical_voice_id) == 0U)
     {
         sample_voice_reader_reset(&multi_voice->reader);
         return BRICK6_SAMPLER_NOTE_INVARIANT;
