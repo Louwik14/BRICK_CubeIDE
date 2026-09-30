@@ -17,30 +17,8 @@ static void brick6_sampler_runtime_mix_reader_segment(const sample_audio_segment
        mono-to-stereo promotion required by the clip shifter. */
     switch (segment->kernel_type)
     {
-        case SAMPLE_KERNEL_REV_1X:
-            sample_voice_reader_mix_rev_1x(segment,
-                                           gain,
-                                           fade_gain,
-                                           fade_count,
-                                           out_l,
-                                           out_r,
-                                           out_offset,
-                                           out_last_l,
-                                           out_last_r);
-            break;
         case SAMPLE_KERNEL_PITCH_FWD_LINEAR:
             sample_voice_reader_mix_pitch_fwd_linear(segment,
-                                                     gain,
-                                                     fade_gain,
-                                                     fade_count,
-                                                     out_l,
-                                                     out_r,
-                                                     out_offset,
-                                                     out_last_l,
-                                                     out_last_r);
-            break;
-        case SAMPLE_KERNEL_PITCH_REV_LINEAR:
-            sample_voice_reader_mix_pitch_rev_linear(segment,
                                                      gain,
                                                      fade_gain,
                                                      fade_count,
@@ -126,25 +104,11 @@ static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *
             for (uint32_t i = 0U; i < segment.frames; ++i)
             {
                 uint32_t loop_pos = 0U;
-                if (segment.kernel_type == SAMPLE_KERNEL_REV_1X)
-                {
-                    loop_pos = (segment.start_frame >= (voice->region_begin + i))
-                                   ? (segment.start_frame - voice->region_begin - i)
-                                   : 0U;
-                }
-                else if (segment.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR)
+                if (segment.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR)
                 {
                     const float source_frame = segment.source_position + ((float)i * segment.source_step);
                     const uint32_t base_frame = (uint32_t)source_frame;
                     loop_pos = (base_frame > voice->region_begin) ? (base_frame - voice->region_begin) : 0U;
-                }
-                else if (segment.kernel_type == SAMPLE_KERNEL_PITCH_REV_LINEAR)
-                {
-                    const float source_frame = segment.source_position - ((float)i * segment.source_step);
-                    const uint32_t base_frame = (uint32_t)source_frame;
-                    loop_pos = ((voice->region_end > 0U) && (base_frame < voice->region_end))
-                                   ? ((voice->region_end - 1U) - base_frame)
-                                   : 0U;
                 }
                 else
                 {
@@ -341,13 +305,11 @@ static uint8_t brick6_sampler_runtime_render_stream_fwd_1x_fast(
         || (voice->active == 0U)
         || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
         || (voice->use_segment_cursor == 0U)
-        || (voice->reverse != 0U)
         || (voice->loop_mode != BRICK6_SAMPLER_LOOP_NONE)
         || (voice->fade_in_frames != 0U)
         || (voice->fade_out_frames != 0U)
         || (voice->start_fade_remaining != 0U)
         || (voice->play_plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
-        || (voice->play_plan.direction != 0U)
         || (voice->play_plan.loop_mode != (uint8_t)SAMPLE_PLAY_LOOP_NONE)
         || (voice->play_plan.step_q16 != BRICK6_SAMPLER_Q16_ONE)
         || (fabsf(voice->step_signed - 1.0f) > BRICK6_SAMPLER_STEP_EPSILON))
@@ -415,13 +377,11 @@ static uint8_t brick6_sampler_runtime_render_stream_fwd_1x_fast_mono(
         || (sample_audio_format_or_stereo(voice->format)
             != SAMPLE_AUDIO_FORMAT_FLOAT32_MONO)
         || (voice->use_segment_cursor == 0U)
-        || (voice->reverse != 0U)
         || (voice->loop_mode != BRICK6_SAMPLER_LOOP_NONE)
         || (voice->fade_in_frames != 0U)
         || (voice->fade_out_frames != 0U)
         || (voice->start_fade_remaining != 0U)
         || (voice->play_plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
-        || (voice->play_plan.direction != 0U)
         || (voice->play_plan.loop_mode != (uint8_t)SAMPLE_PLAY_LOOP_NONE)
         || (voice->play_plan.step_q16 != BRICK6_SAMPLER_Q16_ONE)
         || (fabsf(voice->step_signed - 1.0f) > BRICK6_SAMPLER_STEP_EPSILON))
@@ -499,9 +459,8 @@ static void brick6_sampler_render_sample_mono(brick6_sampler_voice_t *voice,
     {
         brick6_sampler_render_sample_segment_cursor_mono(voice, out_mono, frames);
     }
-    if (((voice->reverse == 0U) && (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE)
-         && (voice->reader.position >= (float)voice->region_end))
-        || ((voice->reverse != 0U) && (voice->reader.active == 0U)))
+    if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE)
+        && (voice->reader.position >= (float)voice->region_end))
     {
         voice->active = 0U;
         voice->position = 0.0f;
@@ -543,9 +502,8 @@ static ITCM_TEXT void brick6_sampler_render_sample(brick6_sampler_voice_t *voice
             return;
         }
         brick6_sampler_render_sample_segment_cursor(voice, out_l, out_r, frames);
-        if (((voice->reverse == 0U) && (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE)
-             && (voice->reader.position >= (float)voice->region_end))
-            || ((voice->reverse != 0U) && (voice->reader.active == 0U)))
+        if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE)
+            && (voice->reader.position >= (float)voice->region_end))
         {
             voice->active = 0U;
             voice->position = 0.0f;
@@ -554,8 +512,7 @@ static ITCM_TEXT void brick6_sampler_render_sample(brick6_sampler_voice_t *voice
         return;
     }
 
-    if ((voice->reverse != 0U) || (fabsf(voice->step_signed - 1.0f) > BRICK6_SAMPLER_STEP_EPSILON)
-        || (voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG))
+    if (fabsf(voice->step_signed - 1.0f) > BRICK6_SAMPLER_STEP_EPSILON)
     {
         float fade_buf[AUDIO_BLOCK_SIZE];
         const float *fade_ptr = 0;
@@ -570,11 +527,8 @@ static ITCM_TEXT void brick6_sampler_render_sample(brick6_sampler_voice_t *voice
             for (uint32_t i = 0U; i < frames; ++i)
             {
                 const uint32_t base_frame = (uint32_t)voice->reader.position;
-                const uint32_t loop_pos = (voice->reverse != 0U)
-                                              ? ((loop_end > 0U) && (base_frame < loop_end)
-                                                     ? ((loop_end - 1U) - base_frame)
-                                                     : 0U)
-                                              : ((base_frame > loop_begin) ? (base_frame - loop_begin) : 0U);
+                const uint32_t loop_pos =
+                    (base_frame > loop_begin) ? (base_frame - loop_begin) : 0U;
                 fade_buf[i] = brick6_sampler_runtime_fade_gain(loop_pos,
                                                                loop_frames,
                                                                voice->fade_in_frames,
@@ -585,7 +539,6 @@ static ITCM_TEXT void brick6_sampler_render_sample(brick6_sampler_voice_t *voice
         produced = sample_voice_reader_render_pitch_forward(&voice->reader,
                                                             loop_begin,
                                                             loop_end,
-                                                            &voice->reverse,
                                                             voice->loop_mode,
                                                             render_gain,
                                                             fade_ptr,

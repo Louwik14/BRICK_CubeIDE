@@ -24,7 +24,7 @@
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert((MULTI_SAMPLE_BULK_READ_BYTES % 512U) == 0U,
                "Multi bulk buffer must remain sector aligned in size");
-_Static_assert(MULTI_SAMPLE_BULK_MAX_BATCH_PAGES >= SAMPLE_AUDIO_FORMAT_STEREO_PRESOCLE_PAGES,
+_Static_assert(MULTI_SAMPLE_BULK_MAX_BATCH_PAGES >= SAMPLE_AUDIO_FORMAT_STREAM_PRESOCLE_PAGES,
                "one bulk batch must cover a stereo presocle when source width permits");
 #endif
 
@@ -313,20 +313,12 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
 
 typedef struct
 {
-    uint32_t start_first;
-    uint32_t start_last;
-    uint32_t loop_first;
-    uint32_t loop_last;
-    uint8_t has_loop_span;
     uint8_t unique_pages;
 } multi_loader_boundary_pages_t;
 
 static multi_loader_boundary_pages_t multi_loader_sample_boundary_pages(
     uint32_t total_frames,
-    uint16_t channels,
-    uint8_t has_loop,
-    uint32_t loop_begin,
-    uint32_t loop_end)
+    uint16_t channels)
 {
     multi_loader_boundary_pages_t result = {0};
     if (total_frames == 0U)
@@ -334,62 +326,8 @@ static multi_loader_boundary_pages_t multi_loader_sample_boundary_pages(
         return result;
     }
 
-    const sample_audio_format_t format = sample_audio_format_or_stereo(
-        sample_audio_format_from_channels(channels));
-    result.start_first = 0U;
-    uint32_t start_pages = sample_audio_format_multi_presocle_pages(format);
-    const uint32_t total_pages = sample_audio_format_required_page_count(format, total_frames);
-    if (start_pages > total_pages)
-    {
-        start_pages = total_pages;
-    }
-    result.start_last = start_pages - 1U;
-    uint32_t pages = result.start_last + 1U;
-
-#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES == 0U
-    if ((has_loop != 0U) && (loop_end > loop_begin) && (loop_end <= total_frames))
-    {
-        uint32_t loop_ready_end = loop_begin + SAMPLE_PREP_MIN_READY_FRAMES;
-        if ((loop_ready_end < loop_begin) || (loop_ready_end > loop_end))
-        {
-            loop_ready_end = loop_end;
-        }
-        result.loop_first = sample_audio_format_page_index_from_frame(format,
-                                                                       loop_begin);
-        result.loop_last = sample_audio_format_page_index_from_frame(format,
-                                                                      loop_ready_end - 1U);
-        result.has_loop_span = 1U;
-        const uint32_t loop_pages = result.loop_last - result.loop_first + 1U;
-        uint32_t overlap = 0U;
-        if ((result.loop_first <= result.start_last) && (result.loop_last >= result.start_first))
-        {
-            const uint32_t overlap_first = (result.loop_first > result.start_first)
-                                               ? result.loop_first
-                                               : result.start_first;
-            const uint32_t overlap_last = (result.loop_last < result.start_last)
-                                              ? result.loop_last
-                                              : result.start_last;
-            overlap = overlap_last - overlap_first + 1U;
-        }
-        pages += loop_pages - overlap;
-    }
-#else
-    (void)has_loop;
-    (void)loop_begin;
-    (void)loop_end;
-#endif
-
-    const uint32_t max_budget_pages =
-        SAMPLE_PREP_MULTI_BUDGET_BYTES / SAMPLE_PAGE_BYTES;
-    if (pages > max_budget_pages)
-    {
-        pages = max_budget_pages;
-    }
-    if (pages > UINT8_MAX)
-    {
-        pages = UINT8_MAX;
-    }
-    result.unique_pages = (uint8_t)pages;
+    if (channels != 2U) return result;
+    result.unique_pages = SAMPLE_AUDIO_FORMAT_STREAM_PRESOCLE_PAGES;
     return result;
 }
 
@@ -406,26 +344,9 @@ static uint8_t multi_loader_bulk_plan_build(
     memset(plan, 0, sizeof(*plan));
     plan->sample_id = sample_id;
     plan->pages_remaining = boundaries->unique_pages;
-    plan->range_first[0] = boundaries->start_first;
-    plan->range_last[0] = boundaries->start_last;
+    plan->range_first[0] = 0U;
+    plan->range_last[0] = 0U;
     plan->range_count = 1U;
-
-    if (boundaries->has_loop_span != 0U)
-    {
-        if (boundaries->loop_first <= (boundaries->start_last + 1U))
-        {
-            if (boundaries->loop_last > plan->range_last[0])
-            {
-                plan->range_last[0] = boundaries->loop_last;
-            }
-        }
-        else
-        {
-            plan->range_first[1] = boundaries->loop_first;
-            plan->range_last[1] = boundaries->loop_last;
-            plan->range_count = 2U;
-        }
-    }
 
     plan->next_page = plan->range_first[0];
     return 1U;
@@ -460,7 +381,7 @@ static multi_sample_prep_budget_t multi_loader_calc_prep_budget(
     const multi_sample_index_t *index)
 {
     multi_sample_prep_budget_t budget = {
-        .budget_pages = SAMPLE_PREP_MULTI_BUDGET_PAGES,
+        .budget_pages = SAMPLE_PAGE_SLOT_POOL_COUNT,
         .first_unpreparable_sample = MULTI_SAMPLE_POOL_INVALID_ID,
     };
     uint32_t required_pages = 0U;
@@ -494,11 +415,8 @@ uint8_t multi_sample_load_required_prep_pages(const multi_sample_index_t *index,
     for (uint16_t i = 0U; i < index->sample_count; ++i)
     {
         const multi_sample_index_sample_t *const sample = &index->samples[i];
-        const sample_audio_format_t format =
-            sample_audio_format_from_channels(sample->channels);
-        const uint32_t sample_pages =
-            (uint32_t)sample_audio_format_multi_start_slot_cost(format)
-            * SAMPLE_PREP_MULTI_START_SLOT_PAGES;
+        const uint32_t sample_pages = (sample->channels == 2U)
+            ? SAMPLE_PAGE_MIN_READY_PAGES : 0U;
         if ((sample_pages == 0U) || (pages > (UINT32_MAX - sample_pages)))
             return 0U;
         pages += sample_pages;
@@ -670,10 +588,7 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
 
         const multi_loader_boundary_pages_t boundaries =
             multi_loader_sample_boundary_pages(sample->total_frames,
-                                               sample->channels,
-                                               sample->has_loop,
-                                               sample->loop_begin,
-                                               sample->loop_end);
+                                               sample->channels);
         if ((i >= MULTI_SAMPLE_MAX_SAMPLES)
             || (multi_loader_bulk_plan_build(&g_multi_bulk_plans[i],
                                              multi_sample_id,

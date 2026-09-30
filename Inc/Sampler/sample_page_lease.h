@@ -31,18 +31,25 @@ extern "C" {
 #error "Each physical Multi voice requires its own lease slot"
 #endif
 
-typedef struct
+typedef enum
 {
-    uint32_t first_page;
-    uint8_t page_count;
-} sample_page_lease_range_t;
+    SAMPLE_PAGE_LEASE_CURRENT = 0,
+    SAMPLE_PAGE_LEASE_NEXT,
+    SAMPLE_PAGE_LEASE_LOOP_START,
+    SAMPLE_PAGE_LEASE_LOOP_START_NEXT,
+    SAMPLE_PAGE_LEASE_PAGE_COUNT
+} sample_page_lease_page_role_t;
+
+#define SAMPLE_PAGE_LEASE_VALID(role) ((uint8_t)(1U << (uint8_t)(role)))
 
 typedef struct
 {
     volatile uint32_t seq;
     sample_audio_key_t key;
     uint32_t registration_epoch;
-    sample_page_lease_range_t ranges[2];
+    uint32_t pages[SAMPLE_PAGE_LEASE_PAGE_COUNT];
+    uint8_t valid_mask;
+    uint8_t reserved[3];
 } sample_page_lease_t;
 
 extern sample_page_lease_t g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];

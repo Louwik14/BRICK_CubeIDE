@@ -12,16 +12,13 @@ extern "C" {
 typedef enum
 {
     SAMPLE_KERNEL_FWD_1X = 0,
-    SAMPLE_KERNEL_REV_1X,
-    SAMPLE_KERNEL_PITCH_FWD_LINEAR,
-    SAMPLE_KERNEL_PITCH_REV_LINEAR
+    SAMPLE_KERNEL_PITCH_FWD_LINEAR
 } sample_kernel_type_t;
 
 typedef enum
 {
     SAMPLE_PLAY_LOOP_NONE = 0,
-    SAMPLE_PLAY_LOOP_FORWARD,
-    SAMPLE_PLAY_LOOP_PINGPONG
+    SAMPLE_PLAY_LOOP_FORWARD
 } sample_play_loop_mode_t;
 
 typedef enum
@@ -37,8 +34,7 @@ typedef enum
 {
     SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_REGION = (1U << 0),
     SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_LOOP = (1U << 1),
-    SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_DIRECTION = (1U << 2),
-    SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_RATE = (1U << 3)
+    SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_RATE = (1U << 2)
 } sample_play_plan_build_flags_t;
 
 typedef struct
@@ -57,7 +53,6 @@ typedef struct
     uint32_t loop_begin;
     uint32_t loop_end;
     uint8_t loop_mode;
-    uint8_t reverse;
     uint8_t reserved;
     float rate;
     float gain;
@@ -85,12 +80,9 @@ typedef struct
     uint32_t fade_in_frames;
     uint32_t fade_out_frames;
     uint32_t step_q16;
-    uint8_t direction;
     uint8_t loop_mode;
     uint8_t stop_on_underrun;
     sample_kernel_type_t kernel_type;
-    uint32_t min_ready_frames;
-    uint32_t target_window_frames;
 } sample_play_plan_t;
 
 typedef struct
@@ -100,10 +92,7 @@ typedef struct
     uint32_t loop_begin;
     uint32_t loop_end;
     float rate;
-    uint32_t min_ready_frames;
-    uint32_t target_window_frames;
     uint8_t flags;
-    uint8_t reverse;
     uint8_t loop_mode;
     uint8_t stop_on_underrun;
 } sample_play_plan_build_options_t;
@@ -117,7 +106,6 @@ typedef struct
     sample_audio_format_t format;
     uint16_t stride_floats;
     uint32_t frames_per_page;
-    uint8_t reverse;
     uint8_t valid;
 } sample_play_plan_page_span_t;
 
@@ -210,13 +198,7 @@ static inline sample_play_plan_build_result_t sample_play_plan_build_from_source
         return SAMPLE_PLAY_PLAN_BUILD_INVALID_REGION;
     }
 
-    const uint8_t reverse =
-        ((flags & SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_DIRECTION) != 0U)
-            ? source->reverse
-            : ((options != 0) ? options->reverse : source->reverse);
-    const uint32_t start_frame =
-        (reverse != 0U) ? ((region_end > region_begin) ? (region_end - 1U) : region_begin)
-                        : region_begin;
+    const uint32_t start_frame = region_begin;
 
     const uint32_t loop_begin =
         ((flags & SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_LOOP) != 0U)
@@ -260,15 +242,11 @@ static inline sample_play_plan_build_result_t sample_play_plan_build_from_source
     out_plan->fade_in_frames = 0U;
     out_plan->fade_out_frames = 0U;
     out_plan->step_q16 = step_q16;
-    out_plan->direction = reverse;
     out_plan->loop_mode = loop_mode;
     out_plan->stop_on_underrun = (options != 0) ? options->stop_on_underrun : 1U;
-    out_plan->kernel_type =
-        (reverse != 0U)
-            ? ((step_q16 == 65536U) ? SAMPLE_KERNEL_REV_1X : SAMPLE_KERNEL_PITCH_REV_LINEAR)
-            : ((step_q16 == 65536U) ? SAMPLE_KERNEL_FWD_1X : SAMPLE_KERNEL_PITCH_FWD_LINEAR);
-    out_plan->min_ready_frames = (options != 0) ? options->min_ready_frames : 0U;
-    out_plan->target_window_frames = (options != 0) ? options->target_window_frames : 0U;
+    out_plan->kernel_type = (step_q16 == 65536U)
+                                ? SAMPLE_KERNEL_FWD_1X
+                                : SAMPLE_KERNEL_PITCH_FWD_LINEAR;
     return sample_play_plan_is_valid(out_plan) != 0U
                ? SAMPLE_PLAY_PLAN_BUILD_OK
                : SAMPLE_PLAY_PLAN_BUILD_INVALID_REGION;

@@ -14,19 +14,26 @@ Une page suit `FREE -> RESERVED -> LOADING -> READY`, `EVICTING`, ou `FAILED`. U
 
 ## Lease physique et service
 
-M7 ne publie aucun snapshot de playhead, frame cursor, deadline, pitch, phase,
-loop state ou demande I/O. Chaque lecteur expose uniquement le lease seqlocke
-`{seq, key, registration_epoch, ranges[2]}`. Un range est
-`{first_page, page_count}`. Il enumere les pages physiques que le lecteur peut
-encore lire; le second range sert au wrap discontinu. Les lecteurs Streamer et
+M7 ne publie aucun snapshot de playhead, deadline, pitch, phase ou demande I/O.
+Chaque lecteur expose un lease seqlocke
+`{seq, key, registration_epoch, pages[4], valid_mask}`. Les quatre roles fixes
+sont `CURRENT`, `NEXT`, `LOOP_START` et `LOOP_START_NEXT`; les doublons de pages
+sont admis et ne consomment qu'une page physique. Les lecteurs Streamer et
 OVERDUB possedent chacun leur lease et peuvent partager les memes pages immuables.
 
-Le scheduler M4 sert les lecteurs actifs en round-robin. Il derive localement
-le lookahead produit a partir des ranges proteges; AUDIO ne publie ni liste de
-besoins ni wake Storage. Une page par lecteur et par passe; aucune horloge
+Le scheduler M4 sert directement les slots absents des lecteurs actifs en
+round-robin. AUDIO est l'unique producteur du besoin; M4 ne derive aucun
+lookahead et il n'existe pas de loop cache parallele. Une page par lecteur et
+par passe; aucune horloge
 STREAM, low-water dynamique ou prediction temporelle ne conditionne le service.
 
-Le contrat produit garantit un pre-socle de 16384 frames par sample et derive le nombre de pages du format stereo canonique. Les limites Stream/Multi sont publiees avant jeu. Il n'existe ni READY par note, ni ACK START, ni retry, rollback ou fallback musical. Un underrun dans ce workload est une rupture de contrat, pas une admission tardive.
+Le contrat produit garantit un pre-socle d'une page 0 READY, soit 8192 frames
+stereo. Au demarrage cette page est `CURRENT`: elle ne s'ajoute pas a la
+fenetre runtime. Chaque reader garantit au plus quatre pages physiques
+distinctes, pour 24 readers, soit 96 pages reservees. Les limites
+Classic/Multi/REC_SOURCE sont publiees avant jeu. Il n'existe ni READY par
+note, ni ACK START, ni retry, rollback ou fallback musical. Un underrun dans ce
+workload est une rupture de contrat, pas une admission tardive.
 
 ## I/O et cadence
 
@@ -49,7 +56,10 @@ ne constituent pas un second catalogue produit.
 
 ## Multi, Sampler RAM et Wavetable
 
-Le bulk Multi calcule et epingle l'union start/loop, utilise le cache, le transport et le scheduler communs, par lots de 64 KiB. Il ne possede ni FatFs, ni decodeur, ni arbitre SD parallele.
+Le bulk Multi prepare uniquement la page 0 et utilise le cache, le transport et
+le scheduler communs, par lots de 64 KiB. La boucle immutable est ensuite
+exprimee par les deux slots `LOOP_START`; Multi ne possede ni profondeur, ni
+cache de boucle, ni FatFs, decodeur ou arbitre SD parallele propres.
 
 La preparation Multi v4 separe la collecte WAV de la resolution des zones. Le
 scan conserve SMPL, INST et les faits du nom; une analyse du dossier choisit
@@ -77,7 +87,10 @@ Le registre compact de leases Stream est fixe, pointer-free, seqlocke et place e
 
 ## Format audio
 
-Une page sample produit de 64 KiB porte 8192 frames FLOAT32 stereo entrelacees. Format, stride et frames/page sont derives par `sample_audio_format.h` et restent immutables pendant la voix.
+Une page sample produit de 64 KiB porte 8192 frames FLOAT32 stereo entrelacees.
+Le Streamer est exclusivement forward; reverse et ping-pong restent limites au
+Sampler RAM. Format, stride et frames/page sont derives par
+`sample_audio_format.h` et restent immutables pendant la voix.
 
 Le format WAV canonique des samples BRICK est IEEE FLOAT32 stereo, 48 kHz,
 32 bits par sample, 8 octets par frame, little-endian. Son chunk `data`

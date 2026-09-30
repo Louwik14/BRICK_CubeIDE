@@ -216,7 +216,8 @@ uint16_t multi_sample_pool_get_slot_capacity_used(void)
         if ((sample->instrument_id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
             && (g_multi_instruments[sample->instrument_id].used != 0U))
         {
-            slots += sample_audio_format_multi_start_slot_cost(sample->format);
+            slots += (sample->format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+                         ? 1U : 0U;
         }
     }
     return (slots > UINT16_MAX) ? UINT16_MAX : (uint16_t)slots;
@@ -703,7 +704,7 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
 
     multi_sample_desc_t *const sample = &g_multi_samples[multi_sample_id];
     const sample_audio_format_t format = sample_audio_format_from_channels(channels);
-    if ((sample_audio_format_is_valid(format) == 0U)
+    if ((format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
         || (g_multi_instruments[sample->instrument_id].used == 0U))
     {
         return 0U;
@@ -714,13 +715,11 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
     {
         return 0U;
     }
-#if !BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
     if ((sample_audio_format_is_valid(instrument->format) != 0U)
         && (instrument->format != format))
     {
         return 0U;
     }
-#endif
     sample->data_offset = data_offset;
     sample->data_size = data_size;
     sample->sample_rate = sample_rate;
@@ -730,25 +729,10 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
     sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(format);
     sample->frames_per_page = sample_audio_format_frames_per_page(format);
     sample->block_align = (uint16_t)((channels * bits_per_sample) / 8U);
-#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
-    if ((sample_audio_format_is_valid(instrument->format) == 0U)
-        && (instrument->sample_count == 1U))
-    {
-        (void)multi_sample_pool_set_instrument_format(sample->instrument_id, format);
-    }
-    else if ((sample_audio_format_is_valid(instrument->format) != 0U)
-             && (instrument->format != format))
-    {
-        instrument->format = SAMPLE_AUDIO_FORMAT_INVALID;
-        instrument->stride_floats = 0U;
-        instrument->frames_per_page = 0U;
-    }
-#else
     if (sample_audio_format_is_valid(instrument->format) == 0U)
     {
         (void)multi_sample_pool_set_instrument_format(sample->instrument_id, format);
     }
-#endif
     return (sample->block_align != 0U) ? 1U : 0U;
 }
 
@@ -812,11 +796,9 @@ uint8_t multi_sample_pool_resolve_source_from_result(
         || (sample_audio_format_is_valid(sample->format) == 0U)
         || (sample->stride_floats != sample_audio_format_stride_floats(sample->format))
         || (sample->frames_per_page != sample_audio_format_frames_per_page(sample->format))
-#if !BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
         || (sample->format != instrument->format)
         || (sample->stride_floats != instrument->stride_floats)
         || (sample->frames_per_page != instrument->frames_per_page)
-#endif
         )
     {
         return 0U;
@@ -837,7 +819,6 @@ uint8_t multi_sample_pool_resolve_source_from_result(
     out_source->loop_begin = (sample->has_loop != 0U) ? sample->loop_begin : 0U;
     out_source->loop_end = (sample->has_loop != 0U) ? sample->loop_end : sample->total_frames;
     out_source->loop_mode = SAMPLE_PLAY_LOOP_NONE;
-    out_source->reverse = 0U;
     out_source->rate = 1.0f;
     out_source->gain = 1.0f;
     out_source->owner_track_id = UINT8_MAX;
@@ -902,11 +883,9 @@ uint8_t multi_sample_pool_debug_add_zone(uint16_t instrument_id,
         || (sample_audio_format_is_valid(sample->format) == 0U)
         || (sample->stride_floats != sample_audio_format_stride_floats(sample->format))
         || (sample->frames_per_page != sample_audio_format_frames_per_page(sample->format))
-#if !BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
         || (sample->format != instrument->format)
         || (sample->stride_floats != instrument->stride_floats)
         || (sample->frames_per_page != instrument->frames_per_page)
-#endif
         )
     {
         return 0U;

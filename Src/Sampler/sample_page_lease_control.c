@@ -20,7 +20,7 @@ uint8_t sample_page_lease_control_read(uint8_t slot,
         if (before == lease->seq)
         {
             *out = copy;
-            return (copy.ranges[0].page_count != 0U) ? 1U : 0U;
+            return (copy.valid_mask != 0U) ? 1U : 0U;
         }
     }
     memset(out, 0, sizeof(*out));
@@ -48,12 +48,10 @@ uint8_t sample_page_lease_control_protects(sample_audio_key_t key,
         if (((lease.registration_epoch != 0U)
                 && (lease.registration_epoch != registration_epoch))
             || (sample_audio_key_equal(&lease.key, &key) == 0U)) continue;
-        for (uint8_t range = 0U; range < 2U; ++range)
+        for (uint8_t role = 0U; role < SAMPLE_PAGE_LEASE_PAGE_COUNT; ++role)
         {
-            const uint32_t first = lease.ranges[range].first_page;
-            const uint32_t count = lease.ranges[range].page_count;
-            if ((count != 0U) && (page_index >= first)
-                && (page_index < (first + count))) return 1U;
+            if (((lease.valid_mask & SAMPLE_PAGE_LEASE_VALID(role)) != 0U)
+                && (lease.pages[role] == page_index)) return 1U;
         }
     }
     return 0U;

@@ -553,7 +553,6 @@ brick6_sampler_runtime_start_multi_renderer(uint8_t track_id,
     const float ratio = brick6_sampler_runtime_pitch_ratio(
         (float)resolved.pitch_semitones);
     play_plan.step_q16 = brick6_sampler_runtime_ratio_to_q16(ratio);
-    play_plan.direction = 0U;
     play_plan.loop_mode = BRICK6_SAMPLER_LOOP_NONE;
     play_plan.stop_on_underrun = 1U;
     play_plan.kernel_type = (play_plan.step_q16 == BRICK6_SAMPLER_Q16_ONE)
@@ -596,10 +595,6 @@ brick6_sampler_runtime_start_multi_renderer(uint8_t track_id,
         return BRICK6_SAMPLER_NOTE_INVARIANT;
     }
     multi_voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
-    sample_voice_reader_bind_loop_cache_incarnation(
-        &multi_voice->reader,
-        physical_voice_id,
-        multi_voice->trigger_order);
     const brick6_sampler_multi_voice_handle_t multi_handle =
         brick6_sampler_runtime_multi_voice_handle(multi_voice);
     uint8_t dsp_slot = MULTI_VOICE_DSP_SLOT_INDEX_INVALID;
@@ -655,7 +650,7 @@ brick6_sampler_runtime_start_multi_renderer(uint8_t track_id,
     multi_voice->fade_in_frames = common_plan.fade_in_frames;
     multi_voice->fade_out_frames = common_plan.fade_out_frames;
     multi_voice->step_signed = (float)common_plan.step_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
-    multi_voice->reverse = common_plan.direction;
+    multi_voice->reverse = 0U;
     multi_voice->loop_mode = common_plan.loop_mode;
     multi_voice->use_slice = 0U;
     multi_voice->use_segment_cursor = 1U;

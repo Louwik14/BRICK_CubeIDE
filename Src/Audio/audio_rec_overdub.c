@@ -97,13 +97,12 @@ uint8_t audio_rec_overdub_mix(uint8_t enabled,
             g_audio_rec_overdub_reader.plan.key.object_id,
             g_audio_rec_overdub_reader.plan.key.generation);
     }
-    uint8_t reverse = 0U;
     uint8_t underrun = 0U;
     const uint32_t produced = sample_voice_reader_render_pitch_forward(
         &g_audio_rec_overdub_reader,
         g_audio_rec_overdub_reader.plan.loop_begin,
         g_audio_rec_overdub_reader.plan.loop_end,
-        &reverse, SAMPLE_PLAY_LOOP_FORWARD, 1.0f, 0, 0U,
+        SAMPLE_PLAY_LOOP_FORWARD, 1.0f, 0, 0U,
         left, right, frames, &underrun, 0, 0);
     if((underrun != 0U) || (produced != frames))
     {

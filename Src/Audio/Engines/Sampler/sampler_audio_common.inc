@@ -249,26 +249,8 @@ static void brick6_sampler_runtime_mix_reader_segment_mono(
 
     switch (segment->kernel_type)
     {
-        case SAMPLE_KERNEL_REV_1X:
-            sample_voice_reader_mix_rev_1x_mono(segment,
-                                                gain,
-                                                fade_gain,
-                                                fade_count,
-                                                out_mono,
-                                                out_offset,
-                                                out_last);
-            break;
         case SAMPLE_KERNEL_PITCH_FWD_LINEAR:
             sample_voice_reader_mix_pitch_fwd_linear_mono(segment,
-                                                          gain,
-                                                          fade_gain,
-                                                          fade_count,
-                                                          out_mono,
-                                                          out_offset,
-                                                          out_last);
-            break;
-        case SAMPLE_KERNEL_PITCH_REV_LINEAR:
-            sample_voice_reader_mix_pitch_rev_linear_mono(segment,
                                                           gain,
                                                           fade_gain,
                                                           fade_count,
@@ -323,26 +305,12 @@ static void brick6_sampler_render_sample_segment_cursor_mono(brick6_sampler_voic
             for (uint32_t i = 0U; i < segment.frames; ++i)
             {
                 uint32_t loop_pos = 0U;
-                if (segment.kernel_type == SAMPLE_KERNEL_REV_1X)
-                {
-                    loop_pos = (segment.start_frame >= (voice->region_begin + i))
-                                   ? (segment.start_frame - voice->region_begin - i)
-                                   : 0U;
-                }
-                else if (segment.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR)
+                if (segment.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR)
                 {
                     const uint32_t base_frame =
                         (uint32_t)(segment.source_position + ((float)i * segment.source_step));
                     loop_pos = (base_frame > voice->region_begin)
                                    ? (base_frame - voice->region_begin)
-                                   : 0U;
-                }
-                else if (segment.kernel_type == SAMPLE_KERNEL_PITCH_REV_LINEAR)
-                {
-                    const uint32_t base_frame =
-                        (uint32_t)(segment.source_position - ((float)i * segment.source_step));
-                    loop_pos = ((voice->region_end > 0U) && (base_frame < voice->region_end))
-                                   ? ((voice->region_end - 1U) - base_frame)
                                    : 0U;
                 }
                 else
@@ -470,11 +438,8 @@ static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_pl
     }
 
     sample_play_plan_build_options_t options = {
-        .min_ready_frames = BRICK6_SAMPLER_MIN_READY_TARGET_FRAMES,
-        .target_window_frames = 0U,
         .flags = (uint8_t)(SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_REGION
                            | SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_LOOP
-                           | SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_DIRECTION
                            | SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_RATE),
         .stop_on_underrun = 1U,
     };
@@ -498,7 +463,6 @@ static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_pl
         out_source->loop_begin = runtime_plan->loop_begin;
         out_source->loop_end = runtime_plan->loop_end;
         out_source->loop_mode = voice->loop_mode;
-        out_source->reverse = voice->reverse;
         out_source->rate = (voice->step_signed > 0.0f) ? voice->step_signed : 1.0f;
         out_source->gain = voice->gain * voice->trigger_velocity_gain;
         out_source->fine_tune_cents = (int16_t)(voice->tune * 100.0f);
@@ -512,7 +476,6 @@ static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_pl
         options.loop_begin = runtime_plan->loop_begin;
         options.loop_end = runtime_plan->loop_end;
         options.rate = out_source->rate;
-        options.reverse = voice->reverse;
         options.loop_mode = voice->loop_mode;
     }
     else if (trigger->kind == BRICK6_SAMPLE_COMMON_TRIGGER_MULTI)
@@ -558,7 +521,6 @@ static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_pl
         out_source->loop_mode = (loop_enabled != 0U)
             ? (uint8_t)SAMPLE_PLAY_LOOP_FORWARD
             : (uint8_t)SAMPLE_PLAY_LOOP_NONE;
-        out_source->reverse = 0U;
         out_source->rate = rate;
         out_source->gain = trigger->render_gain;
         out_source->owner_track_id = trigger->track_id;
@@ -569,12 +531,7 @@ static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_pl
         options.loop_begin = out_source->loop_begin;
         options.loop_end = out_source->loop_end;
         options.rate = rate;
-        options.reverse = 0U;
         options.loop_mode = out_source->loop_mode;
-        options.min_ready_frames = sample_audio_format_multi_presocle_pages(
-                                       sample_audio_format_or_stereo(out_source->format))
-                                   * sample_audio_format_frames_per_page(
-                                       sample_audio_format_or_stereo(out_source->format));
     }
     else
     {

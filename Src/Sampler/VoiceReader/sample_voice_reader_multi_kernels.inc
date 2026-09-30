@@ -12,7 +12,6 @@ static uint8_t sample_voice_reader_prepare_multi_fwd_1x(
     if ((state == 0) || (frames == 0U) || (state->active == 0U)
         || (state->plan_valid == 0U)
         || (state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
-        || (state->plan.direction != 0U)
         || (state->plan.step_q16 != SAMPLE_Q16_ONE)
         || (state->format != expected_format))
     {
@@ -236,7 +235,6 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple(sample_voice_reader_t *re
     sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
     if ((state->plan_valid == 0U)
         || (state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
-        || (state->plan.direction != 0U)
         || (state->plan.loop_mode != SAMPLE_PLAY_LOOP_NONE)
         || (state->plan.step_q16 != SAMPLE_Q16_ONE))
     {
@@ -332,7 +330,6 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple(sample_voice_reader_t *re
 uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   uint32_t region_start,
                                                   uint32_t region_end,
-                                                  uint8_t *io_reverse,
                                                   uint8_t loop_mode,
                                                   float gain,
                                                   const float *fade_gain,
@@ -358,22 +355,19 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
     const float loop_start = (float)region_start;
     const float loop_end = (float)region_end;
     const float loop_length = (float)(region_end - region_start);
-    uint8_t reverse = ((io_reverse != 0) && (*io_reverse != 0U)) ? 1U : 0U;
     float last_l = 0.0f;
     float last_r = 0.0f;
 
     while (produced < frames)
     {
-        sample_voice_reader_normalize_position(&reader->position,
-                                               &reverse,
-                                               loop_start,
-                                               loop_end,
-                                               loop_length,
-                                               loop_mode);
+        while ((loop_mode == SAMPLE_PLAY_LOOP_FORWARD) && (loop_length > 0.0f)
+               && (reader->position >= loop_end))
+        {
+            reader->position = loop_start + (reader->position - loop_end);
+        }
 
-        if ((((loop_mode == 0U) || (loop_length <= 0.0f)) && (reverse == 0U) && (reader->position >= (float)region_end))
-            || ((((loop_mode == 0U) || (loop_length <= 0.0f)) && (reverse != 0U)
-                 && (reader->position < (float)region_start))))
+        if (((loop_mode == SAMPLE_PLAY_LOOP_NONE) || (loop_length <= 0.0f))
+            && (reader->position >= (float)region_end))
         {
             break;
         }
@@ -395,7 +389,6 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
         const uint32_t span_end = span.start_frame + span.frame_count;
         uint32_t segment_frames = 0U;
         float scan_position = reader->position;
-        uint8_t scan_reverse = reverse;
         while ((produced + segment_frames) < frames)
         {
             const uint32_t scan_base_frame = (uint32_t)scan_position;
@@ -405,26 +398,21 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
             }
 
             segment_frames++;
-            const float raw_next_position =
-                scan_position + ((scan_reverse == 0U) ? reader->step : (-reader->step));
-            const uint8_t prev_reverse = scan_reverse;
+            const float raw_next_position = scan_position + reader->step;
             scan_position = raw_next_position;
-            sample_voice_reader_normalize_position(&scan_position,
-                                                   &scan_reverse,
-                                                   loop_start,
-                                                   loop_end,
-                                                   loop_length,
-                                                   loop_mode);
+            while ((loop_mode == SAMPLE_PLAY_LOOP_FORWARD) && (loop_length > 0.0f)
+                   && (scan_position >= loop_end))
+            {
+                scan_position = loop_start + (scan_position - loop_end);
+            }
 
-            if ((((loop_mode == 0U) || (loop_length <= 0.0f)) && (scan_reverse == 0U)
-                 && (scan_position >= (float)region_end))
-                || ((((loop_mode == 0U) || (loop_length <= 0.0f)) && (scan_reverse != 0U)
-                     && (scan_position < (float)region_start))))
+            if (((loop_mode == SAMPLE_PLAY_LOOP_NONE) || (loop_length <= 0.0f))
+                && (scan_position >= (float)region_end))
             {
                 break;
             }
 
-            if ((scan_reverse != prev_reverse) || (scan_position != raw_next_position))
+            if (scan_position != raw_next_position)
             {
                 break;
             }
@@ -440,7 +428,6 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
         }
 
         float position = reader->position;
-        uint8_t segment_reverse = reverse;
         const float *const span_l = span.frames_interleaved;
         const uint32_t span_stride = span.stride_floats;
         const float *const span_r = (span.format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO)
@@ -459,26 +446,20 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
             out_l[produced + i] += last_l;
             out_r[produced + i] += last_r;
 
-            position += (segment_reverse == 0U) ? reader->step : (-reader->step);
-            sample_voice_reader_normalize_position(&position,
-                                                   &segment_reverse,
-                                                   loop_start,
-                                                   loop_end,
-                                                   loop_length,
-                                                   loop_mode);
+            position += reader->step;
+            while ((loop_mode == SAMPLE_PLAY_LOOP_FORWARD) && (loop_length > 0.0f)
+                   && (position >= loop_end))
+            {
+                position = loop_start + (position - loop_end);
+            }
         }
 
         reader->position = position;
-        reverse = segment_reverse;
         reader->frame_pos = (uint32_t)reader->position;
         sample_voice_reader_publish_lease(sample_voice_reader_state(reader), reader->frame_pos);
         produced += segment_frames;
     }
 
-    if (io_reverse != 0)
-    {
-        *io_reverse = reverse;
-    }
     if ((produced != 0U) && (out_last_l != 0) && (out_last_r != 0))
     {
         *out_last_l = last_l;
@@ -509,7 +490,6 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple_mono(sample_voice_reader_
     if ((state->plan_valid == 0U)
         || (state->plan.format != SAMPLE_AUDIO_FORMAT_FLOAT32_MONO)
         || (state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
-        || (state->plan.direction != 0U)
         || (state->plan.loop_mode != SAMPLE_PLAY_LOOP_NONE)
         || (state->plan.step_q16 != SAMPLE_Q16_ONE))
     {

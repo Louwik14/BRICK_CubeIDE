@@ -69,7 +69,8 @@ typedef struct
 {
     uint8_t lease_slot;
     uint8_t lease_valid;
-    sample_page_lease_range_t lease_ranges[2];
+    uint32_t lease_pages[SAMPLE_PAGE_LEASE_PAGE_COUNT];
+    uint8_t lease_valid_mask;
     uint16_t sample_id;
     sample_audio_key_t key;
     sample_audio_format_t format;
@@ -83,9 +84,6 @@ typedef struct
     sample_play_plan_t plan;
     sample_audio_cursor_t audio_cursor;
     uint8_t plan_valid;
-    uint8_t loop_cache_voice_id;
-    uint8_t loop_cache_valid;
-    uint32_t loop_cache_generation;
 } sample_voice_reader_t;
 
 void sample_voice_reader_init(void);
@@ -97,9 +95,6 @@ void sample_voice_reader_bind(sample_voice_reader_t *reader,
 uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
                                            const sample_play_plan_t *plan,
                                            uint8_t reader_id);
-void sample_voice_reader_bind_loop_cache_incarnation(sample_voice_reader_t *reader,
-                                                     uint8_t voice_id,
-                                                     uint32_t generation);
 void sample_voice_reader_set_step(sample_voice_reader_t *reader, float step);
 void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos);
 void sample_voice_reader_update_frame_pos(sample_voice_reader_t *reader, uint32_t frame_pos);
@@ -130,22 +125,6 @@ void sample_voice_reader_mix_fwd_1x_mono(const sample_audio_segment_t *segment,
                                          float *out_mono,
                                          uint32_t out_offset,
                                          float *out_last);
-void sample_voice_reader_mix_rev_1x(const sample_audio_segment_t *segment,
-                                    float gain,
-                                    const float *fade_gain,
-                                    uint32_t fade_count,
-                                    float *out_l,
-                                    float *out_r,
-                                    uint32_t out_offset,
-                                    float *out_last_l,
-                                    float *out_last_r);
-void sample_voice_reader_mix_rev_1x_mono(const sample_audio_segment_t *segment,
-                                         float gain,
-                                         const float *fade_gain,
-                                         uint32_t fade_count,
-                                         float *out_mono,
-                                         uint32_t out_offset,
-                                         float *out_last);
 void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segment,
                                               float gain,
                                               const float *fade_gain,
@@ -156,22 +135,6 @@ void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segm
                                               float *out_last_l,
                                               float *out_last_r);
 void sample_voice_reader_mix_pitch_fwd_linear_mono(const sample_audio_segment_t *segment,
-                                                   float gain,
-                                                   const float *fade_gain,
-                                                   uint32_t fade_count,
-                                                   float *out_mono,
-                                                   uint32_t out_offset,
-                                                   float *out_last);
-void sample_voice_reader_mix_pitch_rev_linear(const sample_audio_segment_t *segment,
-                                              float gain,
-                                              const float *fade_gain,
-                                              uint32_t fade_count,
-                                              float *out_l,
-                                              float *out_r,
-                                              uint32_t out_offset,
-                                              float *out_last_l,
-                                              float *out_last_r);
-void sample_voice_reader_mix_pitch_rev_linear_mono(const sample_audio_segment_t *segment,
                                                    float gain,
                                                    const float *fade_gain,
                                                    uint32_t fade_count,
@@ -217,7 +180,6 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple_mono(sample_voice_reader_
 uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   uint32_t region_start,
                                                   uint32_t region_end,
-                                                  uint8_t *io_reverse,
                                                   uint8_t loop_forward,
                                                   float gain,
                                                   const float *fade_gain,

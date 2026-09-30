@@ -132,7 +132,6 @@ static uint8_t sample_cache_prepare_via_page_cache(uint16_t sample_id,
     forward_plan.start_frame = 0U;
     forward_plan.region_begin = 0U;
     forward_plan.region_end = desc->total_frames;
-    forward_plan.min_ready_frames = SAMPLE_PREP_MIN_READY_FRAMES;
     sample_play_plan_page_span_t forward_span;
     if (sample_play_plan_frames_to_page_span(&forward_plan,
                                              SAMPLE_PREP_MIN_READY_FRAMES,
@@ -150,39 +149,6 @@ static uint8_t sample_cache_prepare_via_page_cache(uint16_t sample_id,
     }
     if (sample_page_cache_get_page_state(sample_id, 0U) != SAMPLE_PAGE_READY)
     {
-    }
-
-    /*
-     * Long STREAM cold base follows the product minimum-ready contract on both
-     * entry sides. The reverse side uses the shared play-plan frame->page span
-     * helper because an unaligned tail start can require one more physical page
-     * than the format-specific minimum-ready frame count divided by the
-     * format-specific page geometry.
-     */
-    sample_play_plan_t reverse_plan;
-    sample_play_plan_init(&reverse_plan);
-    reverse_plan.key = sample_audio_key_classic(sample_id);
-    reverse_plan.sample_id = sample_id;
-    reverse_plan.format = desc->format;
-    reverse_plan.stride_floats = desc->stride_floats;
-    reverse_plan.frames_per_page = desc->frames_per_page;
-    reverse_plan.start_frame = desc->total_frames - 1U;
-    reverse_plan.region_begin = 0U;
-    reverse_plan.region_end = desc->total_frames;
-    reverse_plan.direction = 1U;
-    reverse_plan.min_ready_frames = SAMPLE_PREP_MIN_READY_FRAMES;
-    sample_play_plan_page_span_t reverse_span;
-    if ((sample_play_plan_frames_to_page_span(&reverse_plan,
-                                              SAMPLE_PREP_MIN_READY_FRAMES,
-                                              &reverse_span) != 0U)
-        && (reverse_span.page_count != 0U))
-    {
-        if (sample_cache_reserve_static_page_span(sample_id, &reverse_span) == 0U)
-        {
-            desc->last_error = 8U;
-            g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
-            return 0U;
-        }
     }
 
     desc->state = SAMPLE_CACHE_READY;
@@ -203,7 +169,7 @@ static uint8_t sample_cache_reserve_static_page_span(uint16_t sample_id,
     {
         if (sample_page_cache_port_reserve_static(
                 sample_audio_key_classic(sample_id), page_index,
-                SAMPLE_PAGE_ALLOC_MARGIN) == 0U)
+                SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U)
         {
             return 0U;
         }
@@ -650,7 +616,6 @@ uint8_t sample_cache_resolve_classic_source(uint16_t sample_id,
     out_source->loop_begin = 0U;
     out_source->loop_end = desc->total_frames;
     out_source->loop_mode = SAMPLE_PLAY_LOOP_NONE;
-    out_source->reverse = 0U;
     out_source->rate = 1.0f;
     out_source->gain = 1.0f;
     out_source->owner_track_id = UINT8_MAX;

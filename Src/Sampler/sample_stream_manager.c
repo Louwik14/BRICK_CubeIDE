@@ -173,56 +173,35 @@ static uint8_t sample_stream_manager_candidate_for_slot(
 
     sample_page_lease_t lease;
     if (sample_page_lease_control_read(slot, &lease) == 0U) return 0U;
-    sample_page_lease_range_t derived = {0};
-    const sample_page_lease_range_t *const tail =
-        (lease.ranges[1].page_count != 0U)
-            ? &lease.ranges[1] : &lease.ranges[0];
-    const uint32_t published_pages = (uint32_t)lease.ranges[0].page_count
-                                   + lease.ranges[1].page_count;
-    sample_page_stream_info_t info;
-    if ((published_pages <= 2U)
-            && (sample_page_cache_get_stream_info_key(lease.key, &info) != 0U)
-            && (info.frames_per_page != 0U))
-    {
-        const uint32_t total_pages =
-            (info.total_frames + info.frames_per_page - 1U)
-            / info.frames_per_page;
-        derived.first_page = tail->first_page + tail->page_count;
-        if (derived.first_page < total_pages)
-        {
-            derived.page_count =
-                (lease.key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
-                    ? SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES
-                    : SAMPLE_PAGE_CLASSIC_FORWARD_LOOKAHEAD_PAGES;
-        }
-    }
-
     uint8_t page_rank = 0U;
-    for (uint8_t range_index = 0U; range_index < 3U; ++range_index)
+    for (uint8_t role = 0U; role < SAMPLE_PAGE_LEASE_PAGE_COUNT; ++role)
     {
-        const sample_page_lease_range_t *range =
-            (range_index < 2U) ? &lease.ranges[range_index] : &derived;
-        for (uint8_t offset = 0U; offset < range->page_count; ++offset, ++page_rank)
+        if ((lease.valid_mask & SAMPLE_PAGE_LEASE_VALID(role)) == 0U) continue;
+        const uint32_t page_index = lease.pages[role];
+        uint8_t duplicate = 0U;
+        for (uint8_t previous = 0U; previous < role; ++previous)
         {
-            const uint32_t page_index = range->first_page + offset;
-            const sample_page_state_t state =
-                sample_page_cache_get_page_state_key(lease.key, page_index);
-            if (state == SAMPLE_PAGE_READY) { PERF_COUNT(PERF_N_CACHE_READY); continue; }
-
-            if (out_pending != 0) *out_pending = 1U;
-            if (state == SAMPLE_PAGE_LOADING) { PERF_COUNT(PERF_N_CACHE_LOADING); return 0U; }
-            if (out_candidate == 0) return 0U;
-
-            memset(out_candidate, 0, sizeof(*out_candidate));
-            out_candidate->key = lease.key;
-            out_candidate->page_index = page_index;
-            out_candidate->registration_epoch = lease.registration_epoch;
-            out_candidate->voice_id = slot;
-            out_candidate->page_rank = page_rank;
-            out_candidate->round_robin_slot = slot;
-            out_candidate->active = 1U;
-            return 1U;
+            if (((lease.valid_mask & SAMPLE_PAGE_LEASE_VALID(previous)) != 0U)
+                && (lease.pages[previous] == page_index)) duplicate = 1U;
         }
+        if (duplicate != 0U) continue;
+        const sample_page_state_t state =
+            sample_page_cache_get_page_state_key(lease.key, page_index);
+        if (state == SAMPLE_PAGE_READY) { PERF_COUNT(PERF_N_CACHE_READY); ++page_rank; continue; }
+
+        if (out_pending != 0) *out_pending = 1U;
+        if (state == SAMPLE_PAGE_LOADING) { PERF_COUNT(PERF_N_CACHE_LOADING); return 0U; }
+        if (out_candidate == 0) return 0U;
+
+        memset(out_candidate, 0, sizeof(*out_candidate));
+        out_candidate->key = lease.key;
+        out_candidate->page_index = page_index;
+        out_candidate->registration_epoch = lease.registration_epoch;
+        out_candidate->voice_id = slot;
+        out_candidate->page_rank = page_rank;
+        out_candidate->round_robin_slot = slot;
+        out_candidate->active = 1U;
+        return 1U;
     }
     return 0U;
 }

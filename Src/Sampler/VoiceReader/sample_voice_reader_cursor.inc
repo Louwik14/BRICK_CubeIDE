@@ -23,116 +23,51 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
     PERF_START(need_start);
 
     const uint32_t page = frame_pos / state->frames_per_page;
-    sample_page_lease_range_t ranges[2] = {0};
-    const uint32_t last_page = (state->plan_valid != 0U
-                                && state->plan.region_end != 0U)
-                                   ? ((state->plan.region_end - 1U)
+    uint32_t pages[SAMPLE_PAGE_LEASE_PAGE_COUNT] = {0};
+    uint8_t valid_mask = 0U;
+    const uint32_t window_end = (state->plan_valid != 0U
+                                 && state->plan.loop_mode == SAMPLE_PLAY_LOOP_FORWARD
+                                 && state->plan.loop_end > state->plan.loop_begin)
+                                    ? state->plan.loop_end
+                                    : state->plan.region_end;
+    const uint32_t last_page = (window_end != 0U)
+                                   ? ((window_end - 1U)
                                       / state->frames_per_page)
                                    : page;
-    if ((state->plan.direction == 0U) || (page == 0U))
+    pages[SAMPLE_PAGE_LEASE_CURRENT] = page;
+    valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_CURRENT);
+    if (page < last_page)
     {
-        ranges[0].first_page = page;
-        ranges[0].page_count = (page < last_page) ? 2U : 1U;
-    }
-    else
-    {
-        ranges[0].first_page = page - 1U;
-        ranges[0].page_count = 2U;
+        pages[SAMPLE_PAGE_LEASE_NEXT] = page + 1U;
+        valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_NEXT);
     }
     if ((state->plan_valid != 0U)
         && (state->plan.loop_mode == SAMPLE_PLAY_LOOP_FORWARD)
         && (state->plan.loop_end > state->plan.loop_begin))
     {
-        ranges[1].first_page = state->plan.loop_begin / state->frames_per_page;
+        const uint32_t loop_page = state->plan.loop_begin / state->frames_per_page;
         const uint32_t last = (state->plan.loop_end - 1U) / state->frames_per_page;
-        uint32_t count = last - ranges[1].first_page + 1U;
-        if (count > SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES)
-            count = SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES;
-        ranges[1].page_count = (uint8_t)count;
+        pages[SAMPLE_PAGE_LEASE_LOOP_START] = loop_page;
+        valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_LOOP_START);
+        if (loop_page < last)
+        {
+            pages[SAMPLE_PAGE_LEASE_LOOP_START_NEXT] = loop_page + 1U;
+            valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_LOOP_START_NEXT);
+        }
     }
     PERF_END(PERF_CPU_READER_NEED, need_start);
-    if (memcmp(state->lease_ranges, ranges, sizeof(ranges)) != 0)
+    if ((state->lease_valid_mask != valid_mask)
+        || (memcmp(state->lease_pages, pages, sizeof(pages)) != 0))
     {
         (void)sample_page_lease_audio_publish(state->lease_slot,
                                               state->key,
                                               state->registration_epoch,
-                                              ranges);
-        memcpy(state->lease_ranges, ranges, sizeof(ranges));
+                                              pages,
+                                              valid_mask);
+        memcpy(state->lease_pages, pages, sizeof(pages));
+        state->lease_valid_mask = valid_mask;
     }
 }
-
-#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
-static void sample_voice_reader_release_loop_cache(sample_voice_reader_state_t *state)
-{
-    if (state == 0)
-    {
-        return;
-    }
-    for (uint32_t owner = 0U; owner < SAMPLE_STREAM_TARGET_MAX_VOICES; ++owner)
-    {
-        sample_voice_loop_cache_t *const cache = &g_sample_voice_loop_cache[owner];
-        if (cache->reader != state)
-        {
-            continue;
-        }
-        for (uint32_t i = 0U; i < SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES; ++i)
-        {
-            if ((cache->valid_mask & (uint8_t)(1U << i)) != 0U)
-            {
-            }
-        }
-        memset(cache, 0, sizeof(*cache));
-    }
-}
-
-static void sample_voice_reader_capture_loop_page(sample_voice_reader_state_t *state,
-                                                   const sample_page_span_t *span)
-{
-    if ((state == 0) || (span == 0) || (state->plan_valid == 0U)
-        || (state->plan.loop_mode != SAMPLE_PLAY_LOOP_FORWARD)
-        || (state->plan.loop_end <= state->plan.loop_begin)
-        || (state->frames_per_page == 0U))
-    {
-        return;
-    }
-    if ((state->loop_cache_valid == 0U)
-        || (state->loop_cache_voice_id >= SAMPLE_STREAM_TARGET_MAX_VOICES))
-    {
-        return;
-    }
-    sample_voice_loop_cache_t *const cache =
-        &g_sample_voice_loop_cache[state->loop_cache_voice_id];
-    if ((cache->reader != state)
-        || (cache->generation != state->loop_cache_generation)
-        || (sample_audio_key_equal(&cache->key, &state->key) == 0U))
-    {
-        return;
-    }
-    const uint32_t first = state->plan.loop_begin / state->frames_per_page;
-    const uint32_t last = (state->plan.loop_end - 1U) / state->frames_per_page;
-    const uint32_t cache_pages = sample_audio_format_voice_loop_cache_pages(state->format);
-    if ((span->page_index < first) || (span->page_index > last)
-        || ((span->page_index - first) >= cache_pages))
-    {
-        return;
-    }
-    const uint32_t slot = span->page_index - first;
-    if ((cache->valid_mask & (uint8_t)(1U << slot)) != 0U)
-    {
-        return;
-    }
-    sample_page_ref_t *const ref = &cache->refs[slot];
-    ref->key = span->key;
-    ref->page_index = span->page_index;
-    ref->page_generation = span->page_generation;
-    ref->format = span->format;
-    ref->stride_floats = span->stride_floats;
-    ref->frames_per_page = span->frames_per_page;
-    ref->registration_epoch = span->registration_epoch;
-    ref->slot_index = span->slot_index;
-    cache->valid_mask |= (uint8_t)(1U << slot);
-}
-#endif
 
 static void sample_voice_reader_release_audio_cursor(sample_voice_reader_state_t *state)
 {
@@ -141,56 +76,9 @@ static void sample_voice_reader_release_audio_cursor(sample_voice_reader_state_t
         return;
     }
 
-    if (state->audio_cursor.neighbor_acquired != 0U)
-    {
-    }
-
-    if (state->audio_cursor.current_acquired != 0U)
-    {
-    }
-
     memset(&state->audio_cursor, 0, sizeof(state->audio_cursor));
 }
 
-#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
-static uint8_t sample_voice_reader_resolve_loop_page(
-    sample_voice_reader_state_t *state,
-    uint32_t page_index,
-    sample_page_span_t *out_span)
-{
-    if ((state == 0) || (out_span == 0) || (state->loop_cache_valid == 0U)
-        || (state->loop_cache_voice_id >= SAMPLE_STREAM_TARGET_MAX_VOICES))
-    {
-        return 0U;
-    }
-    sample_voice_loop_cache_t *const cache =
-        &g_sample_voice_loop_cache[state->loop_cache_voice_id];
-    if ((cache->reader != state)
-        || (cache->generation != state->loop_cache_generation)
-        || (sample_audio_key_equal(&cache->key, &state->key) == 0U)
-        || (state->frames_per_page == 0U)
-        || (state->plan.loop_end <= state->plan.loop_begin))
-    {
-        return 0U;
-    }
-    const uint32_t first = state->plan.loop_begin / state->frames_per_page;
-    const uint32_t slot = page_index - first;
-    if ((page_index < first) || (slot >= SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES)
-        || ((cache->valid_mask & (uint8_t)(1U << slot)) == 0U))
-    {
-        return 0U;
-    }
-    if (sample_page_cache_audio_resolve_page_ref_key(state->key,
-                                                   &cache->refs[slot],
-                                                   out_span) != 0U)
-    {
-        return 1U;
-    }
-    memset(&cache->refs[slot], 0, sizeof(cache->refs[slot]));
-    cache->valid_mask &= (uint8_t)~(uint8_t)(1U << slot);
-    return 0U;
-}
-#endif
 
 static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_t *state,
                                                       uint32_t frame_pos)
@@ -206,16 +94,8 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
     sample_page_span_t span;
     const uint32_t page_index =
         sample_audio_format_page_index_from_frame(expected_format, frame_pos);
-    uint8_t acquired = 0U;
-#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
-    acquired = sample_voice_reader_resolve_loop_page(state, page_index, &span);
-#endif
-    if (acquired == 0U)
-    {
-        acquired = sample_page_cache_audio_resolve_page_key(state->key,
-                                                          page_index,
-                                                          &span);
-    }
+    const uint8_t acquired = sample_page_cache_audio_resolve_page_key(
+        state->key, page_index, &span);
     if (acquired == 0U)
     {
         PERF_COUNT(PERF_N_AUDIO_PAGE_MISSING);
@@ -248,9 +128,6 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
     state->audio_cursor.registration_epoch = span.registration_epoch;
     state->audio_cursor.current_acquired = 1U;
     state->audio_cursor.active = 1U;
-#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
-    sample_voice_reader_capture_loop_page(state, &span);
-#endif
     return 1U;
 }
 
@@ -299,9 +176,6 @@ static uint8_t sample_voice_reader_acquire_neighbor_page(sample_voice_reader_sta
     state->audio_cursor.neighbor_base = span.frames_interleaved;
     state->audio_cursor.neighbor_start_frame = span.start_frame;
     state->audio_cursor.neighbor_frame_count = span.frame_count;
-#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
-    sample_voice_reader_capture_loop_page(state, &span);
-#endif
     state->audio_cursor.neighbor_acquired = 1U;
     return 1U;
 }
@@ -319,16 +193,6 @@ static uint32_t sample_voice_reader_forward_end_frame(const sample_voice_reader_
     }
 
     return state->plan.region_end;
-}
-
-static uint8_t sample_voice_reader_pingpong_span_valid(const sample_voice_reader_state_t *state)
-{
-    if (state == 0)
-    {
-        return 0U;
-    }
-
-    return (state->plan.loop_end > (state->plan.loop_begin + 1U)) ? 1U : 0U;
 }
 
 static uint32_t sample_voice_reader_forward_frames_before_boundary_q16(
@@ -366,47 +230,6 @@ static uint32_t sample_voice_reader_forward_frames_before_boundary_q16(
     const uint64_t distance_q16 = limit_q16 - (uint64_t)position_q16;
     uint64_t frames =
         (distance_q16 + (uint64_t)step_q16 - 1ULL) / (uint64_t)step_q16;
-    if (frames > (uint64_t)max_frames)
-    {
-        frames = max_frames;
-    }
-    return (uint32_t)frames;
-}
-
-static uint32_t sample_voice_reader_reverse_frames_before_boundary_q16(
-    float position,
-    float step,
-    uint32_t source_start_frame,
-    uint32_t limit_frame,
-    uint32_t max_frames,
-    uint32_t *out_position_q16,
-    uint32_t *out_step_q16)
-{
-    const uint32_t position_q16 =
-        (uint32_t)(((position - (float)source_start_frame)
-                    * (float)SAMPLE_Q16_ONE) + 0.5f);
-    uint32_t step_q16 =
-        (uint32_t)((step * (float)SAMPLE_Q16_ONE) + 0.5f);
-    if (step_q16 == 0U)
-    {
-        step_q16 = 1U;
-    }
-    *out_position_q16 = position_q16;
-    *out_step_q16 = step_q16;
-    if ((limit_frame < source_start_frame) || (max_frames == 0U))
-    {
-        return 0U;
-    }
-
-    const uint64_t limit_q16 =
-        ((uint64_t)(limit_frame - source_start_frame)) << 16U;
-    if ((uint64_t)position_q16 < limit_q16)
-    {
-        return 0U;
-    }
-    /* Reverse positions are pos - n*step and may equal the lower limit. */
-    uint64_t frames =
-        (((uint64_t)position_q16 - limit_q16) / (uint64_t)step_q16) + 1ULL;
     if (frames > (uint64_t)max_frames)
     {
         frames = max_frames;
@@ -551,144 +374,6 @@ static uint8_t sample_voice_reader_prepare_pitch_forward_segment(sample_voice_re
     return 1U;
 }
 
-static uint8_t sample_voice_reader_prepare_pitch_reverse_segment(sample_voice_reader_state_t *state,
-                                                                 uint32_t max_frames,
-                                                                 sample_audio_segment_t *out_segment)
-{
-    if ((state == 0) || (out_segment == 0) || (max_frames == 0U))
-    {
-        return 0U;
-    }
-
-    if (state->position < (float)state->plan.region_begin)
-    {
-        out_segment->status = SAMPLE_AUDIO_SEGMENT_DONE;
-        return 1U;
-    }
-
-    if (state->audio_cursor.current_acquired == 0U)
-    {
-        if (sample_voice_reader_acquire_audio_page(state, (uint32_t)state->position) == 0U)
-        {
-            out_segment->status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
-            return 1U;
-        }
-    }
-
-    const uint32_t segment_limit =
-        (state->plan.region_begin > state->audio_cursor.current_start_frame)
-            ? state->plan.region_begin
-            : state->audio_cursor.current_start_frame;
-    uint32_t position_q16 = 0U;
-    uint32_t step_q16 = 0U;
-    const uint32_t segment_frames =
-        sample_voice_reader_reverse_frames_before_boundary_q16(
-            state->position,
-            state->step,
-            state->audio_cursor.current_start_frame,
-            segment_limit,
-            max_frames,
-            &position_q16,
-            &step_q16);
-    uint8_t needs_neighbor = 0U;
-    uint32_t neighbor_page_index = UINT32_MAX;
-
-    if (segment_frames == 0U)
-    {
-        out_segment->status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
-        return 1U;
-    }
-
-    const uint64_t reverse_span_q16 =
-        (uint64_t)step_q16 * (uint64_t)(segment_frames - 1U);
-    const uint32_t last_position_q16 =
-        (reverse_span_q16 <= (uint64_t)position_q16)
-            ? (position_q16 - (uint32_t)reverse_span_q16)
-            : 0U;
-    const uint32_t last_base_frame =
-        state->audio_cursor.current_start_frame + (last_position_q16 >> 16U);
-    if (last_base_frame > state->plan.region_begin)
-    {
-        const uint32_t neighbor_frame = last_base_frame - 1U;
-        if (neighbor_frame < state->audio_cursor.current_start_frame)
-        {
-            needs_neighbor = 1U;
-            neighbor_page_index = sample_audio_format_page_index_from_frame(
-                state->audio_cursor.format,
-                neighbor_frame);
-        }
-    }
-
-    if ((needs_neighbor != 0U) && (sample_voice_reader_acquire_neighbor_page(state, neighbor_page_index) == 0U))
-    {
-        out_segment->status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
-        return 1U;
-    }
-
-    const uint8_t is_mono = (state->audio_cursor.format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO) ? 1U : 0U;
-    out_segment->l = state->audio_cursor.current_base;
-    out_segment->r = (is_mono != 0U) ? out_segment->l : (state->audio_cursor.current_base + 1U);
-    out_segment->neighbor_l = state->audio_cursor.neighbor_base;
-    out_segment->neighbor_r = (state->audio_cursor.neighbor_base != 0)
-                                  ? ((is_mono != 0U) ? state->audio_cursor.neighbor_base
-                                                    : (state->audio_cursor.neighbor_base + 1U))
-                                  : 0;
-    out_segment->frames = segment_frames;
-    out_segment->frame_stride = state->audio_cursor.stride_floats;
-    out_segment->start_frame = (uint32_t)state->position;
-    out_segment->source_start_frame = state->audio_cursor.current_start_frame;
-    out_segment->source_frame_count = state->audio_cursor.current_frame_count;
-    out_segment->neighbor_start_frame = state->audio_cursor.neighbor_start_frame;
-    out_segment->neighbor_frame_count = state->audio_cursor.neighbor_frame_count;
-    out_segment->source_limit_frame = state->plan.region_end;
-    out_segment->source_region_begin = state->plan.region_begin;
-    out_segment->source_position = state->position;
-    out_segment->source_step = state->step;
-    out_segment->format = state->audio_cursor.format;
-    out_segment->stride_floats = state->audio_cursor.stride_floats;
-    out_segment->frames_per_page = state->audio_cursor.frames_per_page;
-    out_segment->registration_epoch = state->audio_cursor.registration_epoch;
-    out_segment->is_mono = is_mono;
-    out_segment->kernel_type = SAMPLE_KERNEL_PITCH_REV_LINEAR;
-    out_segment->status = SAMPLE_AUDIO_SEGMENT_OK;
-    return 1U;
-}
-
-static void sample_voice_reader_normalize_position(float *io_position,
-                                                   uint8_t *io_reverse,
-                                                   float loop_start,
-                                                   float loop_end,
-                                                   float loop_length,
-                                                   uint8_t loop_mode)
-{
-    if ((io_position == 0) || (io_reverse == 0))
-    {
-        return;
-    }
-
-    if ((loop_mode == 1U) && (*io_reverse == 0U) && (loop_length > 0.0f))
-    {
-        while (*io_position >= loop_end)
-        {
-            *io_position = loop_start + (*io_position - loop_end);
-        }
-    }
-    else if ((loop_mode == 2U) && (loop_length > 0.0f))
-    {
-        while ((*io_reverse == 0U) && (*io_position >= loop_end))
-        {
-            *io_position = ((2.0f * loop_end) - *io_position) - 1.0f;
-            *io_reverse = 1U;
-        }
-
-        while ((*io_reverse != 0U) && (*io_position < loop_start))
-        {
-            *io_position = (2.0f * loop_start) - *io_position;
-            *io_reverse = 0U;
-        }
-    }
-}
-
 void sample_voice_reader_reset(sample_voice_reader_t *reader)
 {
     if (reader == 0)
@@ -697,9 +382,6 @@ void sample_voice_reader_reset(sample_voice_reader_t *reader)
     }
 
     sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
-#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
-    sample_voice_reader_release_loop_cache(state);
-#endif
     sample_voice_reader_release_audio_cursor(state);
     if (state->lease_valid != 0U)
         sample_page_lease_audio_clear(state->lease_slot);
@@ -737,7 +419,9 @@ uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
                                            const sample_play_plan_t *plan,
                                            uint8_t reader_id)
 {
-    if ((reader == 0) || (plan == 0))
+    if ((reader == 0) || (plan == 0)
+        || ((plan->kernel_type != SAMPLE_KERNEL_FWD_1X)
+            && (plan->kernel_type != SAMPLE_KERNEL_PITCH_FWD_LINEAR)))
     {
         return 0U;
     }
@@ -775,54 +459,6 @@ uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
     }
 
     return 1U;
-}
-
-void sample_voice_reader_bind_loop_cache_incarnation(sample_voice_reader_t *reader,
-                                                     uint8_t voice_id,
-                                                     uint32_t generation)
-{
-#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
-    if ((reader == 0) || (voice_id >= SAMPLE_STREAM_TARGET_MAX_VOICES)
-        || (generation == 0U))
-    {
-        return;
-    }
-    sample_voice_loop_cache_t *const cache = &g_sample_voice_loop_cache[voice_id];
-    if (cache->reader != 0)
-    {
-        sample_voice_reader_release_loop_cache(cache->reader);
-    }
-    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
-    cache->reader = state;
-    cache->key = state->key;
-    cache->generation = generation;
-    cache->voice_id = voice_id;
-    state->loop_cache_voice_id = voice_id;
-    state->loop_cache_generation = generation;
-    state->loop_cache_valid = 1U;
-    if (state->audio_cursor.current_acquired != 0U)
-    {
-        const sample_page_ref_t *const current = &state->audio_cursor.current_page_ref;
-        const sample_page_span_t span = {
-            .frames_interleaved = state->audio_cursor.current_base,
-            .frame_count = state->audio_cursor.current_frame_count,
-            .start_frame = state->audio_cursor.current_start_frame,
-            .page_index = current->page_index,
-            .page_generation = current->page_generation,
-            .key = current->key,
-            .format = current->format,
-            .stride_floats = current->stride_floats,
-            .frames_per_page = current->frames_per_page,
-            .registration_epoch = current->registration_epoch,
-            .slot_index = current->slot_index,
-        };
-        sample_voice_reader_capture_loop_page(state, &span);
-    }
-#else
-    (void)reader;
-    (void)voice_id;
-    (void)generation;
-#endif
 }
 
 void sample_voice_reader_set_step(sample_voice_reader_t *reader, float step)
@@ -911,10 +547,7 @@ uint8_t sample_voice_reader_begin_block(sample_voice_reader_t *reader,
     out_block->r = segment.r;
     out_block->frames = segment.frames;
     out_block->frame_stride = segment.frame_stride;
-    out_block->frame_step = ((segment.kernel_type == SAMPLE_KERNEL_REV_1X)
-                             || (segment.kernel_type == SAMPLE_KERNEL_PITCH_REV_LINEAR))
-                                ? -(int32_t)segment.frame_stride
-                                : (int32_t)segment.frame_stride;
+    out_block->frame_step = (int32_t)segment.frame_stride;
     out_block->format = segment.format;
     out_block->frames_per_page = segment.frames_per_page;
     out_block->is_mono = segment.is_mono;
@@ -971,9 +604,7 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
     sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
     if ((state->plan_valid == 0U)
         || ((state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
-            && (state->plan.kernel_type != SAMPLE_KERNEL_REV_1X)
-            && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_FWD_LINEAR)
-            && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_REV_LINEAR)))
+            && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_FWD_LINEAR)))
     {
         return 0U;
     }
@@ -981,11 +612,6 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
     if (state->plan.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR)
     {
         return sample_voice_reader_prepare_pitch_forward_segment(state, max_frames, out_segment);
-    }
-
-    if (state->plan.kernel_type == SAMPLE_KERNEL_PITCH_REV_LINEAR)
-    {
-        return sample_voice_reader_prepare_pitch_reverse_segment(state, max_frames, out_segment);
     }
 
     const uint32_t forward_end = sample_voice_reader_forward_end_frame(state);
@@ -1004,24 +630,11 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
         }
     }
 
-    uint32_t available = 0U;
-    if (state->plan.kernel_type == SAMPLE_KERNEL_REV_1X)
+    uint32_t available = state->audio_cursor.current_frame_count - state->audio_cursor.current_offset_frames;
+    const uint32_t region_remaining = forward_end - state->frame_pos;
+    if (available > region_remaining)
     {
-        available = state->audio_cursor.current_offset_frames + 1U;
-        const uint32_t region_remaining = (state->frame_pos - state->plan.region_begin) + 1U;
-        if (available > region_remaining)
-        {
-            available = region_remaining;
-        }
-    }
-    else
-    {
-        available = state->audio_cursor.current_frame_count - state->audio_cursor.current_offset_frames;
-        const uint32_t region_remaining = forward_end - state->frame_pos;
-        if (available > region_remaining)
-        {
-            available = region_remaining;
-        }
+        available = region_remaining;
     }
     if (available > max_frames)
     {
@@ -1061,9 +674,7 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
 
     sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
     if ((state->plan_valid == 0U) || ((state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
-                                      && (state->plan.kernel_type != SAMPLE_KERNEL_REV_1X)
-                                      && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_FWD_LINEAR)
-                                      && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_REV_LINEAR)))
+                                      && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_FWD_LINEAR)))
     {
         return;
     }
@@ -1073,10 +684,7 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
         const uint32_t forward_end = sample_voice_reader_forward_end_frame(state);
         const uint8_t loop_forward =
             ((state->plan.loop_mode == 1U) && (forward_end > state->plan.loop_begin)) ? 1U : 0U;
-        const uint8_t pingpong =
-            ((state->plan.loop_mode == 2U) && (sample_voice_reader_pingpong_span_valid(state) != 0U)) ? 1U : 0U;
         uint8_t wrapped_loop = 0U;
-        uint8_t bounced_pingpong = 0U;
 
         state->position += state->step * (float)consumed_frames;
         if (loop_forward != 0U)
@@ -1088,26 +696,6 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
             {
                 state->position = loop_begin + (state->position - loop_end);
                 wrapped_loop = 1U;
-            }
-            state->frame_pos = (uint32_t)state->position;
-        }
-        else if (pingpong != 0U)
-        {
-            const float loop_begin = (float)state->plan.loop_begin;
-            const float loop_end = (float)forward_end;
-            while (state->position >= loop_end)
-            {
-                state->position = ((2.0f * loop_end) - state->position) - 1.0f;
-                state->plan.direction = 1U;
-                state->plan.kernel_type = SAMPLE_KERNEL_PITCH_REV_LINEAR;
-                bounced_pingpong = 1U;
-            }
-            while (state->position < loop_begin)
-            {
-                state->position = (2.0f * loop_begin) - state->position;
-                state->plan.direction = 0U;
-                state->plan.kernel_type = SAMPLE_KERNEL_PITCH_FWD_LINEAR;
-                bounced_pingpong = 1U;
             }
             state->frame_pos = (uint32_t)state->position;
         }
@@ -1129,64 +717,7 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
             return;
         }
 
-        if ((wrapped_loop != 0U) || (bounced_pingpong != 0U) || (state->audio_cursor.current_acquired == 0U)
-            || (state->frame_pos < state->audio_cursor.current_start_frame)
-            || (state->frame_pos
-                >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
-        {
-            sample_voice_reader_release_audio_cursor(state);
-            (void)sample_voice_reader_acquire_audio_page(state, state->frame_pos);
-            return;
-        }
-
-        state->audio_cursor.current_offset_frames = state->frame_pos - state->audio_cursor.current_start_frame;
-        return;
-    }
-
-    if (state->plan.kernel_type == SAMPLE_KERNEL_PITCH_REV_LINEAR)
-    {
-        const uint8_t pingpong =
-            ((state->plan.loop_mode == 2U) && (sample_voice_reader_pingpong_span_valid(state) != 0U)) ? 1U : 0U;
-        uint8_t bounced_pingpong = 0U;
-        state->position -= state->step * (float)consumed_frames;
-        if (pingpong != 0U)
-        {
-            const float loop_begin = (float)state->plan.region_begin;
-            while (state->position < loop_begin)
-            {
-                state->position = (2.0f * loop_begin) - state->position;
-                state->plan.direction = 0U;
-                state->plan.kernel_type = SAMPLE_KERNEL_PITCH_FWD_LINEAR;
-                bounced_pingpong = 1U;
-            }
-            while (state->position >= (float)state->plan.region_end)
-            {
-                state->position = ((2.0f * (float)state->plan.region_end) - state->position) - 1.0f;
-                state->plan.direction = 1U;
-                state->plan.kernel_type = SAMPLE_KERNEL_PITCH_REV_LINEAR;
-                bounced_pingpong = 1U;
-            }
-            state->frame_pos = (uint32_t)state->position;
-        }
-        else if (state->position < (float)state->plan.region_begin)
-        {
-            state->position = (float)((int32_t)state->plan.region_begin - 1);
-            state->frame_pos = state->plan.region_begin;
-            state->active = 0U;
-        }
-        else
-        {
-            state->frame_pos = (uint32_t)state->position;
-        }
-
-        sample_voice_reader_publish_lease(state, state->frame_pos);
-        if (state->active == 0U)
-        {
-            sample_voice_reader_release_audio_cursor(state);
-            return;
-        }
-
-        if ((bounced_pingpong != 0U) || (state->audio_cursor.current_acquired == 0U)
+        if ((wrapped_loop != 0U) || (state->audio_cursor.current_acquired == 0U)
             || (state->frame_pos < state->audio_cursor.current_start_frame)
             || (state->frame_pos
                 >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
@@ -1202,64 +733,15 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
 
     const uint32_t forward_end = sample_voice_reader_forward_end_frame(state);
     uint8_t wrapped_loop = 0U;
-    uint8_t bounced_pingpong = 0U;
 
-    if (state->plan.kernel_type == SAMPLE_KERNEL_REV_1X)
+    state->frame_pos += consumed_frames;
+    if ((state->plan.loop_mode == SAMPLE_PLAY_LOOP_FORWARD) && (forward_end > state->plan.loop_begin)
+        && (state->frame_pos >= forward_end))
     {
-        const uint32_t region_remaining = (state->frame_pos - state->plan.region_begin) + 1U;
-        if (consumed_frames >= region_remaining)
-        {
-            if ((state->plan.loop_mode == 2U) && (sample_voice_reader_pingpong_span_valid(state) != 0U))
-            {
-                state->frame_pos = state->plan.loop_begin + 1U;
-                state->plan.direction = 0U;
-                state->plan.kernel_type = SAMPLE_KERNEL_FWD_1X;
-                state->position = (float)state->frame_pos;
-                bounced_pingpong = 1U;
-            }
-            else
-            {
-                state->frame_pos = state->plan.region_begin;
-                state->position = (float)((int32_t)state->plan.region_begin - 1);
-                state->active = 0U;
-            }
-        }
-        else
-        {
-            state->frame_pos -= consumed_frames;
-            state->position = (float)state->frame_pos;
-        }
+        state->frame_pos = state->plan.loop_begin;
+        wrapped_loop = 1U;
     }
-    else
-    {
-        state->frame_pos += consumed_frames;
-        if ((state->plan.loop_mode == 2U) && (state->frame_pos >= forward_end))
-        {
-            if (sample_voice_reader_pingpong_span_valid(state) != 0U)
-            {
-                state->frame_pos = forward_end - 2U;
-                state->plan.direction = 1U;
-                state->plan.kernel_type = SAMPLE_KERNEL_REV_1X;
-                state->position = (float)state->frame_pos;
-                bounced_pingpong = 1U;
-            }
-            else
-            {
-                state->active = 0U;
-                state->position = (float)forward_end;
-            }
-        }
-        else if ((state->plan.loop_mode != 0U) && (forward_end > state->plan.loop_begin)
-                 && (state->frame_pos >= forward_end))
-        {
-            state->frame_pos = state->plan.loop_begin;
-            wrapped_loop = 1U;
-        }
-        if ((wrapped_loop == 0U) && (bounced_pingpong == 0U))
-        {
-            state->position = (float)state->frame_pos;
-        }
-    }
+    state->position = (float)state->frame_pos;
     sample_voice_reader_publish_lease(state, state->frame_pos);
 
     if (state->audio_cursor.current_acquired == 0U)
@@ -1267,26 +749,9 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
         return;
     }
 
-    const uint32_t previous_offset_frames = state->audio_cursor.current_offset_frames;
-    if (state->plan.kernel_type == SAMPLE_KERNEL_REV_1X)
-    {
-        if (consumed_frames > previous_offset_frames)
-        {
-            state->audio_cursor.current_offset_frames = 0U;
-        }
-        else
-        {
-            state->audio_cursor.current_offset_frames -= consumed_frames;
-        }
-    }
-    else
-    {
-        state->audio_cursor.current_offset_frames += consumed_frames;
-    }
+    state->audio_cursor.current_offset_frames += consumed_frames;
 
-    if (((state->plan.kernel_type == SAMPLE_KERNEL_FWD_1X) && (state->plan.loop_mode == 0U)
-         && (state->frame_pos >= forward_end))
-        || ((state->plan.kernel_type == SAMPLE_KERNEL_REV_1X) && (state->active == 0U)))
+    if ((state->plan.loop_mode == SAMPLE_PLAY_LOOP_NONE) && (state->frame_pos >= forward_end))
     {
         sample_voice_reader_release_audio_cursor(state);
         return;
@@ -1299,20 +764,7 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
         return;
     }
 
-    if (bounced_pingpong != 0U)
-    {
-        sample_voice_reader_release_audio_cursor(state);
-        (void)sample_voice_reader_acquire_audio_page(state, state->frame_pos);
-        return;
-    }
-
-    if ((state->plan.kernel_type == SAMPLE_KERNEL_REV_1X) && (consumed_frames <= previous_offset_frames))
-    {
-        return;
-    }
-
-    if ((state->plan.kernel_type == SAMPLE_KERNEL_FWD_1X)
-        && (state->audio_cursor.current_offset_frames < state->audio_cursor.current_frame_count))
+    if (state->audio_cursor.current_offset_frames < state->audio_cursor.current_frame_count)
     {
         return;
     }

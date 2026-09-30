@@ -221,14 +221,14 @@ static uint32_t ui_page_settings_multi_sample_prep_bytes(
         return 0U;
     }
 
-    const sample_audio_format_t format = sample_audio_format_from_channels(sample->channels);
-    return sample_audio_format_multi_start_slot_cost(format)
-           * SAMPLE_PREP_MULTI_START_SLOT_PAGES * SAMPLE_PAGE_BYTES;
+    return (sample->channels == 2U)
+               ? (SAMPLE_PAGE_MIN_READY_PAGES * SAMPLE_PAGE_BYTES)
+               : 0U;
 }
 
 static uint32_t ui_page_settings_multi_slot_bytes(void)
 {
-    return SAMPLE_PREP_MULTI_START_SLOT_PAGES * SAMPLE_PAGE_BYTES;
+    return SAMPLE_PAGE_MIN_READY_PAGES * SAMPLE_PAGE_BYTES;
 }
 
 static uint32_t ui_page_settings_global_memory_used_bytes(void)

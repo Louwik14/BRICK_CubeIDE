@@ -48,8 +48,8 @@ static void sample_page_cache_alloc_range(sample_page_alloc_type_t alloc_type,
                                           uint32_t *out_start,
                                           uint32_t *out_count)
 {
-    uint32_t start = 0U;
-    uint32_t count = SAMPLE_PAGE_MAX_COUNT;
+    uint32_t start = SAMPLE_PAGE_SLOT_POOL_START;
+    uint32_t count = SAMPLE_PAGE_SLOT_POOL_COUNT;
 
     switch (alloc_type)
     {
@@ -61,11 +61,6 @@ static void sample_page_cache_alloc_range(sample_page_alloc_type_t alloc_type,
         case SAMPLE_PAGE_ALLOC_VOICE_WINDOW:
             start = SAMPLE_PAGE_VOICE_WINDOW_POOL_START;
             count = SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT;
-            break;
-
-        case SAMPLE_PAGE_ALLOC_MARGIN:
-            start = SAMPLE_PAGE_MARGIN_POOL_START;
-            count = SAMPLE_PAGE_MARGIN_POOL_COUNT;
             break;
 
         case SAMPLE_PAGE_ALLOC_GENERAL:

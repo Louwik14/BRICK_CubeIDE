@@ -94,14 +94,16 @@ PROGRAM structurellement differents et les PARAM dont la valeur finale change.
 ### Retour STREAM exact
 
 M7 publie une seule classe de protection physique: un lease par lecteur,
-`{seq, key, registration_epoch, ranges[2]}`. Aucun compteur par slot, pin,
-use-count, owner token, curseur ou snapshot de voix ne subsiste.
+`{seq, key, registration_epoch, pages[4], valid_mask}` pour les roles
+`CURRENT`, `NEXT`, `LOOP_START`, `LOOP_START_NEXT`. Aucun compteur par slot,
+pin, use-count, owner token ou snapshot de voix ne subsiste.
 
-Il ne publie ni low-water, ni deadline, ni vitesse, ni wake, ni demande I/O
-explicite. M4 derive le lookahead, possede scheduler, reservations et lectures
-SD. `STREAM M7->M4 = LEASES PHYSIQUES UNIQUEMENT : OUI`.
+Il ne publie ni low-water, ni deadline, ni vitesse ni wake. Les quatre slots
+sont le besoin I/O explicite; M4 les consomme sans lookahead derive et possede
+scheduler, reservations et lectures SD.
+`STREAM M7->M4 = LEASES/BESOINS PHYSIQUES UNIQUEMENT : OUI`.
 
-Les ranges ne decrivent aucune phase musicale. Ils changent seulement lorsque
+Les slots ne decrivent aucune phase musicale. Ils changent seulement lorsque
 l'ensemble des pages encore lisibles change: bind, entree de page, wrap,
 debut/fin du crossfade REC et release physique. La publication supprime les
 ecritures identiques; aucun heartbeat periodique n'existe.

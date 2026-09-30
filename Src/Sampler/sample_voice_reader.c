@@ -14,7 +14,8 @@ typedef struct
 {
     uint8_t lease_slot;
     uint8_t lease_valid;
-    sample_page_lease_range_t lease_ranges[2];
+    uint32_t lease_pages[SAMPLE_PAGE_LEASE_PAGE_COUNT];
+    uint8_t lease_valid_mask;
     uint16_t sample_id;
     sample_audio_key_t key;
     sample_audio_format_t format;
@@ -28,31 +29,10 @@ typedef struct
     sample_play_plan_t plan;
     sample_audio_cursor_t audio_cursor;
     uint8_t plan_valid;
-    uint8_t loop_cache_voice_id;
-    uint8_t loop_cache_valid;
-    uint32_t loop_cache_generation;
 } sample_voice_reader_state_t;
-
-#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
-typedef struct
-{
-    sample_voice_reader_state_t *reader;
-    sample_audio_key_t key;
-    sample_page_ref_t refs[SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES];
-    uint32_t generation;
-    uint8_t voice_id;
-    uint8_t valid_mask;
-} sample_voice_loop_cache_t;
-
-SDRAM_STREAM_SERVICE static sample_voice_loop_cache_t
-    g_sample_voice_loop_cache[SAMPLE_STREAM_TARGET_MAX_VOICES];
-#endif
 
 void sample_voice_reader_init(void)
 {
-#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
-    memset(g_sample_voice_loop_cache, 0, sizeof(g_sample_voice_loop_cache));
-#endif
 }
 
 

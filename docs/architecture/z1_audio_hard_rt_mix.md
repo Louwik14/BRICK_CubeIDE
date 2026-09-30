@@ -89,7 +89,11 @@ Le GROUP master 7 possede le bus AUDIO, les deux kernels Audio FX A/B, MOD et le
 
 ## Sampler mono et stereo
 
-Le format est immutable pendant la voix. Une page physique de 64 KiB contient 16384 frames mono FLOAT32 ou 8192 frames stereo entrelacees. Mono reste mono jusqu'au pan final; Multi applique filtre et VCA par voix avant spread/pan. Les inserts recoivent le signal stereo apres cette projection. Reverse et ping-pong appartiennent au Sampler RAM, pas au streamer.
+Le format Stream est immutable et canonique FLOAT32 stereo 48 kHz. Une page
+physique de 64 KiB contient 8192 frames stereo entrelacees. Multi applique
+filtre et VCA par voix avant spread/pan. Les inserts recoivent le signal stereo
+apres cette projection. Reverse et ping-pong appartiennent au Sampler RAM, pas
+au streamer.
 
 XFADE est un Insert FX terminal et exclusif dans sa chaine de track. Sa porteuse A est la sortie stereo de la chaine de track, apres filtre et traitements locaux; FILTER POS, FX ORDER et les modes MONO/MID/SIDE sont donc non applicables. Le seul mode spatial admis est STEREO.
 

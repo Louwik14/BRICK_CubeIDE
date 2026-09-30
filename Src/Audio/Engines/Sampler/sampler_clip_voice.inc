@@ -510,7 +510,6 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     play_plan.fade_in_frames = 0U;
     play_plan.fade_out_frames = 0U;
     play_plan.step_q16 = pitch_plan.step_q16;
-    play_plan.direction = 0U;
     play_plan.loop_mode = (clip->loop_enabled != 0U) ? BRICK6_SAMPLER_LOOP_FORWARD
                                                      : BRICK6_SAMPLER_LOOP_NONE;
     play_plan.stop_on_underrun = 1U;
