@@ -121,6 +121,12 @@ uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
                                                 sample_page_raw_allocation_t *out_allocation);
 void sample_page_cache_release_slot_pool_allocation(uint16_t first_slot,
                                                     uint16_t page_count);
+void sample_page_cache_mark_slot_pool_payload_cpu_clean(uint16_t first_slot,
+                                                        uint16_t page_count);
+uint8_t sample_page_cache_loading_target_payload_cpu_clean(
+    const sample_page_load_target_t *target);
+uint8_t sample_page_cache_clean_loading_payload(
+    const sample_page_load_token_t *token, uint32_t modified_bytes);
 uint32_t sample_page_cache_slot_pool_total_bytes(void);
 uint32_t sample_page_cache_slot_pool_free_bytes(void);
 uint8_t sample_page_cache_get_stream_info(uint16_t sample_id,

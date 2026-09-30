@@ -1,7 +1,9 @@
 void sample_page_cache_init(void)
 {
+    g_sample_page_payload_clean_contract_active = 0U;
     sample_page_cache_reset();
     g_sample_page_cache_state.initialized = 1U;
+    g_sample_page_payload_clean_contract_active = 1U;
 }
 
 void sample_page_cache_reset(void)
@@ -203,6 +205,8 @@ uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
         page->generation = ++g_sample_page_cache_state.generation_counter;
         page->last_touch = ++g_sample_page_cache_state.touch_counter;
         page->static_resident = 1U;
+        /* Returning a writable raw allocation transfers CPU ownership. */
+        page->payload_cpu_clean = 0U;
         sample_page_cache_set_state(page, SAMPLE_PAGE_READY);
     }
 
@@ -211,6 +215,19 @@ uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
     out_allocation->capacity_bytes = page_count * SAMPLE_PAGE_BYTES;
     out_allocation->data = (void *)&g_sample_page_data[start_slot][0];
     return 1U;
+}
+
+void sample_page_cache_mark_slot_pool_payload_cpu_clean(uint16_t first_slot,
+                                                        uint16_t page_count)
+{
+    if ((page_count == 0U) || (first_slot < SAMPLE_PAGE_SLOT_POOL_START)
+        || (((uint32_t)first_slot + page_count)
+            > (SAMPLE_PAGE_SLOT_POOL_START + SAMPLE_PAGE_SLOT_POOL_COUNT)))
+        return;
+    __DMB();
+    for (uint32_t i = 0U; i < page_count; ++i)
+        g_sample_page_desc[(uint32_t)first_slot + i].payload_cpu_clean = 1U;
+    __DMB();
 }
 
 void sample_page_cache_release_slot_pool_allocation(uint16_t first_slot,

@@ -9,6 +9,7 @@
 #include "Sampler/sample_page_lease_control.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Platform/stream_rec_perf.h"
+#include "Platform/cache_maintenance.h"
 #include "Storage/waveform_service.h"
 #include "SD/sd_block_device.h"
 #include "stm32h7xx.h"
@@ -17,6 +18,8 @@
 _Static_assert(sizeof(float) == SAMPLE_PAGE_SAMPLE_BYTES, "sample_page_cache expects 32-bit float");
 _Static_assert((SAMPLE_PAGE_SLOT_FLOAT_CAPACITY * sizeof(float)) == SAMPLE_PAGE_BYTES,
                "sample page slot must remain exactly one physical page");
+_Static_assert((SAMPLE_PAGE_BYTES % DCACHE_LINE_SIZE_BYTES) == 0U,
+               "sample page payload must contain complete cachelines");
 #endif
 
 typedef sample_page_backing_descriptor_t sample_page_desc_t;
@@ -56,6 +59,9 @@ SDRAM_PAGE_META static sample_page_sample_desc_t
 static CTRL_STATE uint16_t g_sample_page_reserved_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_free_cursor;
 static CTRL_STATE uint16_t g_sample_page_evict_cursor;
+/* Zero-initialized outside the NOLOAD page metadata.  Boot may not inspect
+ * payload_cpu_clean until reset has established every descriptor. */
+static uint8_t g_sample_page_payload_clean_contract_active;
 
 #define g_sample_page_desc g_sample_page_descriptor
 

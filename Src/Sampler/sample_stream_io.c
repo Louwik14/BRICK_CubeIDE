@@ -205,6 +205,13 @@ static void sample_stream_io_finalize(sample_stream_io_async_t *async)
             #endif
             remaining = first;
         }
+        if (sample_page_cache_clean_loading_payload(
+                &async->result.token,
+                target.frame_count * 2U * sizeof(float)) == 0U)
+        {
+            async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+            return;
+        }
 #if BRICK_PERF_DIAG
         brick_perf_add(PERF_CPU_REC_SOURCE_SCRATCH, scratch_cycles);
         brick_perf_add(PERF_CPU_REC_SOURCE_CONVERT, conversion_cycles);
@@ -333,6 +340,8 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
                     cursor,
                     (uint8_t *)async->target.frames_interleaved,
                     SAMPLE_PAGE_BYTES,
+                    sample_page_cache_loading_target_payload_cpu_clean(
+                        &async->target),
                     command->deadline_margin_us) != 0U)
         {
             async->physical_active = 1U;
@@ -357,14 +366,22 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
         if ((source_offset <= UINT32_MAX)
             && (f_open(&file, command->stream_info.path, FA_READ) == FR_OK))
         {
-            if ((f_lseek(&file, (FSIZE_t)source_offset) == FR_OK)
-                && (f_read(&file, async->target.frames_interleaved,
-                           async->result.source_bytes, &read) == FR_OK)
-                && (read == async->result.source_bytes))
+            if (f_lseek(&file, (FSIZE_t)source_offset) == FR_OK)
             {
-                async->result.read_bytes = read;
-                async->result.load_result = SAMPLE_PAGE_LOAD_OK;
-                async->source = (const uint8_t *)async->target.frames_interleaved;
+                const FRESULT read_result = f_read(
+                    &file, async->target.frames_interleaved,
+                    async->result.source_bytes, &read);
+                const uint8_t cache_clean = (uint8_t)((read == 0U)
+                    || (sample_page_cache_clean_loading_payload(
+                            &async->result.token, read) != 0U));
+                if ((read_result == FR_OK)
+                    && (read == async->result.source_bytes)
+                    && (cache_clean != 0U))
+                {
+                    async->result.read_bytes = read;
+                    async->result.load_result = SAMPLE_PAGE_LOAD_OK;
+                    async->source = (const uint8_t *)async->target.frames_interleaved;
+                }
             }
             (void)f_close(&file);
         }

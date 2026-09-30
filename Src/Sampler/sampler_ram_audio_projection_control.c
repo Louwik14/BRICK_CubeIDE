@@ -7,6 +7,7 @@
 #include "Platform/cache_maintenance.h"
 #include "Platform/memory_layout.h"
 #include "Sampler/sample_global_pool.h"
+#include "Sampler/sample_page_cache_port.h"
 #include "stm32h7xx_hal.h"
 
 void sampler_ram_audio_projection_init(void)
@@ -30,6 +31,8 @@ uint8_t sampler_ram_audio_projection_build(uint16_t ram_slot,
                                          data_bytes, &data) == 0U) return 0U;
     dcache_clean_by_addr_aligned(slot->data, data_bytes);
     dcache_invalidate_by_addr_aligned(slot->data, data_bytes);
+    sample_page_cache_port_mark_shared_cpu_clean(slot->first_page_slot,
+                                                 slot->page_count);
     *out = (sampler_ram_audio_descriptor_t){
         .generation = slot->generation, .frames = slot->frames,
         .sample_rate = slot->sample_rate, .data_offset = slot->data_offset,

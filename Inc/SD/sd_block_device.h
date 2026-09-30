@@ -67,6 +67,12 @@ sd_block_device_result_t sd_block_device_async_read_submit(
     uint32_t sector_count,
     void *dst,
     uint32_t owner_generation);
+/* RX fast path: every destination cacheline is known free of CPU dirty data
+ * and the sector transfer overwrites complete, aligned cachelines.  The
+ * normal post-DMA invalidate remains mandatory. */
+sd_block_device_result_t sd_block_device_async_read_submit_cpu_clean(
+    uint32_t lba, uint32_t sector_count, void *dst,
+    uint32_t owner_generation);
 sd_block_device_result_t sd_block_device_async_write_submit(
     uint32_t lba,
     uint32_t sector_count,

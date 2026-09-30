@@ -243,6 +243,42 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
     return completed;
 }
 
+uint8_t sample_page_cache_loading_target_payload_cpu_clean(
+    const sample_page_load_target_t *target)
+{
+    if ((target == NULL) || (target->slot_index >= SAMPLE_PAGE_MAX_COUNT))
+        return 0U;
+    const sample_page_desc_t *const page = &g_sample_page_desc[target->slot_index];
+    return (uint8_t)((page->state == SAMPLE_PAGE_LOADING)
+        && (page->generation == target->page_generation)
+        && (page->registration_epoch == target->registration_epoch)
+        && (page->page_index == target->page_index)
+        && (sample_audio_key_equal(&page->key, &target->key) != 0U)
+        && (page->payload_cpu_clean != 0U));
+}
+
+uint8_t sample_page_cache_clean_loading_payload(
+    const sample_page_load_token_t *token, uint32_t modified_bytes)
+{
+    if ((token == NULL) || (token->slot_index >= SAMPLE_PAGE_MAX_COUNT)
+        || (modified_bytes == 0U) || (modified_bytes > SAMPLE_PAGE_BYTES))
+        return 0U;
+    sample_page_desc_t *const page = &g_sample_page_desc[token->slot_index];
+    if ((page->state != SAMPLE_PAGE_LOADING)
+        || (page->generation != token->page_generation)
+        || (page->registration_epoch != token->registration_epoch)
+        || (page->page_index != token->page_index)
+        || (sample_audio_key_equal(&page->key, &token->key) == 0U))
+        return 0U;
+    float *const payload = sample_page_cache_data_resolve(page);
+    if (payload == NULL) return 0U;
+    page->payload_cpu_clean = 0U;
+    dcache_clean_by_addr_aligned(payload, modified_bytes);
+    __DMB();
+    page->payload_cpu_clean = 1U;
+    return 1U;
+}
+
 uint8_t sample_page_cache_cancel_loading_key(sample_audio_key_t key,
                                                uint32_t page_index)
 {

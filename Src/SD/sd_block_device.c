@@ -36,6 +36,7 @@ typedef struct
     uint8_t started;
     uint8_t callback_seen;
     uint8_t completed;
+    uint8_t read_destination_cpu_clean;
     volatile uint8_t irq_complete;
     volatile uint8_t irq_error;
     uint8_t prepared;
@@ -292,9 +293,11 @@ static uint8_t sd_block_device_prepare_next(uint8_t index)
         return 0U;
     }
 
-    dcache_invalidate_by_addr_aligned(
-        next->buffer,
-        (size_t)next->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
+    /* Stream page ownership may prove that no dirty CPU line exists. */
+    if (next->read_destination_cpu_clean == 0U)
+        dcache_invalidate_by_addr_aligned(
+            next->buffer,
+            (size_t)next->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
     const sdmmc_async_prepared_transfer_t transfer = {
         .lba = next->lba,
         .sector_count = next->sector_count,
@@ -353,9 +356,11 @@ static void sd_block_device_async_start_head(void)
     uint8_t start_result;
     if(entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
     {
-        dcache_invalidate_by_addr_aligned(
-            entry->buffer,
-            (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
+        /* Generic clients retain the conservative pre-DMA invalidate. */
+        if (entry->read_destination_cpu_clean == 0U)
+            dcache_invalidate_by_addr_aligned(
+                entry->buffer,
+                (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
         g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_READ_DMA;
         start_result = (sdmmc_async_transport_start_read(
             entry->buffer, entry->lba, entry->sector_count) != 0U)
@@ -419,7 +424,8 @@ static sd_block_device_result_t sd_block_device_async_read_submit_internal(
     uint32_t lba,
     uint32_t sector_count,
     void *dst,
-    uint32_t owner_generation)
+    uint32_t owner_generation,
+    uint8_t destination_cpu_clean)
 {
     const sd_block_device_result_t valid =
         sd_block_device_validate_submit(sector_count, dst);
@@ -441,6 +447,7 @@ static sd_block_device_result_t sd_block_device_async_read_submit_internal(
     entry->operation = SD_BLOCK_DEVICE_OPERATION_READ;
     entry->result = SD_BLOCK_DEVICE_BUSY;
     entry->owner_generation = owner_generation;
+    entry->read_destination_cpu_clean = destination_cpu_clean;
     entry->token = sd_block_device_allocate_token();
     entry->queued_tick = HAL_GetTick();
     entry->perf_submit_cycles = brick_perf_now();
@@ -469,7 +476,8 @@ sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
                                                        uint32_t sector_count,
                                                        void *dst)
 {
-    return sd_block_device_async_read_submit_internal(lba, sector_count, dst, 0U);
+    return sd_block_device_async_read_submit_internal(lba, sector_count, dst,
+                                                      0U, 0U);
 }
 
 sd_block_device_result_t sd_block_device_async_read_submit(
@@ -479,7 +487,15 @@ sd_block_device_result_t sd_block_device_async_read_submit(
     uint32_t owner_generation)
 {
     return sd_block_device_async_read_submit_internal(
-        lba, sector_count, dst, owner_generation);
+        lba, sector_count, dst, owner_generation, 0U);
+}
+
+sd_block_device_result_t sd_block_device_async_read_submit_cpu_clean(
+    uint32_t lba, uint32_t sector_count, void *dst,
+    uint32_t owner_generation)
+{
+    return sd_block_device_async_read_submit_internal(
+        lba, sector_count, dst, owner_generation, 1U);
 }
 
 sd_block_device_result_t sd_block_device_async_write_submit(
@@ -639,6 +655,8 @@ void sd_block_device_async_poll(void)
         }
         if(entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
         {
+            /* Always discard stale/speculative CPU lines before publishing
+             * DMA data to its consumer, including the CPU-clean fast path. */
             dcache_invalidate_by_addr_aligned(
                 entry->buffer,
                 (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);

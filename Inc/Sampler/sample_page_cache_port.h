@@ -18,6 +18,8 @@ uint8_t sample_page_cache_port_alloc_shared(
     uint32_t bytes, sample_page_loader_allocation_t *out);
 void sample_page_cache_port_release_shared(uint16_t first_slot,
                                            uint16_t page_count);
+void sample_page_cache_port_mark_shared_cpu_clean(uint16_t first_slot,
+                                                  uint16_t page_count);
 void *sample_page_cache_port_resolve_shared(
     const sample_page_loader_allocation_t *allocation);
 uint32_t sample_page_cache_port_shared_total_bytes(void);

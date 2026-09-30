@@ -136,6 +136,7 @@ uint8_t sample_stream_backend_physical_begin(
     sample_stream_physical_cursor_t *cursor,
     uint8_t *buffer,
     uint32_t buffer_capacity,
+    uint8_t destination_cpu_clean,
     uint32_t deadline_margin_us)
 {
     if ((async != 0) && (sample_stream_backend_physical_find(async) < 0))
@@ -181,6 +182,7 @@ uint8_t sample_stream_backend_physical_begin(
     async->file_byte_offset = file_byte_offset;
     async->buffer_capacity = buffer_capacity;
     async->source_bytes = source_bytes;
+    async->destination_cpu_clean = destination_cpu_clean;
     async->count_multi_diag = (target->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI);
     async->deadline_margin_us = deadline_margin_us;
     async->deadline_started_ms = HAL_GetTick();
@@ -342,11 +344,17 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
         return SD_SCHEDULER_START_ERROR;
     }
     PERF_START(read_start);
-    const sd_block_device_result_t result = sd_block_device_async_read_submit(
-        span.lba, span.sector_count,
-        &async->buffer[async->buffer_sectors
-                        * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE],
-        async->owner_generation);
+    const sd_block_device_result_t result = (async->destination_cpu_clean != 0U)
+        ? sd_block_device_async_read_submit_cpu_clean(
+            span.lba, span.sector_count,
+            &async->buffer[async->buffer_sectors
+                            * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE],
+            async->owner_generation)
+        : sd_block_device_async_read_submit(
+            span.lba, span.sector_count,
+            &async->buffer[async->buffer_sectors
+                            * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE],
+            async->owner_generation);
     PERF_END(PERF_CPU_STREAM_READ_START, read_start);
     if ((result == SD_BLOCK_DEVICE_BUSY)
             || (result == SD_BLOCK_DEVICE_QUEUE_FULL))

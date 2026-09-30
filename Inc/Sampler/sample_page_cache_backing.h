@@ -27,7 +27,8 @@ typedef struct
     uint8_t reserved[3];
     uint32_t generation;
     uint8_t load_cancel_requested;
-    uint8_t lifecycle_reserved[3];
+    uint8_t payload_cpu_clean;
+    uint8_t lifecycle_reserved[2];
     uint32_t last_touch;
 } sample_page_backing_descriptor_t;
 

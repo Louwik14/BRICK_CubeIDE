@@ -41,6 +41,7 @@ typedef struct
     uint32_t cached_map_generation;
     uint32_t cached_media_epoch;
     uint8_t cached_span_valid;
+    uint8_t destination_cpu_clean;
 } sample_stream_backend_physical_async_t;
 
 uint8_t sample_stream_backend_physical_begin(
@@ -50,6 +51,7 @@ uint8_t sample_stream_backend_physical_begin(
     sample_stream_physical_cursor_t *cursor,
     uint8_t *buffer,
     uint32_t buffer_capacity,
+    uint8_t destination_cpu_clean,
     uint32_t deadline_margin_us);
 uint8_t sample_stream_backend_physical_poll(
     sample_stream_backend_physical_async_t *async,

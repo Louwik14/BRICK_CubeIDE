@@ -272,6 +272,12 @@ static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot
         return;
     }
 
+    if ((g_sample_page_payload_clean_contract_active != 0U)
+        && (page->payload_cpu_clean == 0U))
+    {
+        dcache_clean_by_addr_aligned(&g_sample_page_data[slot_index][0],
+                                     SAMPLE_PAGE_BYTES);
+    }
     const uint16_t key_slot = sample_page_cache_key_slot(page->key);
     if ((key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
         && (g_sample_page_last_slot[key_slot] == slot_index))
@@ -290,6 +296,7 @@ static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot
     page->page_index = UINT32_MAX;
     page->start_frame = UINT32_MAX;
     page->data_offset = slot_index * SAMPLE_PAGE_BYTES;
+    page->payload_cpu_clean = 1U;
     page->state = SAMPLE_PAGE_FREE;
 }
 

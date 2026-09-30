@@ -11,6 +11,7 @@
 #include "IPC/shared_memory_ref_control.h"
 #include "Platform/memory_layout.h"
 #include "Sampler/sample_global_pool.h"
+#include "Sampler/sample_page_cache_port.h"
 #include "Sampler/wavetable_pool.h"
 #include "Storage/project_control.h"
 #include "Track/track_runtime.h"
@@ -50,6 +51,8 @@ uint8_t audio_wave_table_projection_build_descriptor(
                                          &out->base_data) == 0U)
         return 0U;
     dcache_clean_by_addr_aligned(slot->data, slot->data_bytes);
+    sample_page_cache_port_mark_shared_cpu_clean(slot->first_page_slot,
+                                                 slot->page_count);
     uint32_t mip_offset = 0U;
     for (uint16_t i = 0U; i < out->band_count; ++i)
     {
@@ -68,6 +71,8 @@ uint8_t audio_wave_table_projection_build_descriptor(
         mip_offset += bytes;
     }
     dcache_clean_by_addr_aligned(slot->mipmap.data, slot->mipmap.data_bytes);
+    sample_page_cache_port_mark_shared_cpu_clean(
+        slot->mipmap.first_page_slot, slot->mipmap.page_count);
     return 1U;
 }
 

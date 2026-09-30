@@ -1139,6 +1139,7 @@ static void sampler_ram_pool_load_async_step(void)
                     &job->stream_cursor, (uint8_t *)(void *)destination,
                     job->allocation.capacity_bytes
                         - job->frames_done * job->candidate.bytes_per_frame,
+                    0U,
                     UINT32_MAX) == 0U)
             {
                 sampler_ram_load_fail(SAMPLER_RAM_RESULT_READ_FAIL);
