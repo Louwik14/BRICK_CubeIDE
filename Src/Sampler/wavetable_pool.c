@@ -11,7 +11,7 @@
 #include "Platform/cache_maintenance.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Sampler/audio_wave_table_projection_control.h"
-#include "IPC/control_audio_timing.h"
+#include "ControlRT/control_audio_timing.h"
 #include "Storage/sd_access_gate.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Platform/memory_layout.h"

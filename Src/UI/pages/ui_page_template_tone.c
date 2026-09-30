@@ -7,7 +7,7 @@
 #include "Param/engine_model_catalog.h"
 #include "Param/md_model_catalog.h"
 #include "IPC/synth_waveform_contract.h"
-#include "IPC/control_audio_visual.h"
+#include "ControlRT/control_audio_visual.h"
 #include "Storage/project_control.h"
 #include "Param/param_registry.h"
 #include "Param/param_prism_labels.h"

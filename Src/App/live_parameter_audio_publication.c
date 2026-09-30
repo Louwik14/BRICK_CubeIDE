@@ -2,10 +2,10 @@
 
 #include <stddef.h>
 
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Platform/brick_media_clock.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/live_parameter_event.h"
 #include "Param/param_value_policy.h"
 #include "Param/param_registry.h"
 #include "Track/track_runtime.h"

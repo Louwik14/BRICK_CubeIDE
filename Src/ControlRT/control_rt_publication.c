@@ -2,8 +2,8 @@
 
 #include <string.h>
 
-#include "IPC/control_audio_fifo_control.h"
-#include "IPC/control_audio_timing.h"
+#include "ControlRT/control_audio_fifo_control.h"
+#include "ControlRT/control_audio_timing.h"
 #include "Platform/brick_media_clock.h"
 #include "Platform/memory_layout.h"
 #include "Track/track_runtime.h"
@@ -12,7 +12,7 @@
 #include "IPC/audio_recorder_capture_contract.h"
 #include "IPC/audio_rec_bus_contract.h"
 #include "IPC/audio_wave_table_projection.h"
-#include "IPC/audio_state_snapshot.h"
+#include "ControlRT/audio_state_transaction.h"
 #include "ControlRT/audio_state_snapshot_control.h"
 #include "IPC/fm_dsp_projection.h"
 #include "Mod/mod_matrix.h"
@@ -179,7 +179,8 @@ static uint8_t control_rt_command_is_structural(
                     || (command->entity < BRICK_ENTITY_CAPACITY)));
         case CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT:
             return (uint8_t)((kind <= CONTROL_AUDIO_STATE_PATCH)
-                && (command->value != 0U));
+                && (command->entity == 0U) && (command->id == 0U)
+                && (command->value == 0U));
         default:
             return 0U;
     }
@@ -240,7 +241,7 @@ static uint8_t audio_state_snapshot_command_is_projectable(
 
 void audio_state_snapshot_control_init(void)
 {
-    memset(&g_audio_prepared_state, 0, sizeof(g_audio_prepared_state));
+    memset(&g_audio_state_transaction, 0, sizeof(g_audio_state_transaction));
     g_audio_state_snapshot_depth = 0U;
     g_audio_state_snapshot_transition = CONTROL_AUDIO_STATE_PATTERN;
 }
@@ -263,8 +264,7 @@ uint8_t audio_state_snapshot_control_begin(
             || (g_audio_state_snapshot_depth == UINT8_MAX)) return 0U;
     if (g_audio_state_snapshot_depth == 0U)
     {
-        g_audio_prepared_state.valid_magic = 0U;
-        g_audio_prepared_state.count = 0U;
+        g_audio_state_transaction.count = 0U;
         g_audio_state_snapshot_transition = transition;
     }
     ++g_audio_state_snapshot_depth;
@@ -300,23 +300,23 @@ uint8_t audio_state_snapshot_control_absorb(
             continue;
         command.effective_sample_time = 0U;
         uint16_t index = 0U;
-        while ((index < g_audio_prepared_state.count)
+        while ((index < g_audio_state_transaction.count)
                 && (audio_state_snapshot_same_key(
-                    &g_audio_prepared_state.command[index], &command) == 0U))
+                    &g_audio_state_transaction.command[index], &command) == 0U))
             ++index;
-        if (index < g_audio_prepared_state.count)
-            g_audio_prepared_state.command[index] = command;
+        if (index < g_audio_state_transaction.count)
+            g_audio_state_transaction.command[index] = command;
         else
         {
-            if (g_audio_prepared_state.count
-                    >= AUDIO_STATE_SNAPSHOT_COMMAND_CAPACITY) return 0U;
-            g_audio_prepared_state.command[g_audio_prepared_state.count++] = command;
+            if (g_audio_state_transaction.count
+                    >= AUDIO_STATE_TRANSACTION_COMMAND_CAPACITY) return 0U;
+            g_audio_state_transaction.command[g_audio_state_transaction.count++] = command;
         }
         if (opcode != CONTROL_AUDIO_COMMAND_PROGRAM) continue;
-        for (uint16_t old = 0U; old < g_audio_prepared_state.count; )
+        for (uint16_t old = 0U; old < g_audio_state_transaction.count; )
         {
             control_audio_command_t *const candidate =
-                &g_audio_prepared_state.command[old];
+                &g_audio_state_transaction.command[old];
             if ((CONTROL_AUDIO_COMMAND_OPCODE(candidate)
                     == CONTROL_AUDIO_COMMAND_PARAM)
                     && (candidate->entity == command.entity)
@@ -325,8 +325,8 @@ uint8_t audio_state_snapshot_control_absorb(
                     && (audio_state_snapshot_command_is_current(
                         candidate) == 0U))
             {
-                g_audio_prepared_state.command[old] =
-                    g_audio_prepared_state.command[--g_audio_prepared_state.count];
+                g_audio_state_transaction.command[old] =
+                    g_audio_state_transaction.command[--g_audio_state_transaction.count];
                 continue;
             }
             ++old;
@@ -350,31 +350,28 @@ uint8_t audio_state_snapshot_control_commit(void)
     --g_audio_state_snapshot_depth;
     if (g_audio_state_snapshot_depth != 0U) return 1U;
     uint16_t count = 0U;
-    for (uint16_t i = 0U; i < g_audio_prepared_state.count; ++i)
+    for (uint16_t i = 0U; i < g_audio_state_transaction.count; ++i)
         if (audio_state_snapshot_command_is_current(
-                &g_audio_prepared_state.command[i]) != 0U)
-            g_audio_prepared_state.command[count++] =
-                g_audio_prepared_state.command[i];
-    g_audio_prepared_state.count = count;
+                &g_audio_state_transaction.command[i]) != 0U)
+            g_audio_state_transaction.command[count++] =
+                g_audio_state_transaction.command[i];
+    g_audio_state_transaction.count = count;
     uint16_t program_count = 0U;
     for (uint16_t i = 0U; i < count; ++i)
     {
-        if (CONTROL_AUDIO_COMMAND_OPCODE(&g_audio_prepared_state.command[i])
+        if (CONTROL_AUDIO_COMMAND_OPCODE(&g_audio_state_transaction.command[i])
                 != CONTROL_AUDIO_COMMAND_PROGRAM) continue;
         const control_audio_command_t program =
-            g_audio_prepared_state.command[i];
-        memmove(&g_audio_prepared_state.command[program_count + 1U],
-                &g_audio_prepared_state.command[program_count],
+            g_audio_state_transaction.command[i];
+        memmove(&g_audio_state_transaction.command[program_count + 1U],
+                &g_audio_state_transaction.command[program_count],
                 (size_t)(i - program_count)
-                    * sizeof(g_audio_prepared_state.command[0]));
-        g_audio_prepared_state.command[program_count++] = program;
+                    * sizeof(g_audio_state_transaction.command[0]));
+        g_audio_state_transaction.command[program_count++] = program;
     }
-    uint32_t generation = 0U;
-    if ((count == 0U) || (audio_state_snapshot_publish(
-            g_audio_prepared_state.command, count, &generation) == 0U))
-        return 0U;
+    if (count == 0U) return 0U;
+    __DMB();
     control_audio_command_t commit = {
-        .value = generation,
         .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
             CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT,
             g_audio_state_snapshot_transition)
@@ -383,8 +380,8 @@ uint8_t audio_state_snapshot_control_commit(void)
     const uint32_t commit_head = control_audio_fifo_control_head_snapshot();
     while (control_audio_fifo_control_head_consumed(commit_head) == 0U)
     {
-        /* SAI preempts CONTROL every 64 frames on H743; on H747 the AUDIO
-         * core advances tail concurrently.  Crossing tail proves apply done. */
+        /* SAI preempts CONTROL every 64 frames. Crossing tail proves that the
+         * IRQ finished applying the immutable local transaction. */
         __DMB();
     }
     return 1U;

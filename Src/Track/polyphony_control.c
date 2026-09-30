@@ -1,7 +1,7 @@
 #include "Track/polyphony_control.h"
 
 #include "Platform/brick_media_clock.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "App/live_parameter_audio_publication.h"
 #include "Track/entity_types.h"
 #include "Track/synth_polyphony.h"
@@ -9,7 +9,7 @@
 #include "Track/control_music_output.h"
 #include "Track/track_runtime.h"
 #include "Param/param_registry.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/live_parameter_event.h"
 #include "main.h"
 #include <math.h>
 #include <stddef.h>

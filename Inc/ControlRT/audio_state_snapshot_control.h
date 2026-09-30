@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 
 void audio_state_snapshot_control_init(void);
 uint8_t audio_state_snapshot_control_begin(

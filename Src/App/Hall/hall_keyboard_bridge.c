@@ -1,7 +1,7 @@
 #include "App/Hall/hall_keyboard_bridge.h"
 
 #include "App/Hall/hall_engine.h"
-#include "IPC/live_event.h"
+#include "ControlRT/live_event.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Keyboard/keyboard_input.h"
 #include "pages/ui_page_audio_rec.h"

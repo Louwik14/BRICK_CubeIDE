@@ -1,9 +1,9 @@
 #include "Mod/mod_matrix_control.h"
 
 #include "Platform/brick_media_clock.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "App/live_parameter_audio_publication.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/live_parameter_event.h"
 #include "Mod/mod_destination_control.h"
 #include "Mod/mod_lfo_v1_control.h"
 #include "Param/param_registry.h"

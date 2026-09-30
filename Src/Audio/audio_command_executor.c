@@ -2,11 +2,11 @@
 
 #include <string.h>
 
-#include "IPC/control_audio_command.h"
-#include "IPC/control_audio_fifo_audio.h"
+#include "ControlRT/control_audio_command.h"
+#include "Audio/control_audio_fifo_audio.h"
 #include "Seq/seq_engine.h"
-#include "IPC/audio_state_snapshot.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/audio_state_transaction.h"
+#include "ControlRT/live_parameter_event.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
 #include "Audio/metronome_runtime.h"
@@ -449,12 +449,13 @@ static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
 static audio_command_apply_result_t audio_command_apply_state_commit(
     const control_audio_command_t *commit)
 {
-    const control_audio_command_t *commands = NULL;
-    uint16_t count = 0U;
     const uint8_t transition = CONTROL_AUDIO_COMMAND_KIND(commit);
-    if ((transition > CONTROL_AUDIO_STATE_PATCH)
-            || (audio_state_snapshot_resolve(
-                commit->value, &commands, &count) == 0U))
+    __DMB();
+    const uint16_t count = g_audio_state_transaction.count;
+    const control_audio_command_t *const commands =
+        g_audio_state_transaction.command;
+    if ((transition > CONTROL_AUDIO_STATE_PATCH) || (count == 0U)
+            || (count > AUDIO_STATE_TRANSACTION_COMMAND_CAPACITY))
         return AUDIO_COMMAND_APPLY_INVALID;
 
     const control_audio_command_t *programs[BRICK_ENTITY_CAPACITY] = {0};

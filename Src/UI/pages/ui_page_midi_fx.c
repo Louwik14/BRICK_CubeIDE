@@ -3,7 +3,7 @@
 #include "Param/engine_model_catalog.h"
 #include "Param/audio_fx_param_catalog.h"
 #include "Track/audio_fx_control_state.h"
-#include "IPC/control_audio_visual.h"
+#include "ControlRT/control_audio_visual.h"
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
 #include "NoteFx/note_fx_state.h"

@@ -29,7 +29,7 @@
 #include "Audio/audio_rec_level_producer.h"
 #include "Platform/stream_rec_perf.h"
 #include "Audio/sd_preview_audio.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 
 #include "env_adsr.h"
 #include "vca_env.h"

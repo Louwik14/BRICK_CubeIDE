@@ -8,7 +8,7 @@
 #include "Track/track_runtime.h"
 #include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/live_parameter_event.h"
 
 CONTROL_STATE_SDRAM static param_filter_control_state_t
     g_param_filter_control[SEQ_LANE_CAPACITY];

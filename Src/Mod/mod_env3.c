@@ -7,7 +7,7 @@
 #include "stm32h7xx.h"
 #include "Audio/env_adsr.h"
 #include "Audio/audio_note_engine_adapter.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "Param/param_filter_audio.h"
 #include "Track/entity_types.h"
 #include "Platform/memory_layout.h"

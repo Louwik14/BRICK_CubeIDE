@@ -11,7 +11,7 @@ typedef enum
     LIVE_EVENT_SOURCE_MIDI_HOST = 2
 } live_event_source_t;
 
-/* Fixed-size, pointer-free contract suitable for a future shared M4/M7 RAM. */
+/* Fixed-size event copied from ingress IRQ context to CONTROL. */
 typedef struct
 {
     uint32_t tim5_tick;
@@ -29,8 +29,7 @@ typedef enum
     LIVE_NOTE_EVENT_ON = 1
 } live_note_event_type_t;
 
-/* Audio-owned timed queue item. It is fixed-size, pointer-free and therefore
- * directly transferable to a future shared M4/M7 event queue. */
+/* Fixed-size timed event retained by the local scheduling pipeline. */
 typedef struct
 {
     uint64_t sample_time;
@@ -47,7 +46,7 @@ _Static_assert(sizeof(live_note_event_t) == 24U,
                "live_note_event_t must remain a fixed 24-byte event");
 
 _Static_assert(sizeof(live_event_t) == 16U,
-               "live_event_t must remain a fixed 16-byte shared event");
+               "live_event_t must remain a fixed 16-byte event");
 
 #define LIVE_EVENT_QUEUE_CAPACITY 64U
 

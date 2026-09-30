@@ -1,4 +1,4 @@
-#include "IPC/live_event.h"
+#include "ControlRT/live_event.h"
 #include "Storage/project_load_quiesce.h"
 
 #include "stm32h7xx_hal.h"

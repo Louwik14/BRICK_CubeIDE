@@ -5,8 +5,9 @@
 
 ## Verdict architectural
 
-La musique est strictement M4 vers M7 par la FIFO fonctionnelle unique. Les
-retours M7 vers M4 restants ne transportent aucune decision musicale:
+La musique passe strictement de CONTROL/SEQ vers AUDIO par la FIFO locale
+unique du M7. Les retours AUDIO vers les services cooperatifs ne transportent
+aucune decision musicale:
 
 - `control_audio_fifo.tail`: liberation physique des cases et mesure de
   capacite SPSC seulement, jamais preuve generique de retrait de ressource;
@@ -27,7 +28,7 @@ faits physiques.
 
 ## Cadence et boot
 
-M4 avance de facon autonome. TIM12 porte le tick du tempo interne; TIM5,
+CONTROL et SEQ avancent de facon autonome. TIM12 porte le tick du tempo interne; TIM5,
 demarre avant les domaines et derive du meme HSE que SAI, est la reference
 absolue commune. CONTROL possede son extension et sa conversion; M7 initialise
 son curseur de rendu intra-bloc depuis la phase DMA placee dans la media clock TIM5 canonique. Les callbacks SAI ne reveillent aucun code CONTROL. PendSV reste reserve

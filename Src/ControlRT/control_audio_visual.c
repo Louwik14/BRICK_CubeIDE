@@ -1,6 +1,6 @@
-#include "IPC/control_audio_visual.h"
+#include "ControlRT/control_audio_visual.h"
 
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 
 static uint8_t control_audio_visual_publish(uint8_t entity, uint16_t id, uint32_t value)

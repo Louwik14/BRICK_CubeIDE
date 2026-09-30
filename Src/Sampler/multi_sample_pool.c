@@ -7,7 +7,7 @@
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_page_lease_control.h"
 #include "IPC/multi_sample_audio_projection_control.h"
-#include "IPC/control_audio_fifo_control.h"
+#include "ControlRT/control_audio_fifo_control.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Track/control_music_output.h"
 #include "Storage/sd_access_gate.h"

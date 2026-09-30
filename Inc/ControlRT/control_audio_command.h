@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-/* Shared M4 -> M7 functional ABI.  The seven opcodes are deliberately the
- * complete public grammar; sub-kinds only refine an opcode. */
+/* CONTROL/SEQ -> AUDIO functional grammar. The seven opcodes are deliberately
+ * complete; sub-kinds only refine an opcode. */
 typedef enum
 {
     CONTROL_AUDIO_COMMAND_PROGRAM = 0U,
@@ -115,7 +115,7 @@ static inline control_audio_program_descriptor_t control_audio_program_unpack(
     return descriptor;
 }
 
-/* Pure wire-format assertion.  The limits are ABI catalog limits supplied by
+/* Pure command-format assertion. The limits are catalog limits supplied by
  * each endpoint; no mutable CONTROL or AUDIO state participates. */
 static inline uint8_t control_audio_program_descriptor_is_structural(
     const control_audio_program_descriptor_t *descriptor,
@@ -145,7 +145,7 @@ typedef struct
 #define CONTROL_AUDIO_COMMAND_KIND(command) ((uint8_t)((command)->opcode_kind >> CONTROL_AUDIO_COMMAND_KIND_SHIFT))
 
 _Static_assert(sizeof(control_audio_command_t) == 16U,
-               "M4/M7 command ABI must remain 16 bytes");
+               "functional command must remain 16 bytes");
 
 /* Internal PARAM sub-ids still travel through the canonical command FIFO. */
 #define CONTROL_AUDIO_FM_BASE_WORD_FIRST    0xFF80U
@@ -182,12 +182,12 @@ _Static_assert(sizeof(control_audio_command_t) == 16U,
 
 _Static_assert(CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP + 1U
                    == CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP,
-               "resource-stop ABI ids must remain consecutive");
+               "resource-stop ids must remain consecutive");
 _Static_assert(CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP + 1U
                    == CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP,
-               "resource-stop ABI ids must remain consecutive");
+               "resource-stop ids must remain consecutive");
 
-/* Durable/transient is a property of the wire command, not of PARAM identity.
+/* Durable/transient is a property of the command, not of PARAM identity.
  * This structural classification carries no CONTROL or AUDIO runtime policy. */
 static inline control_audio_command_state_class_t
 control_audio_command_state_class(const control_audio_command_t *command)

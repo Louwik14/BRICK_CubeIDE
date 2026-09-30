@@ -2,10 +2,10 @@
 
 #include <string.h>
 #include <math.h>
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/live_parameter_event.h"
 #include "Track/track_runtime.h"
 #include "Track/polyphony_control.h"
 #include "Audio/fx_audio_xfade.h"

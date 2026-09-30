@@ -1,6 +1,6 @@
 # Contrat fonctionnel CONTROL vers AUDIO
 
-## Autorite et transport
+## Autorite et publication locale
 
 CONTROL est l'unique autorite fonctionnelle. `control_rt_publication` est le
 seul point final de publication et le seul appelant du writer de
@@ -10,19 +10,22 @@ commande. Ce retour signifie uniquement que la case FIFO et les ressources
 protegees par une fence sont reutilisables; il ne porte aucun resultat musical
 ni ACK fonctionnel.
 
+CONTROL, SEQ et AUDIO s'executent sur le meme M7. La FIFO separe la superloop
+et les IRQ; elle n'est ni une ABI inter-coeur, ni une zone de memoire partagee
+avec un second processeur.
+
 Les indices sont monotones sur 32 bits. Un lot devient visible apres sa copie
 complete, par une publication unique de `head` precedee de `DMB`. Il n'existe ni
 retry tardif, ni fallback, ni perte silencieuse: un manque de place refuse la
 publication et incremente le diagnostic d'overflow.
 
-La FIFO contient 4096 commandes de 16 octets. Son burst maximal est de 1827:
-1024 PARAM, au plus deux commandes pour chacune des 256 actions NOTE internes et
-128 actions externes, puis 35 PROGRAM/TRANSPORT/RECORD/PANIC. Le pire cumul hors
-horizon vaut 953 commandes; avec 512 commandes de marge, le besoin prouve est
-3292. Les assertions de compilation figent la capacite, sa propriete puissance
-de deux et cette marge de 804 commandes.
+La FIFO contient 4096 commandes de 16 octets. Son burst maximal est de 2083:
+1024 PARAM, 1024 commandes NOTE et 35 PROGRAM/TRANSPORT/RECORD/PANIC. Le pire
+cumul hors horizon vaut 953 commandes; avec 512 commandes de marge, le besoin
+prouve est 3548. Les assertions de compilation figent la capacite, sa propriete
+puissance de deux et la marge restante.
 
-## ABI partagee
+## Format local borne
 
 Chaque commande vaut exactement 16 octets et ne contient aucun pointeur:
 
@@ -53,11 +56,13 @@ PROGRAM PARAM NOTE TRANSPORT RECORD PANIC AUDIO_STATE_COMMIT
 - `TRANSPORT` porte START, STOP, CONTINUE ou LOCATE.
 - `RECORD` porte START ou STOP, un `session_id`, une configuration et un client.
 - `PANIC` est global ou limite a une entite.
-- `AUDIO_STATE_COMMIT` rend visible un snapshot pointer-free Pattern/Project.
+- `AUDIO_STATE_COMMIT` rend visible une transaction locale Pattern/Project.
+  Ses champs `entity`, `id` et `value` restent nuls: aucun identifiant de
+  transport, generation ou pointeur ne traverse la FIFO.
 
-La classification wire `DURABLE_STATE`, `TRANSIENT_ACTION`,
+La classification `DURABLE_STATE`, `TRANSIENT_ACTION`,
 `RESOURCE_LIFECYCLE`, `REQUEST` est structurelle et independante du runtime
-AUDIO. Le snapshot absorbe exclusivement `DURABLE_STATE`; le caractere
+AUDIO. La transaction absorbe exclusivement `DURABLE_STATE`; le caractere
 transitoire vient donc de la commande (`TEMP`/`CLEAR_TEMP`), jamais de l'ID PARAM.
 
 `effective_sample_time` utilise la timeline sample absolue. A date egale,
@@ -159,3 +164,12 @@ etat dans l'autorite NOTE generale.
 Les data planes physiques, generations de ressource, pins, refcounts, fences,
 pages Stream, snapshots Undo/Clipboard et tails Recorder restent independants
 de ce contrat fonctionnel.
+
+## Restore atomique
+
+Pattern, Project et Patch construisent hors IRQ un tableau local borne de
+commandes finales. CONTROL publie son contenu avec `DMB`, puis place un unique
+`AUDIO_STATE_COMMIT` dans la FIFO. AUDIO applique la transaction avant d'avancer
+`tail`; CONTROL attend ce franchissement avant de reutiliser le tableau. Cette
+fence de duree de vie remplace l'ancienne generation, le checksum, le magic et
+les clean/invalidate inter-coeur.

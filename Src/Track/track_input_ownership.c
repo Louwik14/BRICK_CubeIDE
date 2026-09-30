@@ -4,7 +4,7 @@
 #include <assert.h>
 
 #include "Track/entity_topology.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 
 static uint8_t g_external_input[TRACK_COUNT];

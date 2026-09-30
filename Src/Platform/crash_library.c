@@ -2,7 +2,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
-#include "IPC/control_audio_fifo_layout.h"
+#include "ControlRT/control_audio_fifo_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"

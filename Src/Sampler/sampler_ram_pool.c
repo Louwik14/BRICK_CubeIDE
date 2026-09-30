@@ -13,7 +13,7 @@
 #include "Sampler/sample_page_cache_port.h"
 #include "IPC/sampler_ram_audio_projection_control.h"
 #include "ControlRT/control_rt_publication.h"
-#include "IPC/control_audio_timing.h"
+#include "ControlRT/control_audio_timing.h"
 #include "Seq/seq_runtime.h"
 #include "Storage/audio_recorder.h"
 #include "Platform/brick_fatal.h"

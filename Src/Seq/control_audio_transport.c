@@ -1,6 +1,6 @@
-#include "IPC/control_audio_transport.h"
+#include "ControlRT/control_audio_transport.h"
 
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_transport_owner.h"

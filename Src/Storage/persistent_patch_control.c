@@ -4,7 +4,7 @@
 #include "ControlRT/audio_state_snapshot_control.h"
 #include "Platform/brick_media_clock.h"
 #include "Platform/memory_layout.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/live_parameter_event.h"
 #include "Mod/mod_env3_control.h"
 #include "Mod/mod_destination_control.h"
 #include "Mod/mod_destination_contract.h"

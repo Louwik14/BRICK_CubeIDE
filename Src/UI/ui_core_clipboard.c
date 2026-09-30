@@ -29,7 +29,7 @@
 #include "Storage/asset_ref.h"
 #include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/live_parameter_event.h"
 #include "main.h"
 #include "NoteFx/note_fx_state.h"
 #include "param_registry.h"

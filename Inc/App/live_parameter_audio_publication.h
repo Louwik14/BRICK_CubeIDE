@@ -6,7 +6,7 @@
 
 #include "Seq/seq_types.h"
 #include "Track/track_types.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 
 #define LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS 64U
 

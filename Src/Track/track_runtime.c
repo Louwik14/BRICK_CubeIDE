@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "Platform/memory_layout.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "IPC/fm_dsp_projection.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Track/control_music_output.h"

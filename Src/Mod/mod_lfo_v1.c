@@ -1,6 +1,6 @@
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Audio/audio_note_engine_adapter.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "Mod/mod_lfo_segment.h"
 #include "Platform/memory_layout.h"
 #include "Track/entity_types.h"

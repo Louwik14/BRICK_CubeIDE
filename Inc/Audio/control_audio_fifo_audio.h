@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "IPC/control_audio_fifo_layout.h"
+#include "ControlRT/control_audio_fifo_layout.h"
 
 void control_audio_fifo_audio_init(void);
 uint8_t control_audio_fifo_audio_peek(control_audio_command_t *out_command);

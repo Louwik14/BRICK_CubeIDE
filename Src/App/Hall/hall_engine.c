@@ -1,7 +1,7 @@
 #include "App/Hall/hall_engine.h"
 
 #include "Platform/brick_media_clock.h"
-#include "IPC/live_event.h"
+#include "ControlRT/live_event.h"
 #include "stm32h7xx_hal.h"
 
 #define HALL_THRESHOLD_PPM                 200U

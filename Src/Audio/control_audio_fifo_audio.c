@@ -1,4 +1,4 @@
-#include "IPC/control_audio_fifo_audio.h"
+#include "Audio/control_audio_fifo_audio.h"
 
 #include <stddef.h>
 #include "stm32h7xx.h"

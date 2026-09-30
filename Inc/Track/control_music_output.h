@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "IPC/control_music_capacity.h"
+#include "ControlRT/control_music_capacity.h"
 #include "Track/entity_topology.h"
 
 #define CONTROL_MUSIC_ACTION_CAPACITY \

@@ -1,5 +1,5 @@
-#include "IPC/control_music_publication.h"
-#include "IPC/control_audio_fifo_layout.h"
+#include "ControlRT/control_music_publication.h"
+#include "ControlRT/control_audio_fifo_layout.h"
 
 #include <stddef.h>
 #include "ControlRT/control_rt_publication.h"

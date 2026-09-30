@@ -13,13 +13,13 @@
 #define SEQ_RUNTIME_INTERNAL_USE 1
 
 #include "Platform/memory_layout.h"
-#include "IPC/control_audio_command.h"
-#include "IPC/control_audio_fifo_layout.h"
+#include "ControlRT/control_audio_command.h"
+#include "ControlRT/control_audio_fifo_layout.h"
 #include "Seq/seq_engine.h"
-#include "IPC/control_music_publication.h"
+#include "ControlRT/control_music_publication.h"
 #include "ControlRT/control_rt_publication.h"
 #include "App/engine_tasklet.h"
-#include "IPC/control_audio_transport.h"
+#include "ControlRT/control_audio_transport.h"
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
 #include "Storage/audio_recorder.h"

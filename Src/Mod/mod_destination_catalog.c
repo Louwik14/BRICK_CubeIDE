@@ -14,7 +14,7 @@
 #include "Track/synth_polyphony.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "Param/param_filter_audio.h"
 #include "Param/param_audio.h"
 #include "Param/audio_fx_param_catalog.h"

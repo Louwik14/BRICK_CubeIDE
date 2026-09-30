@@ -3,9 +3,9 @@
 #include <math.h>
 #include <string.h>
 
-#include "IPC/control_audio_command.h"
-#include "IPC/control_audio_fifo_layout.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/control_audio_command.h"
+#include "ControlRT/control_audio_fifo_layout.h"
+#include "ControlRT/live_parameter_event.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Platform/memory_layout.h"
 

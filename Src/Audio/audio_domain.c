@@ -10,7 +10,7 @@
 #include "Platform/cpu_load.h"
 #include "Sampler/sample_page_cache_audio.h"
 #include "Audio/sample_page_lease_audio.h"
-#include "IPC/control_audio_fifo_audio.h"
+#include "Audio/control_audio_fifo_audio.h"
 
 void audio_domain_init(const brick6_audio_boot_intent_t *boot_intent)
 {

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include "Track/control_music_output.h"
-#include "IPC/control_music_capacity.h"
+#include "ControlRT/control_music_capacity.h"
 #include "Seq/seq_capacity_contract.h"
 
 _Static_assert(CONTROL_MUSIC_SOURCE_MAX_HORIZON_BURST

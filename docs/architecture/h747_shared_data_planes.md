@@ -20,7 +20,6 @@ resolution locale d'un ID ne font jamais partie de l'ABI M4/M7.
 | Preview PCM | M4 Preview -> M7 MAIN | ring non-cacheable `AUDIO_STORAGE_SHARED_SDRAM`, 2048 x 2 floats (16 384) + deux curseurs `D3_IPC` | samples seulement, aucun pointeur | payload, DMB, `write_count` M4 | M7 publie uniquement `read_count`; active/gain sont AUDIO-locaux via PARAM, sans epoch ni reset croise |
 | Recorder FLOAT32 | M7 AUDIO -> M4 Storage/SD | ring cacheable `SDRAM_RECORDER_RING`, 12 032 x 2 x 32 bits (96 256) + layout 20 octets `D3_IPC` | `head_cursor`, `started_session`, `tail_cursor`, `closed_session`, `capture_fault`; aucun config/etat fonctionnel partage | AUDIO remet le curseur a zero, DMB, publie `started_session`; puis H743: FLOAT32, DMB, `head_cursor`; H747: clean FLOAT32, DMB, `head_cursor`. STORAGE ignore les curseurs avant le START de la session courante. | M4 ecrit seulement `tail_cursor` apres commit du DMA direct depuis le ring |
 | REC_SOURCE | M4 Recorder -> M7 Streamer | workspaces A/B et pages STREAM existantes | snapshot `{key, frame_count, registration_epoch}`; aucun pointeur | building prechauffe puis publication atomique current | ancienne generation retiree apres extinction des leases |
-| Snapshot AUDIO restore | M4 CONTROL -> M7 AUDIO | singleton `.sdram_audio_state_snapshot`, 73 920 octets cacheables | generation, count, checksum, valid magic et commandes finales pointer-free | contenu immutable, clean, magic, DMB, puis `AUDIO_STATE_COMMIT(generation)` | M4 attend que le tail FIFO franchisse le commit, apres application M7; aucun ACK |
 
 Les contexts FatFs, loaders, diagnostics, paths de catalogue, pointeurs de
 buffers DMA et function pointers du generic recorder restent prives a M4. Les
@@ -45,8 +44,6 @@ traverse aucune commande ou mailbox.
   aux bornes du ring et au bouclage demandent une gestion explicite; ce
   protocole n'est pas actif dans l'image H743.
 - registries RAM/Wavetable/Multi: `.sdram_recorder`, non-cacheable.
-- snapshot AUDIO singleton: `.sdram_audio_state_snapshot`, SDRAM partagee
-  cacheable; clean M4 puis invalidate M7 autour de la publication generationnee.
 - page pool: SDRAM cacheable. Le producteur nettoie le payload et le descriptor
   avant le flag/ID; le consommateur invalide sa cache privee
   avec `BRICK6_H747_DUAL_CORE` avant la copie. Sur H743, ces hooks sont des
@@ -70,9 +67,10 @@ Recorder n'installe plus de callback `__disable_irq()` dans le generic recorder.
 STREAM conserve sa politique de besoins/credits et son scheduler. Recorder,
 Preview conservent leurs semantiques, leur framing et leur longueur
 STOP. Les sept opcodes et la cadence CONTROL ne changent pas. Le septieme,
-`AUDIO_STATE_COMMIT`, reference uniquement une generation de snapshot partage;
-il ne transporte aucun pointeur. Les requetes visuelles typees utilisent PARAM
-dans la FIFO fonctionnelle existante.
+`AUDIO_STATE_COMMIT`, publie une transaction locale M7 sans generation,
+checksum, magic, pointeur ni maintenance de cache inter-coeur. CONTROL attend
+le franchissement du `tail` avant de reutiliser le workspace. Les requetes
+visuelles typees utilisent PARAM dans la FIFO fonctionnelle existante.
 
 ## Controle de purete
 
@@ -94,6 +92,7 @@ TRANSPORT, RECORD, PANIC ou AUDIO_STATE_COMMIT dans la FIFO.
 Restore n'est plus un data plane: le Pattern decode est valide directement,
 puis installe comme etat CONTROL final. Les seules consequences AUDIO sont les
 PROGRAM structurellement differents et les PARAM dont la valeur finale change.
+Le tableau de restore est une transaction locale bornee entre superloop et IRQ.
 
 ### Retour STREAM exact
 
@@ -138,14 +137,6 @@ dans `command.value`; il ne possede donc ni registre, ni ID, ni data plane.
 Aucune decision fonctionnelle ne subsiste hors FIFO et aucun retour fonctionnel
 M7->M4 ne subsiste.
 
-## Port H747
-
-Le port H747 place les memes sections dans des regions visibles des deux
-coeurs, configure MPU region 5/6 et `.sdram_recorder` sur les deux coeurs, puis
-definit `BRICK6_H747_DUAL_CORE` pour activer clean/invalidate des caches prives.
-Aucun scheduler, opcode, setter FM, cadence ou chemin DMA live n'est specifique
-au port H747.
-
 ## Teardown et cache
 
 Preview publie `PREVIEW_ACTIVE=0` avec une fence FIFO. AUDIO avance
@@ -153,7 +144,3 @@ Preview publie `PREVIEW_ACTIVE=0` avec une fence FIFO. AUDIO avance
 drainage. Aucun epoch, active/gain partage ou reset croise ne subsiste. RAM et
 Multi suivent le meme contrat: STOP fence, passage du
 tail, retrait de projection, puis recyclage.
-
-La reutilisation du dernier tombstone de l'index STREAM publie explicitement la
-ligne modifiee avec `intercore_cache_publish`. C'est le meme clean cache que les
-insertions ordinaires; le protocole de pages et de credits ne change pas.

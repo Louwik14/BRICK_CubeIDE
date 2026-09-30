@@ -15,7 +15,7 @@
 #include "Audio/Engines/tb303_engine.h"
 #include "Audio/Engines/acid_engine.h"
 #include "Platform/brick_build_config.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "Track/synth_polyphony.h"
 #include "Track/track_runtime.h"
 #include "Mod/mod_lfo_v1_audio.h"

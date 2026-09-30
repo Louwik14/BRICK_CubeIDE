@@ -9,7 +9,7 @@
 #include "Mod/mod_lfo_segment.h"
 #include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/live_parameter_event.h"
 #include "Param/param_registry.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_types.h"

@@ -1,4 +1,4 @@
-# Z0 - Plateforme, memoire, cadence et IPC
+# Z0 - Plateforme, memoire, cadence et frontieres
 
 ## Execution
 
@@ -41,17 +41,17 @@ Le Hall Low-Cost execute la machine bornee depuis l'acquisition ADC. TIM5 est le
 
 ## Frontiere CONTROL/AUDIO
 
-La frontiere suit `M4 CONTROL decide -> commande finale 16 octets -> M7 AUDIO execute`. La FIFO SPSC unique de 4096 commandes transporte PROGRAM, PARAM, NOTE, TRANSPORT, RECORD, PANIC et AUDIO_STATE_COMMIT. Les requetes visuelles typees AUDIO waveform et synth waveform empruntent egalement PARAM dans cette FIFO; elles n'ont ni mailbox ni file secondaire. Aucun pointeur, callback, contexte mutable, Pattern ou Project ne la traverse.
+La frontiere suit `CONTROL/SEQ decide -> commande finale 16 octets -> IRQ AUDIO execute` sur le meme M7. La FIFO SPSC locale de 4096 commandes transporte PROGRAM, PARAM, NOTE, TRANSPORT, RECORD, PANIC et AUDIO_STATE_COMMIT. Les requetes visuelles typees AUDIO waveform et synth waveform empruntent egalement PARAM dans cette FIFO; elles n'ont ni mailbox ni file secondaire. Aucun pointeur, callback, contexte mutable, Pattern ou Project ne la traverse.
 
 Les ingress Hall/MIDI et les sources scheduler restent des buffers locaux CONTROL. CONTROL resout et fusionne leur fenetre, transforme un retrigger en NOTE OFF puis NOTE ON au meme sample, puis publie un lot atomique dans la FIFO unique. AUDIO ne fusionne aucune queue et l'ordre physique FIFO est l'ordre fonctionnel a timestamp egal.
 
-Le contrat maximal d'un horizon est 1024 commandes parametres, 768 commandes NOTE (`2 * (256 internes + 128 externes)`) et 35 commandes generales, soit 1827 commandes. Pattern et Project ne poussent plus leurs milliers de commandes dans la FIFO: CONTROL publie la projection AUDIO complete dans un snapshot partage unique, puis une seule commande `AUDIO_STATE_COMMIT`. CONTROL attend ensuite que le `tail` FIFO ait franchi le commit; AUDIO ne le publie qu'apres application, ce qui rend le snapshot reutilisable sans ACK. La FIFO de 4096 couvre l'horizon, le pire cumul hors horizon de 953 commandes et une marge explicite de 512: besoin prouve 3292. Il n'existe ni partition `1827 + 221`, ni admission utilisateur temporairement refusable. A l'interieur d'un horizon, la reservation locale bornee a 1827 porte tout le produit de la fenetre avant un commit FIFO unique.
+Le contrat maximal d'un horizon est 1024 commandes parametres, 1024 commandes NOTE et 35 commandes generales, soit 2083 commandes. Pattern et Project ne poussent plus leurs milliers de commandes dans la FIFO: CONTROL construit une transaction AUDIO locale bornee, puis publie une seule commande `AUDIO_STATE_COMMIT`. CONTROL attend ensuite que le `tail` FIFO ait franchi le commit; AUDIO ne l'avance qu'apres application, ce qui rend le workspace reutilisable sans ACK. La FIFO de 4096 couvre l'horizon, le pire cumul hors horizon de 953 commandes et une marge explicite de 512: besoin prouve 3548. A l'interieur d'un horizon, la reservation locale bornee porte tout le produit de la fenetre avant un commit FIFO unique.
 
 La frontiere physique de plateforme est regroupee dans `Inc/Platform` et
-`Src/Platform`. Les types, layouts et `extern` purs appartiennent a
-`DOMAIN_CONTRACTS`; leurs definitions physiques appartiennent au groupe
-`SHARED_BACKING`. Les publishers et queues locales appartiennent explicitement
-a `DOMAIN_CONTROL`, jamais a `PLATFORM_H743`. Les writers CONTROL, readers AUDIO,
+`Src/Platform`. Les types et layouts fonctionnels appartiennent a `ControlRT`;
+le backing de la FIFO et de la transaction appartient a `DOMAIN_CONTROL`. Les
+publishers et queues locales appartiennent explicitement a `DOMAIN_CONTROL`,
+jamais a `PLATFORM_H743` ou `SHARED_BACKING`. Les writers CONTROL, readers AUDIO,
 publishers AUDIO et readers CONTROL sont des unites distinctes dans leur domaine proprietaire. Les
 fichiers de metier CONTROL, les runtimes et DSP AUDIO, ainsi que les pools
 Storage/Sampler, restent dans leurs domaines; `live_parameter_audio_runtime`
@@ -68,10 +68,11 @@ plus partie: leases et index rapide sont locaux au M7 en D2 cacheable,
 metadata et payloads restent dans leurs arenas SDRAM. La maintenance cache des
 pages Stream appartient uniquement a la frontiere CPU/DMA. La projection
 complete du Recorder reste dans la zone SDRAM partagee non-cacheable. Le
-snapshot AUDIO unique de 73920 octets reside dans
-`.sdram_audio_state_snapshot`. `DMB` ordonne les publications IRQ/superloop
-mais ne remplace pas le protocole d'ownership. La zone Recorder de 256 KiB est
-shareable non-cacheable; les buffers DMA SAI sont en D2 non-cacheable.
+transaction AUDIO reside dans la SDRAM CONTROL cacheable locale. Elle ne porte
+ni generation, ni checksum, ni magic, ni maintenance de cache inter-coeur.
+`DMB` ordonne sa publication vers l'IRQ et le franchissement du `tail` protege
+sa duree de vie. La zone Recorder de 256 KiB est shareable non-cacheable; les
+buffers DMA SAI sont en D2 non-cacheable.
 
 Les principaux sens sont:
 
@@ -111,14 +112,15 @@ variables placees correspondant aux `extern`, sans fonction, init, reset ou
 policy. L'initialisation reste chez le writer proprietaire. `PLATFORM_H743`
 porte seulement les seams de composition mono-coeur, le hardware
 board et le staging/remap LED physique. Boutons, encodeurs et logique produit LED
-appartiennent a CONTROL. Les backings diagnostic/waveform, FIFO, Recorder,
+appartiennent a CONTROL. Les backings diagnostic/waveform, Recorder,
 Preview et projections Sampler appartiennent a `SHARED_BACKING`. Le backing du
 page-cache Stream est local au domaine Sampler monocoeur.
 `sample_page_cache.c` possede les
 metadonnees, index, reservations et publications READY dans `DOMAIN_STORAGE`;
 `sample_page_cache_audio.c` possede les credits et acces AUDIO. Ces unites sont
-exclues du compile-check Cortex-M4 historique. Les appels CONTROL vers AUDIO ne passent
-que par `Inc/IPC`; le compile-check Cortex-M4 interdit toute dependance vers
+exclues du compile-check Cortex-M4 historique. Les appels CONTROL vers AUDIO
+passent par `Inc/ControlRT`; les data planes physiques restants utilisent
+`Inc/IPC`. Le compile-check CONTROL historique interdit toute dependance vers
 `Inc/Audio`, `Src/Audio` et les DSP tiers. Le firewall CONTRACTS refuse en plus
 les headers prives CONTROL/AUDIO et les anciennes APIs owner-specific sorties de
 la liste des contrats. Les checks compilent de vrais objets CM4/CM7, incluent

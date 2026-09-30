@@ -24,7 +24,7 @@
 #include "Platform/memory_layout.h"
 #include "Platform/cache_maintenance.h"
 #include "Audio/metronome_runtime.h"
-#include "IPC/control_audio_fifo_audio.h"
+#include "Audio/control_audio_fifo_audio.h"
 #include "Audio/audio_command_executor.h"
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_transport_runtime.h"

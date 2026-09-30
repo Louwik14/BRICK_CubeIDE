@@ -12,7 +12,7 @@
 
 #include "App/brick6_boot_fx_policy.h"
 
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "main.h"
 

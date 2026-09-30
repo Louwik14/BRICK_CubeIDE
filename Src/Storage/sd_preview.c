@@ -17,7 +17,7 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "IPC/sd_preview_ring_contract.h"
 #include "Storage/project_load_quiesce.h"

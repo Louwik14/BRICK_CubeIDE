@@ -10,8 +10,8 @@
 #include <string.h>
 
 #include "Audio/mixer.h"
-#include "IPC/control_audio_command.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/control_audio_command.h"
+#include "ControlRT/live_parameter_event.h"
 #include "Mod/mod_destination_audio.h"
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Param/param_spec.h"

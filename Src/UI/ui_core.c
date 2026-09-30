@@ -37,7 +37,7 @@
 #include "pages/ui_page_template_play.h"
 #include "UI/pages/ui_page_template_cfg.h"
 #include "Storage/sample_capture.h"
-#include "IPC/control_audio_visual.h"
+#include "ControlRT/control_audio_visual.h"
 #include "Track/track_input_ownership.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "ui_bootstrap.h"

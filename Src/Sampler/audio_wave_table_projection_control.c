@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Param/param_registry.h"
 #include "Platform/intercore_cache.h"

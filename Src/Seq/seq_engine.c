@@ -6,7 +6,7 @@
 #include "Param/param_ids.h"
 #include "Param/param_registry.h"
 #include "Param/param_value_policy.h"
-#include "IPC/live_parameter_event.h"
+#include "ControlRT/live_parameter_event.h"
 #include "Platform/brick_fatal.h"
 #include "Platform/memory_layout.h"
 #include <limits.h>

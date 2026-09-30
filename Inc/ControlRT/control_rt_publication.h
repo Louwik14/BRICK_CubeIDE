@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 
 #define CONTROL_RT_PUBLICATION_BEGIN_REJECTED       0U
 #define CONTROL_RT_PUBLICATION_BEGIN_ACCEPTED       1U

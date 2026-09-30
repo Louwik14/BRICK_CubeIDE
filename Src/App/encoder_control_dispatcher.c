@@ -1,8 +1,8 @@
 #include "App/encoder_control_dispatcher.h"
 
 #include "App/live_parameter_audio_publication.h"
-#include "IPC/live_parameter_event.h"
-#include "IPC/control_audio_fifo_layout.h"
+#include "ControlRT/live_parameter_event.h"
+#include "ControlRT/control_audio_fifo_layout.h"
 #include "Param/param_registry.h"
 #include "Track/track_mute.h"
 #include "UI/ui_param.h"

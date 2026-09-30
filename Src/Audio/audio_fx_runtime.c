@@ -18,7 +18,7 @@
 #include "Audio/mixer.h"
 #include "Board/board_audio_format.h"
 #include "Track/synth_polyphony.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 

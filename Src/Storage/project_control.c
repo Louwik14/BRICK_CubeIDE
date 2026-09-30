@@ -4,7 +4,7 @@
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
 #include "Sampler/audio_wave_table_projection_control.h"
-#include "IPC/control_audio_command.h"
+#include "ControlRT/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 
 #include "Param/param_macro.h"

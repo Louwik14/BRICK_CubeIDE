@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "IPC/control_audio_fifo_layout.h"
+#include "ControlRT/control_audio_fifo_layout.h"
 
 typedef struct
 {
