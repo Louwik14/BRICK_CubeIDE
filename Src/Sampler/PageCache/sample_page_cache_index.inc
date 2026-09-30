@@ -13,10 +13,7 @@ static float *sample_page_cache_data_resolve(const sample_page_desc_t *page)
 static uint8_t sample_page_cache_page_is_leased(const sample_page_desc_t *page)
 {
     return ((page != 0)
-            && (sample_page_lease_control_protects(
-                                                   (uint16_t)(page - g_sample_page_desc),
-                                                   page->generation,
-                                                   page->key,
+            && (sample_page_lease_control_protects(page->key,
                                                    page->registration_epoch,
                                                    page->page_index) != 0U)) ? 1U : 0U;
 }
@@ -92,10 +89,7 @@ static uint8_t sample_page_cache_page_is_contractual(const sample_page_desc_t *p
     }
 
     return ((page->static_resident != 0U)
-            || (sample_page_lease_control_protects(
-                                                   (uint16_t)(page - g_sample_page_desc),
-                                                   page->generation,
-                                                   page->key,
+            || (sample_page_lease_control_protects(page->key,
                                                    page->registration_epoch,
                                                    page->page_index) != 0U)) ? 1U : 0U;
 }
@@ -313,8 +307,6 @@ static uint8_t sample_page_cache_page_is_contractual_snapshot(
     return ((page->static_resident != 0U)
             || (sample_page_lease_control_snapshot_protects(
                     lease_snapshot,
-                    (uint16_t)(page - g_sample_page_desc),
-                    page->generation,
                     page->key,
                     page->registration_epoch,
                     page->page_index) != 0U)) ? 1U : 0U;
@@ -339,7 +331,6 @@ static uint8_t sample_page_cache_claim_for_recycle(sample_page_desc_t *page)
     sample_page_cache_unlock(primask);
 
     const uint8_t leased = sample_page_lease_control_protects(
-        (uint16_t)(page - g_sample_page_desc), generation,
         key, epoch, page_index);
     primask = sample_page_cache_lock();
     if ((page->state != SAMPLE_PAGE_EVICTING)

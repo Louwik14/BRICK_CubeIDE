@@ -150,7 +150,7 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
         page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
         page->frame_count = frame_count;
         page->generation = ++g_sample_page_cache_state.generation_counter;
-        page->last_touch = 0U;
+        page->last_touch = ++g_sample_page_cache_state.touch_counter;
         page->static_resident = 0U;
         sample_page_cache_set_state(page, SAMPLE_PAGE_RESERVED);
         const uint16_t key_slot = sample_page_cache_key_slot(key);
@@ -198,12 +198,6 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
             continue;
         }
 
-        if ((range_start == SAMPLE_PAGE_VOICE_WINDOW_POOL_START)
-            && (range_count == SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT))
-        {
-            evict_page = page;
-            break;
-        }
         if ((evict_page == 0) || (page->last_touch < evict_page->last_touch))
             evict_page = page;
     }
@@ -227,7 +221,7 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     evict_page->start_frame = sample_audio_format_page_start_frame(evict_page->format, page_index);
     evict_page->frame_count = frame_count;
     evict_page->generation = ++g_sample_page_cache_state.generation_counter;
-    evict_page->last_touch = 0U;
+    evict_page->last_touch = ++g_sample_page_cache_state.touch_counter;
     evict_page->static_resident = 0U;
     sample_page_cache_set_state(evict_page, SAMPLE_PAGE_RESERVED);
     const uint16_t key_slot = sample_page_cache_key_slot(key);

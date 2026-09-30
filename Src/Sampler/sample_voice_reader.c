@@ -14,6 +14,8 @@ typedef struct
 {
     uint8_t lease_slot;
     uint8_t lease_valid;
+    uint32_t lease_pages[SAMPLE_PAGE_LEASE_PAGE_COUNT];
+    uint8_t lease_valid_mask;
     uint16_t sample_id;
     sample_audio_key_t key;
     sample_audio_format_t format;
