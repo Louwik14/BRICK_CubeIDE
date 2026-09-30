@@ -52,7 +52,7 @@ typedef struct
     uint8_t active;
     uint8_t physical_active;
     uint8_t direct_float;
-    uint8_t recorder_pcm24;
+    uint8_t legacy_recorder_pcm24;
 } sample_stream_io_async_t;
 SDRAM_STREAM_SERVICE static sample_stream_io_async_t
     g_sample_stream_io_async[SAMPLE_STREAM_IO_JOB_COUNT];
@@ -181,7 +181,7 @@ static void sample_stream_io_finalize(sample_stream_io_async_t *async)
             async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
         return;
     }
-    if (async->recorder_pcm24 != 0U)
+    if (async->legacy_recorder_pcm24 != 0U)
     {
         if (async->source == NULL)
         {
@@ -305,20 +305,19 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
 
     const wav_info_t *const wav = &command->stream_info.info;
     async->direct_float = (uint8_t)(
-        (command->target.key.domain != SAMPLE_AUDIO_DOMAIN_REC)
-        && (wav_parser_is_canonical_brick_float(wav) != 0U)
+        (wav_parser_is_canonical_brick_float(wav) != 0U)
         && (command->target.format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
         && (command->target.stride_floats == 2U)
         && ((((uint64_t)command->stream_info.data_offset
               + (uint64_t)command->target.start_frame * 8U)
              % SAMPLE_STREAM_IO_SECTOR_BYTES) == 0U));
-    async->recorder_pcm24 = (uint8_t)(
+    async->legacy_recorder_pcm24 = (uint8_t)(
         (command->target.key.domain == SAMPLE_AUDIO_DOMAIN_REC)
         && (wav->encoding == WAV_SAMPLE_ENCODING_PCM_INTEGER)
         && (wav->sample_rate == 48000U) && (wav->channels == 2U)
         && (wav->bits_per_sample == 24U) && (wav->block_align == 6U)
         && (command->target.format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED));
-    if ((async->direct_float == 0U) && (async->recorder_pcm24 == 0U))
+    if ((async->direct_float == 0U) && (async->legacy_recorder_pcm24 == 0U))
     {
         async->result.load_result = SAMPLE_PAGE_LOAD_UNSUPPORTED_SAMPLE;
         async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
@@ -330,7 +329,7 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
     if ((async->result.source_bytes == 0U)
         || ((async->direct_float != 0U)
             && (async->result.source_bytes > SAMPLE_PAGE_BYTES))
-        || ((async->recorder_pcm24 != 0U)
+        || ((async->legacy_recorder_pcm24 != 0U)
             && ((uint64_t)async->result.source_bytes
                 + (2U * (SAMPLE_STREAM_IO_SECTOR_BYTES - 1U))
                 > SAMPLE_PAGE_BYTES)))

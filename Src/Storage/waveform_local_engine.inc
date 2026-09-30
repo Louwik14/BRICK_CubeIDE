@@ -44,6 +44,10 @@ typedef struct
     uint32_t data_offset;
     uint32_t media_epoch;
     uint32_t generation;
+    uint16_t block_align;
+    uint16_t bits_per_sample;
+    uint16_t channels;
+    wav_sample_encoding_t encoding;
     uint8_t valid;
     uint8_t format_ready;
     uint8_t desired;
@@ -278,33 +282,46 @@ static void waveform_local_storage_service(void)
     {
         wav_info_t info;
         if(wav_parser_parse_info(&fp, &info) == 0
-                || info.audio_format != 1U
-                || info.channels != 2U
-                || info.bits_per_sample != 24U
-                || info.block_align != 6U)
+                || wav_parser_format_supported(&info) == 0U
+                || info.block_align > 8U)
         {
             tile->state = WAVEFORM_LOCAL_EMPTY;
             (void)f_close(&fp);
             goto end;
         }
         g_waveform_local.data_offset = info.data_offset;
+        g_waveform_local.block_align = info.block_align;
+        g_waveform_local.bits_per_sample = info.bits_per_sample;
+        g_waveform_local.channels = info.channels;
+        g_waveform_local.encoding = info.encoding;
         g_waveform_local.format_ready = 1U;
     }
     uint32_t frames = tile->frame_count - tile->loaded_frames;
-    if(frames > WAVEFORM_LOCAL_CHUNK_BYTES / 6U)
-        frames = WAVEFORM_LOCAL_CHUNK_BYTES / 6U;
-    const uint32_t bytes = frames * 6U;
+    if(frames > WAVEFORM_LOCAL_CHUNK_BYTES / g_waveform_local.block_align)
+        frames = WAVEFORM_LOCAL_CHUNK_BYTES / g_waveform_local.block_align;
+    const uint32_t bytes = frames * g_waveform_local.block_align;
     UINT read = 0U;
     if(f_lseek(&fp, g_waveform_local.data_offset
-            + (tile->start_frame + tile->loaded_frames) * 6U) == FR_OK
+            + (tile->start_frame + tile->loaded_frames)
+                * g_waveform_local.block_align) == FR_OK
             && f_read(&fp, g_waveform_read, bytes, &read) == FR_OK
             && read == bytes)
     {
         for(uint32_t f = 0U; f < frames; ++f)
         {
-            const uint8_t *const pcm = &g_waveform_read[f * 6U];
-            const int16_t left = waveform_decode_sample(pcm, 24U);
-            const int16_t right = waveform_decode_sample(pcm + 3U, 24U);
+            const uint8_t *const pcm =
+                &g_waveform_read[f * g_waveform_local.block_align];
+            const uint16_t sample_bytes = g_waveform_local.bits_per_sample / 8U;
+            const int16_t left =
+                (g_waveform_local.encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+                    ? waveform_decode_float_sample(pcm)
+                    : waveform_decode_sample(pcm, g_waveform_local.bits_per_sample);
+            const int16_t right = (g_waveform_local.channels == 2U)
+                ? ((g_waveform_local.encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+                    ? waveform_decode_float_sample(pcm + sample_bytes)
+                    : waveform_decode_sample(pcm + sample_bytes,
+                                              g_waveform_local.bits_per_sample))
+                : left;
             const int16_t mono = (int16_t)(((int32_t)left + right) / 2);
             const uint32_t rel = tile->loaded_frames + f;
             g_waveform_local_pcm[(uint8_t)index][rel] = mono;

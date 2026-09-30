@@ -193,7 +193,7 @@ uint8_t sample_page_cache_reserve_start_pages_key_alloc(sample_audio_key_t key,
 uint8_t sample_page_cache_mark_static_page_key_alloc(sample_audio_key_t key,
                                                      uint32_t page_index,
                                                      sample_page_alloc_type_t alloc_type);
-uint8_t sample_page_cache_register_live_pcm24_stereo_sample_key(
+uint8_t sample_page_cache_register_live_float32_stereo_sample_key(
     sample_audio_key_t key,
     const char *path,
     uint32_t total_frames,

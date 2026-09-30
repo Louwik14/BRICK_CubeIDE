@@ -9,7 +9,7 @@ retours M7 vers M4 restants ne transportent aucune decision musicale:
   capacite SPSC seulement, jamais preuve generique de retrait de ressource;
 - credit STREAM compact par voix: page courante, longueur de fenetre et bornes
   de loop forward;
-- Recorder PCM: ring stereo PCM24, head de frames produites, tail de frames
+- Recorder FLOAT32: ring stereo natif, head de frames produites, tail de frames
   liberees, session I/O et longueur exacte au stop;
 - niveau REC, waveform audio et waveform synth, chacun avec publisher AUDIO et reader CONTROL separes;
 - diagnostic Audio: boot/error et, pour la charge CPU, uniquement `{valid, avg_permille}`. Le couper
@@ -48,7 +48,7 @@ CONTROL. La valeur DSP privee n'est plus publiee ni relue par UI/CONTROL.
 | Multi descriptors/pages | M4/Storage | M7/AUDIO | `RETIRING` bloque toute nouvelle programmation; la projection reste resolvable jusqu'au `MULTI_RESOURCE_STOP`, puis le slot n'est libere qu'apres franchissement wrap-safe du `head` capture par `tail` et extinction des leases |
 | STREAM pages | M4/Storage | M7/AUDIO | cache partage; un lease par lecteur, union M4, `EVICTING` puis relecture; aucun pin/use-count/refcount |
 | Preview PCM | M4/Storage | M7/AUDIO | ring SPSC separe; reutilisation par consumer tail |
-| Recorder PCM | M7/AUDIO | M4/Storage | ring SPSC; M7 head `accepted_frames`, M4 tail `released_frames`; stop fixe le head final |
+| Recorder FLOAT32 | M7/AUDIO | M4/Storage | ring SPSC; M7 head `accepted_frames`, M4 tail `released_frames`; stop fixe le head final |
 | REC_SOURCE | M4/Storage | M7/AUDIO | snapshot immutable current; generation A/B retiree apres extinction des leases |
 
 Les tokens/generations conserves appartiennent aux loads SD, registrations de

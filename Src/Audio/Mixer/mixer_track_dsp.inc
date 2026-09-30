@@ -205,8 +205,7 @@ static ITCM_TEXT void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
 #define MIXER_FILTER_BLOCK_SMOOTH 0.25f
 #define MIXER_REVERB_SEND_INDEX 0U
 #define MIXER_DELAY_SEND_INDEX 1U
-#define MIXER_RECORDER_PCM24_MAX 8388607.0f
-#define MIXER_RECORDER_PCM24_MIN (-8388608.0f)
+#define MIXER_REC_LEVEL_FULL_SCALE 8388607.0f
 
 typedef enum
 {
@@ -233,19 +232,12 @@ static AUDIO_HOT mixer_reverb_state_t g_reverb;
 static float g_delay_spectral_position = 0.50f;
 static float g_delay_spectral_width = 1.0f;
 
-static int32_t mixer_rec_float_to_pcm24(float sample)
+static uint32_t mixer_rec_float_peak_to_level(float sample)
 {
-    float scaled = sample * MIXER_RECORDER_PCM24_MAX;
-    if(scaled > MIXER_RECORDER_PCM24_MAX)
-    {
-        scaled = MIXER_RECORDER_PCM24_MAX;
-    }
-    else if(scaled < MIXER_RECORDER_PCM24_MIN)
-    {
-        scaled = MIXER_RECORDER_PCM24_MIN;
-    }
-
-    return (int32_t)scaled;
+    if(sample != sample) return 0U;
+    if(sample < 0.0f) sample = -sample;
+    if(sample >= 1.0f) return 8388607U;
+    return (uint32_t)(sample * MIXER_REC_LEVEL_FULL_SCALE);
 }
 
 static float clampf_local(float v, float lo, float hi)

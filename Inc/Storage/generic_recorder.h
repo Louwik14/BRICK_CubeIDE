@@ -104,8 +104,9 @@ typedef struct
 
 typedef struct
 {
-    int32_t *ring_interleaved;
+    const void *ring_interleaved;
     uint32_t ring_capacity_frames;
+    uint16_t bytes_per_frame;
     uint8_t *write_buffers[GENERIC_RECORDER_WRITE_BUFFER_COUNT];
     uint32_t write_buffer_bytes;
     uint32_t minimum_write_bytes;

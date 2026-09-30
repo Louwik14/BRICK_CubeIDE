@@ -9,6 +9,7 @@
 #include "SD/sd_block_device.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/audio_recorder.h"
+#include "Storage/audio_recorder_wav.h"
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_shared_io.h"
@@ -511,20 +512,6 @@ void wav_convert_init(void)
     g_wav_convert.phase = WAV_CONVERT_PHASE_IDLE;
 }
 
-static void wav_convert_write_le16(uint8_t *dst, uint16_t value)
-{
-    dst[0] = (uint8_t)(value & 0xFFU);
-    dst[1] = (uint8_t)((value >> 8) & 0xFFU);
-}
-
-static void wav_convert_write_le32(uint8_t *dst, uint32_t value)
-{
-    dst[0] = (uint8_t)(value & 0xFFUL);
-    dst[1] = (uint8_t)((value >> 8) & 0xFFUL);
-    dst[2] = (uint8_t)((value >> 16) & 0xFFUL);
-    dst[3] = (uint8_t)((value >> 24) & 0xFFUL);
-}
-
 static uint16_t wav_convert_read_le16(const uint8_t *src)
 {
     return (uint16_t)src[0] | ((uint16_t)src[1] << 8);
@@ -534,34 +521,6 @@ static uint32_t wav_convert_read_le32(const uint8_t *src)
 {
     return (uint32_t)src[0] | ((uint32_t)src[1] << 8)
            | ((uint32_t)src[2] << 16) | ((uint32_t)src[3] << 24);
-}
-
-static void wav_convert_build_wav_header(uint8_t *header,
-                                         uint32_t data_bytes,
-                                         uint32_t frame_count)
-{
-    const uint16_t block_align = WAV_CONVERT_TARGET_BYTES_PER_FRAME;
-    const uint32_t byte_rate = WAV_CONVERT_TARGET_RATE * (uint32_t)block_align;
-
-    memset(header, 0, WAV_CONVERT_WAV_DATA_OFFSET_BYTES);
-    memcpy(&header[0], "RIFF", 4U);
-    wav_convert_write_le32(&header[4], (WAV_CONVERT_WAV_DATA_OFFSET_BYTES - 8U) + data_bytes);
-    memcpy(&header[8], "WAVE", 4U);
-    memcpy(&header[12], "fmt ", 4U);
-    wav_convert_write_le32(&header[16], 16U);
-    wav_convert_write_le16(&header[20], 3U);
-    wav_convert_write_le16(&header[22], WAV_CONVERT_TARGET_CHANNELS);
-    wav_convert_write_le32(&header[24], WAV_CONVERT_TARGET_RATE);
-    wav_convert_write_le32(&header[28], byte_rate);
-    wav_convert_write_le16(&header[32], block_align);
-    wav_convert_write_le16(&header[34], WAV_CONVERT_TARGET_BITS);
-    memcpy(&header[36], "fact", 4U);
-    wav_convert_write_le32(&header[40], 4U);
-    wav_convert_write_le32(&header[44], frame_count);
-    memcpy(&header[48], "JUNK", 4U);
-    wav_convert_write_le32(&header[52], WAV_CONVERT_WAV_JUNK_BYTES);
-    memcpy(&header[504], "data", 4U);
-    wav_convert_write_le32(&header[508], data_bytes);
 }
 
 static uint8_t wav_convert_copy_path(char *dst, const char *src)
@@ -999,8 +958,13 @@ static uint8_t wav_convert_write_header_phase(void)
     wav_convert_fast_write_t *const write = &g_wav_convert.fast_write;
     if (write->state == WAV_CONVERT_FAST_WRITE_IDLE)
     {
-        wav_convert_build_wav_header(g_wav_convert.wav_header,
-            g_wav_convert.target_data_bytes, g_wav_convert.target_frames);
+        if (audio_recorder_wav_build_header(g_wav_convert.wav_header,
+                g_wav_convert.target_data_bytes, WAV_CONVERT_TARGET_RATE,
+                WAV_CONVERT_TARGET_CHANNELS) == 0U)
+        {
+            wav_convert_fail(WAV_CONVERT_ERROR_WRITE_FAIL);
+            return 0U;
+        }
         wav_convert_release_gate();
         if (wav_convert_fast_write_begin(write, 0U,
                 g_wav_convert.wav_header, sizeof(g_wav_convert.wav_header),

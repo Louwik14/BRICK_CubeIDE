@@ -144,6 +144,7 @@ static uint8_t audio_recorder_storage_start_writer(
     memset(&config, 0, sizeof(config));
     config.ring_interleaved = g_audio_recorder_capture_ring;
     config.ring_capacity_frames = AUDIO_RECORDER_CAPTURE_RING_FRAMES;
+    config.bytes_per_frame = AUDIO_RECORDER_BYTES_PER_FRAME;
     for (uint32_t i = 0U; i < GENERIC_RECORDER_WRITE_BUFFER_COUNT; ++i)
         config.write_buffers[i] = g_audio_recorder_write_buffers[i];
     config.write_buffer_bytes = AUDIO_RECORDER_WRITE_BUFFER_BYTES;

@@ -102,7 +102,7 @@ uint8_t audio_recorder_capture_audio_stop(uint8_t client,
 }
 
 uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
-                                          const int32_t *lr_interleaved,
+                                          const float *lr_interleaved,
                                           uint32_t frames)
 {
     if ((g_audio_capture.active == 0U)
@@ -132,16 +132,16 @@ uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
     if (first > frames) first = frames;
     memcpy(&g_audio_recorder_capture_ring[write * AUDIO_RECORDER_CHANNELS],
            lr_interleaved,
-           (size_t)first * AUDIO_RECORDER_CHANNELS * sizeof(int32_t));
+           (size_t)first * AUDIO_RECORDER_CHANNELS * sizeof(float));
     if (frames > first)
         memcpy(g_audio_recorder_capture_ring,
                &lr_interleaved[first * AUDIO_RECORDER_CHANNELS],
-               (size_t)(frames - first) * AUDIO_RECORDER_CHANNELS * sizeof(int32_t));
+               (size_t)(frames - first) * AUDIO_RECORDER_CHANNELS * sizeof(float));
     __DMB();
     g_audio_recorder_capture.head_cursor = head + frames;
     PERF_END(PERF_CPU_AUDIO_RING, ring_start);
     PERF_ACCUM(PERF_N_REC_FRAMES, frames);
-    PERF_ACCUM(PERF_N_REC_PCM_BYTES, frames * 6U);
+    PERF_ACCUM(PERF_N_REC_PCM_BYTES, frames * AUDIO_RECORDER_BYTES_PER_FRAME);
     const uint32_t fill = retained + frames;
     PERF_SET(PERF_N_REC_RING_FILL, fill);
     PERF_MAX(PERF_N_REC_RING_MAX, fill);

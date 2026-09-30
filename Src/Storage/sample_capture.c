@@ -83,6 +83,7 @@ typedef struct
     uint32_t chunk_bytes;
     uint32_t saved_frames;
     uint32_t start_frame;
+    uint16_t source_bytes_per_frame;
     uint16_t path_attempts;
     uint8_t source_open;
     uint8_t destination_open;

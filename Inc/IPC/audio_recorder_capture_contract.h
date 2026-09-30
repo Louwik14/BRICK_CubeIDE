@@ -5,7 +5,7 @@
 /*
  * Recorder AUDIO/STORAGE data plane.
  *
- * AUDIO is the sole producer: it writes the PCM24 samples in the ring and
+ * AUDIO is the sole producer: it writes native FLOAT32 samples in the ring and
  * publishes head_cursor only after the payload is visible.  AUDIO also owns
  * started_session, closed_session and capture_fault; started_session publishes
  * the reset of the frame cursor for a new take. closed_session means that no
@@ -41,11 +41,11 @@ typedef struct
     volatile uint32_t capture_fault;
 } audio_recorder_capture_transport_t;
 
-_Static_assert(sizeof(int32_t) == 4U,
+_Static_assert(sizeof(float) == 4U,
                "Recorder ring element ABI changed");
 _Static_assert(sizeof(audio_recorder_capture_transport_t) == 20U,
                "Recorder capture transport ABI changed");
 
-extern int32_t g_audio_recorder_capture_ring
+extern float g_audio_recorder_capture_ring
     [AUDIO_RECORDER_CAPTURE_RING_FRAMES * AUDIO_RECORDER_CHANNELS];
 extern audio_recorder_capture_transport_t g_audio_recorder_capture;

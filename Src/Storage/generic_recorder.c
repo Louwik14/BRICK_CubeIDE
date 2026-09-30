@@ -21,7 +21,7 @@ static uint32_t generic_recorder_next_generation(void)
 
 static uint32_t generic_recorder_bytes_per_frame(const generic_recorder_t *recorder)
 {
-    return (uint32_t)recorder->config.channels * 3U;
+    return recorder->config.bytes_per_frame;
 }
 
 static uint32_t generic_recorder_bytes_per_second(const generic_recorder_t *recorder)
@@ -163,67 +163,18 @@ static void generic_recorder_pack(generic_recorder_t *recorder,
     uint64_t frame = logical_offset / bytes_per_frame;
     uint32_t byte_in_frame = (uint32_t)(logical_offset % bytes_per_frame);
     uint32_t output = 0U;
-    while ((output < valid_bytes) && (byte_in_frame != 0U))
-    {
-        const uint32_t channel = byte_in_frame / 3U;
-        const uint32_t byte_in_sample = byte_in_frame % 3U;
-        const uint32_t ring_frame =
-            (uint32_t)(frame % recorder->config.ring_capacity_frames);
-        const int32_t value =
-            recorder->config.ring_interleaved[
-                ring_frame * recorder->config.channels + channel];
-        destination[output++] =
-            (uint8_t)((uint32_t)value >> (byte_in_sample * 8U));
-        byte_in_frame++;
-        if (byte_in_frame == bytes_per_frame)
-        {
-            byte_in_frame = 0U;
-            frame++;
-        }
-    }
-    uint32_t ring_frame =
-        (uint32_t)(frame % recorder->config.ring_capacity_frames);
-    while ((valid_bytes - output) >= bytes_per_frame)
-    {
-        uint32_t contiguous_frames =
-            recorder->config.ring_capacity_frames - ring_frame;
-        const uint32_t remaining_frames =
-            (valid_bytes - output) / bytes_per_frame;
-        if (contiguous_frames > remaining_frames)
-        {
-            contiguous_frames = remaining_frames;
-        }
-        const int32_t *source = &recorder->config.ring_interleaved[
-            ring_frame * recorder->config.channels];
-        for (uint32_t i = 0U; i < contiguous_frames; ++i)
-        {
-            for (uint32_t channel = 0U;
-                 channel < recorder->config.channels;
-                 ++channel)
-            {
-                const uint32_t value = (uint32_t)*source++;
-                destination[output++] = (uint8_t)value;
-                destination[output++] = (uint8_t)(value >> 8);
-                destination[output++] = (uint8_t)(value >> 16);
-            }
-        }
-        ring_frame += contiguous_frames;
-        if (ring_frame == recorder->config.ring_capacity_frames)
-        {
-            ring_frame = 0U;
-        }
-    }
-    byte_in_frame = 0U;
+    const uint8_t *const ring = (const uint8_t *)recorder->config.ring_interleaved;
     while (output < valid_bytes)
     {
-        const uint32_t channel = byte_in_frame / 3U;
-        const uint32_t byte_in_sample = byte_in_frame % 3U;
-        const uint32_t value = (uint32_t)
-            recorder->config.ring_interleaved[
-                ring_frame * recorder->config.channels + channel];
-        destination[output++] =
-            (uint8_t)(value >> (byte_in_sample * 8U));
-        byte_in_frame++;
+        const uint32_t ring_frame =
+            (uint32_t)(frame % recorder->config.ring_capacity_frames);
+        uint32_t chunk = bytes_per_frame - byte_in_frame;
+        if (chunk > (valid_bytes - output)) chunk = valid_bytes - output;
+        memcpy(&destination[output],
+               &ring[ring_frame * bytes_per_frame + byte_in_frame], chunk);
+        output += chunk;
+        byte_in_frame += chunk;
+        if (byte_in_frame == bytes_per_frame) { byte_in_frame = 0U; frame++; }
     }
     if (dma_bytes > valid_bytes)
     {
@@ -344,6 +295,7 @@ uint8_t generic_recorder_begin(generic_recorder_t *recorder,
                                const generic_recorder_config_t *config)
 {
     if ((recorder == 0) || (config == 0) || (config->ring_interleaved == 0)
+        || (config->bytes_per_frame == 0U)
         || (config->ring_capacity_frames == 0U)
         || (config->sample_rate_hz == 0U) || (config->channels == 0U)
         || (config->write_buffer_bytes < GENERIC_RECORDER_SECTOR_BYTES)

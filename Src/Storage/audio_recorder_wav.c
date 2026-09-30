@@ -22,12 +22,11 @@ uint8_t audio_recorder_wav_build_header(
     uint32_t sample_rate_hz,
     uint16_t channels)
 {
-    if ((header == 0) || (sample_rate_hz == 0U) || (channels == 0U)
-            || (channels > (UINT16_MAX / 3U)))
+    if ((header == 0) || (sample_rate_hz == 0U) || (channels != 2U))
     {
         return 0U;
     }
-    const uint16_t block_align = (uint16_t)(channels * 3U);
+    const uint16_t block_align = (uint16_t)(channels * sizeof(float));
     if ((data_bytes > (UINT32_MAX - (AUDIO_RECORDER_WAV_HEADER_BYTES - 8U)))
             || ((data_bytes % block_align) != 0U))
     {
@@ -45,15 +44,18 @@ uint8_t audio_recorder_wav_build_header(
     memcpy(&header[8], "WAVE", 4U);
     memcpy(&header[12], "fmt ", 4U);
     audio_recorder_wav_le32(&header[16], 16U);
-    audio_recorder_wav_le16(&header[20], 1U);
+    audio_recorder_wav_le16(&header[20], 3U);
     audio_recorder_wav_le16(&header[22], channels);
     audio_recorder_wav_le32(&header[24], sample_rate_hz);
     audio_recorder_wav_le32(&header[28], (uint32_t)byte_rate_64);
     audio_recorder_wav_le16(&header[32], block_align);
-    audio_recorder_wav_le16(&header[34], 24U);
-    memcpy(&header[36], "JUNK", 4U);
-    audio_recorder_wav_le32(&header[40],
-        AUDIO_RECORDER_WAV_HEADER_BYTES - 52U);
+    audio_recorder_wav_le16(&header[34], 32U);
+    memcpy(&header[36], "fact", 4U);
+    audio_recorder_wav_le32(&header[40], 4U);
+    audio_recorder_wav_le32(&header[44], data_bytes / block_align);
+    memcpy(&header[48], "JUNK", 4U);
+    audio_recorder_wav_le32(&header[52],
+        AUDIO_RECORDER_WAV_HEADER_BYTES - 64U);
     memcpy(&header[AUDIO_RECORDER_WAV_HEADER_BYTES - 8U], "data", 4U);
     audio_recorder_wav_le32(
         &header[AUDIO_RECORDER_WAV_HEADER_BYTES - 4U], data_bytes);

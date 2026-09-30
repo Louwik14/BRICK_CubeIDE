@@ -9,7 +9,7 @@ uint8_t audio_recorder_capture_audio_start(uint8_t client,
 uint8_t audio_recorder_capture_audio_stop(uint8_t client,
                                           uint32_t session_id);
 uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
-                                          const int32_t *lr_interleaved,
+                                          const float *lr_interleaved,
                                           uint32_t frames);
 uint8_t audio_recorder_capture_audio_frames(audio_recorder_client_t client,
                                             uint32_t *out_frames);

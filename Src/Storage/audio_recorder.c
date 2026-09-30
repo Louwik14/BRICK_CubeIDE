@@ -108,7 +108,7 @@ static void register_build_stream(void)
             || (audio_recorder_storage_get_map_copy(&map) == 0U)
             || (map.reserved_file_bytes > UINT32_MAX)) return;
     const sample_audio_key_t key = rec_source_building_key();
-    if(sample_page_cache_register_live_pcm24_stereo_sample_key(
+    if(sample_page_cache_register_live_float32_stereo_sample_key(
             key, g_audio_recorder.temporary_path, total_frames,
             readable_frames, AUDIO_RECORDER_WAV_HEADER_BYTES,
             (uint32_t)map.reserved_file_bytes, map.extents,

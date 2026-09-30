@@ -54,10 +54,18 @@ static void compact_one(void)
     g_rec_source_waveform.compact_cursor++;
 }
 
-static void capture_frame(const int32_t *lr, uint32_t frame)
+static int16_t float_to_i16(float value)
 {
-    const int16_t l = (int16_t)(lr[0] >> 8U);
-    const int16_t r = (int16_t)(lr[1] >> 8U);
+    if (value != value) value = 0.0f;
+    if (value > 0.999969f) value = 0.999969f;
+    else if (value < -1.0f) value = -1.0f;
+    return (int16_t)(value * 32767.0f);
+}
+
+static void capture_frame(const float *lr, uint32_t frame)
+{
+    const int16_t l = float_to_i16(lr[0]);
+    const int16_t r = float_to_i16(lr[1]);
     const int16_t sample_min = (l < r) ? l : r;
     const int16_t sample_max = (l > r) ? l : r;
     rec_source_waveform_summary_t *active =
@@ -123,7 +131,7 @@ void rec_source_waveform_abort(void)
     g_rec_source_waveform.active = 0U;
 }
 
-void rec_source_waveform_capture_service(const int32_t *ring_interleaved,
+void rec_source_waveform_capture_service(const float *ring_interleaved,
                                          uint32_t ring_capacity_frames,
                                          uint32_t published_frames)
 {

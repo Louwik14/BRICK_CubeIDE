@@ -17,7 +17,7 @@ uint8_t sample_page_cache_mark_static_page_key_alloc(sample_audio_key_t key,
     return 1U;
 }
 
-uint8_t sample_page_cache_register_live_pcm24_stereo_sample_key(
+uint8_t sample_page_cache_register_live_float32_stereo_sample_key(
     sample_audio_key_t key,
     const char *path,
     uint32_t total_frames,
@@ -47,15 +47,19 @@ uint8_t sample_page_cache_register_live_pcm24_stereo_sample_key(
         return 0U;
     }
     sample->key = key;
-    sample->info.audio_format = 1U;
-    sample->info.encoding = WAV_SAMPLE_ENCODING_PCM_INTEGER;
+    sample->info.audio_format = 3U;
+    sample->info.encoding = WAV_SAMPLE_ENCODING_IEEE_FLOAT;
     sample->info.sample_rate = AUDIO_RECORDER_SAMPLE_RATE_HZ;
     sample->info.channels = AUDIO_RECORDER_CHANNELS;
-    sample->info.bits_per_sample = 24U;
+    sample->info.bits_per_sample = AUDIO_RECORDER_BITS_PER_SAMPLE;
+    sample->info.valid_bits_per_sample = AUDIO_RECORDER_BITS_PER_SAMPLE;
+    sample->info.fmt_chunk_size = 16U;
     sample->info.block_align = AUDIO_RECORDER_BYTES_PER_FRAME;
     sample->info.byte_rate = AUDIO_RECORDER_SAMPLE_RATE_HZ
                            * AUDIO_RECORDER_BYTES_PER_FRAME;
     sample->info.data_size = (uint32_t)data_bytes;
+    sample->info.fact_sample_length = total_frames;
+    sample->info.has_fact = 1U;
     sample->total_frames = total_frames;
     sample->readable_frames = readable_frames;
     sample->data_offset = data_offset;
@@ -129,6 +133,7 @@ uint8_t sample_page_cache_finalize_live_frames_key(sample_audio_key_t key,
     sample->total_frames = final_frames;
     sample->readable_frames = final_frames;
     sample->info.data_size = data_bytes;
+    sample->info.fact_sample_length = final_frames;
     sample->stream_safe.total_frames = final_frames;
     sample->stream_safe.data_size = data_bytes;
     sample_page_cache_unlock(primask);

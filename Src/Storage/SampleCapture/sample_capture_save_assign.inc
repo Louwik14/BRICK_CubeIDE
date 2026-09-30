@@ -230,13 +230,31 @@ static void sample_capture_save_service(void)
             if((fr != FR_OK) || (transferred != sizeof(job->header))) sample_capture_save_fail();
             else
             {
-                const uint32_t data_bytes = job->saved_frames * AUDIO_RECORDER_BYTES_PER_FRAME;
+                job->source_bytes_per_frame = (uint16_t)job->header[32]
+                    | ((uint16_t)job->header[33] << 8U);
+                if ((job->source_bytes_per_frame != 6U)
+                        && (job->source_bytes_per_frame
+                            != AUDIO_RECORDER_BYTES_PER_FRAME))
+                {
+                    sample_capture_save_fail();
+                    break;
+                }
+                const uint32_t data_bytes = job->saved_frames
+                    * job->source_bytes_per_frame;
+                job->bytes_left = data_bytes;
                 const uint32_t riff_bytes = data_bytes
                     + SAMPLE_CAPTURE_WAV_DATA_OFFSET - 8U;
                 job->header[4] = (uint8_t)(riff_bytes & 0xFFU);
                 job->header[5] = (uint8_t)((riff_bytes >> 8U) & 0xFFU);
                 job->header[6] = (uint8_t)((riff_bytes >> 16U) & 0xFFU);
                 job->header[7] = (uint8_t)((riff_bytes >> 24U) & 0xFFU);
+                if (memcmp(&job->header[36], "fact", 4U) == 0)
+                {
+                    job->header[44] = (uint8_t)(job->saved_frames & 0xFFU);
+                    job->header[45] = (uint8_t)((job->saved_frames >> 8U) & 0xFFU);
+                    job->header[46] = (uint8_t)((job->saved_frames >> 16U) & 0xFFU);
+                    job->header[47] = (uint8_t)((job->saved_frames >> 24U) & 0xFFU);
+                }
                 job->header[SAMPLE_CAPTURE_WAV_DATA_OFFSET - 4U] =
                     (uint8_t)(data_bytes & 0xFFU);
                 job->header[SAMPLE_CAPTURE_WAV_DATA_OFFSET - 3U] =
@@ -255,7 +273,7 @@ static void sample_capture_save_service(void)
             break;
         case SAMPLE_CAPTURE_SAVE_SEEK_DATA:
             fr = f_lseek(&job->source, SAMPLE_CAPTURE_WAV_DATA_OFFSET
-                + (job->start_frame * AUDIO_RECORDER_BYTES_PER_FRAME));
+                + (job->start_frame * job->source_bytes_per_frame));
             if(fr != FR_OK) sample_capture_save_fail();
             else job->phase = SAMPLE_CAPTURE_SAVE_READ_DATA;
             break;
@@ -355,8 +373,7 @@ uint8_t sample_capture_model_save_trimmed(void)
     job->saved_frames = save_end - save_start;
     job->no_copy = (uint8_t)((save_start == 0U)
                     && (save_end == current.frame_count));
-    job->bytes_left = (job->no_copy != 0U) ? 0U
-        : (job->saved_frames * AUDIO_RECORDER_BYTES_PER_FRAME);
+    job->bytes_left = 0U;
     job->phase = SAMPLE_CAPTURE_SAVE_SELECT_PATH;
     g_sample_capture.state.save_pending = 1U;
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;

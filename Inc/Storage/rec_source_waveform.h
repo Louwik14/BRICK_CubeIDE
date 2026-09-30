@@ -20,7 +20,7 @@ typedef struct
 
 void rec_source_waveform_begin(uint32_t frame_limit);
 void rec_source_waveform_abort(void);
-void rec_source_waveform_capture_service(const int32_t *ring_interleaved,
+void rec_source_waveform_capture_service(const float *ring_interleaved,
                                          uint32_t ring_capacity_frames,
                                          uint32_t published_frames);
 uint32_t rec_source_waveform_captured_frames(void);

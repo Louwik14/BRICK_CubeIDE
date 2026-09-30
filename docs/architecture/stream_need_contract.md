@@ -91,8 +91,9 @@ la preview et l'import continuent a
 accepter PCM16/24/32 et FLOAT32 mono/stereo. Le runtime Classic/Multi exige ce
 format canonique: le backend SD lit directement dans la page FLOAT32 finale,
 sans decodeur ni scratch de page intermediaire. Le loader RAM lit de meme
-directement dans son allocation FLOAT32. Le PCM24 du Recorder reste une
-frontiere distincte; ses pages sont converties en place, de la fin vers le
-debut, avec un unique tampon borne de 512 frames.
+directement dans son allocation FLOAT32. Le Recorder produit lui aussi ce
+format canonique et ses pages suivent le chemin FLOAT32 direct. Le decodeur
+PCM24 borne reste disponible uniquement pour les anciennes prises deja
+presentes sur SD.
 
 Preview est un ring PCM SPSC distinct. Le building REC utilise la carte append-only du Recorder; il n'est publie qu'apres finalisation et prechauffage des pages initiales. Le detail appartient a [recorder_sd.md](recorder_sd.md).

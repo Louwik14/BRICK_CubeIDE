@@ -8,27 +8,27 @@ immuable et le Streamer assure la lecture.
 
 - CONTROL porte Audio REC : armement, trigger, longueur, quantize, routing,
   STOP, SAVE et état UI.
-- AUDIO construit le bus REC stéréo float, applique l'OVERDUB et convertit le
-  résultat en PCM24 stocké dans des mots `int32_t`.
+- AUDIO construit le bus REC stéréo float, applique l'OVERDUB et publie
+  directement le résultat FLOAT32 entrelacé dans le ring Recorder.
 - STORAGE draine le ring, réserve et mappe le fichier, arbitre les accès SD,
   finalise le WAV et publie la nouvelle génération.
 - `REC_SOURCE` possède quatre descripteurs générationnels bornés et leur cycle
   `FREE/PREPARED`, `BUILDING`, `CURRENT`, `UNDO`, `RETIRED`.
 - Le Streamer est l'unique moteur de playback. Une track Stream utilise
   `SOURCE=POOL` ou `SOURCE=REC` avec le même reader, le même cache paginé, le
-  même décodeur PCM24 et les mêmes leases.
+  même chemin FLOAT32 direct et les mêmes leases.
 
 Le Recorder ne connaît aucune track consommatrice. Le Streamer ne connaît ni
 les fichiers temporaires `.REC`, ni la finalisation, ni l'alternance A/B.
 
 ## Data-plane live
 
-À 48 kHz, stéréo PCM24 représente 6 octets par frame et 288 000 octets/s.
+À 48 kHz, stéréo FLOAT32 représente 8 octets par frame et 384 000 octets/s.
 
 ```text
 mixer AUDIO, sources routées après leur traitement pertinent
   -> bus REC stéréo float
-  -> conversion/saturation PCM24 int32
+  -> entrelacement FLOAT32 natif
   -> ring AUDIO -> STORAGE de 12 001 frames (~250,02 ms)
   -> generic_recorder
   -> deux buffers préalloués de 32 KiB
@@ -40,7 +40,7 @@ mixer AUDIO, sources routées après leur traitement pertinent
 Le head du ring appartient à AUDIO. Le tail accepté/committé appartient à
 STORAGE. AUDIO ne fait aucun appel FatFs et n'attend jamais la carte. Un vrai
 dépassement head-tail ferme la capture avec `AUDIO_RECORDER_ERROR_RING_OVERFLOW`.
-Chaque buffer de 32 KiB représente environ 113,8 ms de PCM.
+Chaque buffer de 32 KiB représente environ 85,3 ms d'audio FLOAT32.
 
 ## Préparation, arrêt et finalisation
 
@@ -153,7 +153,7 @@ status produit; elle n'est pas reclassée en ring overflow. Les erreurs média,
 
 ## Waveform de prise
 
-AUDIO publie dans le ring le PCM24 final qui est l'unique point source du
+AUDIO publie dans le ring le FLOAT32 final qui est l'unique point source du
 résumé. Avant de rendre les frames du ring recyclables, STORAGE alimente 4096
 couples min/max int16. Une longueur fixe utilise le mapping direct
 frames-vers-bins. Une longueur libre utilise des niveaux bornés et compacte
@@ -184,7 +184,7 @@ Le chemin de données est gradué :
   24 000 frames et les niveaux dérivés 16/64/256 avec min/max/first/last
   (environ 1 MiB). La vue et ses tuiles voisines sont demandées, les tuiles
   proches du focus restent chaudes, et une inversion de pan réutilise leurs
-  préfixes chargés. Une lecture PCM24 stéréo d'au plus 4092 octets est admise
+  préfixes chargés. Une lecture WAV supportée d'au plus 4092 octets est admise
   par passage STORAGE. Les colonnes précises déjà présentes en RAM se
   dessinent sans attendre la fin de la tuile ; seules les colonnes absentes
   utilisent l'overview REC.
