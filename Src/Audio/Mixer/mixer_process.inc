@@ -1262,7 +1262,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                              audio_rec_bus_l, audio_rec_bus_r, frames) == 0U)
         audio_rec_capture_active = 0U;
 
-    uint32_t audio_rec_peak_abs_pcm24 = 0U;
+    float audio_rec_peak = 0.0f;
     if(audio_rec_bus_active != 0U)
     {
 #if BRICK_PERF_DIAG
@@ -1278,12 +1278,10 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             PERF_START(rec_peak_start);
             for(uint32_t i = 0U; i < frames; ++i)
             {
-                const uint32_t abs_l = mixer_rec_float_peak_to_level(audio_rec_bus_l[i]);
-                const uint32_t abs_r = mixer_rec_float_peak_to_level(audio_rec_bus_r[i]);
-                if(abs_l > audio_rec_peak_abs_pcm24)
-                    audio_rec_peak_abs_pcm24 = abs_l;
-                if(abs_r > audio_rec_peak_abs_pcm24)
-                    audio_rec_peak_abs_pcm24 = abs_r;
+                audio_rec_peak = mixer_rec_float_peak_accumulate(
+                    audio_rec_peak, audio_rec_bus_l[i]);
+                audio_rec_peak = mixer_rec_float_peak_accumulate(
+                    audio_rec_peak, audio_rec_bus_r[i]);
             }
             PERF_END(PERF_CPU_AUDIO_PEAK, rec_peak_start);
             (void)audio_recorder_capture_audio_push(
@@ -1293,24 +1291,20 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         {
             for(uint32_t i = 0U; i < frames; ++i)
             {
-                const uint32_t abs_l = mixer_rec_float_peak_to_level(audio_rec_bus_l[i]);
-                const uint32_t abs_r = mixer_rec_float_peak_to_level(audio_rec_bus_r[i]);
-                if(abs_l > audio_rec_peak_abs_pcm24)
-                    audio_rec_peak_abs_pcm24 = abs_l;
-                if(abs_r > audio_rec_peak_abs_pcm24)
-                    audio_rec_peak_abs_pcm24 = abs_r;
+                audio_rec_peak = mixer_rec_float_peak_accumulate(
+                    audio_rec_peak, audio_rec_bus_l[i]);
+                audio_rec_peak = mixer_rec_float_peak_accumulate(
+                    audio_rec_peak, audio_rec_bus_r[i]);
             }
         }
 #else
         for(uint32_t i = 0U; i < frames; ++i)
         {
             const uint32_t out = i * AUDIO_RECORDER_CHANNELS;
-            const uint32_t abs_l = mixer_rec_float_peak_to_level(audio_rec_bus_l[i]);
-            const uint32_t abs_r = mixer_rec_float_peak_to_level(audio_rec_bus_r[i]);
-            if(abs_l > audio_rec_peak_abs_pcm24)
-                audio_rec_peak_abs_pcm24 = abs_l;
-            if(abs_r > audio_rec_peak_abs_pcm24)
-                audio_rec_peak_abs_pcm24 = abs_r;
+            audio_rec_peak = mixer_rec_float_peak_accumulate(
+                audio_rec_peak, audio_rec_bus_l[i]);
+            audio_rec_peak = mixer_rec_float_peak_accumulate(
+                audio_rec_peak, audio_rec_bus_r[i]);
             if(audio_rec_capture_active != 0U)
             {
                 audio_rec_bus_interleaved[out] = audio_rec_bus_l[i];
@@ -1324,7 +1318,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         }
 #endif
     }
-    audio_rec_level_producer_publish(audio_rec_peak_abs_pcm24);
+    audio_rec_level_producer_publish(mixer_rec_float_peak_to_level(audio_rec_peak));
 #if BRICK_PERF_DIAG
     if(rec_audio_perf_active != 0U)
         brick_perf_add(PERF_CPU_AUDIO_TOTAL,

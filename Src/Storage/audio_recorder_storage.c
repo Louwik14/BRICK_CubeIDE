@@ -14,8 +14,8 @@
 #include "stm32h7xx_hal.h"
 #include "main.h"
 
-#define AUDIO_RECORDER_WRITE_BUFFER_BYTES SD_SCHEDULER_SEQUENTIAL_DATA_BYTES
-#define AUDIO_RECORDER_MINIMUM_WRITE_BYTES (8192U)
+#define AUDIO_RECORDER_MAXIMUM_WRITE_BYTES SD_SCHEDULER_SEQUENTIAL_DATA_BYTES
+#define AUDIO_RECORDER_MINIMUM_WRITE_BYTES SD_SCHEDULER_SEQUENTIAL_DATA_BYTES
 #define AUDIO_RECORDER_INITIAL_RESERVE_BYTES (2U * 1024U * 1024U)
 #define AUDIO_RECORDER_EXTENSION_BYTES (2U * 1024U * 1024U)
 #define AUDIO_RECORDER_RESERVATION_LOW_US (3000000U)
@@ -60,11 +60,9 @@ typedef struct
     char final_path[AUDIO_RECORDER_PATH_MAX];
 } audio_recorder_storage_runtime_t;
 
-/* FatFs, callbacks, generic-recorder state and DMA buffers are STORAGE-only. */
+/* FatFs, callbacks and generic-recorder state are STORAGE-only. */
 STORAGE_STATE_SDRAM static audio_recorder_storage_runtime_t g_audio_recorder_storage;
-RECORDER_SCRATCH_SDRAM static uint8_t
-    g_audio_recorder_write_buffers[GENERIC_RECORDER_WRITE_BUFFER_COUNT]
-                                  [AUDIO_RECORDER_WRITE_BUFFER_BYTES];
+RECORDER_SCRATCH_SDRAM static uint8_t g_audio_recorder_tail_buffer[512U];
 static uint8_t g_trace_storage_phase;
 static uint8_t g_trace_final_phase;
 
@@ -145,9 +143,8 @@ static uint8_t audio_recorder_storage_start_writer(
     config.ring_interleaved = g_audio_recorder_capture_ring;
     config.ring_capacity_frames = AUDIO_RECORDER_CAPTURE_RING_FRAMES;
     config.bytes_per_frame = AUDIO_RECORDER_BYTES_PER_FRAME;
-    for (uint32_t i = 0U; i < GENERIC_RECORDER_WRITE_BUFFER_COUNT; ++i)
-        config.write_buffers[i] = g_audio_recorder_write_buffers[i];
-    config.write_buffer_bytes = AUDIO_RECORDER_WRITE_BUFFER_BYTES;
+    config.tail_buffer = g_audio_recorder_tail_buffer;
+    config.maximum_write_bytes = AUDIO_RECORDER_MAXIMUM_WRITE_BYTES;
     config.minimum_write_bytes = AUDIO_RECORDER_MINIMUM_WRITE_BYTES;
     config.sample_rate_hz = AUDIO_RECORDER_SAMPLE_RATE_HZ;
     config.channels = AUDIO_RECORDER_CHANNELS;

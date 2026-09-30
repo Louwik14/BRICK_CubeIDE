@@ -232,12 +232,17 @@ static AUDIO_HOT mixer_reverb_state_t g_reverb;
 static float g_delay_spectral_position = 0.50f;
 static float g_delay_spectral_width = 1.0f;
 
-static uint32_t mixer_rec_float_peak_to_level(float sample)
+static float mixer_rec_float_peak_accumulate(float peak, float sample)
 {
-    if(sample != sample) return 0U;
+    if(sample != sample) return peak;
     if(sample < 0.0f) sample = -sample;
-    if(sample >= 1.0f) return 8388607U;
-    return (uint32_t)(sample * MIXER_REC_LEVEL_FULL_SCALE);
+    return (sample > peak) ? sample : peak;
+}
+
+static uint32_t mixer_rec_float_peak_to_level(float peak)
+{
+    if(peak >= 1.0f) return 8388607U;
+    return (uint32_t)(peak * MIXER_REC_LEVEL_FULL_SCALE);
 }
 
 static float clampf_local(float v, float lo, float hi)

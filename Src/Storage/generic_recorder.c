@@ -97,7 +97,7 @@ static uint8_t generic_recorder_snapshot(generic_recorder_t *recorder,
 
 static uint8_t generic_recorder_has_descriptors(const generic_recorder_t *recorder)
 {
-    for (uint32_t i = 0U; i < GENERIC_RECORDER_WRITE_BUFFER_COUNT; ++i)
+    for (uint32_t i = 0U; i < GENERIC_RECORDER_DESCRIPTOR_COUNT; ++i)
     {
         if (recorder->descriptors[i].state != GENERIC_RECORDER_DESCRIPTOR_FREE)
         {
@@ -110,7 +110,7 @@ static uint8_t generic_recorder_has_descriptors(const generic_recorder_t *record
 static generic_recorder_write_descriptor_t *generic_recorder_free_descriptor(
     generic_recorder_t *recorder)
 {
-    for (uint32_t i = 0U; i < GENERIC_RECORDER_WRITE_BUFFER_COUNT; ++i)
+    for (uint32_t i = 0U; i < GENERIC_RECORDER_DESCRIPTOR_COUNT; ++i)
     {
         if (recorder->descriptors[i].state == GENERIC_RECORDER_DESCRIPTOR_FREE)
         {
@@ -124,7 +124,7 @@ static generic_recorder_write_descriptor_t *generic_recorder_ready_descriptor(
     generic_recorder_t *recorder)
 {
     generic_recorder_write_descriptor_t *best = 0;
-    for (uint32_t i = 0U; i < GENERIC_RECORDER_WRITE_BUFFER_COUNT; ++i)
+    for (uint32_t i = 0U; i < GENERIC_RECORDER_DESCRIPTOR_COUNT; ++i)
     {
         generic_recorder_write_descriptor_t *const descriptor =
             &recorder->descriptors[i];
@@ -142,7 +142,7 @@ static generic_recorder_write_descriptor_t *generic_recorder_ready_descriptor(
 static generic_recorder_write_descriptor_t *generic_recorder_in_flight_descriptor(
     generic_recorder_t *recorder)
 {
-    for (uint32_t i = 0U; i < GENERIC_RECORDER_WRITE_BUFFER_COUNT; ++i)
+    for (uint32_t i = 0U; i < GENERIC_RECORDER_DESCRIPTOR_COUNT; ++i)
     {
         if (recorder->descriptors[i].state
             == GENERIC_RECORDER_DESCRIPTOR_IN_FLIGHT)
@@ -153,33 +153,22 @@ static generic_recorder_write_descriptor_t *generic_recorder_in_flight_descripto
     return 0;
 }
 
-static void generic_recorder_pack(generic_recorder_t *recorder,
-                                  uint8_t *destination,
-                                  uint64_t logical_offset,
-                                  uint32_t valid_bytes,
-                                  uint32_t dma_bytes)
+static const uint8_t *generic_recorder_source(generic_recorder_t *recorder,
+                                              uint64_t logical_offset,
+                                              uint32_t valid_bytes,
+                                              uint32_t dma_bytes)
 {
-    const uint32_t bytes_per_frame = generic_recorder_bytes_per_frame(recorder);
-    uint64_t frame = logical_offset / bytes_per_frame;
-    uint32_t byte_in_frame = (uint32_t)(logical_offset % bytes_per_frame);
-    uint32_t output = 0U;
     const uint8_t *const ring = (const uint8_t *)recorder->config.ring_interleaved;
-    while (output < valid_bytes)
+    const uint32_t ring_bytes = recorder->config.ring_capacity_frames
+                                * generic_recorder_bytes_per_frame(recorder);
+    const uint32_t ring_offset = (uint32_t)(logical_offset % ring_bytes);
+    if (dma_bytes == valid_bytes)
     {
-        const uint32_t ring_frame =
-            (uint32_t)(frame % recorder->config.ring_capacity_frames);
-        uint32_t chunk = bytes_per_frame - byte_in_frame;
-        if (chunk > (valid_bytes - output)) chunk = valid_bytes - output;
-        memcpy(&destination[output],
-               &ring[ring_frame * bytes_per_frame + byte_in_frame], chunk);
-        output += chunk;
-        byte_in_frame += chunk;
-        if (byte_in_frame == bytes_per_frame) { byte_in_frame = 0U; frame++; }
+        return &ring[ring_offset];
     }
-    if (dma_bytes > valid_bytes)
-    {
-        memset(&destination[valid_bytes], 0, dma_bytes - valid_bytes);
-    }
+    memcpy(recorder->config.tail_buffer, &ring[ring_offset], valid_bytes);
+    memset(&recorder->config.tail_buffer[valid_bytes], 0, dma_bytes - valid_bytes);
+    return recorder->config.tail_buffer;
 }
 
 static uint8_t generic_recorder_prepare_descriptor(generic_recorder_t *recorder,
@@ -198,10 +187,15 @@ static uint8_t generic_recorder_prepare_descriptor(generic_recorder_t *recorder,
         return 0U;
     }
     uint64_t valid_goal = backlog;
-    if (valid_goal > recorder->config.write_buffer_bytes)
+    if (valid_goal > recorder->config.maximum_write_bytes)
     {
-        valid_goal = recorder->config.write_buffer_bytes;
+        valid_goal = recorder->config.maximum_write_bytes;
     }
+    const uint32_t ring_bytes = recorder->config.ring_capacity_frames
+                                * generic_recorder_bytes_per_frame(recorder);
+    const uint32_t ring_offset = (uint32_t)(recorder->assigned_tail % ring_bytes);
+    const uint32_t contiguous_bytes = ring_bytes - ring_offset;
+    if (valid_goal > contiguous_bytes) valid_goal = contiguous_bytes;
     uint32_t dma_goal;
     if (recorder->state == GENERIC_RECORDER_CAPTURING)
     {
@@ -214,8 +208,17 @@ static uint8_t generic_recorder_prepare_descriptor(generic_recorder_t *recorder,
     }
     else
     {
-        dma_goal = (uint32_t)((valid_goal + GENERIC_RECORDER_SECTOR_BYTES - 1U)
-                              & ~(uint64_t)(GENERIC_RECORDER_SECTOR_BYTES - 1U));
+        const uint32_t complete_bytes = (uint32_t)valid_goal
+            & ~(GENERIC_RECORDER_SECTOR_BYTES - 1U);
+        if (complete_bytes != 0U)
+        {
+            valid_goal = complete_bytes;
+            dma_goal = complete_bytes;
+        }
+        else
+        {
+            dma_goal = GENERIC_RECORDER_SECTOR_BYTES;
+        }
     }
 
     recorder_file_reservation_map_snapshot_t snapshot;
@@ -255,16 +258,17 @@ static uint8_t generic_recorder_prepare_descriptor(generic_recorder_t *recorder,
     }
     if ((valid_bytes == 0U)
         || ((recorder->state == GENERIC_RECORDER_CAPTURING)
-            && (valid_bytes != dma_bytes)))
+            && (valid_bytes != dma_bytes))
+        || ((valid_bytes != dma_bytes)
+            && ((dma_bytes != GENERIC_RECORDER_SECTOR_BYTES)
+                || (valid_bytes >= GENERIC_RECORDER_SECTOR_BYTES))))
     {
         recorder->error = GENERIC_RECORDER_ERROR_MAPPING;
         recorder->state = GENERIC_RECORDER_ERROR;
         return 0U;
     }
 
-    const uint32_t buffer_index = (uint32_t)(descriptor - recorder->descriptors);
     memset(descriptor, 0, sizeof(*descriptor));
-    descriptor->buffer = recorder->config.write_buffers[buffer_index];
     descriptor->logical_offset = recorder->assigned_tail;
     descriptor->lba = span.lba;
     descriptor->dma_bytes = dma_bytes;
@@ -272,11 +276,10 @@ static uint8_t generic_recorder_prepare_descriptor(generic_recorder_t *recorder,
     descriptor->media_epoch = snapshot.media_epoch;
     descriptor->extent_index = span.extent_index;
     PERF_START(pack_start);
-    generic_recorder_pack(recorder,
-                          descriptor->buffer,
-                          descriptor->logical_offset,
-                          valid_bytes,
-                          dma_bytes);
+    descriptor->buffer = generic_recorder_source(recorder,
+                                                 descriptor->logical_offset,
+                                                 valid_bytes,
+                                                 dma_bytes);
     PERF_END(PERF_CPU_REC_PACK, pack_start);
     descriptor->state = GENERIC_RECORDER_DESCRIPTOR_READY;
     recorder->assigned_tail += valid_bytes;
@@ -298,11 +301,13 @@ uint8_t generic_recorder_begin(generic_recorder_t *recorder,
         || (config->bytes_per_frame == 0U)
         || (config->ring_capacity_frames == 0U)
         || (config->sample_rate_hz == 0U) || (config->channels == 0U)
-        || (config->write_buffer_bytes < GENERIC_RECORDER_SECTOR_BYTES)
-        || ((config->write_buffer_bytes
+        || (config->tail_buffer == 0)
+        || ((((uintptr_t)config->tail_buffer) & 31U) != 0U)
+        || (config->maximum_write_bytes < GENERIC_RECORDER_SECTOR_BYTES)
+        || ((config->maximum_write_bytes
              & (GENERIC_RECORDER_SECTOR_BYTES - 1U)) != 0U)
         || (config->minimum_write_bytes < GENERIC_RECORDER_SECTOR_BYTES)
-        || (config->minimum_write_bytes > config->write_buffer_bytes)
+        || (config->minimum_write_bytes > config->maximum_write_bytes)
         || ((config->minimum_write_bytes
              & (GENERIC_RECORDER_SECTOR_BYTES - 1U)) != 0U)
         || (config->reserved_header_bytes == 0U)
@@ -317,13 +322,14 @@ uint8_t generic_recorder_begin(generic_recorder_t *recorder,
     {
         return 0U;
     }
-    for (uint32_t i = 0U; i < GENERIC_RECORDER_WRITE_BUFFER_COUNT; ++i)
+    const uint64_t ring_bytes = (uint64_t)config->ring_capacity_frames
+                                * config->bytes_per_frame;
+    if ((((uintptr_t)config->ring_interleaved & 31U) != 0U)
+        || ((GENERIC_RECORDER_SECTOR_BYTES % config->bytes_per_frame) != 0U)
+        || ((ring_bytes & (GENERIC_RECORDER_SECTOR_BYTES - 1U)) != 0U)
+        || (ring_bytes > UINT32_MAX))
     {
-        if ((config->write_buffers[i] == 0)
-            || ((((uintptr_t)config->write_buffers[i]) & 31U) != 0U))
-        {
-            return 0U;
-        }
+        return 0U;
     }
     generic_recorder_init(recorder);
     recorder->config = *config;

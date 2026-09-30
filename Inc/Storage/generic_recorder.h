@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define GENERIC_RECORDER_WRITE_BUFFER_COUNT (2U)
+#define GENERIC_RECORDER_DESCRIPTOR_COUNT (2U)
 
 typedef enum
 {
@@ -107,8 +107,8 @@ typedef struct
     const void *ring_interleaved;
     uint32_t ring_capacity_frames;
     uint16_t bytes_per_frame;
-    uint8_t *write_buffers[GENERIC_RECORDER_WRITE_BUFFER_COUNT];
-    uint32_t write_buffer_bytes;
+    uint8_t *tail_buffer;
+    uint32_t maximum_write_bytes;
     uint32_t minimum_write_bytes;
     uint32_t sample_rate_hz;
     uint16_t channels;
@@ -148,7 +148,7 @@ typedef enum
 
 typedef struct
 {
-    uint8_t *buffer;
+    const uint8_t *buffer;
     uint64_t logical_offset;
     uint32_t lba;
     uint32_t dma_bytes;
@@ -165,7 +165,7 @@ typedef struct
 typedef struct
 {
     generic_recorder_config_t config;
-    generic_recorder_write_descriptor_t descriptors[GENERIC_RECORDER_WRITE_BUFFER_COUNT];
+    generic_recorder_write_descriptor_t descriptors[GENERIC_RECORDER_DESCRIPTOR_COUNT];
     uint64_t accepted_tail;
     uint64_t assigned_tail;
     uint64_t committed_tail;

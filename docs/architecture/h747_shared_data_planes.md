@@ -13,7 +13,7 @@ resolution locale d'un ID ne font jamais partie de l'ABI M4/M7.
 | Multi | M4 loader/projection -> M7 Sampler | projection non-cacheable `AUDIO_SHARED_MULTI_SDRAM` (47 104 octets) + instruments compacts `D2_IPC` | zones et sources numeriques, IDs sample/instrument, offsets fichier; aucun path/pointeur | samples/zones immutables, DMB, instrument `ready` publie en dernier | stop instrument + fin des credits page, withdraw, puis catalogue/pages recyclables |
 | STREAM pages | M4 Storage -> M7 readers | payload cacheable `.sdram_sample_page_pool`, 24 641 536 octets | descriptor M4 avec `data_offset`; token I/O pointer-free; resolution locale seulement | decode dans page, clean payload, clean descriptor, etat `READY` en dernier | un lease seqlocke par lecteur; `EVICTING` puis relecture de leur union avant recyclage |
 | Preview PCM | M4 Preview -> M7 MAIN | ring non-cacheable `AUDIO_STORAGE_SHARED_SDRAM`, 2048 x 2 floats (16 384) + deux curseurs `D3_IPC` | samples seulement, aucun pointeur | payload, DMB, `write_count` M4 | M7 publie uniquement `read_count`; active/gain sont AUDIO-locaux via PARAM, sans epoch ni reset croise |
-| Recorder FLOAT32 | M7 AUDIO -> M4 Storage/SD | ring cacheable `SDRAM_RECORDER_RING`, 12 001 x 2 x 32 bits (96 008) + layout 20 octets `D3_IPC` | `head_cursor`, `started_session`, `tail_cursor`, `closed_session`, `capture_fault`; aucun config/etat fonctionnel partage | AUDIO remet le curseur a zero, DMB, publie `started_session`; puis H743: FLOAT32, DMB, `head_cursor`; H747: clean FLOAT32, DMB, `head_cursor`. STORAGE ignore les curseurs avant le START de la session courante. | M4 ecrit seulement `tail_cursor` apres copie/commit |
+| Recorder FLOAT32 | M7 AUDIO -> M4 Storage/SD | ring cacheable `SDRAM_RECORDER_RING`, 12 032 x 2 x 32 bits (96 256) + layout 20 octets `D3_IPC` | `head_cursor`, `started_session`, `tail_cursor`, `closed_session`, `capture_fault`; aucun config/etat fonctionnel partage | AUDIO remet le curseur a zero, DMB, publie `started_session`; puis H743: FLOAT32, DMB, `head_cursor`; H747: clean FLOAT32, DMB, `head_cursor`. STORAGE ignore les curseurs avant le START de la session courante. | M4 ecrit seulement `tail_cursor` apres commit du DMA direct depuis le ring |
 | REC_SOURCE | M4 Recorder -> M7 Streamer | workspaces A/B et pages STREAM existantes | snapshot `{key, frame_count, registration_epoch}`; aucun pointeur | building prechauffe puis publication atomique current | ancienne generation retiree apres extinction des leases |
 | Snapshot AUDIO restore | M4 CONTROL -> M7 AUDIO | singleton `.sdram_audio_state_snapshot`, 73 920 octets cacheables | generation, count, checksum, valid magic et commandes finales pointer-free | contenu immutable, clean, magic, DMB, puis `AUDIO_STATE_COMMIT(generation)` | M4 attend que le tail FIFO franchisse le commit, apres application M7; aucun ACK |
 
@@ -31,8 +31,9 @@ traverse aucune commande ou mailbox.
 - `.sdram_recorder`, derniers 256 KiB: shareable non-cacheable, MPU region 4.
 - `.sdram_recorder_ring`, 128 KiB a `0xC1FA0000`: cacheable, non-shareable,
   MPU region 3. Sur H743 monocoeur, AUDIO et Recorder accedent tous deux par
-  CPU et aucune maintenance cache du ring n'est necessaire. Le buffer FLOAT32
-  de write passe par le clean existant avant SDMMC DMA.
+  CPU. Le driver SD nettoie la plage FLOAT32 directement source avant le DMA ;
+  le ring reste non recyclable jusqu'a la completion. Le seul buffer de write
+  est le secteur partiel final de 512 octets.
 - Sur H747 a caches prives, le producteur M7 doit clean les lignes de 32 octets
   produites avant DMB et publication de `head_cursor`. Le lecteur M4 doit lire
   `head_cursor`, invalidate les lignes concernees puis lire le ring. Les lignes

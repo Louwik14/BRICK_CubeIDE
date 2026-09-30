@@ -29,18 +29,19 @@ les fichiers temporaires `.REC`, ni la finalisation, ni l'alternance A/B.
 mixer AUDIO, sources routées après leur traitement pertinent
   -> bus REC stéréo float
   -> entrelacement FLOAT32 natif
-  -> ring AUDIO -> STORAGE de 12 001 frames (~250,02 ms)
-  -> generic_recorder
-  -> deux buffers préalloués de 32 KiB
+  -> ring AUDIO -> STORAGE de 12 032 frames (~250,67 ms)
+  -> generic_recorder, descripteurs directs de 32 KiB
   -> extents physiques pré-réservés
   -> scheduler SD partagé
-  -> SDMMC DMA direct
+  -> SDMMC DMA directement depuis le ring
 ```
 
 Le head du ring appartient à AUDIO. Le tail accepté/committé appartient à
 STORAGE. AUDIO ne fait aucun appel FatFs et n'attend jamais la carte. Un vrai
 dépassement head-tail ferme la capture avec `AUDIO_RECORDER_ERROR_RING_OVERFLOW`.
-Chaque buffer de 32 KiB représente environ 85,3 ms d'audio FLOAT32.
+Chaque descripteur de 32 KiB représente environ 85,3 ms d'audio FLOAT32. Le
+ring est un multiple exact de secteurs et reste protégé jusqu'au commit DMA ;
+seul le dernier secteur partiel passe par un buffer de terminaison de 512 octets.
 
 ## Préparation, arrêt et finalisation
 
