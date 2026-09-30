@@ -27,7 +27,7 @@ static uint32_t g_sample_stream_physical_generation;
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(sizeof(sample_stream_physical_extent_t) == 12U,
                "physical extent budget changed");
-_Static_assert(sizeof(sample_stream_physical_map_t) == 28U,
+_Static_assert(sizeof(sample_stream_physical_map_t) == 60U,
                "physical map header budget changed");
 _Static_assert(sizeof(sample_stream_physical_pool_block_t) == 104U,
                "physical extent pool block budget changed");
@@ -41,6 +41,16 @@ static uint32_t sample_stream_physical_next_generation(void)
         g_sample_stream_physical_generation = 1U;
     }
     return g_sample_stream_physical_generation;
+}
+
+static void sample_stream_physical_map_reset_blocks(
+    sample_stream_physical_map_t *map)
+{
+    map->first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_PHYSICAL_MAP_MAX_BLOCKS; ++i)
+    {
+        map->pool_block[i] = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
+    }
 }
 
 void sample_stream_physical_map_pool_reset(void)
@@ -59,7 +69,7 @@ void sample_stream_physical_map_release(sample_stream_physical_map_t *map)
     if (map->generation == 0U)
     {
         memset(map, 0, sizeof(*map));
-        map->first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
+        sample_stream_physical_map_reset_blocks(map);
         return;
     }
 
@@ -79,7 +89,7 @@ void sample_stream_physical_map_release(sample_stream_physical_map_t *map)
         visited++;
     }
     memset(map, 0, sizeof(*map));
-    map->first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
+    sample_stream_physical_map_reset_blocks(map);
 }
 
 static int32_t sample_stream_physical_pool_allocate(uint32_t owner_generation)
@@ -117,38 +127,35 @@ static uint8_t sample_stream_physical_map_append(sample_stream_physical_map_t *m
     const uint16_t overflow_index = (uint16_t)(map->extent_count - 1U);
     const uint16_t required_block =
         (uint16_t)(overflow_index / SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK);
-    uint16_t block_index = map->first_pool_block;
-    uint16_t previous = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
-    for (uint16_t ordinal = 0U; ordinal <= required_block; ++ordinal)
+    if (required_block >= SAMPLE_STREAM_PHYSICAL_MAP_MAX_BLOCKS)
     {
-        if (block_index >= SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS)
+        return 0U;
+    }
+    uint16_t block_index = map->pool_block[required_block];
+    if (block_index >= SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS)
+    {
+        const int32_t allocated =
+            sample_stream_physical_pool_allocate(map->generation);
+        if (allocated < 0) return 0U;
+        block_index = (uint16_t)allocated;
+        map->pool_block[required_block] = block_index;
+        if (required_block == 0U)
         {
-            const int32_t allocated =
-                sample_stream_physical_pool_allocate(map->generation);
-            if (allocated < 0)
+            map->first_pool_block = block_index;
+        }
+        else
+        {
+            const uint16_t previous = map->pool_block[required_block - 1U];
+            if (previous >= SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS)
             {
+                memset(&g_sample_stream_physical_pool[block_index], 0,
+                       sizeof(g_sample_stream_physical_pool[block_index]));
+                map->pool_block[required_block] =
+                    SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
                 return 0U;
             }
-            block_index = (uint16_t)allocated;
-            if (previous < SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS)
-            {
-                g_sample_stream_physical_pool[previous].next = block_index;
-            }
-            else
-            {
-                map->first_pool_block = block_index;
-            }
+            g_sample_stream_physical_pool[previous].next = block_index;
         }
-        if (ordinal == required_block)
-        {
-            break;
-        }
-        if (g_sample_stream_physical_pool[block_index].owner_generation != map->generation)
-        {
-            return 0U;
-        }
-        previous = block_index;
-        block_index = g_sample_stream_physical_pool[block_index].next;
     }
 
     sample_stream_physical_pool_block_t *const block =
@@ -178,7 +185,7 @@ uint8_t sample_stream_physical_map_import(
     sample_stream_physical_map_release(map);
     map->generation = sample_stream_physical_next_generation();
     map->media_epoch = media_epoch;
-    map->first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
+    sample_stream_physical_map_reset_blocks(map);
     for (uint16_t i = 0U; i < extent_count; ++i)
     {
         if (sample_stream_physical_map_append(map, &extents[i]) == 0U)
@@ -224,32 +231,24 @@ uint8_t sample_stream_physical_map_get_extent(const sample_stream_physical_map_t
         return 1U;
     }
 
-    uint16_t overflow_index = (uint16_t)(extent_index - 1U);
-    uint16_t block_index = map->first_pool_block;
-    while ((overflow_index >= SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK)
-           && (block_index < SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS))
-    {
-        const sample_stream_physical_pool_block_t *const block =
-            &g_sample_stream_physical_pool[block_index];
-        if (block->owner_generation != map->generation)
-        {
-            return 0U;
-        }
-        overflow_index = (uint16_t)(overflow_index
-                         - SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK);
-        block_index = block->next;
-    }
+    const uint16_t overflow_index = (uint16_t)(extent_index - 1U);
+    const uint16_t block_ordinal = (uint16_t)(
+        overflow_index / SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK);
+    if (block_ordinal >= SAMPLE_STREAM_PHYSICAL_MAP_MAX_BLOCKS) return 0U;
+    const uint16_t block_index = map->pool_block[block_ordinal];
     if (block_index >= SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS)
     {
         return 0U;
     }
     const sample_stream_physical_pool_block_t *const block =
         &g_sample_stream_physical_pool[block_index];
-    if ((block->owner_generation != map->generation) || (overflow_index >= block->used))
+    const uint16_t in_block = (uint16_t)(
+        overflow_index % SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK);
+    if ((block->owner_generation != map->generation) || (in_block >= block->used))
     {
         return 0U;
     }
-    *out_extent = block->extents[overflow_index];
+    *out_extent = block->extents[in_block];
     return 1U;
 }
 
@@ -395,7 +394,7 @@ void sample_stream_safe_metadata_init_fatfs(sample_audio_key_t key,
     }
 
     memset(out_meta, 0, sizeof(*out_meta));
-    out_meta->physical_map.first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
+    sample_stream_physical_map_reset_blocks(&out_meta->physical_map);
     out_meta->key = key;
     out_meta->data_offset_bytes = data_offset;
     out_meta->total_frames = total_frames;
@@ -431,7 +430,7 @@ uint8_t sample_stream_fatfs_map_build_from_file(FIL *fp,
     sample_stream_physical_map_t *const map = &out_meta->physical_map;
     map->generation = sample_stream_physical_next_generation();
     map->media_epoch = sd_access_media_epoch();
-    map->first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
+    sample_stream_physical_map_reset_blocks(map);
 
     memset(g_sample_stream_clmt_scratch, 0, sizeof(g_sample_stream_clmt_scratch));
     g_sample_stream_clmt_scratch[0] = SAMPLE_STREAM_FATFS_CLMT_ITEMS;

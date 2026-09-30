@@ -5,7 +5,8 @@ uint8_t sample_page_cache_mark_static_page_key_alloc(sample_audio_key_t key,
     sample_page_desc_t *page = sample_page_cache_find_page_mut_key(key, page_index);
     if (page == 0)
     {
-        page = sample_page_cache_alloc_empty_slot_key(key, page_index, alloc_type);
+        page = sample_page_cache_alloc_empty_slot_key(
+            key, page_index, alloc_type, UINT32_MAX);
         if (page == 0)
         {
             return 0U;

@@ -54,7 +54,13 @@ typedef struct
     uint8_t direct_float;
     uint8_t legacy_recorder_pcm24;
 } sample_stream_io_async_t;
-SDRAM_STREAM_SERVICE static sample_stream_io_async_t
+_Static_assert(sizeof(sample_page_stream_load_info_t) == 128U,
+               "stream load snapshot budget changed");
+_Static_assert(sizeof(sample_stream_io_command_t) == 196U,
+               "stream I/O command budget changed");
+_Static_assert(sizeof(sample_stream_io_async_t) == 448U,
+               "stream async job budget changed");
+STREAM_LOCAL_D2 static sample_stream_io_async_t
     g_sample_stream_io_async[SAMPLE_STREAM_IO_JOB_COUNT];
 static uint32_t g_sample_stream_io_next_order;
 static sample_stream_read_chunk_kib_t g_sample_stream_io_chunk_kib =
@@ -62,27 +68,28 @@ static sample_stream_read_chunk_kib_t g_sample_stream_io_chunk_kib =
 uint8_t sample_stream_io_command_init(sample_stream_io_command_t *out_command,
                                       const sample_page_load_token_t *token,
                                       const sample_page_load_target_t *target,
-                                      const sample_page_stream_info_t *stream_info)
+                                      const sample_page_stream_load_info_t *stream)
 {
-    if ((out_command == 0) || (token == 0) || (target == 0) || (stream_info == 0))
+    if ((out_command == 0) || (token == 0) || (target == 0) || (stream == 0))
     {
         return 0U;
     }
-    memset(out_command, 0, sizeof(*out_command));
-    out_command->token = *token;
-    out_command->target = (sample_stream_io_target_t){
-        .key = target->key,
-        .page_index = target->page_index,
-        .start_frame = target->start_frame,
-        .frame_count = target->frame_count,
-        .frames_per_page = target->frames_per_page,
-        .registration_epoch = target->registration_epoch,
-        .page_generation = target->page_generation,
-        .slot_index = target->slot_index,
-        .format = target->format,
-        .stride_floats = target->stride_floats,
+    *out_command = (sample_stream_io_command_t){
+        .token = *token,
+        .target = {
+            .key = target->key,
+            .page_index = target->page_index,
+            .start_frame = target->start_frame,
+            .frame_count = target->frame_count,
+            .frames_per_page = target->frames_per_page,
+            .registration_epoch = target->registration_epoch,
+            .page_generation = target->page_generation,
+            .slot_index = target->slot_index,
+            .format = target->format,
+            .stride_floats = target->stride_floats,
+        },
+        .stream = *stream,
     };
-    out_command->stream_info = *stream_info;
     return 1U;
 }
 
@@ -157,7 +164,7 @@ static void sample_stream_io_finalize(sample_stream_io_async_t *async)
         return;
     }
     const uint32_t expected_bytes = target.frame_count
-        * async->command.stream_info.info.block_align;
+        * async->command.stream.stream_safe.block_align;
     if ((expected_bytes == 0U) || (async->result.source_bytes != expected_bytes))
     {
         async->result.load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
@@ -293,19 +300,20 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
         return 1U;
     }
 
-    const wav_info_t *const wav = &command->stream_info.info;
     async->direct_float = (uint8_t)(
-        (wav_parser_is_canonical_brick_float(wav) != 0U)
+        (command->stream.canonical_float != 0U)
         && (command->target.format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
         && (command->target.stride_floats == 2U)
-        && ((((uint64_t)command->stream_info.data_offset
+        && ((((uint64_t)command->stream.stream_safe.data_offset_bytes
               + (uint64_t)command->target.start_frame * 8U)
              % SAMPLE_STREAM_IO_SECTOR_BYTES) == 0U));
     async->legacy_recorder_pcm24 = (uint8_t)(
         (command->target.key.domain == SAMPLE_AUDIO_DOMAIN_REC)
-        && (wav->encoding == WAV_SAMPLE_ENCODING_PCM_INTEGER)
-        && (wav->sample_rate == 48000U) && (wav->channels == 2U)
-        && (wav->bits_per_sample == 24U) && (wav->block_align == 6U)
+        && (command->stream.encoding == WAV_SAMPLE_ENCODING_PCM_INTEGER)
+        && (command->stream.stream_safe.sample_rate == 48000U)
+        && (command->stream.stream_safe.channels == 2U)
+        && (command->stream.stream_safe.bits_per_sample == 24U)
+        && (command->stream.stream_safe.block_align == 6U)
         && (command->target.format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED));
     if ((async->direct_float == 0U) && (async->legacy_recorder_pcm24 == 0U))
     {
@@ -315,7 +323,7 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
     }
 
     async->result.source_bytes = async->target.frame_count
-                                 * command->stream_info.info.block_align;
+                                 * command->stream.stream_safe.block_align;
     if ((async->result.source_bytes == 0U)
         || ((async->direct_float != 0U)
             && (async->result.source_bytes > SAMPLE_PAGE_BYTES))
@@ -329,13 +337,13 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
     }
     sample_stream_physical_cursor_t *const cursor = &async->local_physical_cursor;
     const uint8_t physical_expected = (uint8_t)(
-        sample_stream_safe_metadata_backend(&command->stream_info.stream_safe)
+        sample_stream_safe_metadata_backend(&command->stream.stream_safe)
             == SAMPLE_STREAM_BACKEND_PHYSICAL);
     if(physical_expected != 0U)
     {
         if(sample_stream_backend_physical_begin(
                     &async->physical,
-                    &async->command.stream_info,
+                    &async->command.stream.stream_safe,
                     &async->target,
                     cursor,
                     (uint8_t *)async->target.frames_interleaved,
@@ -353,18 +361,23 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
         async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
         return 1U;
     }
-    if ((command->stream_info.physical_only == 0U)
-        && (command->deadline_margin_us == UINT32_MAX)
-        && (command->stream_info.path[0] != '\0'))
+    if ((command->stream.physical_only == 0U)
+        && (command->deadline_margin_us == UINT32_MAX))
     {
+        sample_page_stream_info_t fallback;
         FIL file;
         UINT read = 0U;
         const uint64_t source_offset =
-            (uint64_t)command->stream_info.data_offset
+            (uint64_t)command->stream.stream_safe.data_offset_bytes
             + ((uint64_t)async->target.start_frame
-               * command->stream_info.info.block_align);
+               * command->stream.stream_safe.block_align);
         if ((source_offset <= UINT32_MAX)
-            && (f_open(&file, command->stream_info.path, FA_READ) == FR_OK))
+            && (sample_page_cache_get_stream_info_key(
+                    command->token.key, &fallback) != 0U)
+            && (fallback.registration_epoch
+                == command->token.registration_epoch)
+            && (fallback.path[0] != '\0')
+            && (f_open(&file, fallback.path, FA_READ) == FR_OK))
         {
             if (f_lseek(&file, (FSIZE_t)source_offset) == FR_OK)
             {

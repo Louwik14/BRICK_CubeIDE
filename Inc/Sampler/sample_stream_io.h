@@ -28,7 +28,7 @@ typedef struct
 {
     sample_page_load_token_t token;
     sample_stream_io_target_t target;
-    sample_page_stream_info_t stream_info;
+    sample_page_stream_load_info_t stream;
     uint32_t deadline_margin_us;
 } sample_stream_io_command_t;
 
@@ -63,7 +63,7 @@ void sample_stream_io_cancel(void);
 uint8_t sample_stream_io_command_init(sample_stream_io_command_t *out_command,
                                       const sample_page_load_token_t *token,
                                       const sample_page_load_target_t *target,
-                                      const sample_page_stream_info_t *stream_info);
+                                      const sample_page_stream_load_info_t *stream);
 
 #ifdef __cplusplus
 }

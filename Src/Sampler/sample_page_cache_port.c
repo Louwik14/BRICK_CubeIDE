@@ -147,13 +147,14 @@ uint8_t sample_page_cache_port_prepare_page(sample_audio_key_t key,
         || ((static_resident != 0U) && (sample_page_cache_mark_static_page_key_alloc(
                                 key, page_index, alloc_type) == 0U))) return 0U;
     sample_page_load_target_t target;
-    sample_page_stream_info_t stream_info;
+    sample_page_stream_load_info_t stream_info;
     sample_page_load_token_t token;
     if ((sample_page_cache_get_bulk_load_target_key(key, page_index, &target) == 0U)
-        || (sample_page_cache_get_stream_info_key(key, &stream_info) == 0U)
+        || (sample_page_cache_get_stream_load_info_key(key, &stream_info) == 0U)
         || (sample_page_cache_begin_loading(&target, &token) == 0U)
         || (sample_stream_io_command_init(out_command, &token, &target,
-                                          &stream_info) == 0U)) return 0U;
+                                          &stream_info) == 0U))
+        return 0U;
     return 1U;
 }
 

@@ -46,7 +46,7 @@ typedef struct
 
 uint8_t sample_stream_backend_physical_begin(
     sample_stream_backend_physical_async_t *async,
-    const sample_page_stream_info_t *info,
+    const sample_stream_safe_metadata_t *metadata,
     const sample_page_load_target_t *target,
     sample_stream_physical_cursor_t *cursor,
     uint8_t *buffer,

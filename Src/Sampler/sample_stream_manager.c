@@ -271,8 +271,8 @@ static uint8_t sample_stream_manager_submit_prefill(
     {
         return 0U;
     }
-    sample_page_stream_info_t stream_info;
-    if ((sample_page_cache_get_stream_info_key(target.key, &stream_info) == 0U)
+    sample_page_stream_load_info_t stream_info;
+    if ((sample_page_cache_get_stream_load_info_key(target.key, &stream_info) == 0U)
         || (sample_audio_key_equal(&target.key, &stream_info.key) == 0U)
         || (target.format != stream_info.format)
         || (target.stride_floats != stream_info.stride_floats)
@@ -334,13 +334,13 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
     for (;;)
     {
         sample_page_load_target_t target;
-        sample_page_stream_info_t stream_info;
+        sample_page_stream_load_info_t stream_info;
         if (sample_stream_manager_pick_next(&target) == 0U)
         {
             break;
         }
 
-        if (sample_page_cache_get_stream_info_key(target.key, &stream_info) == 0U)
+        if (sample_page_cache_get_stream_load_info_key(target.key, &stream_info) == 0U)
         {
             (void)sample_page_cache_set_page_state_key(target.key,
                                                    target.page_index,

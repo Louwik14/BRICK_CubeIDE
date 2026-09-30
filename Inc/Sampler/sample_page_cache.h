@@ -28,6 +28,22 @@ typedef struct
     uint8_t physical_only;
 } sample_page_stream_info_t;
 
+/* Immutable snapshot retained by a page I/O job.  Paths and the full WAV
+ * parser result stay in the registry and are fetched only by the synchronous
+ * FatFs fallback. */
+typedef struct
+{
+    sample_audio_key_t key;
+    sample_stream_safe_metadata_t stream_safe;
+    uint32_t registration_epoch;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+    uint32_t frames_per_page;
+    wav_sample_encoding_t encoding;
+    uint8_t canonical_float;
+    uint8_t physical_only;
+} sample_page_stream_load_info_t;
+
 typedef struct
 {
     sample_audio_key_t key;
@@ -133,6 +149,8 @@ uint8_t sample_page_cache_get_stream_info(uint16_t sample_id,
                                           sample_page_stream_info_t *out_info);
 uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,
                                               sample_page_stream_info_t *out_info);
+uint8_t sample_page_cache_get_stream_load_info_key(
+    sample_audio_key_t key, sample_page_stream_load_info_t *out_info);
 uint8_t sample_page_cache_get_registration_epoch_key(
     sample_audio_key_t key, uint32_t *out_registration_epoch);
 uint8_t sample_page_cache_register_prepared_stream(

@@ -243,6 +243,34 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
     return completed;
 }
 
+uint8_t sample_page_cache_get_stream_load_info_key(
+    sample_audio_key_t key, sample_page_stream_load_info_t *out_info)
+{
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (out_info == 0))
+        return 0U;
+    const sample_page_sample_desc_t *const sample =
+        &g_sample_page_sample_desc[key_slot];
+    if (sample_page_cache_sample_is_stream_loadable_key(key) == 0U)
+        return 0U;
+    if ((sample->physical_only != 0U)
+        && (sample_stream_physical_map_is_current(
+                &sample->stream_safe.physical_map) == 0U)) return 0U;
+
+    *out_info = (sample_page_stream_load_info_t){
+        .key = key,
+        .stream_safe = sample->stream_safe,
+        .registration_epoch = sample->registration_epoch,
+        .format = sample->format,
+        .stride_floats = sample->stride_floats,
+        .frames_per_page = sample->frames_per_page,
+        .encoding = sample->info.encoding,
+        .canonical_float = wav_parser_is_canonical_brick_float(&sample->info),
+        .physical_only = sample->physical_only,
+    };
+    return 1U;
+}
+
 uint8_t sample_page_cache_loading_target_payload_cpu_clean(
     const sample_page_load_target_t *target)
 {
@@ -396,10 +424,13 @@ uint8_t sample_page_cache_reserve_page_key_alloc(sample_audio_key_t key,
                                                  uint32_t page_index,
                                                  sample_page_alloc_type_t alloc_type)
 {
-    sample_page_desc_t *page = sample_page_cache_find_page_mut_key(key, page_index);
+    uint32_t insert_index = UINT32_MAX;
+    sample_page_desc_t *page = sample_page_cache_find_page_mut_key_hint(
+        key, page_index, &insert_index);
     if (page == 0)
     {
-        page = sample_page_cache_alloc_empty_slot_key(key, page_index, alloc_type);
+        page = sample_page_cache_alloc_empty_slot_key(
+            key, page_index, alloc_type, insert_index);
         if (page == 0)
         {
             return 0U;
@@ -441,12 +472,15 @@ uint8_t sample_page_cache_reserve_page_ref_key(sample_audio_key_t key,
                                                uint32_t page_index,
                                                sample_page_ref_t *out_ref)
 {
-    sample_page_desc_t *page = sample_page_cache_find_page_mut_key(key, page_index);
+    uint32_t insert_index = UINT32_MAX;
+    sample_page_desc_t *page = sample_page_cache_find_page_mut_key_hint(
+        key, page_index, &insert_index);
     if (page == 0)
     {
         page = sample_page_cache_alloc_empty_slot_key(key,
                                                       page_index,
-                                                      SAMPLE_PAGE_ALLOC_GENERAL);
+                                                      SAMPLE_PAGE_ALLOC_GENERAL,
+                                                      insert_index);
         if (page == 0)
         {
             return 0U;

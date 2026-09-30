@@ -131,7 +131,7 @@ static uint8_t sample_stream_backend_physical_next_span(
 
 uint8_t sample_stream_backend_physical_begin(
     sample_stream_backend_physical_async_t *async,
-    const sample_page_stream_info_t *info,
+    const sample_stream_safe_metadata_t *metadata,
     const sample_page_load_target_t *target,
     sample_stream_physical_cursor_t *cursor,
     uint8_t *buffer,
@@ -143,23 +143,23 @@ uint8_t sample_stream_backend_physical_begin(
     {
         sample_stream_backend_physical_invalidate_span(async);
     }
-    if ((async == 0) || (info == 0) || (target == 0)
+    if ((async == 0) || (metadata == 0) || (target == 0)
         || (buffer == 0)
-        || (info->info.block_align == 0U)
+        || (metadata->block_align == 0U)
         || (sample_stream_physical_map_is_current(
-                &info->stream_safe.physical_map) == 0U))
+                &metadata->physical_map) == 0U))
     {
         return 0U;
     }
 
-    const uint32_t source_bytes = target->frame_count * info->info.block_align;
+    const uint32_t source_bytes = target->frame_count * metadata->block_align;
     const uint64_t audio_byte_offset =
-        (uint64_t)target->start_frame * (uint64_t)info->info.block_align;
+        (uint64_t)target->start_frame * (uint64_t)metadata->block_align;
     const uint64_t file_byte_offset =
-        (uint64_t)info->stream_safe.data_offset_bytes + audio_byte_offset;
+        (uint64_t)metadata->data_offset_bytes + audio_byte_offset;
     const uint64_t file_end = file_byte_offset + source_bytes;
     if ((source_bytes == 0U) || (file_end < file_byte_offset)
-            || (file_end > info->stream_safe.file_size))
+            || (file_end > metadata->file_size))
     {
         return 0U;
     }
@@ -176,7 +176,7 @@ uint8_t sample_stream_backend_physical_begin(
     if(pending_slot < 0) return 0U;
 
     memset(async, 0, sizeof(*async));
-    async->map = &info->stream_safe.physical_map;
+    async->map = &metadata->physical_map;
     async->cursor = cursor;
     async->buffer = buffer;
     async->file_byte_offset = file_byte_offset;

@@ -18,6 +18,10 @@ typedef enum
 #define SAMPLE_STREAM_PHYSICAL_MAP_MAX_EXTENTS      (128U)
 #define SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS      (512U)
 #define SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK (8U)
+#define SAMPLE_STREAM_PHYSICAL_MAP_MAX_BLOCKS       \
+    ((SAMPLE_STREAM_PHYSICAL_MAP_MAX_EXTENTS - 1U   \
+      + SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK - 1U) \
+     / SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK)
 #define SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK    (UINT16_MAX)
 
 typedef struct
@@ -34,6 +38,7 @@ typedef struct
     uint32_t media_epoch;
     uint16_t extent_count;
     uint16_t first_pool_block;
+    uint16_t pool_block[SAMPLE_STREAM_PHYSICAL_MAP_MAX_BLOCKS];
     uint8_t valid;
     uint8_t reserved[3];
 } sample_stream_physical_map_t;

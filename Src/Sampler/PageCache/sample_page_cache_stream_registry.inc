@@ -91,8 +91,9 @@ static uint32_t sample_page_cache_range_cursor_offset(uint16_t cursor,
 }
 
 static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_key_t key,
-                                                                  uint32_t page_index,
-                                                                  sample_page_alloc_type_t alloc_type)
+                                                                   uint32_t page_index,
+                                                                   sample_page_alloc_type_t alloc_type,
+                                                                   uint32_t insert_index)
 {
     sample_page_desc_t *evict_page = 0;
     const uint32_t frame_count = sample_page_cache_stream_page_frame_count_key(key, page_index);
@@ -128,7 +129,8 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
             const uint16_t key_slot = sample_page_cache_key_slot(key);
             if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
             {
-                sample_page_cache_index_put_key(key, page_index, (uint16_t)i);
+                sample_page_cache_index_put_new_key_at(
+                    key, page_index, (uint16_t)i, insert_index);
                 g_sample_page_last_slot[key_slot] = (uint16_t)i;
             }
             g_sample_page_free_cursor =
