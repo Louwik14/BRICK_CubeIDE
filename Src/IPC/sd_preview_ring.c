@@ -1,6 +1,6 @@
 #include "IPC/sd_preview_ring_contract.h"
 #include "Platform/memory_layout.h"
 
-AUDIO_STORAGE_SHARED_SDRAM float
+AUDIO_M7_PRIVATE_SDRAM float
     g_sd_preview_ring[SD_PREVIEW_RING_FRAMES * 2U];
-D3_IPC sd_preview_ring_layout_t g_sd_preview_ring_layout;
+STREAM_LOCAL_D2 sd_preview_ring_layout_t g_sd_preview_ring_layout;

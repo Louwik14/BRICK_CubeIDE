@@ -24,7 +24,7 @@ AUDIO_M7_PRIVATE_SDRAM sampler_ram_audio_slot_t
 AUDIO_M7_PRIVATE_SDRAM volatile uint16_t
     g_sampler_ram_audio_global_to_slot[SAMPLER_RAM_AUDIO_SLOT_COUNT];
 
-D2_IPC sampler_ram_playhead_slot_t
+STREAM_LOCAL_D2 sampler_ram_playhead_slot_t
     g_sampler_ram_playhead[BRICK_ENTITY_CAPACITY];
 
 AUDIO_M7_PRIVATE_SDRAM audio_wavetable_registry_slot_t

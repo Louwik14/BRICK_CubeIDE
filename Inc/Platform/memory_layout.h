@@ -116,13 +116,10 @@
 #define SDRAM_RECORDER SEC_ATTR(".sdram_recorder") ALIGN32
 /* CPU-produced Recorder PCM. Separate from the non-cacheable shared arena. */
 #define SDRAM_RECORDER_RING SEC_ATTR(".sdram_recorder_ring") ALIGN32
-  /* M7/M4 CPU bulk data in the same shareable, non-cacheable 256 KiB MPU region. */
-#define AUDIO_STORAGE_SHARED_SDRAM SEC_ATTR(".sdram_recorder") ALIGN32
 #define AUDIO_STATE_SHARED_SDRAM SEC_ATTR(".sdram_audio_state_snapshot") ALIGN32
 
 /* Large cold audio history (delay/grain/reverb tails) */
 #define AUDIO_COLD_SDRAM SEC_ATTR(".sdram_audio_cold") ALIGN32
-#define AUDIO_SHARED_REGISTRY_SDRAM AUDIO_STORAGE_SHARED_SDRAM
 /* M7-only bulk state. It is cacheable and never part of an inter-core ABI. */
 #define AUDIO_M7_PRIVATE_SDRAM AUDIO_COLD_SDRAM
 
