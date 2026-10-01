@@ -6,7 +6,7 @@
 #include "Track/entity_types.h"
 #include "Param/param_ids.h"
 #include "Param/engine_model_catalog.h"
-#include "Audio/fx_audio_xfade.h"
+#include "Track/audio_fx_xfade_contract.h"
 
 #ifdef __cplusplus
 extern "C" {

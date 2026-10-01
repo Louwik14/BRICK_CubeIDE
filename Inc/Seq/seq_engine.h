@@ -9,6 +9,7 @@
 #include "Seq/seq_product_contract.h"
 #include "Seq/seq_capacity_contract.h"
 #include "Seq/seq_timing.h"
+#include "Seq/seq_audio_boundary.h"
 
 #define SEQ_ENGINE_H743_PERIOD_SAMPLES 64U
 #define SEQ_ENGINE_TERMINAL_CAPACITY 3136U
@@ -34,46 +35,9 @@
 #define SEQ_ENGINE_FX_PLAN_OVERRIDE_MASK UINT16_C(0x003C)
 #define SEQ_ENGINE_PARAM_ID_MASK UINT16_C(0x01FF)
 
-typedef enum {
-    /* Transition-scoped parameters (currently ACID/TB303 SLIDE) must be
-     * visible to the renderer before the previous note is released. */
-    SEQ_ENGINE_EVENT_TRANSITION_PARAM = 0,
-    SEQ_ENGINE_EVENT_NOTE_OFF,
-    SEQ_ENGINE_EVENT_PARAM,
-    SEQ_ENGINE_EVENT_NOTE_ON,
-    SEQ_ENGINE_EVENT_PANIC
-} seq_event_kind_t;
-
-typedef enum {
-    SEQ_ENGINE_PARAM_TEMP = 0,
-    SEQ_ENGINE_PARAM_CLEAR_TEMP,
-    SEQ_ENGINE_PARAM_RESTORE_BASE
-} seq_param_semantic_t;
-
-typedef union __attribute__((packed)) {
-    struct __attribute__((packed)) {
-        uint32_t occurrence_id;
-        uint16_t reserved;
-        uint8_t track;
-        uint8_t note;
-        uint8_t velocity;
-        uint8_t logical_slot;
-    } note;
-    struct __attribute__((packed)) {
-        uint32_t value32;
-        uint16_t param_id;
-        uint8_t track;
-        uint8_t semantic;
-        uint8_t reserved[2];
-    } param;
-} seq_terminal_event_t;
-
 /* Terminal ownership survives a missing or disarmed SEQ block. */
 #define SEQ_ENGINE_NOTE_LIVE UINT16_C(0x8000)
 #define SEQ_ENGINE_NOTE_OWNER_MASK UINT16_C(0x7FFF)
-
-_Static_assert(sizeof(seq_terminal_event_t) == 10U,
-               "SEQ terminal payload budget");
 
 #define SEQ_ENGINE_TERMINAL_INDEX_NONE UINT16_MAX
 #define SEQ_ENGINE_TERMINAL_CLASS_COUNT 5U
@@ -283,18 +247,6 @@ uint8_t seq_engine_control_flush_with_workspace(
 uint8_t seq_engine_control_replace_with_workspace(
     seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
 const seq_pattern_t *seq_engine_pattern_capture(void);
-
-/* H743 adapter: AUDIO only checks the previous READY block and wakes SEQ. */
-void seq_engine_irq_init(void);
-void seq_engine_audio_boundary(uint64_t block_start_sample, uint8_t recovering);
-uint16_t seq_engine_audio_frames_until_due(uint64_t sample,
-                                             uint16_t maximum);
-uint8_t seq_engine_audio_pop_due(uint64_t sample,
-                                   uint8_t *out_kind,
-                                   seq_terminal_event_t *out_event);
-uint16_t seq_engine_audio_track_mask(void);
-void seq_engine_audio_force_stop(uint64_t effective_sample,
-                                 uint8_t preserve_live_notes);
 
 _Static_assert(SEQ_LANE_CAPACITY == 16U, "SEQ requires 16 lanes");
 _Static_assert(SEQ_PLAY_MAX_CAPACITY == 8U, "SEQ requires 8 PLAY per top lane");

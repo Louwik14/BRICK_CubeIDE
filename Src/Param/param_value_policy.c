@@ -3,7 +3,7 @@
 #include <math.h>
 
 #include "Param/engine_model_catalog.h"
-#include "Audio/fx_audio_xfade.h"
+#include "Track/audio_fx_xfade_contract.h"
 #include "Mod/mod_lfo_v1_control.h"
 #include "Param/param_registry.h"
 

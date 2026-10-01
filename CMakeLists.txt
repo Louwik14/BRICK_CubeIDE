@@ -188,6 +188,8 @@ set(BRICK6_BOARD_DRIVER_INC_DIRS
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/brick_domain_manifest.cmake")
 
 set(DOMAIN_CONTRACT_HEADERS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Seq/seq_audio_boundary.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Track/audio_fx_xfade_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Platform/crash_library.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Platform/brick_fatal.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param/param_ids.h"

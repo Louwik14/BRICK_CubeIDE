@@ -8,7 +8,7 @@
 #include "ControlRT/live_parameter_event.h"
 #include "Track/track_runtime.h"
 #include "Track/polyphony_control.h"
-#include "Audio/fx_audio_xfade.h"
+#include "Track/audio_fx_xfade_contract.h"
 #include "main.h"
 
 typedef struct

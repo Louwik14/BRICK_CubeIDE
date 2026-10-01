@@ -42,7 +42,7 @@
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Platform/brick_media_clock.h"
-#include "Seq/seq_engine.h"
+#include "Seq/seq_audio_boundary.h"
 
 #include <string.h>
 #include <stdint.h>
