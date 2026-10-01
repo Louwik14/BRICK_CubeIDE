@@ -27,7 +27,7 @@ AUDIO_M7_PRIVATE_SDRAM volatile uint16_t
 D2_IPC sampler_ram_playhead_slot_t
     g_sampler_ram_playhead[BRICK_ENTITY_CAPACITY];
 
-AUDIO_STATE_SHARED_SDRAM audio_wavetable_registry_slot_t
+AUDIO_M7_PRIVATE_SDRAM audio_wavetable_registry_slot_t
     g_audio_wavetable_registry[WAVETABLE_POOL_MAX_SLOTS];
 
 _Static_assert(sizeof(sample_classic_audio_snapshot_t) == 28U,
@@ -42,9 +42,5 @@ _Static_assert(sizeof(multi_sample_audio_source_t) == 40U,
                "Multi source ABI changed");
 _Static_assert(sizeof(sampler_ram_audio_slot_t) == 36U,
                "RAM projection slot layout changed");
-_Static_assert(sizeof(audio_wavetable_registry_snapshot_t)
-                   == sizeof(audio_wavetable_descriptor_t) + 4U,
-               "Wavetable registry snapshot ABI changed");
-_Static_assert(sizeof(audio_wavetable_registry_slot_t)
-                   == (2U * sizeof(audio_wavetable_registry_snapshot_t)) + 4U,
-               "Wavetable registry ABI changed");
+_Static_assert(sizeof(audio_wavetable_registry_slot_t) == 188U,
+               "Wavetable registry slot layout changed");

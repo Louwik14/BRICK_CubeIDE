@@ -1051,6 +1051,7 @@ static wavetable_result_t wavetable_pool_commit_candidate(
         candidate->preview.generation = candidate->generation;
     }
     audio_wavetable_descriptor_t descriptor;
+    wavetable_pool_mark_payload_cpu_clean(candidate);
     if (audio_wave_table_projection_build_descriptor(
             wavetable_slot, candidate, &descriptor) == 0U)
         return WAVETABLE_RESULT_REGISTER_FAIL;

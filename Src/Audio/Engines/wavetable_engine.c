@@ -5,7 +5,6 @@
 #include <string.h>
 
 #include "Audio/synth_waveform_audio.h"
-#include "Audio/audio_shared_memory.h"
 #include "Audio/audio_wavetable_registry.h"
 #include "Sampler/wavetable_config.h"
 #include "Platform/memory_layout.h"
@@ -178,8 +177,7 @@ static uint8_t wave_build_hot_table(
     out->wavetable_slot = table->wavetable_slot;
     if (table->band_count == 0U)
     {
-        const float *const data = (const float *)audio_shared_memory_consume(
-            &table->base_data);
+        const float *const data = table->base_data;
         if (data == NULL) return 0U;
         out->band_count = 1U;
         out->bands[0].data = data;
@@ -192,8 +190,7 @@ static uint8_t wave_build_hot_table(
         {
             const audio_wavetable_band_t *const src = &table->bands[i];
             const uint32_t expected_magnitude = WAVE_PHASE_INDEX_BITS - i;
-            const float *const data = (const float *)audio_shared_memory_consume(
-                &src->data);
+            const float *const data = src->data;
             if ((data == NULL)
                 || (src->cycle_magnitude != expected_magnitude)
                 || (src->cycle_sample_count != (1UL << expected_magnitude)))

@@ -405,6 +405,7 @@ static void wavetable_pool_load_async_step(void)
                 candidate->state = WAVETABLE_SLOT_READY;
                 candidate->error = WAVETABLE_RESULT_OK;
                 candidate->preview.generation = candidate->generation;
+                wavetable_pool_mark_payload_cpu_clean(candidate);
                 if (audio_wave_table_projection_build_descriptor(
                         job->wavetable_slot, candidate,
                         &job->prepared_descriptor) == 0U)

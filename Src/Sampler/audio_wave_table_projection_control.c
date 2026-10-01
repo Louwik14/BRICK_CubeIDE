@@ -6,12 +6,8 @@
 #include "ControlRT/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Param/param_registry.h"
-#include "Platform/intercore_cache.h"
-#include "Platform/cache_maintenance.h"
-#include "IPC/shared_memory_ref_control.h"
-#include "Platform/memory_layout.h"
 #include "Sampler/sample_global_pool.h"
-#include "Sampler/sample_page_cache_port.h"
+#include "Sampler/sample_page_cache_backing.h"
 #include "Sampler/wavetable_pool.h"
 #include "Storage/project_control.h"
 #include "Track/track_runtime.h"
@@ -28,8 +24,7 @@ void audio_wave_table_projection_init(void)
     for (uint8_t i = 0U; i < AUDIO_WAVE_TABLE_SELECTION_COUNT; ++i)
         g_control_selection[i].wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
     memset(g_audio_wavetable_registry, 0, sizeof(g_audio_wavetable_registry));
-    intercore_cache_publish(g_audio_wavetable_registry,
-                            sizeof(g_audio_wavetable_registry));
+    __DMB();
 }
 
 uint8_t audio_wave_table_projection_build_descriptor(
@@ -46,33 +41,61 @@ uint8_t audio_wave_table_projection_build_descriptor(
     out->wavetable_slot = wavetable_slot;
     out->global_slot = slot->global_slot;
     out->band_count = slot->mipmap.band_count;
-    if (shared_memory_ref_make_page_pool(slot->first_page_slot, 0U,
-                                         slot->data_bytes,
-                                         &out->base_data) == 0U)
+    const uint64_t expected_base_bytes = (uint64_t)slot->frame_count
+        * WAVETABLE_FRAME_SAMPLE_COUNT * sizeof(float);
+    if ((slot->generation == 0U) || (slot->data == NULL)
+        || (slot->first_page_slot >= SAMPLE_PAGE_MAX_COUNT)
+        || (slot->page_count == 0U)
+        || (slot->page_count > (SAMPLE_PAGE_MAX_COUNT - slot->first_page_slot))
+        || ((uint64_t)slot->data_bytes
+            > ((uint64_t)slot->page_count * SAMPLE_PAGE_BYTES))
+        || ((const uint8_t *)slot->data
+            != &((const uint8_t *)g_sample_page_data)[
+                (uint32_t)slot->first_page_slot * SAMPLE_PAGE_BYTES])
+        || (slot->frame_count == 0U)
+        || (slot->frame_sample_count != WAVETABLE_FRAME_SAMPLE_COUNT)
+        || (expected_base_bytes != slot->data_bytes)
+        || (out->band_count > WAVETABLE_MIPMAP_MAX_BANDS))
         return 0U;
-    dcache_clean_by_addr_aligned(slot->data, slot->data_bytes);
-    sample_page_cache_port_mark_shared_cpu_clean(slot->first_page_slot,
-                                                 slot->page_count);
+    out->base_data = slot->data;
+    if ((out->band_count != 0U)
+        && ((slot->mipmap.data == NULL)
+            || (slot->mipmap.first_page_slot >= SAMPLE_PAGE_MAX_COUNT)
+            || (slot->mipmap.page_count == 0U)
+            || (slot->mipmap.page_count
+                > (SAMPLE_PAGE_MAX_COUNT - slot->mipmap.first_page_slot))
+            || ((uint64_t)slot->mipmap.data_bytes
+                > ((uint64_t)slot->mipmap.page_count * SAMPLE_PAGE_BYTES))
+            || ((const uint8_t *)slot->mipmap.data
+                != &((const uint8_t *)g_sample_page_data)[
+                    (uint32_t)slot->mipmap.first_page_slot
+                        * SAMPLE_PAGE_BYTES])))
+        return 0U;
     uint32_t mip_offset = 0U;
     for (uint16_t i = 0U; i < out->band_count; ++i)
     {
         const wavetable_mipmap_band_t *const src = &slot->mipmap.bands[i];
         audio_wavetable_band_t *const dst = &out->bands[i];
-        const uint32_t bytes = src->sample_count * sizeof(float);
+        const uint64_t band_bytes = (uint64_t)src->sample_count * sizeof(float);
         dst->max_phase_increment = src->max_phase_increment;
         dst->cycle_sample_count = src->cycle_sample_count;
         dst->sample_count = src->sample_count;
         dst->cycle_magnitude = src->cycle_magnitude;
         dst->flags = src->flags;
-        if (shared_memory_ref_make_page_pool(slot->mipmap.first_page_slot,
-                                             mip_offset, bytes,
-                                             &dst->data) == 0U)
+        if ((src->data == NULL) || (src->cycle_sample_count == 0U)
+            || (src->sample_count == 0U)
+            || (band_bytes > UINT32_MAX)
+            || (mip_offset > slot->mipmap.data_bytes)
+            || ((uint32_t)band_bytes
+                > (slot->mipmap.data_bytes - mip_offset))
+            || ((const uint8_t *)src->data
+                != &((const uint8_t *)slot->mipmap.data)[mip_offset]))
             return 0U;
-        mip_offset += bytes;
+        dst->data = src->data;
+        mip_offset += (uint32_t)band_bytes;
     }
-    dcache_clean_by_addr_aligned(slot->mipmap.data, slot->mipmap.data_bytes);
-    sample_page_cache_port_mark_shared_cpu_clean(
-        slot->mipmap.first_page_slot, slot->mipmap.page_count);
+    if ((out->band_count != 0U)
+        && (mip_offset != slot->mipmap.data_bytes)) return 0U;
     return 1U;
 }
 
@@ -85,16 +108,12 @@ uint8_t audio_wave_table_projection_install_descriptor(
         || (descriptor->band_count > WAVETABLE_MIPMAP_MAX_BANDS)) return 0U;
     audio_wavetable_registry_slot_t *const dst =
         &g_audio_wavetable_registry[descriptor->wavetable_slot];
-    const uint32_t inactive = dst->active_snapshot ^ 1U;
-    audio_wavetable_registry_snapshot_t *const next =
-        &dst->snapshots[inactive];
-    next->ready = 0U;
-    next->descriptor = *descriptor;
-    next->ready = 1U;
-    intercore_cache_publish(next, sizeof(*next));
-    dst->active_snapshot = inactive;
-    intercore_cache_publish((const void *)&dst->active_snapshot,
-                            sizeof(dst->active_snapshot));
+    dst->ready = 0U;
+    __DMB();
+    dst->descriptor = *descriptor;
+    __DMB();
+    dst->ready = 1U;
+    __DMB();
     return 1U;
 }
 
@@ -103,16 +122,12 @@ void audio_wave_table_projection_install_prepared(
 {
     audio_wavetable_registry_slot_t *const dst =
         &g_audio_wavetable_registry[descriptor->wavetable_slot];
-    const uint32_t inactive = dst->active_snapshot ^ 1U;
-    audio_wavetable_registry_snapshot_t *const next =
-        &dst->snapshots[inactive];
-    next->ready = 0U;
-    next->descriptor = *descriptor;
-    next->ready = 1U;
-    intercore_cache_publish(next, sizeof(*next));
-    dst->active_snapshot = inactive;
-    intercore_cache_publish((const void *)&dst->active_snapshot,
-                            sizeof(dst->active_snapshot));
+    dst->ready = 0U;
+    __DMB();
+    dst->descriptor = *descriptor;
+    __DMB();
+    dst->ready = 1U;
+    __DMB();
 }
 
 static uint8_t resolve_selection(uint16_t logical,
@@ -189,21 +204,12 @@ void audio_wave_table_projection_withdraw_slot(uint16_t slot,
     {
         audio_wavetable_registry_slot_t *const registry =
             &g_audio_wavetable_registry[slot];
-        const uint32_t active = registry->active_snapshot;
-        const audio_wavetable_registry_snapshot_t *const current =
-            &registry->snapshots[active];
         if ((generation == 0U)
-            || ((current->ready != 0U)
-                && (current->descriptor.generation == generation)))
+            || ((registry->ready != 0U)
+                && (registry->descriptor.generation == generation)))
         {
-            const uint32_t inactive = active ^ 1U;
-            audio_wavetable_registry_snapshot_t *const next =
-                &registry->snapshots[inactive];
-            memset(next, 0, sizeof(*next));
-            intercore_cache_publish(next, sizeof(*next));
-            registry->active_snapshot = inactive;
-            intercore_cache_publish((const void *)&registry->active_snapshot,
-                                    sizeof(registry->active_snapshot));
+            registry->ready = 0U;
+            __DMB();
         }
     }
     for (uint8_t i = 0U; i < AUDIO_WAVE_TABLE_SELECTION_COUNT; ++i)

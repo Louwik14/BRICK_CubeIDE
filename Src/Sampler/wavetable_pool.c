@@ -195,6 +195,21 @@ static CTRL_STATE uint8_t
     g_wavetable_retire_stop_committed[WAVETABLE_POOL_MAX_SLOTS];
 static CTRL_STATE uint8_t g_wavetable_retire_invariant_failed;
 
+static void wavetable_pool_mark_payload_cpu_clean(
+    const wavetable_slot_t *slot)
+{
+    /* These CPU-produced payloads remain local to M7.  Cleaning here is the
+     * page-cache ownership handoff that makes payload_cpu_clean truthful; it
+     * is not part of the CONTROL-to-AUDIO publication protocol. */
+    dcache_clean_by_addr_aligned(slot->data, slot->data_bytes);
+    dcache_clean_by_addr_aligned(slot->mipmap.data,
+                                 slot->mipmap.data_bytes);
+    sample_page_cache_port_mark_shared_cpu_clean(slot->first_page_slot,
+                                                 slot->page_count);
+    sample_page_cache_port_mark_shared_cpu_clean(slot->mipmap.first_page_slot,
+                                                 slot->mipmap.page_count);
+}
+
 static void wavetable_restore_retained_old(void)
 {
     wavetable_load_job_t *const job = &g_wavetable_load_job;
