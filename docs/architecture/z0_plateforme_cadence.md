@@ -58,11 +58,10 @@ Le build classe chaque unite dans `DOMAIN_CONTROL`, `DOMAIN_STORAGE`,
 resident dans le domaine qui possede leur lifecycle; aucun domaine
 `SHARED_BACKING` n'existe.
 
-Le check CONTROL/STORAGE conserve volontairement une compilation Cortex-M4
-comme contrainte de portabilite, sous le nom neutre
-`control_domain_compile_check`. Il ne represente ni une image produit ni un
-runtime secondaire. Le check AUDIO compile les sources pour Cortex-M7. Leurs
-dependency files appliquent les firewalls de domaines.
+Le firmware est compile une seule fois, pour le Cortex-M7. Le target
+`domain_dependency_check` reutilise les dependances enregistrees par Ninja lors
+de ce build normal pour appliquer les firewalls CONTROL, STORAGE, AUDIO et
+CONTRACTS. Il ne compile ni ne lie aucune image ou aucun objet secondaire.
 
 ## USB
 

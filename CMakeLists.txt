@@ -270,24 +270,6 @@ source_group("Domains/AUDIO" FILES ${DOMAIN_AUDIO})
 source_group("Domains/CONTRACTS" FILES ${DOMAIN_CONTRACTS} ${DOMAIN_CONTRACT_HEADERS})
 source_group("Domains/PLATFORM_H743" FILES ${PLATFORM_H743})
 
-# CONTROL/STORAGE portability checks exclude the monocore Streamer, whose
-# AUDIO IRQ and cooperative STORAGE service share the H743 M7 image.
-set(DOMAIN_CONTROL_PORTABLE ${DOMAIN_CONTROL_BUILD} ${DOMAIN_STORAGE_BUILD})
-list(FILTER DOMAIN_CONTROL_PORTABLE INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
-set(STREAMER_MONOCORE_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_cache.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache_backing.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache_port.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_lease_control.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_backend_physical.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_fatfs_map.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_io.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_manager.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_scheduler.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/brick6_stream_service_task.c")
-list(REMOVE_ITEM DOMAIN_CONTROL_PORTABLE ${STREAMER_MONOCORE_SOURCES})
-
 # --------------------------------------------------------------------------
 # Include directories
 # --------------------------------------------------------------------------
@@ -318,80 +300,20 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src
 )
 
-set(CONTROL_DOMAIN_INCLUDE_DIRS
-    "${CMAKE_CURRENT_SOURCE_DIR}/App"
-    "${BRICK6_BOARD_USB_INC_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/Third_Party/FatFs/src"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/App"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Board"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Contracts"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Keyboard"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/MIDI"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Mod"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/NoteFx"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Platform"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/SD"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Seq"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Storage"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Track"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/UI"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Inc"
-    ${BRICK6_BOARD_DRIVER_INC_DIRS}
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/Device/ST/STM32H7xx/Include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/Include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src"
-)
-
-set(CONTROL_DOMAIN_GENERATED_INC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Generated/Inc")
-list(APPEND CONTROL_DOMAIN_INCLUDE_DIRS "${CONTROL_DOMAIN_GENERATED_INC}")
-
-set(CONTROL_DOMAIN_STORAGE_SOURCES ${DOMAIN_STORAGE_BUILD})
-set(CONTROL_DOMAIN_CONTRACT_HEADERS ${DOMAIN_CONTRACT_HEADERS} ${DOMAIN_CONTRACT_UNITS})
-
-set(CONTROL_DOMAIN_MANIFEST
-    "${CMAKE_CURRENT_BINARY_DIR}/control_domain_compile_manifest.cmake")
+# The domain firewall consumes dependency information emitted by this normal
+# M7 build.  It performs no secondary compilation and creates no extra objects.
+set(DOMAIN_FIREWALL_MANIFEST
+    "${CMAKE_CURRENT_BINARY_DIR}/domain_dependency_manifest.cmake")
 configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/control_domain_compile_manifest.cmake.in"
-    "${CONTROL_DOMAIN_MANIFEST}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/domain_dependency_manifest.cmake.in"
+    "${DOMAIN_FIREWALL_MANIFEST}"
     @ONLY)
-
-add_custom_target(control_domain_compile_check
+add_custom_target(domain_dependency_check ALL
     COMMAND "${CMAKE_COMMAND}"
-        -DMANIFEST=${CONTROL_DOMAIN_MANIFEST}
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/control_domain_compile_check.cmake"
-    SOURCES ${DOMAIN_CONTROL_PORTABLE} ${DOMAIN_CONTRACTS}
-    COMMENT "Compile-check DOMAIN_CONTROL + DOMAIN_STORAGE for Cortex-M4"
-    VERBATIM)
-
-# The symmetric M7 check compiles AUDIO-owned BRICK units only, then audits
-# compiler-produced dependency files against CONTROL-private surfaces.
-set(DOMAIN_AUDIO_M7 ${DOMAIN_AUDIO_BUILD})
-list(FILTER DOMAIN_AUDIO_M7 INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
-set(AUDIO_M7_INCLUDE_DIRS ${CONTROL_DOMAIN_INCLUDE_DIRS}
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/Engines"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/PrivateInclude"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Utility"
-    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments"
-    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib")
-set(AUDIO_M7_MANIFEST "${CMAKE_CURRENT_BINARY_DIR}/audio_m7_compile_manifest.cmake")
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/audio_m7_compile_manifest.cmake.in"
-    "${AUDIO_M7_MANIFEST}" @ONLY)
-add_custom_target(audio_m7_compile_check
-    COMMAND "${CMAKE_COMMAND}" -DMANIFEST=${AUDIO_M7_MANIFEST}
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/audio_m7_compile_check.cmake"
-    SOURCES ${DOMAIN_AUDIO_M7}
-    COMMENT "Compile-check DOMAIN_AUDIO for Cortex-M7"
+        -DMANIFEST=${DOMAIN_FIREWALL_MANIFEST}
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/domain_dependency_check.cmake"
+    DEPENDS ${CMAKE_PROJECT_NAME}
+    COMMENT "Check M7 domain dependencies"
     VERBATIM)
 
 # --------------------------------------------------------------------------
