@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stddef.h>
 
-#include "Platform/intercore_cache.h"
 #include "Platform/memory_layout.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_port.h"
@@ -15,6 +14,7 @@
 #include "Storage/undo_v2.h"
 #include "Storage/wav_parser.h"
 #include "ff.h"
+#include "stm32h7xx.h"
 
 #define REC_SOURCE_INVALID_SLOT UINT8_MAX
 #define REC_SOURCE_PROMOTION_MAGIC 0x5250524AUL
@@ -65,7 +65,6 @@ static uint8_t g_rec_source_current_slot = REC_SOURCE_INVALID_SLOT;
 static uint8_t g_rec_source_building_slot = REC_SOURCE_INVALID_SLOT;
 static uint8_t g_rec_source_preview_slot = REC_SOURCE_INVALID_SLOT;
 static uint32_t g_rec_source_next_generation;
-static uint32_t g_rec_source_publication_serial;
 static uint8_t g_rec_source_recovery_pending;
 
 static uint8_t copy_path(char *dst, const char *src)
@@ -127,22 +126,18 @@ static uint32_t allocate_generation(void)
 
 static void publish_projection(const rec_source_generation_t *target)
 {
-    const uint32_t inactive = g_rec_source_projection.active_snapshot ^ 1U;
-    rec_source_snapshot_t *const next = &g_rec_source_projection.snapshots[inactive];
-    memset(next, 0, sizeof(*next));
-    next->publication_serial = ++g_rec_source_publication_serial;
+    g_rec_source_projection.ready = 0U;
+    __DMB();
     if (target != NULL)
     {
-        next->key = target->key;
-        next->frame_count = target->frame_count;
-        next->sample_rate = 48000U;
-        next->registration_epoch = target->registration_epoch;
-        next->ready = 1U;
+        g_rec_source_projection.key = target->key;
+        g_rec_source_projection.frame_count = target->frame_count;
+        g_rec_source_projection.sample_rate = 48000U;
+        g_rec_source_projection.registration_epoch = target->registration_epoch;
+        __DMB();
+        g_rec_source_projection.ready = 1U;
     }
-    intercore_cache_publish(next, sizeof(*next));
-    g_rec_source_projection.active_snapshot = inactive;
-    intercore_cache_publish((const void *)&g_rec_source_projection.active_snapshot,
-                            sizeof(g_rec_source_projection.active_snapshot));
+    __DMB();
 }
 
 static uint8_t target_pages_ready(const rec_source_generation_t *target)
@@ -371,10 +366,9 @@ void rec_source_init(void)
     g_rec_source_building_slot = REC_SOURCE_INVALID_SLOT;
     g_rec_source_preview_slot = REC_SOURCE_INVALID_SLOT;
     g_rec_source_next_generation = 0U;
-    g_rec_source_publication_serial = 0U;
     g_rec_source_recovery_pending = 1U;
     memset(&g_rec_source_projection, 0, sizeof(g_rec_source_projection));
-    intercore_cache_publish(&g_rec_source_projection, sizeof(g_rec_source_projection));
+    __DMB();
 }
 
 void rec_source_service(void)
@@ -633,9 +627,12 @@ uint8_t rec_source_promote_current(const char *persistent_path)
 uint8_t rec_source_current_snapshot(rec_source_snapshot_t *out_snapshot)
 {
     if (out_snapshot == NULL) return 0U;
-    const uint32_t active = g_rec_source_projection.active_snapshot;
-    *out_snapshot = g_rec_source_projection.snapshots[active];
-    return out_snapshot->ready;
+    if (g_rec_source_projection.ready == 0U) return 0U;
+    __DMB();
+    *out_snapshot = g_rec_source_projection;
+    __DMB();
+    return (uint8_t)((out_snapshot->ready != 0U)
+        && (g_rec_source_projection.ready != 0U));
 }
 
 uint8_t rec_source_current_path(const char **out_path, rec_source_snapshot_t *out_snapshot)

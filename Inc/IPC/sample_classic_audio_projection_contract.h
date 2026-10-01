@@ -5,20 +5,14 @@
 
 typedef struct
 {
+    volatile uint8_t ready;
+    uint8_t reserved[3];
     sample_audio_key_t key;
     uint32_t total_frames;
     uint32_t registration_epoch;
     sample_audio_format_t format;
     uint16_t stride_floats;
     uint32_t frames_per_page;
-    uint8_t ready;
-    uint8_t reserved[3];
-} sample_classic_audio_snapshot_t;
-
-typedef struct
-{
-    volatile uint32_t active_snapshot;
-    sample_classic_audio_snapshot_t snapshots[2];
 } sample_classic_audio_source_t;
 
 extern sample_classic_audio_source_t

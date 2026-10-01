@@ -1,19 +1,14 @@
 #include "IPC/sample_classic_audio_projection_contract.h"
 #include "Audio/sample_classic_audio_projection_audio.h"
 
-#include "Platform/intercore_cache.h"
+#include "stm32h7xx.h"
 
 uint8_t sample_classic_audio_projection_is_ready(uint16_t sample_id)
 {
     if (sample_id >= SAMPLE_CLASSIC_CAPACITY) return 0U;
     const sample_classic_audio_source_t *const src =
         &g_sample_classic_audio_source[sample_id];
-    intercore_cache_consume((const void *)&src->active_snapshot,
-                            sizeof(src->active_snapshot));
-    const uint32_t active = src->active_snapshot;
-    intercore_cache_consume(&src->snapshots[active],
-                            sizeof(src->snapshots[active]));
-    return src->snapshots[active].ready;
+    return src->ready;
 }
 
 uint8_t sample_classic_audio_projection_resolve(uint16_t sample_id,
@@ -22,13 +17,11 @@ uint8_t sample_classic_audio_projection_resolve(uint16_t sample_id,
     if (out != 0) sample_resolved_source_init(out);
     if ((out == 0) || (sample_id >= SAMPLE_CLASSIC_CAPACITY)) return 0U;
     const sample_classic_audio_source_t *const src = &g_sample_classic_audio_source[sample_id];
-    intercore_cache_consume((const void *)&src->active_snapshot,
-                            sizeof(src->active_snapshot));
-    const uint32_t active = src->active_snapshot;
-    intercore_cache_consume(&src->snapshots[active],
-                            sizeof(src->snapshots[active]));
-    const sample_classic_audio_snapshot_t snap = src->snapshots[active];
-    if (snap.ready == 0U) return 0U;
+    if (src->ready == 0U) return 0U;
+    __DMB();
+    const sample_classic_audio_source_t snap = *src;
+    __DMB();
+    if ((snap.ready == 0U) || (src->ready == 0U)) return 0U;
     out->key = snap.key;
     out->total_frames = snap.total_frames;
     out->registration_epoch = snap.registration_epoch;

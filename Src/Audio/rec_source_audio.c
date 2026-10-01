@@ -1,21 +1,19 @@
 #include "Audio/rec_source_audio.h"
 
 #include "IPC/rec_source_contract.h"
-#include "Platform/intercore_cache.h"
 #include "Sampler/sample_audio_format.h"
+#include "stm32h7xx.h"
 
 uint8_t rec_source_audio_resolve(sample_resolved_source_t *out_source)
 {
     if (out_source != NULL) sample_resolved_source_init(out_source);
     if (out_source == NULL) return 0U;
-    intercore_cache_consume((const void *)&g_rec_source_projection.active_snapshot,
-                            sizeof(g_rec_source_projection.active_snapshot));
-    const uint32_t active = g_rec_source_projection.active_snapshot;
-    intercore_cache_consume(&g_rec_source_projection.snapshots[active],
-                            sizeof(g_rec_source_projection.snapshots[active]));
-    const rec_source_snapshot_t snapshot =
-        g_rec_source_projection.snapshots[active];
-    if ((snapshot.ready == 0U) || (snapshot.frame_count == 0U)) return 0U;
+    if (g_rec_source_projection.ready == 0U) return 0U;
+    __DMB();
+    const rec_source_snapshot_t snapshot = g_rec_source_projection;
+    __DMB();
+    if ((snapshot.ready == 0U) || (g_rec_source_projection.ready == 0U)
+        || (snapshot.frame_count == 0U)) return 0U;
     out_source->key = snapshot.key;
     out_source->total_frames = snapshot.frame_count;
     out_source->registration_epoch = snapshot.registration_epoch;

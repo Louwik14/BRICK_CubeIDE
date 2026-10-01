@@ -30,10 +30,10 @@ D2_IPC sampler_ram_playhead_slot_t
 AUDIO_M7_PRIVATE_SDRAM audio_wavetable_registry_slot_t
     g_audio_wavetable_registry[WAVETABLE_POOL_MAX_SLOTS];
 
-_Static_assert(sizeof(sample_classic_audio_snapshot_t) == 28U,
-               "Classic snapshot ABI changed");
-_Static_assert(sizeof(sample_classic_audio_source_t) == 60U,
-               "Classic source ABI changed");
+_Static_assert(sizeof(sample_classic_audio_source_t) == 28U,
+               "Classic source layout changed");
+_Static_assert(sizeof(rec_source_projection_t) == 24U,
+               "REC source projection layout changed");
 _Static_assert(sizeof(multi_audio_instrument_t) == 16U,
                "Multi instrument ABI changed");
 _Static_assert(sizeof(multi_audio_zone_t) == 8U,
