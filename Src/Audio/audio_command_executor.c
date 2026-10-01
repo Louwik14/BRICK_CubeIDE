@@ -130,6 +130,22 @@ static void audio_command_close_entity(uint8_t entity)
     brick6_sampler_runtime_reset_track(entity);
 }
 
+static void audio_command_prepare_synth_program_change(
+    uint8_t entity, const control_audio_program_descriptor_t *target)
+{
+    if ((target == NULL) || (entity >= BRICK_ENTITY_CAPACITY)
+            || (target->family != TRACK_RUNTIME_FAMILY_SYNTH)
+            || ((target->type != TRACK_RUNTIME_TYPE_PRISM)
+                && (target->type != TRACK_RUNTIME_TYPE_STACK)
+                && (target->type != TRACK_RUNTIME_TYPE_WAVE)
+                && (target->type != TRACK_RUNTIME_TYPE_FM))) return;
+    const uint8_t target_voices =
+        CONTROL_AUDIO_PROGRAM_DECODE_VOICES(target->flags);
+    if (target_voices >= synth_polyphony_get_voice_count(entity)) return;
+    seq_engine_control_disarm_track(entity);
+    audio_command_executor_close_outputs_from(entity, target_voices);
+}
+
 static void audio_command_close_external_entities(void)
 {
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
@@ -530,6 +546,9 @@ static audio_command_apply_result_t audio_command_apply_patch_state_commit(
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
         if ((changed & (uint16_t)(1U << entity)) == 0U) continue;
+        const control_audio_program_descriptor_t target =
+            control_audio_program_unpack(programs[entity]->value);
+        audio_command_prepare_synth_program_change(entity, &target);
         audio_command_close_entity(entity);
         control_audio_command_t release = off;
         release.entity = entity;
@@ -595,9 +614,14 @@ static uint8_t audio_prepared_apply_tone(
         param_id_t id;
         float value;
         if (!tone_param_codec_slot_to_param(tone->tag, slot, &id)
-                || !tone_program_control_get_from(tone, id, &value)
-                || !audio_prepared_apply_float(entity, id, value,
-                    CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
+                || !tone_program_control_get_from(tone, id, &value)) return 0U;
+        /* MIDI PROGRAM/CC values are CONTROL/SEQ output state.  They are part
+         * of the persistent TONE payload, but have no AUDIO endpoint. */
+        if ((id == PARAM_MIDI_PROGRAM)
+                || ((id >= PARAM_MIDI_CC1_1) && (id <= PARAM_MIDI_CC3_4)))
+            continue;
+        if (!audio_prepared_apply_float(entity, id, value,
+                CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
     }
     return 1U;
 }
@@ -678,14 +702,6 @@ static uint8_t audio_prepared_apply_common(
     if (configurable_polyphony != 0U)
     {
         const float voices = (float)state->polyphony.voice_count;
-        const uint8_t current_voices = synth_polyphony_get_voice_count(entity);
-        if ((state->polyphony.voice_count >= 1U)
-                && (state->polyphony.voice_count < current_voices))
-        {
-            seq_engine_control_disarm_track(entity);
-            audio_command_executor_close_outputs_from(
-                entity, state->polyphony.voice_count);
-        }
         if (!audio_prepared_apply_float(entity,
                 (param_id_t)CONTROL_AUDIO_CONFIG_POLY_VOICES, voices,
                 CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)
@@ -856,6 +872,18 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
                                       CONTROL_AUDIO_PANIC_GLOBAL) };
         if (!audio_command_apply_panic(&panic)) return AUDIO_COMMAND_APPLY_INVALID;
     }
+    else
+    {
+        /* PROGRAM installation below already materializes the target synth
+         * voice count encoded in flags.  Trim outputs against the old engine
+         * while its allocator still owns them; after installation,
+         * synth_polyphony_get_voice_count() already reports the target and a
+         * late comparison can no longer see that a shrink occurred. */
+        for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+            if ((changed & (uint16_t)(1U << entity)) != 0U)
+                audio_command_prepare_synth_program_change(
+                    entity, &state->entity[entity].program);
+    }
     const control_audio_program_descriptor_t off = {
         .family = TRACK_RUNTIME_FAMILY_OFF, .type = TRACK_RUNTIME_TYPE_NONE };
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
@@ -886,6 +914,9 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
         if (target->active == 0U) continue;
         if (!audio_note_engine_adapter_apply_midi_config(entity,
                 target->midi_channel, target->midi_source)) goto invalid;
+        /* A MIDI PROGRAM is active for sequencing/routing but deliberately has
+         * no audio-routable Tone/Common/FX/Mute/Mod/Resource endpoint. */
+        if (target->program.family == TRACK_RUNTIME_FAMILY_MIDI) continue;
         if (target->product_kind == PREPARED_AUDIO_PRODUCT_FM)
         {
             if (!audio_prepared_apply_fm(entity, &target->product.fm)) goto invalid;
