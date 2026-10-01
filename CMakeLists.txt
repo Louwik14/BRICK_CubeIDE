@@ -45,6 +45,10 @@ endif()
 # Target
 # --------------------------------------------------------------------------
 add_executable(${CMAKE_PROJECT_NAME})
+option(BRICK_PATTERN_RECALL_DIAG
+    "Exhaustive PreparedAudio Pattern Recall diagnostics" ON)
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+    BRICK_PATTERN_RECALL_DIAG=$<BOOL:${BRICK_PATTERN_RECALL_DIAG}>)
 option(BRICK_PERF_DIAG "Instrument the H743 Streamer/Recorder baseline" ON)
 if(BRICK_PERF_DIAG)
     target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
@@ -206,6 +210,7 @@ set(DOMAIN_CONTRACT_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/audio_wavetable_registry_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/ControlRT/control_audio_command.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/ControlRT/control_audio_fifo_layout.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/ControlRT/pattern_recall_diag.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/ControlRT/live_parameter_event.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/multi_sample_audio_projection.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/multi_sample_audio_projection_contract.h"

@@ -66,6 +66,10 @@ uint8_t audio_note_engine_adapter_current_ctx(
     track_audio_runtime_ctx_t *out_context);
 uint8_t audio_note_engine_adapter_entity_has_held_output(
     brick_entity_id_t entity_id);
+#if BRICK_PATTERN_RECALL_DIAG
+uint8_t audio_note_engine_adapter_diag_held_count(
+    brick_entity_id_t entity_id);
+#endif
 uint16_t audio_note_engine_adapter_entity_mask(
     track_runtime_engine_t engine);
 brick_entity_id_t audio_note_engine_adapter_entity_for_mix_lane(

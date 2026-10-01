@@ -7,6 +7,7 @@
 #include "Seq/seq_engine.h"
 #include "ControlRT/audio_state_transaction.h"
 #include "ControlRT/prepared_audio_state.h"
+#include "ControlRT/pattern_recall_diag.h"
 #include "ControlRT/live_parameter_event.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
@@ -32,16 +33,22 @@
 #include "Track/control_music_output.h"
 #include "Sampler/multi_sample_config.h"
 #include "Sampler/wavetable_config.h"
+#include "Audio/audio_wavetable_registry.h"
+#include "Audio/multi_sample_audio_projection_audio.h"
+#include "Audio/sample_classic_audio_projection_audio.h"
+#include "Audio/sampler_ram_audio_projection_audio.h"
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
 #include "Param/param_global_control.h"
 #include "Param/param_registry.h"
+#include "Param/param_spec.h"
 #include "Track/tone_param_codec.h"
 #include "Audio/sd_preview_audio.h"
 #include "Platform/brick_fatal.h"
 #include "Platform/memory_layout.h"
 #include "main.h"
 #include "stm32h7xx.h"
+#include <math.h>
 
 typedef enum
 {
@@ -667,6 +674,9 @@ static uint8_t audio_prepared_apply_common(
     const float *const filter = (const float *)&state->filter;
     const float *const vca = (const float *)&state->vca;
     const float *const mixer = (const float *)&state->mixer;
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_FILTER_APPLY);
+#endif
     for (uint8_t i = 0U; i < 12U; ++i)
         if (param_registry_projected_track_param_is_applicable(filter_ids[i],
                 (track_family_t)state->ui_family,
@@ -675,6 +685,9 @@ static uint8_t audio_prepared_apply_common(
                 state->topology_role == ENTITY_ROLE_GROUP_CHILD)
                 && !audio_prepared_apply_float(entity, filter_ids[i], filter[i],
                     CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_VCA_APPLY);
+#endif
     for (uint8_t i = 0U; i < 6U; ++i)
         if (param_registry_projected_track_param_is_applicable(vca_ids[i],
                 (track_family_t)state->ui_family,
@@ -683,6 +696,9 @@ static uint8_t audio_prepared_apply_common(
                 state->topology_role == ENTITY_ROLE_GROUP_CHILD)
                 && !audio_prepared_apply_float(entity, vca_ids[i], vca[i],
                     CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_MIXER_APPLY);
+#endif
     for (uint8_t i = 0U; i < 5U; ++i)
         if (param_registry_projected_track_param_is_applicable(mixer_ids[i],
                 (track_family_t)state->ui_family,
@@ -701,6 +717,9 @@ static uint8_t audio_prepared_apply_common(
                 || (state->program.type == TRACK_RUNTIME_TYPE_FM))));
     if (configurable_polyphony != 0U)
     {
+#if BRICK_PATTERN_RECALL_DIAG
+        pattern_recall_diag_phase(PATTERN_DIAG_PHASE_POLY_APPLY);
+#endif
         const float voices = (float)state->polyphony.voice_count;
         if (!audio_prepared_apply_float(entity,
                 (param_id_t)CONTROL_AUDIO_CONFIG_POLY_VOICES, voices,
@@ -710,6 +729,9 @@ static uint8_t audio_prepared_apply_common(
                     CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
     }
     const audio_fx_control_state_t *const fx = &state->audio_fx;
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_FX_APPLY);
+#endif
     if (entity < BRICK_ENTITY_TOP_LEVEL_COUNT)
     {
         if (!audio_fx_runtime_set_filter_pos(entity, fx->config.filter_position)
@@ -836,15 +858,512 @@ static uint8_t audio_prepared_apply_resource(
     return 1U;
 }
 
+#if BRICK_PATTERN_RECALL_DIAG
+static void audio_pattern_diag_failure(uint8_t subsystem, uint8_t entity,
+    uint16_t field, uint8_t code, uint32_t actual, uint32_t expected,
+    uint32_t capacity, uint32_t context)
+{
+    pattern_recall_diag_failure(1U, subsystem, entity, field, code, actual,
+                                expected, capacity, context);
+}
+
+static uint8_t audio_pattern_diag_expected_engine(
+    const control_audio_program_descriptor_t *program,
+    uint8_t *out_engine)
+{
+    uint8_t engine = TRACK_RUNTIME_ENGINE_NONE;
+    if (program->family == TRACK_RUNTIME_FAMILY_OFF)
+    {
+        if (program->type != TRACK_RUNTIME_TYPE_NONE) return 0U;
+    }
+    else if (program->family == TRACK_RUNTIME_FAMILY_MIDI)
+    {
+        if (program->type != TRACK_RUNTIME_TYPE_MIDI) return 0U;
+    }
+    else if (program->family == TRACK_RUNTIME_FAMILY_EXTERNAL)
+    {
+        if (program->type != TRACK_RUNTIME_TYPE_EXTERNAL) return 0U;
+        engine = TRACK_RUNTIME_ENGINE_AUDIO_TRACK;
+    }
+    else if (program->family == TRACK_RUNTIME_FAMILY_DRUM)
+    {
+        if (program->type != TRACK_RUNTIME_TYPE_DRUM_MD) return 0U;
+        engine = TRACK_RUNTIME_ENGINE_DRUM;
+    }
+    else if (program->family == TRACK_RUNTIME_FAMILY_SAMPLER)
+    {
+        if ((program->type != TRACK_RUNTIME_TYPE_RAM)
+                && (program->type != TRACK_RUNTIME_TYPE_STREAM)
+                && (program->type != TRACK_RUNTIME_TYPE_MULTI)) return 0U;
+        engine = TRACK_RUNTIME_ENGINE_SAMPLER;
+    }
+    else if (program->family == TRACK_RUNTIME_FAMILY_SYNTH)
+    {
+        switch ((track_runtime_type_t)program->type)
+        {
+            case TRACK_RUNTIME_TYPE_PRISM: engine = TRACK_RUNTIME_ENGINE_PRISM; break;
+            case TRACK_RUNTIME_TYPE_STACK: engine = TRACK_RUNTIME_ENGINE_STACK; break;
+            case TRACK_RUNTIME_TYPE_WAVE: engine = TRACK_RUNTIME_ENGINE_WAVE; break;
+            case TRACK_RUNTIME_TYPE_FM: engine = TRACK_RUNTIME_ENGINE_FM; break;
+            case TRACK_RUNTIME_TYPE_TB303: engine = TRACK_RUNTIME_ENGINE_TB303; break;
+            case TRACK_RUNTIME_TYPE_ACID: engine = TRACK_RUNTIME_ENGINE_ACID; break;
+            default: return 0U;
+        }
+    }
+    else if (!((program->family == TRACK_RUNTIME_FAMILY_OTHER)
+            && (program->type == TRACK_RUNTIME_TYPE_GROUP)
+            && ((program->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER)
+                != 0U))) return 0U;
+    *out_engine = engine;
+    return 1U;
+}
+
+static uint8_t audio_pattern_diag_synth_renderer(uint8_t engine)
+{
+    return (uint8_t)((engine == TRACK_RUNTIME_ENGINE_DRUM)
+        || (engine == TRACK_RUNTIME_ENGINE_PRISM)
+        || (engine == TRACK_RUNTIME_ENGINE_STACK)
+        || (engine == TRACK_RUNTIME_ENGINE_WAVE)
+        || (engine == TRACK_RUNTIME_ENGINE_FM)
+        || (engine == TRACK_RUNTIME_ENGINE_TB303)
+        || (engine == TRACK_RUNTIME_ENGINE_ACID));
+}
+
+static void audio_pattern_diag_param(uint8_t subsystem, uint8_t entity,
+                                     param_id_t id, float value)
+{
+    if ((id < PARAM_COUNT)
+            && (param_spec_audio_command_value_is_valid(id, value) != 0U))
+        return;
+    uint32_t bits = 0U;
+    memcpy(&bits, &value, sizeof(bits));
+    audio_pattern_diag_failure(subsystem, entity, id,
+        PATTERN_DIAG_CODE_DOMAIN, bits, 0U, PARAM_COUNT, id);
+}
+
+static void audio_pattern_diag_entity_values(uint8_t entity,
+    const prepared_audio_entity_state_t *target)
+{
+    if (target->program.family == TRACK_RUNTIME_FAMILY_MIDI) return;
+    if (target->product_kind == PREPARED_AUDIO_PRODUCT_TONE)
+    {
+        const uint8_t count = tone_param_codec_count(target->product.tone.tag);
+        for (uint8_t slot = 0U; slot < count; ++slot)
+        {
+            param_id_t id;
+            float value;
+            if (!tone_param_codec_slot_to_param(
+                    target->product.tone.tag, slot, &id)
+                    || !tone_program_control_get_from(
+                        &target->product.tone, id, &value))
+            {
+                audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_TONE,
+                    entity, slot, PATTERN_DIAG_CODE_DOMAIN,
+                    target->product.tone.tag, 0U, count, 0U);
+                continue;
+            }
+            if ((id == PARAM_MIDI_PROGRAM)
+                    || ((id >= PARAM_MIDI_CC1_1)
+                        && (id <= PARAM_MIDI_CC3_4))) continue;
+            audio_pattern_diag_param(PATTERN_DIAG_SUBSYSTEM_TONE,
+                                      entity, id, value);
+        }
+    }
+    else if (target->product_kind == PREPARED_AUDIO_PRODUCT_FM)
+    {
+        static const param_id_t ids[] = {
+            PARAM_FM_RATIO, PARAM_FM_BRIGHT, PARAM_FM_BODY, PARAM_FM_DETAIL,
+            PARAM_FM_METAL, PARAM_FM_ENV_ATTACK, PARAM_FM_ENV_DECAY,
+            PARAM_FM_ENV_SUSTAIN, PARAM_FM_ENV_RELEASE, PARAM_FM_PLAY_VEL,
+            PARAM_FM_PLAY_KEY, PARAM_FM_PLAY_PITCH_ENV,
+            PARAM_FM_PLAY_PITCH_TIME };
+        for (uint8_t i = 0U; i < (uint8_t)(sizeof(ids) / sizeof(ids[0])); ++i)
+        {
+            float value = 0.0f;
+            if (!fm_control_state_get_public_param_from(
+                    &target->product.fm, ids[i], &value))
+                audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_FM,
+                    entity, ids[i], PATTERN_DIAG_CODE_DOMAIN, 0U, 1U,
+                    PARAM_COUNT, i);
+            else
+                audio_pattern_diag_param(PATTERN_DIAG_SUBSYSTEM_FM,
+                                          entity, ids[i], value);
+        }
+    }
+    static const param_id_t filter_ids[12U] = {
+        PARAM_FILTER_MORPH, PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE,
+        PARAM_FILTER_EG_AMT, PARAM_FILTER_ATTACK, PARAM_FILTER_DECAY,
+        PARAM_FILTER_SUSTAIN, PARAM_FILTER_RELEASE, PARAM_FILTER_KEYTRK,
+        PARAM_FILTER_ENVRST, PARAM_FILTER_ENVDLY, PARAM_ENV_RETRIG_FILTER };
+    static const param_id_t vca_ids[6U] = {
+        PARAM_VCA_ATTACK, PARAM_VCA_DECAY, PARAM_VCA_SUSTAIN,
+        PARAM_VCA_RELEASE, PARAM_FILTER_MODE, PARAM_ENV_RETRIG_VCA };
+    static const param_id_t mixer_ids[5U] = {
+        PARAM_MIX_LEVEL, PARAM_MIX_PAN, PARAM_MIX_SEND1,
+        PARAM_MIX_SEND2, PARAM_MIX_SEND3 };
+    const float *const filter = (const float *)&target->filter;
+    const float *const vca = (const float *)&target->vca;
+    const float *const mixer = (const float *)&target->mixer;
+    for (uint8_t i = 0U; i < 12U; ++i)
+        if (param_registry_projected_track_param_is_applicable(filter_ids[i],
+                (track_family_t)target->ui_family,
+                (track_runtime_type_t)target->program.type,
+                target->topology_role == ENTITY_ROLE_GROUP_MASTER,
+                target->topology_role == ENTITY_ROLE_GROUP_CHILD))
+            audio_pattern_diag_param(PATTERN_DIAG_SUBSYSTEM_FILTER,
+                                      entity, filter_ids[i], filter[i]);
+    for (uint8_t i = 0U; i < 6U; ++i)
+        if (param_registry_projected_track_param_is_applicable(vca_ids[i],
+                (track_family_t)target->ui_family,
+                (track_runtime_type_t)target->program.type,
+                target->topology_role == ENTITY_ROLE_GROUP_MASTER,
+                target->topology_role == ENTITY_ROLE_GROUP_CHILD))
+            audio_pattern_diag_param(PATTERN_DIAG_SUBSYSTEM_VCA,
+                                      entity, vca_ids[i], vca[i]);
+    for (uint8_t i = 0U; i < 5U; ++i)
+        if (param_registry_projected_track_param_is_applicable(mixer_ids[i],
+                (track_family_t)target->ui_family,
+                (track_runtime_type_t)target->program.type,
+                target->topology_role == ENTITY_ROLE_GROUP_MASTER,
+                target->topology_role == ENTITY_ROLE_GROUP_CHILD))
+            audio_pattern_diag_param(PATTERN_DIAG_SUBSYSTEM_MIXER,
+                                      entity, mixer_ids[i], mixer[i]);
+    if (target->modulation_present != 0U)
+    {
+        for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+        {
+            const mod_lfo_control_value_t *const value =
+                &target->modulation.lfo.lfo[lfo];
+            const float fields[MOD_LFO_PARAM_COUNT] = {
+                value->rate, value->shape, value->trigger, value->phase };
+            for (uint8_t param = 0U; param < MOD_LFO_PARAM_COUNT; ++param)
+                if (!isfinite(fields[param]))
+                {
+                    uint32_t bits = 0U;
+                    memcpy(&bits, &fields[param], sizeof(bits));
+                    audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_MOD,
+                        entity, (uint16_t)(lfo * MOD_LFO_PARAM_COUNT + param),
+                        PATTERN_DIAG_CODE_DOMAIN, bits, 0U,
+                        MOD_LFO_PARAM_COUNT, lfo);
+                }
+        }
+        for (uint8_t op = 0U; op < 2U; ++op)
+        {
+            if ((target->modulation.multi_source[op][0]
+                    >= MOD_MATRIX_SOURCE_COUNT)
+                    || (target->modulation.multi_source[op][1]
+                        >= MOD_MATRIX_SOURCE_COUNT)
+                    || (target->modulation.slew_source[op]
+                        >= MOD_MATRIX_SOURCE_COUNT)
+                    || !isfinite(target->modulation.slew_amount[op]))
+                audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_MOD,
+                    entity, (uint16_t)(32U + op), PATTERN_DIAG_CODE_DOMAIN,
+                    (uint32_t)target->modulation.multi_source[op][0]
+                        | ((uint32_t)target->modulation.multi_source[op][1]
+                            << 8U)
+                        | ((uint32_t)target->modulation.slew_source[op]
+                            << 16U),
+                    0U, MOD_MATRIX_SOURCE_COUNT, 0U);
+        }
+    }
+}
+
+static uint8_t audio_pattern_diag_runtime_preflight(
+    const control_audio_command_t *commit, const prepared_audio_state_t *state,
+    uint16_t changed)
+{
+    const uint16_t failures_before =
+        g_pattern_recall_diag.runtime_failure_count;
+    uint16_t target_voice_total = 0U;
+    uint16_t input_seen = 0U;
+    g_pattern_recall_diag.changed_program_mask = changed;
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_AUDIO_RUNTIME_PREFLIGHT);
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        const prepared_audio_entity_state_t *const target =
+            &state->entity[entity];
+        const control_audio_program_descriptor_t *const program =
+            &target->program;
+        track_audio_runtime_ctx_t current = {0};
+        const uint8_t has_current = audio_note_engine_adapter_current_ctx(
+            entity, &current);
+        const uint8_t held =
+            audio_note_engine_adapter_diag_held_count(entity);
+        uint8_t expected_engine = TRACK_RUNTIME_ENGINE_NONE;
+        uint8_t target_voices = CONTROL_AUDIO_PROGRAM_DECODE_VOICES(
+            program->flags);
+        if (target_voices == 0U) target_voices = 1U;
+        const uint8_t trim = ((changed & (uint16_t)(1U << entity)) != 0U
+                && program->family == TRACK_RUNTIME_FAMILY_SYNTH
+                && held > target_voices)
+            ? (uint8_t)(held - target_voices) : 0U;
+        g_pattern_recall_diag.polyphony[entity] =
+            (pattern_recall_diag_polyphony_t){
+                .current_renderer = has_current
+                    ? current.program_route.engine : TRACK_RUNTIME_ENGINE_NONE,
+                .current_held_count = held,
+                .target_polyphony = target_voices,
+                .trim_count = trim,
+                .owner_renderer = program->engine,
+                .changed = (changed & (uint16_t)(1U << entity)) ? 1U : 0U
+            };
+        if (!control_audio_program_descriptor_is_structural(program,
+                TRACK_RUNTIME_ENGINE_COUNT, TRACK_RUNTIME_FAMILY_OTHER,
+                TRACK_RUNTIME_TYPE_COUNT)
+                || !audio_pattern_diag_expected_engine(
+                    program, &expected_engine)
+                || (program->engine != expected_engine))
+            audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_PROGRAM,
+                entity, 0U, PATTERN_DIAG_CODE_INSTALL,
+                control_audio_program_pack(program), expected_engine,
+                TRACK_RUNTIME_ENGINE_COUNT,
+                has_current ? ((uint32_t)current.program_route.engine
+                    | ((uint32_t)current.family << 8U)
+                    | ((uint32_t)current.type << 16U)
+                    | ((uint32_t)current.flags << 24U)) : 0U);
+        if ((target->active == 0U)
+                != (program->family == TRACK_RUNTIME_FAMILY_OFF))
+            audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_PROGRAM,
+                entity, 1U, PATTERN_DIAG_CODE_MISMATCH, target->active,
+                program->family != TRACK_RUNTIME_FAMILY_OFF, 1U,
+                control_audio_program_pack(program));
+        if ((target->active != 0U)
+                && ((target->midi_channel < 1U)
+                    || (target->midi_channel > 16U)
+                    || (target->midi_source >= TRACK_MIDI_SOURCE_COUNT)))
+            audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_PROGRAM,
+                entity, CONTROL_AUDIO_PARAM_MIDI_CONFIG,
+                PATTERN_DIAG_CODE_DOMAIN,
+                (uint32_t)target->midi_channel
+                    | ((uint32_t)target->midi_source << 8U),
+                1U, TRACK_MIDI_SOURCE_COUNT, 16U);
+        if (audio_pattern_diag_synth_renderer(program->engine) != 0U)
+        {
+            const uint8_t owned = (program->engine == TRACK_RUNTIME_ENGINE_DRUM
+                    || program->engine == TRACK_RUNTIME_ENGINE_TB303
+                    || program->engine == TRACK_RUNTIME_ENGINE_ACID)
+                ? 1U : target_voices;
+            target_voice_total = (uint16_t)(target_voice_total + owned);
+            if ((owned < 1U) || (owned > SYNTH_POLYPHONY_MAX_VOICES))
+                audio_pattern_diag_failure(
+                    PATTERN_DIAG_SUBSYSTEM_POLYPHONY, entity, 0U,
+                    PATTERN_DIAG_CODE_RANGE, owned, 1U,
+                    SYNTH_POLYPHONY_MAX_VOICES,
+                    ((uint32_t)held << 16U) | trim);
+            if (((changed & (uint16_t)(1U << entity)) == 0U)
+                    && (held > owned))
+                audio_pattern_diag_failure(
+                    PATTERN_DIAG_SUBSYSTEM_REBIND, entity, 0U,
+                    PATTERN_DIAG_CODE_HELD_OUTPUTS, held, 0U, owned,
+                    ((uint32_t)current.program_route.engine << 8U)
+                        | program->engine);
+        }
+        if ((target->program.family == TRACK_RUNTIME_FAMILY_MIDI)
+                && ((target->modulation_present != 0U)
+                    || (target->resource.kind
+                        != PREPARED_AUDIO_RESOURCE_NONE)))
+            audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_PROGRAM,
+                entity, 2U, PATTERN_DIAG_CODE_ENDPOINT,
+                ((uint32_t)target->modulation_present << 8U)
+                    | target->resource.kind, 0U, 0U, program->family);
+        if ((target->modulation_present != 0U)
+                && (entity >= PREPARED_AUDIO_TEMP_OWNER_COUNT))
+            audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_MOD,
+                entity, 0U, PATTERN_DIAG_CODE_CAPACITY, entity, 0U,
+                PREPARED_AUDIO_TEMP_OWNER_COUNT, 0U);
+        audio_pattern_diag_entity_values(entity, target);
+
+        const prepared_audio_resource_state_t *const resource =
+            &target->resource;
+        if (resource->kind == PREPARED_AUDIO_RESOURCE_NONE)
+        {
+            /* NONE is a complete, valid target. */
+        }
+        else if (resource->kind == PREPARED_AUDIO_RESOURCE_SAMPLER)
+        {
+            const uint16_t id = resource->sampler_runtime;
+            uint8_t ready = (resource->present == 0U && id == UINT16_MAX)
+                ? 1U : 0U;
+            if (resource->present != 0U)
+            {
+                if (program->type == TRACK_RUNTIME_TYPE_MULTI)
+                    ready = multi_sample_audio_projection_is_ready(id);
+                else if (program->type == TRACK_RUNTIME_TYPE_RAM)
+                {
+                    sampler_ram_audio_descriptor_t descriptor;
+                    ready = sampler_ram_audio_projection_resolve(
+                        id, &descriptor);
+                }
+                else if (program->type == TRACK_RUNTIME_TYPE_STREAM)
+                    ready = sample_classic_audio_projection_is_ready(id);
+            }
+            if (ready == 0U)
+                audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_RESOURCE,
+                    entity, 0U, PATTERN_DIAG_CODE_NOT_READY, id,
+                    resource->present, UINT16_MAX, program->type);
+        }
+        else if (resource->kind == PREPARED_AUDIO_RESOURCE_WAVETABLE)
+        {
+            for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
+            {
+                const audio_wave_table_selection_t *const selection =
+                    &resource->wavetable[osc];
+                if (selection->wavetable_slot == WAVETABLE_POOL_INVALID_SLOT)
+                {
+                    if (selection->generation != 0U)
+                        audio_pattern_diag_failure(
+                            PATTERN_DIAG_SUBSYSTEM_RESOURCE, entity, osc,
+                            PATTERN_DIAG_CODE_GENERATION,
+                            selection->generation, 0U,
+                            WAVETABLE_POOL_MAX_SLOTS,
+                            selection->wavetable_slot);
+                    continue;
+                }
+                audio_wavetable_descriptor_t descriptor;
+                if (!audio_wavetable_registry_resolve(
+                        selection->wavetable_slot, selection->generation,
+                        &descriptor))
+                    audio_pattern_diag_failure(
+                        PATTERN_DIAG_SUBSYSTEM_RESOURCE, entity, osc,
+                        PATTERN_DIAG_CODE_NOT_READY,
+                        selection->generation, 1U,
+                        WAVETABLE_POOL_MAX_SLOTS,
+                        selection->wavetable_slot);
+            }
+        }
+        else
+            audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_RESOURCE,
+                entity, 0U, PATTERN_DIAG_CODE_DOMAIN, resource->kind,
+                PREPARED_AUDIO_RESOURCE_NONE,
+                PREPARED_AUDIO_RESOURCE_WAVETABLE, program->type);
+    }
+    if (target_voice_total > SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+        audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_POLYPHONY,
+            BRICK_ENTITY_INVALID_ID, 1U, PATTERN_DIAG_CODE_VOICE_BUDGET,
+            target_voice_total, 0U, SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET,
+            changed);
+    for (uint8_t input = 0U; input < ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT;
+         ++input)
+    {
+        const uint8_t owner = state->input_owner[input];
+        if (owner == BRICK_ENTITY_INVALID_ID) continue;
+        if ((owner >= TRACK_COUNT)
+                || (state->entity[owner].active == 0U)
+                || (state->entity[owner].program.family
+                    != TRACK_RUNTIME_FAMILY_EXTERNAL)
+                || ((input_seen & (uint16_t)(1U << owner)) != 0U))
+            audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_INPUT,
+                owner, input, PATTERN_DIAG_CODE_ENDPOINT, owner, 0U,
+                TRACK_COUNT, state->entity[owner].program.family);
+        if (owner < BRICK_ENTITY_CAPACITY)
+            input_seen |= (uint16_t)(1U << owner);
+    }
+    for (uint8_t index = 0U; index < PARAM_GLOBAL_CONTROL_VALUE_COUNT;
+         ++index)
+    {
+        param_id_t id = PARAM_COUNT;
+        float value = 0.0f;
+        if (!param_global_audio_command_state_get_at(
+                &state->global, index, &id, &value) || !isfinite(value))
+        {
+            uint32_t bits = 0U;
+            memcpy(&bits, &value, sizeof(bits));
+            audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_GLOBAL,
+                BRICK_ENTITY_INVALID_ID, id, PATTERN_DIAG_CODE_DOMAIN,
+                bits, 0U, PARAM_GLOBAL_CONTROL_VALUE_COUNT, index);
+        }
+        else if (param_spec_audio_command_value_is_valid(id, value) == 0U)
+            audio_pattern_diag_param(PATTERN_DIAG_SUBSYSTEM_GLOBAL,
+                                     BRICK_ENTITY_INVALID_ID, id, value);
+    }
+    if ((state->tempo_milli_bpm == 0U) || (state->step_q16 == 0U)
+            || (state->metronome_level > 127U))
+        audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_TRANSPORT,
+            BRICK_ENTITY_INVALID_ID, 0U, PATTERN_DIAG_CODE_RANGE,
+            state->tempo_milli_bpm, 1U, state->step_q16,
+            state->metronome_level);
+    for (uint8_t owner = 0U; owner < PREPARED_AUDIO_TEMP_OWNER_COUNT; ++owner)
+        for (uint16_t word = 0U; word < PREPARED_AUDIO_PARAM_MASK_WORDS; ++word)
+        {
+            const uint32_t pending = state->temp_clear_mask[owner][word];
+            if ((word == (PREPARED_AUDIO_PARAM_MASK_WORDS - 1U))
+                    && ((pending >> (PARAM_COUNT & 31U)) != 0U)
+                    && ((PARAM_COUNT & 31U) != 0U))
+                audio_pattern_diag_failure(
+                    PATTERN_DIAG_SUBSYSTEM_TEMP_CLEAR, owner, word,
+                    PATTERN_DIAG_CODE_RANGE, pending, 0U, PARAM_COUNT, 0U);
+        }
+    pattern_recall_diag_identity(g_pattern_recall_diag.candidate_generation,
+        g_pattern_recall_diag.prepared_seq_generation, commit->value,
+        CONTROL_AUDIO_COMMAND_KIND(commit), commit->effective_sample_time);
+    return (g_pattern_recall_diag.runtime_failure_count == failures_before)
+        ? 1U : 0U;
+}
+#endif
+
 static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
     const control_audio_command_t *commit)
 {
     const uint8_t transition = CONTROL_AUDIO_COMMAND_KIND(commit);
+#if BRICK_PATTERN_RECALL_DIAG
+    if ((g_pattern_recall_diag.magic != PATTERN_RECALL_DIAG_MAGIC)
+            || (g_pattern_recall_diag.prepared_audio_generation
+                != commit->value))
+        pattern_recall_diag_reset(commit->value, commit->value, commit->value);
+    const uint16_t runtime_failures_at_enter =
+        g_pattern_recall_diag.runtime_failure_count;
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_AUDIO_IRQ_ENTER);
+    pattern_recall_diag_identity(g_pattern_recall_diag.candidate_generation,
+        g_pattern_recall_diag.prepared_seq_generation, commit->value,
+        transition, commit->effective_sample_time);
+    if (transition > CONTROL_AUDIO_STATE_PROJECT)
+        audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_META,
+            commit->entity, 0U, PATTERN_DIAG_CODE_RANGE, transition, 0U,
+            CONTROL_AUDIO_STATE_PROJECT, commit->opcode_kind);
+    if (commit->entity >= PREPARED_AUDIO_SLOT_COUNT)
+        audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_META,
+            commit->entity, 1U, PATTERN_DIAG_CODE_CAPACITY, commit->entity,
+            0U, PREPARED_AUDIO_SLOT_COUNT, 0U);
+    if (commit->value == 0U)
+        audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_META,
+            commit->entity, 2U, PATTERN_DIAG_CODE_GENERATION, 0U, 1U,
+            UINT32_MAX, 0U);
+    if (g_pattern_recall_diag.runtime_failure_count
+            != runtime_failures_at_enter)
+    {
+        __DMB();
+        return AUDIO_COMMAND_APPLY_INVALID;
+    }
+#endif
     if ((transition > CONTROL_AUDIO_STATE_PROJECT)
             || (commit->entity >= PREPARED_AUDIO_SLOT_COUNT)
             || (commit->value == 0U)) return AUDIO_COMMAND_APPLY_INVALID;
     const prepared_audio_slot_t *const slot =
         &g_prepared_audio_slots[commit->entity];
+#if BRICK_PATTERN_RECALL_DIAG
+    if (slot->ready == 0U)
+        audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_META,
+            commit->entity, 3U, PATTERN_DIAG_CODE_STALE, slot->ready, 1U,
+            1U, slot->reserved);
+    if (slot->reserved == 0U)
+        audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_META,
+            commit->entity, 4U, PATTERN_DIAG_CODE_STALE, slot->reserved, 1U,
+            1U, slot->ready);
+    if (slot->generation != commit->value)
+        audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_META,
+            commit->entity, 5U, PATTERN_DIAG_CODE_GENERATION,
+            slot->generation, commit->value, UINT32_MAX, 0U);
+    if (slot->transition != transition)
+        audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_META,
+            commit->entity, 6U, PATTERN_DIAG_CODE_MISMATCH,
+            slot->transition, transition, CONTROL_AUDIO_STATE_PROJECT, 0U);
+    if (g_pattern_recall_diag.runtime_failure_count
+            != runtime_failures_at_enter)
+    {
+        __DMB();
+        return AUDIO_COMMAND_APPLY_INVALID;
+    }
+#endif
     if ((slot->ready == 0U) || (slot->reserved == 0U)
             || (slot->generation != commit->value)
             || (slot->transition != transition)) return AUDIO_COMMAND_APPLY_INVALID;
@@ -865,6 +1384,13 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
         if ((transition == CONTROL_AUDIO_STATE_PROJECT) || (same == 0U))
             changed |= (uint16_t)(1U << entity);
     }
+#if BRICK_PATTERN_RECALL_DIAG
+    if (!audio_pattern_diag_runtime_preflight(commit, state, changed))
+    {
+        __DMB();
+        return AUDIO_COMMAND_APPLY_INVALID;
+    }
+#endif
     if (transition == CONTROL_AUDIO_STATE_PROJECT)
     {
         const control_audio_command_t panic = { .opcode_kind =
@@ -879,6 +1405,9 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
          * while its allocator still owns them; after installation,
          * synth_polyphony_get_voice_count() already reports the target and a
          * late comparison can no longer see that a shrink occurred. */
+#if BRICK_PATTERN_RECALL_DIAG
+        pattern_recall_diag_phase(PATTERN_DIAG_PHASE_POLYPHONY_TRIM);
+#endif
         for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
             if ((changed & (uint16_t)(1U << entity)) != 0U)
                 audio_command_prepare_synth_program_change(
@@ -886,9 +1415,15 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
     }
     const control_audio_program_descriptor_t off = {
         .family = TRACK_RUNTIME_FAMILY_OFF, .type = TRACK_RUNTIME_TYPE_NONE };
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_PROGRAM_CLOSE);
+#endif
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
         if ((changed & (uint16_t)(1U << entity)) != 0U)
             audio_command_close_entity(entity);
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_PROGRAM_OFF);
+#endif
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
         if ((changed & (uint16_t)(1U << entity)) != 0U)
         {
@@ -898,6 +1433,9 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
         }
     g_audio_state_rebind_deferred = 1U;
     g_audio_state_rebind_mask = changed;
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_PROGRAM_INSTALL);
+#endif
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
         if ((changed & (uint16_t)(1U << entity)) != 0U)
         {
@@ -917,6 +1455,9 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
         /* A MIDI PROGRAM is active for sequencing/routing but deliberately has
          * no audio-routable Tone/Common/FX/Mute/Mod/Resource endpoint. */
         if (target->program.family == TRACK_RUNTIME_FAMILY_MIDI) continue;
+#if BRICK_PATTERN_RECALL_DIAG
+        pattern_recall_diag_phase(PATTERN_DIAG_PHASE_PRODUCT_APPLY);
+#endif
         if (target->product_kind == PREPARED_AUDIO_PRODUCT_FM)
         {
             if (!audio_prepared_apply_fm(entity, &target->product.fm)) goto invalid;
@@ -929,10 +1470,22 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
                 (float)target->muted,
                 CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) goto invalid;
         if ((target->modulation_present != 0U)
-                && !audio_prepared_apply_mod(entity, &target->modulation))
+                )
+        {
+#if BRICK_PATTERN_RECALL_DIAG
+            pattern_recall_diag_phase(PATTERN_DIAG_PHASE_MOD_APPLY);
+#endif
+            if (!audio_prepared_apply_mod(entity, &target->modulation))
             goto invalid;
+        }
+#if BRICK_PATTERN_RECALL_DIAG
+        pattern_recall_diag_phase(PATTERN_DIAG_PHASE_RESOURCE_APPLY);
+#endif
         if (!audio_prepared_apply_resource(entity, &target->resource)) goto invalid;
     }
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_GLOBAL_APPLY);
+#endif
     for (uint8_t index = 0U; index < PARAM_GLOBAL_CONTROL_VALUE_COUNT; ++index)
     {
         param_id_t id;
@@ -947,6 +1500,9 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
             || !audio_transport_runtime_set_tempo(state->tempo_milli_bpm)
             || !audio_transport_runtime_set_step_q16(state->step_q16)) goto invalid;
     metronome_runtime_set_level_u7(state->metronome_level);
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_TEMP_CLEAR);
+#endif
     for (uint8_t entity = 0U;
          entity < PREPARED_AUDIO_TEMP_OWNER_COUNT; ++entity)
         for (uint16_t word = 0U; word < PREPARED_AUDIO_PARAM_MASK_WORDS; ++word)
@@ -964,6 +1520,9 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
             }
         }
     g_audio_state_rebind_deferred = 0U;
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_REBIND);
+#endif
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
         if ((g_audio_state_rebind_mask & (uint16_t)(1U << entity)) != 0U)
             if (!audio_note_engine_adapter_initialize_held_outputs(entity))
@@ -971,6 +1530,9 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
     g_audio_state_rebind_mask = 0U;
     brick6_fm_runtime_finalize_pending();
     audio_mod_matrix_finalize_dirty();
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_phase(PATTERN_DIAG_PHASE_AUDIO_COMMIT_DONE);
+#endif
     return AUDIO_COMMAND_APPLY_OK;
 invalid:
     g_audio_state_rebind_deferred = 0U;

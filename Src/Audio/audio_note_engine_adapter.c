@@ -84,6 +84,18 @@ uint8_t audio_note_engine_adapter_entity_has_held_output(
     return 0U;
 }
 
+#if BRICK_PATTERN_RECALL_DIAG
+uint8_t audio_note_engine_adapter_diag_held_count(
+    brick_entity_id_t entity_id)
+{
+    if (entity_id >= BRICK_ENTITY_CAPACITY) return UINT8_MAX;
+    uint8_t count = 0U;
+    for (uint8_t i = 0U; i < AUDIO_PHYSICAL_OUTPUT_CAPACITY; ++i)
+        count += (g_audio_physical_output[entity_id][i].gate != 0U) ? 1U : 0U;
+    return count;
+}
+#endif
+
 static uint8_t audio_note_engine_commit_output(brick_entity_id_t entity_id,
                                                uint32_t output_id,
                                                uint8_t note,

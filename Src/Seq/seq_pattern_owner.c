@@ -665,6 +665,13 @@ uint8_t seq_engine_control_prepared(void)
     return g_prepared_active;
 }
 
+#if BRICK_PATTERN_RECALL_DIAG
+uint32_t seq_engine_control_prepared_generation(void)
+{
+    return (g_prepared_active != 0U) ? g_edit_generation : 0U;
+}
+#endif
+
 void seq_engine_control_abort_prepared(void)
 {
     if (g_prepared_active == 0U) return;

@@ -304,6 +304,9 @@ uint8_t seq_engine_control_prepare_finish(uint8_t root_index,
 uint8_t seq_engine_control_prepared(void);
 void seq_engine_control_abort_prepared(void);
 void seq_engine_control_commit_prepared(seq_pattern_prepared_commit_t mode);
+#if BRICK_PATTERN_RECALL_DIAG
+uint32_t seq_engine_control_prepared_generation(void);
+#endif
 const seq_pattern_t *seq_engine_pattern_capture(void);
 
 _Static_assert(SEQ_LANE_CAPACITY == 16U, "SEQ requires 16 lanes");

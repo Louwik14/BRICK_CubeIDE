@@ -12,6 +12,7 @@
 #include "Track/control_music_output.h"
 #include "ControlRT/control_rt_publication.h"
 #include "ControlRT/prepared_audio_state.h"
+#include "ControlRT/pattern_recall_diag.h"
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
@@ -199,6 +200,12 @@ static void pattern_candidate_decoded(void)
     {g_persist_dbg.decision_reason=PERSIST_DBG_DECISION_PREFLIGHT_BLOCKED;pattern_debug_state();return;}
     if(prepared!=PERSIST_CODEC_OK)
     {g_persist_dbg.cancel_reason=PERSIST_DBG_CANCEL_VALIDATION_FAILED;persist_debug_error(PERSIST_DBG_STAGE_VALIDATE,(int32_t)prepared);pattern_candidate_clear();pattern_candidate_release_payload();return;}
+#if BRICK_PATTERN_RECALL_DIAG
+    pattern_recall_diag_identity(g_pattern_candidate.request_generation,
+        g_pattern_recall_diag.prepared_seq_generation,
+        g_pattern_io_workspace->prepared_pattern.audio_generation,
+        CONTROL_AUDIO_STATE_PATTERN, 0U);
+#endif
     g_pattern_candidate.phase = PATTERN_CANDIDATE_PREPARED;
     g_pattern_candidate.boundary_armed = 0U;
     g_pattern_candidate.boundary_generation = 0U;
