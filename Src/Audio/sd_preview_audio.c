@@ -1,6 +1,6 @@
 #include "Audio/sd_preview_audio.h"
 
-#include "Contracts/sd_preview_ring_contract.h"
+#include "Storage/sd_preview_ring_contract.h"
 #include "stm32h7xx.h"
 
 static float g_sd_preview_gain;

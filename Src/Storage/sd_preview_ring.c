@@ -1,4 +1,4 @@
-#include "Contracts/sd_preview_ring_contract.h"
+#include "Storage/sd_preview_ring_contract.h"
 #include "Platform/memory_layout.h"
 
 AUDIO_M7_PRIVATE_SDRAM float

@@ -2,7 +2,6 @@
 # Keep entries nominative: directory inference is intentionally forbidden.
 
 set(DOMAIN_CONTROL
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/brick_fatal.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/buttons.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/drv_encoders.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/encoders.c"
@@ -18,10 +17,11 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Hall/hall_loop.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Hall/hall_note_midi.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Hall/hall_surface.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/audio_rec_level_reader.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/brick6_boot_defaults.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/brick6_boot_fx_policy.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/brick6_master_control.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/brick6_app_init.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/power_shutdown.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/ControlRT/control_audio_fifo_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/control_domain.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/encoder_control_dispatcher.c"
@@ -30,7 +30,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/ControlRT/control_audio_backing.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/ControlRT/control_music_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/ControlRT/live_event.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/live_parameter_audio_publication.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/ControlRT/live_parameter_audio_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/name_contract.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/ControlRT/control_audio_visual.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/kbd_chords_dict.c"
@@ -96,7 +96,6 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/rec_sd_trace.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/asset_ref.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/boot_context_sd.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/control_audio_rec_bus.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/groove_bank.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/groove_flash_backend.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/patch_product.c"
@@ -207,6 +206,8 @@ set(DOMAIN_STORAGE
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/recorder_file_reservation.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sd_access_gate.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sd_preview_ring.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_rec_level_reader.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Recorder/control_audio_rec_bus.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Recorder/audio_recorder_ring.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_cache.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache.c"
@@ -318,7 +319,6 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_ramp.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_backends.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_tone_backends.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/cpu_load.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_voice_reader.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/synth_polyphony.c"
 )
@@ -339,6 +339,8 @@ set(DOMAIN_CONTRACTS ${DOMAIN_CONTRACT_UNITS})
 
 set(PLATFORM_H743_COMMON
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_engine_port_h743.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/brick_fatal.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/cpu_load.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/crash_library.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/brick_media_clock.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Drivers/tlv320aic3204.c"
@@ -349,8 +351,6 @@ set(PLATFORM_H743_COMMON
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/sdram.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/sdram_alloc.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/w9825g6kh.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/brick6_app_init.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/power_shutdown.c"
 )
 
 set(PLATFORM_H743_LOWCOST

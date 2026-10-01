@@ -2,7 +2,7 @@
 
 #include "Platform/brick_media_clock.h"
 #include "ControlRT/control_audio_command.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "ControlRT/live_parameter_event.h"
 #include "Mod/mod_destination_control.h"
 #include "Mod/mod_lfo_v1_control.h"

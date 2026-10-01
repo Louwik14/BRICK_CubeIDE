@@ -2,7 +2,7 @@
 
 #include <math.h>
 #include "Platform/brick_media_clock.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "ControlRT/live_parameter_event.h"
 #include "Param/param_registry.h"
 #include <stddef.h>

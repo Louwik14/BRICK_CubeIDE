@@ -19,7 +19,7 @@
 #include "Storage/wav_audio_codec.h"
 #include "ControlRT/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
-#include "Contracts/sd_preview_ring_contract.h"
+#include "Storage/sd_preview_ring_contract.h"
 #include "Storage/project_load_quiesce.h"
 #include "stm32h7xx_hal.h"
 #include "main.h"

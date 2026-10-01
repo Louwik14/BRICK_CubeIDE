@@ -10,7 +10,7 @@
 #include "Track/audio_fx_control_state.h"
 #include "Platform/brick_media_clock.h"
 #include "ControlRT/live_parameter_event.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "Track/track_input_ownership.h"
 #include "Seq/metronome_control.h"
 #include "Seq/seq_runtime.h"

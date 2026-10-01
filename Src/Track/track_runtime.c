@@ -18,7 +18,7 @@
 #include "Storage/project_control.h"
 #include "Track/tone_program_control.h"
 #include "Param/tone_param_catalog.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_engine.h"
 #include "stm32h7xx_hal.h"

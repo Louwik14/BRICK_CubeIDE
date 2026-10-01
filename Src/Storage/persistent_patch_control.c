@@ -1,6 +1,6 @@
 #include "Storage/persistent_patch_control.h"
 #include <string.h>
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "ControlRT/audio_state_snapshot_control.h"
 #include "Platform/brick_media_clock.h"
 #include "Platform/memory_layout.h"

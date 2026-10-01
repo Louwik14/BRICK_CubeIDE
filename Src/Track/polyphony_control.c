@@ -2,7 +2,7 @@
 
 #include "Platform/brick_media_clock.h"
 #include "ControlRT/control_audio_command.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "Track/entity_types.h"
 #include "Track/synth_polyphony.h"
 #include "Seq/seq_engine.h"

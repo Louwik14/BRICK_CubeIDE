@@ -14,7 +14,7 @@
 #include "Platform/memory_layout.h"
 #include "Track/track_runtime.h"
 #include "Track/tone_param_codec.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "param_registry.h"
 #include "NoteFx/note_fx_state.h"
 #include "Param/param_control_backends.h"

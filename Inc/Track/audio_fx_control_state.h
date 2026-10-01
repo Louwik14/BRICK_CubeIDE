@@ -5,7 +5,7 @@
 #include "Param/engine_model_catalog.h"
 #include "Param/param_ids.h"
 #include "Track/entity_types.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 
 typedef struct
 {

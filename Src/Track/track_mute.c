@@ -7,7 +7,7 @@
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_types.h"
 #include "Platform/brick_media_clock.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "ControlRT/live_parameter_event.h"
 
 static uint8_t g_track_mute[SEQ_LANE_CAPACITY];

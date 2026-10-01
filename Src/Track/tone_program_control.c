@@ -8,7 +8,7 @@
 #include "Seq/seq_types.h"
 #include "Track/tone_param_codec.h"
 #include "Platform/brick_media_clock.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "ControlRT/live_parameter_event.h"
 
 SEQ_STATE_D2 static tone_program_control_t g_tone_program[SEQ_LANE_CAPACITY];

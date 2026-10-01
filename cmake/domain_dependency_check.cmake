@@ -95,7 +95,8 @@ foreach(line IN LISTS deps_lines)
         string(REPLACE "\\" "/" source_normalized "${current_source}")
 
         # Publication headers are public contracts, not AUDIO internals.
-        if(dependency MATCHES "/Inc/Audio/Publications/")
+        if(dependency MATCHES "/Inc/Audio/Publications/" OR
+           dependency MATCHES "/Inc/Storage/sd_preview_ring_contract.h$")
             continue()
         endif()
         set(is_adapter FALSE)

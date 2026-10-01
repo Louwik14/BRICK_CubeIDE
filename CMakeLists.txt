@@ -214,7 +214,7 @@ set(DOMAIN_CONTRACT_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sampler_ram_playhead_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Board/usb_audio_float_ring.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/Publications/synth_waveform_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Contracts/sd_preview_ring_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Storage/sd_preview_ring_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_audio_format.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/wavetable_config.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_audio_key.h"
@@ -281,7 +281,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Board
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Contracts
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/MIDI
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Storage
@@ -308,7 +307,7 @@ configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/domain_dependency_manifest.cmake.in"
     "${DOMAIN_FIREWALL_MANIFEST}"
     @ONLY)
-add_custom_target(domain_dependency_check ALL
+add_custom_target(domain_dependency_check
     COMMAND "${CMAKE_COMMAND}"
         -DMANIFEST=${DOMAIN_FIREWALL_MANIFEST}
         -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/domain_dependency_check.cmake"

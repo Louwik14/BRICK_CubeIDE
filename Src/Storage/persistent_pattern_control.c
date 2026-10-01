@@ -1,7 +1,7 @@
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/persistent_entity_topology.h"
 #include "Storage/persistent_key_catalog.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "Platform/brick_media_clock.h"
 #include "ControlRT/live_parameter_event.h"
 #include "ControlRT/control_audio_fifo_layout.h"

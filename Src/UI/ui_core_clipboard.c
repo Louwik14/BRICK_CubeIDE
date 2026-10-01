@@ -28,7 +28,7 @@
 #include "Mod/mod_lfo_v1_control.h"
 #include "Storage/asset_ref.h"
 #include "Platform/brick_media_clock.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "ControlRT/live_parameter_event.h"
 #include "main.h"
 #include "NoteFx/note_fx_state.h"

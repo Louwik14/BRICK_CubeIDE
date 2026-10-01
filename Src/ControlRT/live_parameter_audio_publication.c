@@ -1,4 +1,4 @@
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 
 #include <stddef.h>
 

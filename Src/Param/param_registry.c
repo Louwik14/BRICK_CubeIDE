@@ -54,7 +54,7 @@
 #include "Track/polyphony_control.h"
 #include "Mod/mod_env3_control.h"
 #include "Track/track_state.h"
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 #include "ControlRT/live_parameter_event.h"
 #include "ControlRT/control_audio_command.h"
 #include "Platform/brick_media_clock.h"

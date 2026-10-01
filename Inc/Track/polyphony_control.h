@@ -2,7 +2,7 @@
 #define POLYPHONY_CONTROL_H
 
 #include <stdint.h>
-#include "App/live_parameter_audio_publication.h"
+#include "ControlRT/live_parameter_audio_publication.h"
 
 typedef struct { uint8_t voice_count; float spread; } polyphony_control_state_t;
 
