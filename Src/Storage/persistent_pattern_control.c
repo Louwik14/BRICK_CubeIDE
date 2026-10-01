@@ -781,7 +781,6 @@ static uint8_t persistent_pattern_prepare_audio(
     prepared_audio_state_t *audio = NULL;
     if (!prepared_audio_control_reserve(&prepared->audio_slot,
             &prepared->audio_generation, &audio)) return 0U;
-    audio->global = pattern->globals.audio;
     audio->tempo_milli_bpm = pattern->globals.tempo_milli_bpm;
     audio->step_q16 = seq_runtime_samples_per_step_for_tempo(
         pattern->globals.tempo_milli_bpm);
@@ -923,7 +922,10 @@ static uint8_t persistent_pattern_finalize_audio_resources(
         &g_prepared_audio_slots[prepared->audio_slot];
     if ((slot->reserved == 0U) || (slot->ready != 0U)
             || (slot->generation != prepared->audio_generation)) return 0U;
-    if (!param_global_control_capture(&slot->state.global)) return 0U;
+    param_global_control_state_t global;
+    if (!param_global_control_capture(&global)
+            || !param_global_control_prepare_audio_commands(
+                &global, &slot->state.global)) return 0U;
     slot->state.tempo_milli_bpm = seq_runtime_get_effective_tempo_bpm_milli();
     slot->state.step_q16 = seq_runtime_get_samples_per_step_q16();
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)

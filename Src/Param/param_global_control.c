@@ -129,6 +129,17 @@ uint8_t param_global_control_state_get_at(
     return 1U;
 }
 
+uint8_t param_global_audio_command_state_get_at(
+    const param_global_audio_command_state_t *state, uint8_t index,
+    param_id_t *out_id, float *out_value)
+{
+    if ((state == NULL) || (out_id == NULL) || (out_value == NULL)
+            || (index >= GLOBAL_CONTROL_VALUE_COUNT)) return 0U;
+    *out_id = g_global_param_ids[index];
+    *out_value = state->value[index];
+    return 1U;
+}
+
 static uint8_t global_slot(param_id_t id, param_global_slot_t *out)
 {
     param_global_slot_t slot;
@@ -221,6 +232,24 @@ uint8_t param_global_control_capture(param_global_control_state_t *out_state)
     if (out_state == 0) return 0U;
     float *const out = (float *)out_state;
     for (uint8_t i=0U;i<(uint8_t)GLOBAL_CONTROL_VALUE_COUNT;++i) out[i]=g_global_values[i];
+    return 1U;
+}
+
+uint8_t param_global_control_prepare_audio_commands(
+    const param_global_control_state_t *state,
+    param_global_audio_command_state_t *out_state)
+{
+    if ((state == NULL) || (out_state == NULL)) return 0U;
+    const float *const values = (const float *)state;
+    const uint8_t modfx_model = (uint8_t)(values[GLOBAL_MODFX_MODEL] + 0.5f);
+    for (uint8_t i = 0U; i < (uint8_t)GLOBAL_CONTROL_VALUE_COUNT; ++i)
+    {
+        const param_id_t id = g_global_param_ids[i];
+        if ((param_registry_track_value_is_audio_command(id, 0U) == 0U)
+                || (param_registry_prepare_global_audio_command(
+                    id, values[i], modfx_model,
+                    &out_state->value[i]) == 0U)) return 0U;
+    }
     return 1U;
 }
 

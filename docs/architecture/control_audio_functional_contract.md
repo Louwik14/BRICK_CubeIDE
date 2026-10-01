@@ -172,9 +172,10 @@ de ce contrat fonctionnel.
 `PreparedPattern` contient les preuves CONTROL et le slot SEQ compile, et
 reserve aussi un slot `PreparedAudio`. Ce dernier contient directement les 16
 descripteurs PROGRAM, les etats Tone/FM/Filter/VCA/Mixer/FX/Poly/Mod, les
-bindings de ressources, MIDI et les globals. Sa construction et ses resolutions
-statiques ont lieu hors IRQ. Les handles de ressources sont finalises cote
-CONTROL apres installation des assets et avant publication.
+bindings de ressources, MIDI et les globals deja projetes dans le domaine des
+commandes AUDIO. Sa construction et ses resolutions statiques ont lieu hors IRQ.
+Les handles de ressources et la projection AUDIO des globals sont finalises
+cote CONTROL apres installation des assets et avant publication.
 
 Pattern et Project publient un unique `AUDIO_STATE_COMMIT(slot,generation)` dans
 la FIFO. A son timestamp, AUDIO compare encore les PROGRAM cibles au runtime

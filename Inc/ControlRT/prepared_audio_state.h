@@ -89,7 +89,7 @@ typedef struct
 typedef struct
 {
     prepared_audio_entity_state_t entity[BRICK_ENTITY_CAPACITY];
-    param_global_control_state_t global;
+    param_global_audio_command_state_t global;
     uint32_t tempo_milli_bpm;
     uint32_t step_q16;
     uint16_t active_mask;

@@ -901,7 +901,8 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
     {
         param_id_t id;
         float value;
-        if (!param_global_control_state_get_at(&state->global,index,&id,&value)
+        if (!param_global_audio_command_state_get_at(
+                &state->global,index,&id,&value)
                 || !audio_prepared_apply_float(0U,id,value,
                     CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL)) goto invalid;
     }

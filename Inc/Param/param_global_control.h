@@ -24,6 +24,11 @@ enum
     PARAM_GLOBAL_CONTROL_VALUE_COUNT = 51U
 };
 
+typedef struct
+{
+    float value[PARAM_GLOBAL_CONTROL_VALUE_COUNT];
+} param_global_audio_command_state_t;
+
 _Static_assert(sizeof(param_global_control_state_t)
                    == sizeof(float) * PARAM_GLOBAL_CONTROL_VALUE_COUNT,
                "global CONTROL layout cardinality changed");
@@ -35,9 +40,15 @@ void param_global_control_init(void);
 uint8_t param_global_control_get(param_id_t id, float *out_value);
 uint8_t param_global_control_set(param_id_t id, float value);
 uint8_t param_global_control_capture(param_global_control_state_t *out_state);
+uint8_t param_global_control_prepare_audio_commands(
+    const param_global_control_state_t *state,
+    param_global_audio_command_state_t *out_state);
 uint8_t param_global_control_restore(const param_global_control_state_t *state);
 uint8_t param_global_control_state_get_at(
     const param_global_control_state_t *state, uint8_t index,
+    param_id_t *out_id, float *out_value);
+uint8_t param_global_audio_command_state_get_at(
+    const param_global_audio_command_state_t *state, uint8_t index,
     param_id_t *out_id, float *out_value);
 
 #ifdef __cplusplus
