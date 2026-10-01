@@ -784,7 +784,8 @@ static uint8_t persistent_pattern_prepare_audio(
     prepared_audio_state_t *audio = NULL;
     if (!prepared_audio_control_reserve(&prepared->audio_slot,
             &prepared->audio_generation, &audio)) return 0U;
-    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    for (uint8_t entity = 0U;
+         entity < PREPARED_AUDIO_TEMP_OWNER_COUNT; ++entity)
         for (param_id_t id = 0U; id < PARAM_COUNT; ++id)
             if (param_registry_temp_is_clearable(id) != 0U)
                 audio->temp_clear_mask[entity][id >> 5U]

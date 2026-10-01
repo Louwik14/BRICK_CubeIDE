@@ -20,7 +20,6 @@
 #include "App/name_contract.h"
 #include "Seq/seq_engine.h"
 #include "Seq/seq_runtime.h"
-#include "Param/param_registry.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_index.h"
 #include "Sampler/sample_cache.h"
@@ -1640,13 +1639,6 @@ void project_product_load_service(void)
         if(project_control_apply_macros(&restore->macros)==0U)
             PROJECT_PRODUCT_FATAL("PROJECT_MACRO_COMMIT_FAILED",
                                   PROJECT_FATAL_PATTERN_APPLY);
-        prepared_audio_state_t *const prepared_audio =
-            &g_prepared_audio_slots[restore->prepared_pattern.audio_slot].state;
-        for(uint8_t entity=0U;entity<BRICK_ENTITY_CAPACITY;++entity)
-            for(param_id_t id=0U;id<PARAM_COUNT;++id)
-                if(param_registry_temp_is_clearable(id)!=0U)
-                    prepared_audio->temp_clear_mask[entity][id>>5U]
-                        |=UINT32_C(1)<<(id&31U);
         /* Publish a fresh stopped SEQ epoch before AUDIO installs the
          * replacement programs.  No terminal event from the previous
          * Project may be interpreted against the new engine map. */

@@ -52,6 +52,8 @@ typedef enum
     AUDIO_COMMAND_APPLY_REBIND,
     AUDIO_COMMAND_APPLY_MAPPING
 } audio_command_apply_result_t;
+_Static_assert(PREPARED_AUDIO_TEMP_OWNER_COUNT == SEQ_TRACK_COUNT,
+               "Prepared AUDIO temp owners must match AUDIO mod owners");
 brick_fatal_record_t g_audio_command_fatal_record;
 static uint32_t g_audio_wavetable_generation[
     BRICK_ENTITY_CAPACITY * BRICK6_WAVE_OSC_COUNT];
@@ -914,7 +916,8 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
             || !audio_transport_runtime_set_tempo(state->tempo_milli_bpm)
             || !audio_transport_runtime_set_step_q16(state->step_q16)) goto invalid;
     metronome_runtime_set_level_u7(state->metronome_level);
-    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    for (uint8_t entity = 0U;
+         entity < PREPARED_AUDIO_TEMP_OWNER_COUNT; ++entity)
         for (uint16_t word = 0U; word < PREPARED_AUDIO_PARAM_MASK_WORDS; ++word)
         {
             uint32_t pending = state->temp_clear_mask[entity][word];

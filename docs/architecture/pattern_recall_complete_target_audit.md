@@ -32,7 +32,7 @@ pour Pattern comme pour Project.
 | Decode | octets codec | `persist_control_pattern_t` | copie et validation de format | `persist_codec_decode_pattern*` | Storage DTO |
 | Prevalidation | DTO | preuves `persistent_pattern_prepared_t` | resolution famille/type, caps, cles, p-locks | `persistent_pattern_control_prepare()` | CONTROL prepare |
 | SEQ prepare | DTO + cles resolues | slot SEQ inactif | copie complete track/steps/p-locks/Note FX/mute; generation SEQ | `persistent_pattern_prepare_seq()` | SEQ |
-| AUDIO prepare | DTO + preuves | slot `g_prepared_audio_slots[slot]` reserve | generation AUDIO unique, cible provisoire, `temp_clear_mask` complet | `persistent_pattern_prepare_audio()` | CONTROL publication |
+| AUDIO prepare | DTO + preuves | slot `g_prepared_audio_slots[slot]` reserve | generation AUDIO unique, cible provisoire, `temp_clear_mask` des 8 owners physiques | `persistent_pattern_prepare_audio()` | CONTROL publication |
 | Attente | candidat PREPARED | boundary armee | reference stable au DTO/workspace | `pattern_candidate_arm_boundary()` | Pattern CONTROL |
 | Commit CONTROL | DTO + preuves | Track/Product/Tone/FM/Filter/VCA/Mixer/Poly/FX/Mod/MIDI/Globals CONTROL | copie/install complete; les publications PROGRAM/PARAM ordinaires sont inhibees | `persistent_pattern_control_commit_prepared_control()` | CONTROL |
 | Finalisation AUDIO | owners CONTROL installes | meme slot AUDIO reserve | reconstruction complete des 16 entites; meme `{slot,generation}` | `persistent_pattern_finalize_audio_from_control()` | CONTROL vers AUDIO |
@@ -153,8 +153,9 @@ retire d'information necessaire : ces informations sont derivees des owners et
 des slots complets.
 
 La correction ne rajoute aucun slot, aucune transaction live ni rollback. Le
-champ `muted` reutilise l'octet reserve existant; la taille reste 9 048 octets
-pour l'etat et 9 056 pour le slot. Le cout CPU est une recapture CONTROL de 16
+champ `muted` reutilise l'octet reserve existant. Le masque temporaire est
+dimensionne sur les 8 owners AUDIO physiques; la taille est 8 728 octets pour
+l'etat et 8 736 pour le slot. Le cout CPU est une recapture CONTROL de 16
 entites au commit, hors IRQ. L'IRQ conserve un seul parcours borne, le meme FIFO,
 le meme timestamp, le meme `DMB` et la meme fence de consommation.
 

@@ -20,6 +20,7 @@
 #define PREPARED_AUDIO_SLOT_COUNT 1U
 #define PREPARED_AUDIO_INVALID_SLOT UINT8_MAX
 #define PREPARED_AUDIO_PARAM_MASK_WORDS ((PARAM_COUNT + 31U) / 32U)
+#define PREPARED_AUDIO_TEMP_OWNER_COUNT BRICK_ENTITY_TOP_LEVEL_COUNT
 
 typedef enum
 {
@@ -92,7 +93,7 @@ typedef struct
     param_global_audio_command_state_t global;
     uint32_t tempo_milli_bpm;
     uint32_t step_q16;
-    uint32_t temp_clear_mask[BRICK_ENTITY_CAPACITY]
+    uint32_t temp_clear_mask[PREPARED_AUDIO_TEMP_OWNER_COUNT]
                             [PREPARED_AUDIO_PARAM_MASK_WORDS];
     uint8_t input_owner[2U];
     uint8_t metronome_level;
@@ -109,9 +110,9 @@ typedef struct
     prepared_audio_state_t state;
 } prepared_audio_slot_t;
 
-_Static_assert(sizeof(prepared_audio_state_t) == 9048U,
+_Static_assert(sizeof(prepared_audio_state_t) == 8728U,
                "Prepared AUDIO state size changed");
-_Static_assert(sizeof(prepared_audio_slot_t) == 9056U,
+_Static_assert(sizeof(prepared_audio_slot_t) == 8736U,
                "Prepared AUDIO slot size changed");
 
 extern prepared_audio_slot_t g_prepared_audio_slots[PREPARED_AUDIO_SLOT_COUNT];
