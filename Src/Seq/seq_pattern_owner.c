@@ -714,6 +714,16 @@ void seq_engine_control_commit_prepared(seq_pattern_prepared_commit_t mode)
         if (g_transport_epoch == 0U) g_transport_epoch = 1U;
         g_last_running = g_build_seed.running;
     }
+    if (mode == SEQ_PATTERN_PREPARED_COMMIT_FLUSH)
+    {
+        /* A running Pattern recall is a new execution frontier even though
+         * transport remains RUNNING.  Without a new epoch the terminal core
+         * only observes a generation change: it adopts the new step cursor
+         * but does not schedule the boundary already at step_sample_q16, so
+         * step 0 is first visited one complete step too late. */
+        ++g_transport_epoch;
+        if (g_transport_epoch == 0U) g_transport_epoch = 1U;
+    }
     if (mode == SEQ_PATTERN_PREPARED_COMMIT_REPLACE)
     {
         seq_param_iface_execution_replace();
