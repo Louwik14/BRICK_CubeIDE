@@ -34,20 +34,39 @@ typedef enum
     SAMPLE_STREAM_IO_JOB_FINALIZING
 } sample_stream_io_job_state_t;
 
+typedef struct
+{
+    float *frames_interleaved;
+    uint32_t start_frame;
+    uint32_t frame_count;
+    uint32_t frames_per_page;
+    sample_audio_format_t format;
+    uint16_t stride_floats;
+} sample_stream_io_page_t;
+
+_Static_assert(sizeof(sample_stream_io_page_t) == 20U,
+               "stream job page view budget changed");
+
 SDRAM_STREAM_SERVICE __attribute__((aligned(32))) static uint8_t
     g_sample_stream_io_rec_decode[
         SAMPLE_STREAM_IO_REC_DECODE_FRAMES * SAMPLE_STREAM_IO_REC_BYTES_PER_FRAME];
+/* One fixed-lifetime STORAGE job owns the frozen page identity, resolved page
+ * view, immutable stream metadata, async backend state and final result. */
 typedef struct
 {
-    sample_stream_io_command_t command;
-    sample_page_load_target_t target;
-    sample_stream_io_result_t result;
+    sample_page_load_token_t token;
+    sample_stream_io_page_t page;
+    sample_page_stream_load_info_t stream;
     sample_stream_physical_cursor_t local_physical_cursor;
     sample_stream_backend_physical_async_t physical;
     const uint8_t *source;
+    uint32_t source_bytes;
+    uint32_t read_bytes;
+    uint32_t request_cycles;
     uint32_t media_epoch;
     uint32_t order;
     uint32_t perf_dma_done_cycles;
+    sample_page_load_result_t load_result;
     uint8_t state;
     uint8_t active;
     uint8_t physical_active;
@@ -56,42 +75,13 @@ typedef struct
 } sample_stream_io_async_t;
 _Static_assert(sizeof(sample_page_stream_load_info_t) == 128U,
                "stream load snapshot budget changed");
-_Static_assert(sizeof(sample_stream_io_command_t) == 196U,
-               "stream I/O command budget changed");
-_Static_assert(sizeof(sample_stream_io_async_t) == 448U,
+_Static_assert(sizeof(sample_stream_io_async_t) == 360U,
                "stream async job budget changed");
 STREAM_LOCAL_D2 static sample_stream_io_async_t
     g_sample_stream_io_async[SAMPLE_STREAM_IO_JOB_COUNT];
 static uint32_t g_sample_stream_io_next_order;
 static sample_stream_read_chunk_kib_t g_sample_stream_io_chunk_kib =
     (sample_stream_read_chunk_kib_t)BRICK6_STREAM_READ_CHUNK_KIB;
-uint8_t sample_stream_io_command_init(sample_stream_io_command_t *out_command,
-                                      const sample_page_load_token_t *token,
-                                      const sample_page_load_target_t *target,
-                                      const sample_page_stream_load_info_t *stream)
-{
-    if ((out_command == 0) || (token == 0) || (target == 0) || (stream == 0))
-    {
-        return 0U;
-    }
-    *out_command = (sample_stream_io_command_t){
-        .token = *token,
-        .target = {
-            .key = target->key,
-            .page_index = target->page_index,
-            .start_frame = target->start_frame,
-            .frame_count = target->frame_count,
-            .frames_per_page = target->frames_per_page,
-            .registration_epoch = target->registration_epoch,
-            .page_generation = target->page_generation,
-            .slot_index = target->slot_index,
-            .format = target->format,
-            .stride_floats = target->stride_floats,
-        },
-        .stream = *stream,
-    };
-    return 1U;
-}
 
 static uint8_t sample_stream_io_chunk_valid(sample_stream_read_chunk_kib_t chunk_kib)
 {
@@ -141,47 +131,49 @@ static uint8_t sample_stream_io_target_matches(
     const sample_page_load_target_t *target)
 {
     return (uint8_t)((async != NULL) && (target != NULL)
-        && (target->slot_index == async->command.target.slot_index)
-        && (target->page_index == async->command.target.page_index)
-        && (target->page_generation == async->command.target.page_generation)
-        && (target->registration_epoch == async->command.target.registration_epoch)
-        && (target->frame_count == async->command.target.frame_count)
-        && (target->format == async->command.target.format)
-        && (target->stride_floats == async->command.target.stride_floats)
-        && (target->frames_interleaved == async->target.frames_interleaved));
+        && (target->slot_index == async->token.slot_index)
+        && (target->page_index == async->token.page_index)
+        && (target->page_generation == async->token.page_generation)
+        && (target->registration_epoch == async->token.registration_epoch)
+        && (sample_audio_key_equal(&target->key, &async->token.key) != 0U)
+        && (target->start_frame == async->page.start_frame)
+        && (target->frame_count == async->page.frame_count)
+        && (target->frames_per_page == async->page.frames_per_page)
+        && (target->format == async->page.format)
+        && (target->stride_floats == async->page.stride_floats)
+        && (target->frames_interleaved == async->page.frames_interleaved));
 }
 
 static void sample_stream_io_finalize(sample_stream_io_async_t *async)
 {
-    if ((async == NULL) || (async->result.load_result != SAMPLE_PAGE_LOAD_OK)) return;
+    if ((async == NULL) || (async->load_result != SAMPLE_PAGE_LOAD_OK)) return;
     sample_page_load_target_t target;
     if ((async->media_epoch != sd_access_media_epoch())
-        || (sample_page_cache_resolve_loading_target(
-                &async->result.token, &target) == 0U)
+        || (sample_page_cache_resolve_loading_target(&async->token, &target) == 0U)
         || (sample_stream_io_target_matches(async, &target) == 0U))
     {
-        async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+        async->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
         return;
     }
     const uint32_t expected_bytes = target.frame_count
-        * async->command.stream.stream_safe.block_align;
-    if ((expected_bytes == 0U) || (async->result.source_bytes != expected_bytes))
+        * async->stream.stream_safe.block_align;
+    if ((expected_bytes == 0U) || (async->source_bytes != expected_bytes))
     {
-        async->result.load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+        async->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
         return;
     }
     if (async->direct_float != 0U)
     {
         if ((async->source != (const uint8_t *)target.frames_interleaved)
             || (expected_bytes != target.frame_count * 2U * sizeof(float)))
-            async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+            async->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
         return;
     }
     if (async->legacy_recorder_pcm24 != 0U)
     {
         if (async->source == NULL)
         {
-            async->result.load_result = SAMPLE_PAGE_LOAD_DECODE_FAILED;
+            async->load_result = SAMPLE_PAGE_LOAD_DECODE_FAILED;
             return;
         }
 #if BRICK_PERF_DIAG
@@ -213,10 +205,10 @@ static void sample_stream_io_finalize(sample_stream_io_async_t *async)
             remaining = first;
         }
         if (sample_page_cache_clean_loading_payload(
-                &async->result.token,
+                &async->token,
                 target.frame_count * 2U * sizeof(float)) == 0U)
         {
-            async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+            async->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
             return;
         }
 #if BRICK_PERF_DIAG
@@ -227,14 +219,16 @@ static void sample_stream_io_finalize(sample_stream_io_async_t *async)
         PERF_ACCUM(PERF_N_REC_SOURCE_FRAMES, target.frame_count);
         return;
     }
-    async->result.load_result = SAMPLE_PAGE_LOAD_UNSUPPORTED_SAMPLE;
+    async->load_result = SAMPLE_PAGE_LOAD_UNSUPPORTED_SAMPLE;
 }
 
-uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
+uint8_t sample_stream_io_begin(const sample_page_load_token_t *token,
+                               uint32_t deadline_margin_us)
 {
     PERF_START(begin_start);
     sample_stream_io_async_t *async = 0;
-    if (command == 0)
+    sample_page_load_target_t target;
+    if (token == 0)
     {
         return 0U;
     }
@@ -265,70 +259,69 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
     async->active = 1U;
     async->order = g_sample_stream_io_next_order++;
     async->media_epoch = sd_access_media_epoch();
-    async->command = *command;
-    async->result.token = command->token;
-    async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-    async->result.request_cycles = brick_perf_now();
-    async->target = (sample_page_load_target_t){
-        .key = command->target.key,
-        .page_index = command->target.page_index,
-        .start_frame = command->target.start_frame,
-        .frame_count = command->target.frame_count,
-        .frames_per_page = command->target.frames_per_page,
-        .registration_epoch = command->target.registration_epoch,
-        .page_generation = command->target.page_generation,
-        .slot_index = command->target.slot_index,
-        .format = command->target.format,
-        .stride_floats = command->target.stride_floats,
-        .frames_interleaved = NULL,
-    };
-    if ((sample_audio_format_is_valid(async->target.format) == 0U)
-        || (async->target.frame_count == 0U)
-        || (async->target.frames_per_page == 0U)
-        || (async->target.frame_count > async->target.frames_per_page))
+    async->token = *token;
+    async->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+    async->request_cycles = brick_perf_now();
+    if ((sample_page_cache_resolve_loading_target(&async->token, &target) == 0U)
+        || (sample_page_cache_get_stream_load_info_key(
+                async->token.key, &async->stream) == 0U)
+        || (sample_audio_key_equal(&target.key, &async->stream.key) == 0U)
+        || (target.format != async->stream.format)
+        || (target.stride_floats != async->stream.stride_floats)
+        || (target.frames_per_page != async->stream.frames_per_page)
+        || (target.registration_epoch != async->stream.registration_epoch))
     {
         async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
         return 1U;
     }
-
-    if ((sample_page_cache_resolve_loading_target(
-            &async->result.token, &async->target) == 0U)
-        || (sample_stream_io_target_matches(async, &async->target) == 0U)
-        || (async->target.frames_interleaved == NULL))
+    async->page = (sample_stream_io_page_t){
+        .frames_interleaved = target.frames_interleaved,
+        .start_frame = target.start_frame,
+        .frame_count = target.frame_count,
+        .frames_per_page = target.frames_per_page,
+        .format = target.format,
+        .stride_floats = target.stride_floats,
+    };
+    if ((sample_audio_format_is_valid(async->page.format) == 0U)
+        || (async->page.frame_count == 0U)
+        || (async->page.frames_per_page == 0U)
+        || (async->page.frame_count > async->page.frames_per_page)
+        || (async->page.frames_interleaved == NULL)
+        || (sample_stream_io_target_matches(async, &target) == 0U))
     {
         async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
         return 1U;
     }
 
     async->direct_float = (uint8_t)(
-        (command->stream.canonical_float != 0U)
-        && (command->target.format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
-        && (command->target.stride_floats == 2U)
-        && ((((uint64_t)command->stream.stream_safe.data_offset_bytes
-              + (uint64_t)command->target.start_frame * 8U)
+        (async->stream.canonical_float != 0U)
+        && (async->page.format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+        && (async->page.stride_floats == 2U)
+        && ((((uint64_t)async->stream.stream_safe.data_offset_bytes
+              + (uint64_t)async->page.start_frame * 8U)
              % SAMPLE_STREAM_IO_SECTOR_BYTES) == 0U));
     async->legacy_recorder_pcm24 = (uint8_t)(
-        (command->target.key.domain == SAMPLE_AUDIO_DOMAIN_REC)
-        && (command->stream.encoding == WAV_SAMPLE_ENCODING_PCM_INTEGER)
-        && (command->stream.stream_safe.sample_rate == 48000U)
-        && (command->stream.stream_safe.channels == 2U)
-        && (command->stream.stream_safe.bits_per_sample == 24U)
-        && (command->stream.stream_safe.block_align == 6U)
-        && (command->target.format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED));
+        (async->token.key.domain == SAMPLE_AUDIO_DOMAIN_REC)
+        && (async->stream.encoding == WAV_SAMPLE_ENCODING_PCM_INTEGER)
+        && (async->stream.stream_safe.sample_rate == 48000U)
+        && (async->stream.stream_safe.channels == 2U)
+        && (async->stream.stream_safe.bits_per_sample == 24U)
+        && (async->stream.stream_safe.block_align == 6U)
+        && (async->page.format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED));
     if ((async->direct_float == 0U) && (async->legacy_recorder_pcm24 == 0U))
     {
-        async->result.load_result = SAMPLE_PAGE_LOAD_UNSUPPORTED_SAMPLE;
+        async->load_result = SAMPLE_PAGE_LOAD_UNSUPPORTED_SAMPLE;
         async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
         return 1U;
     }
 
-    async->result.source_bytes = async->target.frame_count
-                                 * command->stream.stream_safe.block_align;
-    if ((async->result.source_bytes == 0U)
+    async->source_bytes = async->page.frame_count
+                          * async->stream.stream_safe.block_align;
+    if ((async->source_bytes == 0U)
         || ((async->direct_float != 0U)
-            && (async->result.source_bytes > SAMPLE_PAGE_BYTES))
+            && (async->source_bytes > SAMPLE_PAGE_BYTES))
         || ((async->legacy_recorder_pcm24 != 0U)
-            && ((uint64_t)async->result.source_bytes
+            && ((uint64_t)async->source_bytes
                 + (2U * (SAMPLE_STREAM_IO_SECTOR_BYTES - 1U))
                 > SAMPLE_PAGE_BYTES)))
     {
@@ -337,63 +330,63 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
     }
     sample_stream_physical_cursor_t *const cursor = &async->local_physical_cursor;
     const uint8_t physical_expected = (uint8_t)(
-        sample_stream_safe_metadata_backend(&command->stream.stream_safe)
+        sample_stream_safe_metadata_backend(&async->stream.stream_safe)
             == SAMPLE_STREAM_BACKEND_PHYSICAL);
     if(physical_expected != 0U)
     {
         if(sample_stream_backend_physical_begin(
                     &async->physical,
-                    &async->command.stream.stream_safe,
-                    &async->target,
+                    &async->stream.stream_safe,
+                    &target,
                     cursor,
-                    (uint8_t *)async->target.frames_interleaved,
+                    (uint8_t *)async->page.frames_interleaved,
                     SAMPLE_PAGE_BYTES,
                     sample_page_cache_loading_target_payload_cpu_clean(
-                        &async->target),
-                    command->deadline_margin_us) != 0U)
+                        &target),
+                    deadline_margin_us) != 0U)
         {
             async->physical_active = 1U;
             async->state = SAMPLE_STREAM_IO_JOB_DMA;
             PERF_END(PERF_CPU_STREAM_IO_BEGIN, begin_start);
             return 1U;
         }
-        async->result.load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+        async->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
         async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
         return 1U;
     }
-    if ((command->stream.physical_only == 0U)
-        && (command->deadline_margin_us == UINT32_MAX))
+    if ((async->stream.physical_only == 0U)
+        && (deadline_margin_us == UINT32_MAX))
     {
         sample_page_stream_info_t fallback;
         FIL file;
         UINT read = 0U;
         const uint64_t source_offset =
-            (uint64_t)command->stream.stream_safe.data_offset_bytes
-            + ((uint64_t)async->target.start_frame
-               * command->stream.stream_safe.block_align);
+            (uint64_t)async->stream.stream_safe.data_offset_bytes
+            + ((uint64_t)async->page.start_frame
+               * async->stream.stream_safe.block_align);
         if ((source_offset <= UINT32_MAX)
             && (sample_page_cache_get_stream_info_key(
-                    command->token.key, &fallback) != 0U)
+                    async->token.key, &fallback) != 0U)
             && (fallback.registration_epoch
-                == command->token.registration_epoch)
+                == async->token.registration_epoch)
             && (fallback.path[0] != '\0')
             && (f_open(&file, fallback.path, FA_READ) == FR_OK))
         {
             if (f_lseek(&file, (FSIZE_t)source_offset) == FR_OK)
             {
                 const FRESULT read_result = f_read(
-                    &file, async->target.frames_interleaved,
-                    async->result.source_bytes, &read);
+                    &file, async->page.frames_interleaved,
+                    async->source_bytes, &read);
                 const uint8_t cache_clean = (uint8_t)((read == 0U)
                     || (sample_page_cache_clean_loading_payload(
-                            &async->result.token, read) != 0U));
+                            &async->token, read) != 0U));
                 if ((read_result == FR_OK)
-                    && (read == async->result.source_bytes)
+                    && (read == async->source_bytes)
                     && (cache_clean != 0U))
                 {
-                    async->result.read_bytes = read;
-                    async->result.load_result = SAMPLE_PAGE_LOAD_OK;
-                    async->source = (const uint8_t *)async->target.frames_interleaved;
+                    async->read_bytes = read;
+                    async->load_result = SAMPLE_PAGE_LOAD_OK;
+                    async->source = (const uint8_t *)async->page.frames_interleaved;
                 }
             }
             (void)f_close(&file);
@@ -403,7 +396,7 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
     }
     /* Deadline streaming stays physical-only; synchronous full imports may
      * use the bounded Storage-side FatFs fallback above. */
-    async->result.load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+    async->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
     async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
     return 1U;
 }
@@ -431,11 +424,17 @@ static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
         PERF_START(finalize_start);
         sample_stream_io_finalize(async);
         PERF_END(PERF_CPU_STREAM_IO_FINALIZE, finalize_start);
-        if ((async->result.load_result == SAMPLE_PAGE_LOAD_OK)
+        if ((async->load_result == SAMPLE_PAGE_LOAD_OK)
             && (async->perf_dma_done_cycles != 0U))
             brick_perf_wall(PERF_WALL_STREAM_DMA_IO_FINALIZE,
                             brick_perf_now() - async->perf_dma_done_cycles);
-        *out_result = async->result;
+        *out_result = (sample_stream_io_result_t){
+            .token = async->token,
+            .load_result = async->load_result,
+            .source_bytes = async->source_bytes,
+            .read_bytes = async->read_bytes,
+            .request_cycles = async->request_cycles,
+        };
         memset(async, 0, sizeof(*async));
         return 1U;
     }
@@ -456,17 +455,17 @@ static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
                 &async->physical,
                 &physical_result,
                 &async->source,
-                &async->result.source_bytes,
+                &async->source_bytes,
                 &physical_reads) == 0U)
         {
             return 0U;
         }
         async->physical_active = 0U;
         async->perf_dma_done_cycles = brick_perf_now();
-        async->result.load_result = physical_result;
+        async->load_result = physical_result;
         if (physical_result == SAMPLE_PAGE_LOAD_OK)
         {
-            async->result.read_bytes = async->result.source_bytes;
+            async->read_bytes = async->source_bytes;
         }
         async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
         return 0U;
@@ -493,40 +492,41 @@ uint8_t sample_stream_io_key_busy(sample_audio_key_t key)
     for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_JOB_COUNT; ++i)
         if ((g_sample_stream_io_async[i].active != 0U)
             && (sample_audio_key_equal(
-                    &g_sample_stream_io_async[i].command.token.key,
+                    &g_sample_stream_io_async[i].token.key,
                     &key) != 0U)) return 1U;
     return 0U;
 }
 
-void sample_stream_io_execute_local(const sample_stream_io_command_t *command,
+void sample_stream_io_execute_local(const sample_page_load_token_t *token,
+                                    uint32_t deadline_margin_us,
                                     sample_stream_io_result_t *out_result)
 {
     if (out_result == NULL) return;
     memset(out_result, 0, sizeof(*out_result));
     out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-    if (command == NULL) return;
-    out_result->token = command->token;
+    if (token == NULL) return;
+    out_result->token = *token;
 
     /* Bulk callers own the Storage service while using this blocking helper.
      * Refuse to steal a completion from the cooperative Stream manager. */
     if (sample_stream_io_active_job_count() != 0U) return;
 
-    if (sample_stream_io_begin(command) == 0U) return;
+    if (sample_stream_io_begin(token, deadline_margin_us) == 0U) return;
     do
     {
         sd_scheduler_runtime_service();
     } while (sample_stream_io_poll(out_result) == 0U);
 
-    if ((out_result->token.slot_index != command->token.slot_index)
+    if ((out_result->token.slot_index != token->slot_index)
         || (out_result->token.page_generation
-            != command->token.page_generation)
+            != token->page_generation)
         || (out_result->token.registration_epoch
-            != command->token.registration_epoch)
-        || (out_result->token.page_index != command->token.page_index)
+            != token->registration_epoch)
+        || (out_result->token.page_index != token->page_index)
         || (sample_audio_key_equal(&out_result->token.key,
-                                   &command->token.key) == 0U))
+                                   &token->key) == 0U))
     {
-        out_result->token = command->token;
+        out_result->token = *token;
         out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
     }
 }

@@ -718,7 +718,7 @@ static void multi_loader_start_next_queued(void)
 static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
                                             const multi_sample_desc_t *sample)
 {
-    sample_stream_io_command_t commands[MULTI_SAMPLE_BULK_MAX_BATCH_PAGES];
+    sample_page_load_token_t tokens[MULTI_SAMPLE_BULK_MAX_BATCH_PAGES];
     uint32_t batch_bytes = 0U;
     uint32_t target_count = 0U;
     uint32_t page = plan->next_page;
@@ -738,16 +738,16 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
         if ((target_count != 0U)
             && (batch_bytes > (MULTI_SAMPLE_BULK_READ_BYTES - bytes)))
             break;
-        sample_stream_io_command_t command;
+        sample_page_load_token_t token;
         if (sample_page_cache_port_prepare_page(
                 key, page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT, 0U,
-                &command) == 0U)
+                &token) == 0U)
         {
             for (uint32_t j = 0U; j < target_count; ++j)
-                sample_page_cache_port_abort(&commands[j]);
+                sample_page_cache_port_abort(&tokens[j]);
             return 0U;
         }
-        commands[target_count] = command;
+        tokens[target_count] = token;
         batch_bytes += bytes;
         target_count++;
         page++;
@@ -761,12 +761,12 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
     for (uint32_t i = 0U; i < target_count; ++i)
     {
         sample_stream_io_result_t result;
-        sample_stream_io_execute_local(&commands[i], &result);
+        sample_stream_io_execute_local(&tokens[i], 0U, &result);
         const uint8_t published = sample_page_cache_port_complete(&result);
         if ((result.load_result != SAMPLE_PAGE_LOAD_OK) || (published == 0U))
         {
             for (uint32_t j = i + 1U; j < target_count; ++j)
-                sample_page_cache_port_abort(&commands[j]);
+                sample_page_cache_port_abort(&tokens[j]);
             return 0U;
         }
         ++g_multi_load_status.pages_ready;

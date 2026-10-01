@@ -138,22 +138,17 @@ uint8_t sample_page_cache_port_prepare_page(sample_audio_key_t key,
                                             uint32_t page_index,
                                             sample_page_alloc_type_t alloc_type,
                                             uint8_t static_resident,
-                                            sample_stream_io_command_t *out_command)
+                                            sample_page_load_token_t *out_token)
 {
-    if (out_command == NULL) return 0U;
-    memset(out_command, 0, sizeof(*out_command));
+    if (out_token == NULL) return 0U;
+    memset(out_token, 0, sizeof(*out_token));
     if ((sample_page_cache_prepare_bulk_page_key_alloc(key, page_index,
                                                        alloc_type) == 0U)
         || ((static_resident != 0U) && (sample_page_cache_mark_static_page_key_alloc(
                                 key, page_index, alloc_type) == 0U))) return 0U;
     sample_page_load_target_t target;
-    sample_page_stream_load_info_t stream_info;
-    sample_page_load_token_t token;
     if ((sample_page_cache_get_bulk_load_target_key(key, page_index, &target) == 0U)
-        || (sample_page_cache_get_stream_load_info_key(key, &stream_info) == 0U)
-        || (sample_page_cache_begin_loading(&target, &token) == 0U)
-        || (sample_stream_io_command_init(out_command, &token, &target,
-                                          &stream_info) == 0U))
+        || (sample_page_cache_begin_loading(&target, out_token) == 0U))
         return 0U;
     return 1U;
 }
@@ -185,10 +180,10 @@ uint8_t sample_page_cache_port_complete(const sample_stream_io_result_t *result)
             ? SAMPLE_PAGE_FINISH_READY : SAMPLE_PAGE_FINISH_ERROR);
 }
 
-void sample_page_cache_port_abort(const sample_stream_io_command_t *command)
+void sample_page_cache_port_abort(const sample_page_load_token_t *token)
 {
-    if (command != NULL)
-        (void)sample_page_cache_finish_loading(&command->token,
+    if (token != NULL)
+        (void)sample_page_cache_finish_loading(token,
                                                SAMPLE_PAGE_FINISH_ERROR);
 }
 

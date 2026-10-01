@@ -251,34 +251,12 @@ static uint8_t sample_stream_manager_submit_prefill(
     {
         return 0U;
     }
-    sample_page_stream_load_info_t stream_info;
-    if ((sample_page_cache_get_stream_load_info_key(target.key, &stream_info) == 0U)
-        || (sample_audio_key_equal(&target.key, &stream_info.key) == 0U)
-        || (target.format != stream_info.format)
-        || (target.stride_floats != stream_info.stride_floats)
-        || (target.frames_per_page != stream_info.frames_per_page)
-        || ((target.registration_epoch != 0U)
-            && (target.registration_epoch != stream_info.registration_epoch)))
-    {
-        (void)sample_page_cache_set_page_state_key(
-            target.key, target.page_index, SAMPLE_PAGE_FAILED);
-        return 0U;
-    }
     sample_page_load_token_t token;
     if (sample_page_cache_begin_loading(&target, &token) == 0U)
     {
         return 0U;
     }
-    sample_stream_io_command_t command;
-    if (sample_stream_io_command_init(&command, &token, &target,
-                                      &stream_info) == 0U)
-    {
-        (void)sample_page_cache_finish_loading(
-            &token, SAMPLE_PAGE_FINISH_ERROR);
-        return 0U;
-    }
-    command.deadline_margin_us = UINT32_MAX;
-    if (sample_stream_io_begin(&command) == 0U)
+    if (sample_stream_io_begin(&token, UINT32_MAX) == 0U)
     {
         (void)sample_page_cache_finish_loading(
             &token, SAMPLE_PAGE_FINISH_ERROR);
@@ -314,31 +292,9 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
     for (;;)
     {
         sample_page_load_target_t target;
-        sample_page_stream_load_info_t stream_info;
         if (sample_stream_manager_pick_next(&target) == 0U)
         {
             break;
-        }
-
-        if (sample_page_cache_get_stream_load_info_key(target.key, &stream_info) == 0U)
-        {
-            (void)sample_page_cache_set_page_state_key(target.key,
-                                                   target.page_index,
-                                                   SAMPLE_PAGE_FAILED);
-            return;
-        }
-
-        if ((sample_audio_key_equal(&target.key, &stream_info.key) == 0U)
-            || (target.format != stream_info.format)
-            || (target.stride_floats != stream_info.stride_floats)
-            || (target.frames_per_page != stream_info.frames_per_page)
-            || ((target.registration_epoch != 0U)
-                && (target.registration_epoch != stream_info.registration_epoch)))
-        {
-            (void)sample_page_cache_set_page_state_key(target.key,
-                                                       target.page_index,
-                                                       SAMPLE_PAGE_FAILED);
-            return;
         }
 
         sample_page_load_token_t load_token;
@@ -350,25 +306,13 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
          * ownership and entered LOADING. Candidate scans and retries are not
          * requests. Static presocle prefill is deliberately excluded. */
         PERF_COUNT(PERF_N_PAGES_REQUESTED);
-        sample_stream_io_command_t io_command;
-        PERF_START(command_start);
-        if (sample_stream_io_command_init(&io_command,
-                                          &load_token,
-                                          &target,
-                                          &stream_info) == 0U)
-        {
-            (void)sample_page_cache_finish_loading(&load_token,
-                                                   SAMPLE_PAGE_FINISH_ERROR);
-            continue;
-        }
-        PERF_END(PERF_CPU_STREAM_COMMAND, command_start);
-        io_command.deadline_margin_us = UINT32_MAX;
         sample_stream_io_result_t io_result;
         memset(&io_result, 0, sizeof(io_result));
         io_result.token = load_token;
         io_result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
         PERF_START(submit_start);
-        const uint8_t submitted = sample_stream_io_begin(&io_command);
+        const uint8_t submitted = sample_stream_io_begin(
+            &load_token, UINT32_MAX);
         PERF_END(PERF_CPU_STREAM_SUBMIT, submit_start);
         if (submitted == 0U)
         {
