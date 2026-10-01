@@ -103,24 +103,34 @@ La fin de PREPARE et l'appel de quiescence definissent explicitement
 peuvent etre jetes parce que le live n'a jamais ete modifie; ce cleanup de
 candidat n'est pas un rollback runtime. Apres `T_FORWARD`, le remplacement est
 strictement forward-only et aucun chemin d'echec ne rouvre implicitement
-l'ingress. La publication CONTROL
+l'ingress. Le Working Pattern suit avant cette frontiere le pipeline commun
+`DECODED -> VALIDATED -> PREPARED`: les owners CONTROL sont prevalides, les
+cles persistantes et adresses de p-lock sont resolues, les capacites sont
+prouvees et le `seq_pattern_t` inactif est entierement compile. La publication CONTROL
 finale installe Pattern et macros dans un unique snapshot AUDIO de type Project;
 l'identite Pattern courante et le hook UI unique ne sont publies qu'apres le
 commit AUDIO reussi. Le chemin interne d'installation Pattern ne cree donc pas
 de transaction imbriquee et ne publie aucun etat UI intermediaire.
 
-Le remplacement publie aussi, avant ce commit AUDIO, une generation Sequence
-complete avec un nouvel epoch d'execution. Publication immutable et retrait du
+Le remplacement publie aussi, avant ce commit AUDIO, la generation Sequence
+complete deja compilee avec un nouvel epoch d'execution. Son commit ne parse,
+ne resout, n'alloue et ne compile rien: il retime depuis le shadow transport
+courant puis swap le slot/generation. Publication immutable et retrait du
 graphe mutable SEQ forment une seule section critique: slots terminaux
 READY/READING, curseur AUDIO, core/ledgers/calendriers, held NoteFX, ingress,
 pending IRQ, force-stop et disarm/rearm sont retires ensemble. Les evenements
-live-rec encore en attente dans CONTROL sont jetes avant la compilation. AUDIO
+live-rec encore en attente dans CONTROL sont jetes au commit de remplacement,
+avant la publication du slot prepare. AUDIO
 n'acquiert ensuite qu'un bloc de la generation d'execution courante ou de la
 generation publiee suivante. Cette barriere vaut meme lorsque le transport est
 arrete: au PLAY suivant, aucun terminal NOTE ou PARAM compile depuis l'ancien
 Pattern ne peut etre applique aux moteurs du nouveau Project.
 Les recalls Pattern a l'arret suivent le meme ordre; un recall en lecture garde
 son epoch musical et publie sa generation a la frontiere de cycle choisie.
+Le meme prepareur sert les DTO charges, le Blank construit par
+`persistent_pattern_control_build_defaults()` et le Working Pattern Project.
+Le boot bas niveau conserve ses initialiseurs d'owners: il construit le premier
+live et ne remplace aucun Pattern.
 La compilation atomique de plusieurs geometries Groove reutilise alors le
 scratch de decode du Project ou du Pattern, devenu mort apres validation. Elle
 ne tente pas de reacquerir le workspace persistence encore possede par la
@@ -254,10 +264,15 @@ calibration. Aucun de ces stores ne possede de fallback Flash interne.
 
 Le recall Pattern possede un seul candidat et une seule identite
 `{generation, bank, pattern, boundary}`. Ses phases sont `EMPTY`, `REQUESTED`,
-`LOADING` et `PENDING`; READY et queue ne sont plus deux autorites. Apres decode,
+`LOADING`, `VALIDATED` et `PREPARED`; READY et queue ne sont plus deux autorites. Apres decode,
 la validation structurelle utilise les familles, types, inputs et polyphonies du
 candidat complet; un budget de voix invalide est donc refuse avant APPLY. Le
-candidat `PENDING` est ensuite soit applique immediatement, soit arme sur la boundary.
+candidat devient `PREPARED` seulement apres validation des owners CONTROL,
+resolution des keys et compilation complete du slot SEQ inactif. Il est ensuite
+soit applique immediatement, soit arme sur la boundary. Tout travail faillible
+est termine avant l'attente; CONTROL commit et SEQ commit n'ont plus de resultat
+utilisateur normal. Une impossibilite a ce stade est un invariant fatal.
+`AUDIO_STATE_COMMIT` et sa fence FIFO restent le mecanisme AUDIO existant.
 Cette boundary est globale au Pattern sortant et ne depend jamais de la lane
 selectionnee dans l'UI. Comme le modele ne porte pas de longueur globale
 separee, son cycle est celui de la lane sequencable dont la traversee complete

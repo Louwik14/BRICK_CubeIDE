@@ -829,7 +829,10 @@ project_control_asset_result_t project_control_track_asset_restore_status(
     /* Pattern installation only binds assets which LOAD_ASSETS has already
      * made terminal.  Loading here would create a second attempt after P3. */
     if (project_control_find_asset(asset->kind, path, &logical) == 0U)
-        return PROJECT_CONTROL_ASSET_FAILED;
+        return (project_control_track_asset_mark_unavailable(
+                    entity, role, asset) != 0U)
+            ? PROJECT_CONTROL_ASSET_FAILED
+            : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
     if (asset->kind == PERSIST_ASSET_SAMPLE_STREAM)
     {
         const project_control_asset_result_t status = classic_asset_status(logical);

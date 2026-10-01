@@ -2,6 +2,7 @@
 #define PERSISTENCE_WORKSPACE_H
 
 #include "Storage/persistent_control_codec.h"
+#include "Storage/persistent_pattern_control.h"
 
 typedef enum
 {
@@ -41,6 +42,7 @@ _Static_assert(sizeof(persistence_project_save_workspace_t) == 1010324U,
 typedef struct
 {
     persist_control_pattern_t working_pattern;
+    persistent_pattern_prepared_t prepared_pattern;
     persist_control_asset_ref_t assets[PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY];
     persist_control_macros_t macros;
     persist_codec_project_metadata_t metadata;
@@ -57,7 +59,7 @@ typedef struct
     } scratch;
 } persistence_project_restore_workspace_t;
 
-_Static_assert(sizeof(persistence_project_restore_workspace_t) == 949896U,
+_Static_assert(sizeof(persistence_project_restore_workspace_t) == 958760U,
                "Project Restore workspace size changed");
 
 _Static_assert(sizeof(persist_control_pattern_t)
@@ -67,6 +69,7 @@ _Static_assert(sizeof(persist_control_pattern_t)
 typedef struct
 {
     persist_control_pattern_t pattern;
+    persistent_pattern_prepared_t prepared_pattern;
     union
     {
         uint8_t encoded[PERSISTENCE_PATTERN_ENCODED_MAX_BYTES];
@@ -74,7 +77,7 @@ typedef struct
     } scratch;
 } persistence_pattern_io_workspace_t;
 
-_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 574744U,
+_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 583608U,
                "Pattern IO workspace size changed");
 
 persistence_project_save_workspace_t *persistence_workspace_acquire_project_save(void);

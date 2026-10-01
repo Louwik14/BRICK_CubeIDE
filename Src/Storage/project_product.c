@@ -1054,6 +1054,7 @@ static void project_discard_restore_workspace(
     persistence_project_restore_workspace_t *restore)
 {
     if (restore == NULL) return;
+    persistent_pattern_control_abort_prepared(&restore->prepared_pattern);
     if (restore->pattern_bank_started != 0U)
     {
         pattern_control_bank_abort(NULL);
@@ -1195,7 +1196,10 @@ static void project_product_enter_failed_forward_media(void)
         restore->pattern_bank_staged = 0U;
     }
     if (restore != NULL)
+    {
+        persistent_pattern_control_abort_prepared(&restore->prepared_pattern);
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
+    }
     memset(&g_project_load,0,sizeof(g_project_load));
     g_project_load.state=PROJECT_LOAD_FAILED_FORWARD_MEDIA;
     g_project_load.forward_crossed=1U;
@@ -1625,40 +1629,34 @@ void project_product_load_service(void)
         }
         g_persist_dbg.audio_publish_result=1U;
         g_persist_dbg.seq_publish_result=1U;
-        if(audio_state_snapshot_control_preflight()==0U)return;
-        uint8_t ok=audio_state_snapshot_control_begin(
-            CONTROL_AUDIO_STATE_PROJECT);
-        if(ok)ok=(persistent_pattern_control_install_into_active_snapshot(
-            &restore->working_pattern,0U)==PERSIST_CODEC_OK)?1U:0U;
-        if(ok)ok=project_control_apply_macros(&restore->macros);
-        if(ok)
-        {
-            /* Publish a fresh stopped SEQ epoch before AUDIO installs the
-             * replacement programs.  No terminal event from the previous
-             * Project may be interpreted against the new engine map. */
-            ok=seq_engine_control_replace_with_workspace(
-                restore->scratch.groove_build.track);
-            if(ok==0U)g_persist_dbg.seq_publish_result=0U;
-        }
-        if(ok)
-        {
-            ok=audio_state_snapshot_control_commit();
-            if(ok==0U)audio_state_snapshot_control_abort();
-        }
-        else audio_state_snapshot_control_abort();
-        if(ok)
-        {
-            g_persist_dbg.audio_publish_result=2U;
-            g_persist_dbg.seq_publish_result=2U;
-            persist_debug_publication(1U,1U);
-            pattern_live_publish_active(restore->metadata.active_pattern_bank,
-                restore->metadata.active_pattern);
-            persistent_pattern_control_sync_ui_after_commit();
-            ui_macro_interaction_reset();
-        }
-        if (ok == 0U)
-            PROJECT_PRODUCT_FATAL("PROJECT_PATTERN_APPLY_FAILED",
+        if(audio_state_snapshot_control_preflight()==0U)
+            PROJECT_PRODUCT_FATAL("PROJECT_AUDIO_PREFLIGHT_LOST_AFTER_PREPARED",
                                   PROJECT_FATAL_PATTERN_APPLY);
+        if(audio_state_snapshot_control_begin(CONTROL_AUDIO_STATE_PROJECT)==0U)
+            PROJECT_PRODUCT_FATAL("PROJECT_AUDIO_BEGIN_FAILED_AFTER_PREPARED",
+                                       PROJECT_FATAL_PATTERN_APPLY);
+        persistent_pattern_control_commit_prepared_control(
+            &restore->prepared_pattern);
+        if(project_control_apply_macros(&restore->macros)==0U)
+            PROJECT_PRODUCT_FATAL("PROJECT_MACRO_COMMIT_FAILED",
+                                  PROJECT_FATAL_PATTERN_APPLY);
+        /* Publish a fresh stopped SEQ epoch before AUDIO installs the
+         * replacement programs.  No terminal event from the previous
+         * Project may be interpreted against the new engine map. */
+        persistent_pattern_control_commit_prepared_seq(
+            &restore->prepared_pattern,0U);
+        g_persist_dbg.seq_publish_result=2U;
+        if(audio_state_snapshot_control_commit()==0U)
+            PROJECT_PRODUCT_FATAL("PROJECT_AUDIO_COMMIT_FAILED",
+                                  PROJECT_FATAL_PATTERN_APPLY);
+        g_persist_dbg.audio_publish_result=2U;
+        persist_debug_publication(1U,1U);
+        pattern_live_publish_active(restore->metadata.active_pattern_bank,
+            restore->metadata.active_pattern);
+        persistent_pattern_control_sync_ui_after_commit();
+        ui_macro_interaction_reset();
+        restore->prepared_pattern.control_prepared=0U;
+        restore->prepared_pattern.pattern=NULL;
         project_product_load_finish_success();
         return;
     }
@@ -1786,6 +1784,19 @@ uint8_t project_product_load(uint8_t slot)
             PROJECT_PRODUCT_RESULT_INVALID_DOCUMENT,recovery_forward);
         return 0U;
     }
+    const persist_codec_result_t pattern_prepare=
+        persistent_pattern_control_prepare(&restore->working_pattern,
+            &restore->prepared_pattern,restore->scratch.groove_build.track);
+    if(pattern_prepare!=PERSIST_CODEC_OK)
+    {
+        persist_debug_error(PERSIST_DBG_STAGE_VALIDATE,(int32_t)pattern_prepare);
+        project_product_discard_prepared_candidate(restore,
+            (pattern_prepare==PERSIST_CODEC_IO_ERROR)
+                ?PROJECT_PRODUCT_RESULT_NOT_NOW
+                :PROJECT_PRODUCT_RESULT_INVALID_DOCUMENT,
+            recovery_forward);
+        return 0U;
+    }
     const project_product_result_t prepare_commit_result=
         project_product_prepare_pattern_commit();
     if(prepare_commit_result!=PROJECT_PRODUCT_RESULT_IN_PROGRESS)
@@ -1876,6 +1887,18 @@ uint8_t project_product_blank(void)
     if(project_product_prevalidate_candidate(restore)==0U)
         PROJECT_PRODUCT_FATAL("PROJECT_BLANK_PREVALIDATION_FAILED",
                               PROJECT_FATAL_BLANK_BUILD);
+    const persist_codec_result_t pattern_prepare=
+        persistent_pattern_control_prepare(&restore->working_pattern,
+            &restore->prepared_pattern,restore->scratch.groove_build.track);
+    if(pattern_prepare!=PERSIST_CODEC_OK)
+    {
+        if(pattern_prepare!=PERSIST_CODEC_IO_ERROR)
+            PROJECT_PRODUCT_FATAL("PROJECT_BLANK_PATTERN_PREPARE_FAILED",
+                                  PROJECT_FATAL_BLANK_BUILD);
+        project_product_discard_prepared_candidate(restore,
+            PROJECT_PRODUCT_RESULT_NOT_NOW,recovery_forward);
+        return 0U;
+    }
     const project_product_result_t prepare_commit_result=
         project_product_prepare_pattern_commit();
     if(prepare_commit_result!=PROJECT_PRODUCT_RESULT_IN_PROGRESS)

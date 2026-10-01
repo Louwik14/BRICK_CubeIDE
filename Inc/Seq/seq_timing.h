@@ -100,6 +100,10 @@ void seq_timing_compile(const seq_track_timing_config_t *config,
                         uint32_t groove_seed,
                         uint32_t loop_period_q16,
                         seq_track_timing_plan_t *plan);
+/* Rebind sample-domain horizons after a prepared Pattern adopts the current
+ * transport cadence.  Geometry and all fallible preparation are unchanged. */
+void seq_timing_retime(seq_track_timing_plan_t *plan,
+                       uint32_t samples_per_step_q16);
 int64_t seq_timing_quantize_position_q16(
     const seq_track_timing_plan_t *plan, int64_t position_q16);
 uint64_t seq_timing_source_timestamp(

@@ -108,6 +108,7 @@ void seq_runtime_time_adapter_process_internal_from_irq(void);
 /* Orchestration loop: supervises transport, clock source and external/internal progress. */
 void seq_runtime_time_adapter_process(void);
 uint32_t seq_runtime_get_samples_per_step_q16(void);
+uint32_t seq_runtime_samples_per_step_for_tempo(uint32_t bpm_milli);
 void seq_runtime_capture_shadow_seed(seq_runtime_shadow_seed_t *out_seed);
 
 /* Orchestration / policy surface. */

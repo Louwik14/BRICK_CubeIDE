@@ -92,6 +92,8 @@ uint8_t tone_program_control_activate(uint8_t track,track_runtime_type_t type)
 }
 uint8_t tone_program_control_get(uint8_t track,param_id_t id,float*out)
 {if(track>=SEQ_LANE_CAPACITY||out==NULL)return 0U;float*f=tone_field(&g_tone_program[track],id);if(f==NULL)return 0U;*out=*f;return 1U;}
+uint8_t tone_program_control_get_from(const tone_program_control_t*program,param_id_t id,float*out)
+{if(program==NULL||out==NULL)return 0U;tone_program_control_t copy=*program;float*f=tone_field(&copy,id);if(f==NULL)return 0U;*out=*f;return 1U;}
 uint8_t tone_program_control_set(uint8_t track,param_id_t id,float value)
 {if(track>=SEQ_LANE_CAPACITY)return 0U;float*f=tone_field(&g_tone_program[track],id);if(f==NULL)return 0U;*f=value;return 1U;}
 uint8_t tone_program_control_get_slot_normalized(uint8_t track,uint8_t slot,float*out)

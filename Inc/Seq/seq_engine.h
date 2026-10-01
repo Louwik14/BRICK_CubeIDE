@@ -191,6 +191,50 @@ typedef struct {
     seq_play_item_t child_play[BRICK_ENTITY_GROUP_CHILD_COUNT][SEQ_MAX_STEPS];
 } seq_pattern_t;
 
+typedef struct {
+    uint8_t note;
+    uint8_t velocity;
+    uint8_t length;
+    int8_t microtiming;
+    uint8_t present_mask;
+} seq_pattern_prepare_play_t;
+
+typedef struct {
+    uint16_t capabilities;
+    uint8_t logical_capacity;
+    uint8_t role;
+    uint8_t runtime_type;
+    uint8_t midi_channel_zero_based;
+    uint8_t division;
+    uint8_t muted;
+    uint8_t active;
+    uint8_t length;
+    uint8_t page_mask;
+    uint8_t direction;
+    int8_t rotate;
+    uint8_t can_emit;
+    uint8_t note_enabled;
+    uint8_t lock_enabled;
+    uint8_t fx_enabled;
+    note_fx_chain_state_t note_fx;
+    seq_play_snapshot_t play_base;
+    seq_track_timing_config_t timing;
+} seq_pattern_prepare_track_t;
+
+typedef struct {
+    uint8_t trigger;
+    uint8_t roll;
+    uint8_t play_count;
+    uint8_t lock_count;
+    seq_pattern_prepare_play_t play[SEQ_PLAY_MAX_CAPACITY];
+    seq_lock_pattern_t locks[SEQ_STEP_MAX_LOCKS];
+} seq_pattern_prepare_step_t;
+
+typedef enum {
+    SEQ_PATTERN_PREPARED_COMMIT_FLUSH = 0,
+    SEQ_PATTERN_PREPARED_COMMIT_REPLACE
+} seq_pattern_prepared_commit_t;
+
 /* Snapshot the next global cycle boundary from SEQ's authoritative cursor.
  * The representative lane is the longest complete active traversal on the
  * transport grid; ties resolve to the lowest lane id. */
@@ -246,6 +290,20 @@ uint8_t seq_engine_control_flush_with_workspace(
     seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
 uint8_t seq_engine_control_replace_with_workspace(
     seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
+uint8_t seq_engine_control_prepare_begin(
+    const seq_track_timing_config_t timing[SEQ_TIMING_TRACK_COUNT],
+    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
+uint8_t seq_engine_control_prepare_track(
+    uint8_t track, const seq_pattern_prepare_track_t *prepared,
+    uint32_t samples_per_step_q16, uint32_t groove_seed);
+uint8_t seq_engine_control_prepare_step(
+    uint8_t track, uint8_t step,
+    const seq_pattern_prepare_step_t *prepared);
+uint8_t seq_engine_control_prepare_finish(uint8_t root_index,
+    uint8_t scale_index, uint32_t groove_seed);
+uint8_t seq_engine_control_prepared(void);
+void seq_engine_control_abort_prepared(void);
+void seq_engine_control_commit_prepared(seq_pattern_prepared_commit_t mode);
 const seq_pattern_t *seq_engine_pattern_capture(void);
 
 _Static_assert(SEQ_LANE_CAPACITY == 16U, "SEQ requires 16 lanes");

@@ -31,6 +31,7 @@
 #include "Track/mixer_control_state.h"
 #include "Mod/mod_env3_control.h"
 #include "Track/tone_program_control.h"
+#include "Track/tone_param_codec.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime.h"
@@ -46,6 +47,74 @@
 #include "UI/ui_active_track_sync.h"
 #include <math.h>
 #include <string.h>
+
+static uint8_t prepared_pattern_value(const persist_control_entity_t *entity,
+    track_runtime_type_t runtime_type,param_id_t id, float *out)
+{
+    if (entity == NULL || out == NULL) return 0U;
+    if (entity->fm_present != 0U
+        && fm_control_state_get_public_param_from(&entity->fm,id,out) != 0U)
+        return 1U;
+    if (entity->tone_present != 0U
+        && tone_program_control_get_from(&entity->tone,id,out) != 0U)
+        return 1U;
+    if(entity->tone_present==0U&&entity->fm_present==0U)
+    {
+        tone_program_control_t defaults;
+        if(tone_program_control_make_default(runtime_type,&defaults)!=0U
+            &&tone_program_control_get_from(&defaults,id,out)!=0U)return 1U;
+    }
+    switch(id)
+    {
+        case PARAM_FILTER_MORPH:*out=entity->filter.morph;return 1U;
+        case PARAM_FILTER_CUTOFF:*out=entity->filter.cutoff;return 1U;
+        case PARAM_FILTER_RESONANCE:*out=entity->filter.resonance;return 1U;
+        case PARAM_FILTER_EG_AMT:*out=entity->filter.eg_amount;return 1U;
+        case PARAM_FILTER_ATTACK:*out=entity->filter.attack;return 1U;
+        case PARAM_FILTER_DECAY:*out=entity->filter.decay;return 1U;
+        case PARAM_FILTER_SUSTAIN:*out=entity->filter.sustain;return 1U;
+        case PARAM_FILTER_RELEASE:*out=entity->filter.release;return 1U;
+        case PARAM_FILTER_KEYTRK:*out=entity->filter.keytrack;return 1U;
+        case PARAM_FILTER_ENVRST:*out=entity->filter.env_reset;return 1U;
+        case PARAM_FILTER_ENVDLY:*out=entity->filter.env_delay;return 1U;
+        case PARAM_ENV_RETRIG_FILTER:*out=entity->filter.retrigger;return 1U;
+        case PARAM_VCA_ATTACK:*out=entity->vca.attack;return 1U;
+        case PARAM_VCA_DECAY:*out=entity->vca.decay;return 1U;
+        case PARAM_VCA_SUSTAIN:*out=entity->vca.sustain;return 1U;
+        case PARAM_VCA_RELEASE:*out=entity->vca.release;return 1U;
+        case PARAM_ENV_RETRIG_VCA:*out=entity->vca.retrigger;return 1U;
+        case PARAM_MIX_LEVEL:*out=entity->mixer.level;return 1U;
+        case PARAM_MIX_PAN:*out=entity->mixer.pan;return 1U;
+        case PARAM_MIX_SEND1:*out=entity->mixer.send1;return 1U;
+        case PARAM_MIX_SEND2:*out=entity->mixer.send2;return 1U;
+        case PARAM_MIX_SEND3:*out=entity->mixer.send3;return 1U;
+        case PARAM_AUDIO_FX_P1:*out=entity->audio_fx.p1[0];return 1U;
+        case PARAM_AUDIO_FX_P2:*out=entity->audio_fx.p2[0];return 1U;
+        case PARAM_AUDIO_FX_P3:*out=entity->audio_fx.p3[0];return 1U;
+        case PARAM_AUDIO_FX_B_P1:*out=entity->audio_fx.p1[1];return 1U;
+        case PARAM_AUDIO_FX_B_P2:*out=entity->audio_fx.p2[1];return 1U;
+        case PARAM_AUDIO_FX_B_P3:*out=entity->audio_fx.p3[1];return 1U;
+        case PARAM_GROUP_FX_A_LEVEL:*out=entity->audio_fx.group_level[0];return 1U;
+        case PARAM_GROUP_FX_B_LEVEL:*out=entity->audio_fx.group_level[1];return 1U;
+        case PARAM_ENV3_ATTACK:*out=entity->modulation.envelope.attack;return 1U;
+        case PARAM_ENV3_DECAY:*out=entity->modulation.envelope.decay;return 1U;
+        case PARAM_ENV3_SUSTAIN:*out=entity->modulation.envelope.sustain;return 1U;
+        case PARAM_ENV3_RELEASE:*out=entity->modulation.envelope.release;return 1U;
+        default: break;
+    }
+    if(id>=PARAM_LFO1_RATE&&id<=PARAM_LFO3_PHASE)
+    {
+        const uint8_t lfo=(uint8_t)((id-PARAM_LFO1_RATE)/4U);
+        switch((uint8_t)((id-PARAM_LFO1_RATE)%4U))
+        {
+            case 0U:*out=entity->modulation.lfos[lfo].rate;return 1U;
+            case 1U:{mod_lfo_shape_t v;if(!persist_key_lfo_shape_from_disk(entity->modulation.lfos[lfo].shape_key,&v))return 0U;*out=(float)v;return 1U;}
+            case 2U:{mod_lfo_trig_mode_t v;if(!persist_key_lfo_trigger_from_disk(entity->modulation.lfos[lfo].trigger_key,&v))return 0U;*out=(float)v;return 1U;}
+            default:*out=entity->modulation.lfos[lfo].phase_offset;return 1U;
+        }
+    }
+    return 0U;
+}
 
 _Static_assert(PERSIST_CONTROL_ENTITY_COUNT == 16U,
                "AUDIO full-projection entity proof changed");
@@ -558,7 +627,8 @@ static uint8_t persistent_sequence_changed(uint8_t e, const persist_control_enti
     }
     return 0U;
 }
-static uint8_t apply_sequence(uint8_t e,const persist_control_entity_t*x){seq_model_set_track_length(e,x->sequence.length);seq_runtime_set_track_div(e,x->sequence.division);seq_runtime_set_track_traversal(e,x->sequence.direction,x->sequence.rotate);seq_runtime_set_track_timing(e,&x->sequence.timing);for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t*st=&x->sequence.steps[s];seq_model_set_trig(e,s,st->trigger);seq_model_set_step_roll(e,s,st->roll);seq_model_play_clear_step(e,s);seq_model_step_param_plock_clear(e,s);for(uint8_t v=0U;v<st->play_count;++v){const persist_control_play_item_t*p=&st->play[v];if(((p->present_mask&SEQ_STEP_PLAY_PRESENT_NOTE)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_NOTE,p->note)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_VELOCITY)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_VELOCITY,p->velocity)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_LENGTH)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_LENGTH,p->length)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_MICROTIMING)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_MICROTIMING,p->microtiming)==0U))return 0U;}for(uint8_t i=0U;i<st->lock_count;++i){param_id_t id;uint8_t set;seq_param_slot_t slot;uint8_t found=0U;seq_value16_t value;if(persist_key_tone_slot_from_disk(st->locks[i].parameter,&slot)!=0U){set=SEQ_PLOCK_SET_TONE;value=(seq_value16_t)(st->locks[i].value.f32*65535.0f+0.5f);found=1U;}else{if(persist_key_param_from_disk(st->locks[i].parameter,&id)==0U||apply_plock_value(id,&st->locks[i],&value)==0U)return 0U;for(set=0U;set<SEQ_PLOCK_SET_COUNT;++set)if(seq_param_iface_param_to_slot(e,set,id,&slot)!=0U){found=1U;break;}}if(found==0U)return 0U;seq_plock_op_status_t status=seq_model_step_plock_upsert(e,s,set,slot,value,st->locks[i].flags);if(status!=SEQ_PLOCK_OP_CREATED&&status!=SEQ_PLOCK_OP_UPDATED)return 0U;}}return 1U;}
+static uint8_t apply_sequence(uint8_t e,const persist_control_entity_t*x,
+    const persistent_pattern_prepared_t *prepared){uint16_t resolved_index=0U;seq_model_set_track_length(e,x->sequence.length);seq_runtime_set_track_div(e,x->sequence.division);seq_runtime_set_track_traversal(e,x->sequence.direction,x->sequence.rotate);seq_runtime_set_track_timing(e,&x->sequence.timing);for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t*st=&x->sequence.steps[s];seq_model_set_trig(e,s,st->trigger);seq_model_set_step_roll(e,s,st->roll);seq_model_play_clear_step(e,s);seq_model_step_param_plock_clear(e,s);for(uint8_t v=0U;v<st->play_count;++v){const persist_control_play_item_t*p=&st->play[v];if(((p->present_mask&SEQ_STEP_PLAY_PRESENT_NOTE)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_NOTE,p->note)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_VELOCITY)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_VELOCITY,p->velocity)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_LENGTH)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_LENGTH,p->length)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_MICROTIMING)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_MICROTIMING,p->microtiming)==0U))return 0U;}for(uint8_t i=0U;i<st->lock_count;++i){param_id_t id;uint8_t set;seq_param_slot_t slot;uint8_t found=0U;seq_value16_t value;if(prepared!=NULL){if(resolved_index>=prepared->lock_count[e]||!seq_param_iface_key_to_address(prepared->locks[e][resolved_index++],&set,&slot))return 0U;if(set==SEQ_PLOCK_SET_TONE)value=(seq_value16_t)(st->locks[i].value.f32*65535.0f+0.5f);else if(!seq_param_iface_slot_to_param_for_type(track_runtime_type_from_ui((track_type_t)prepared->type[e]),set,slot,&id)||!apply_plock_value(id,&st->locks[i],&value))return 0U;found=1U;}else if(persist_key_tone_slot_from_disk(st->locks[i].parameter,&slot)!=0U){set=SEQ_PLOCK_SET_TONE;value=(seq_value16_t)(st->locks[i].value.f32*65535.0f+0.5f);found=1U;}else{if(persist_key_param_from_disk(st->locks[i].parameter,&id)==0U||apply_plock_value(id,&st->locks[i],&value)==0U)return 0U;for(set=0U;set<SEQ_PLOCK_SET_COUNT;++set)if(seq_param_iface_param_to_slot(e,set,id,&slot)!=0U){found=1U;break;}}if(found==0U)return 0U;seq_plock_op_status_t status=seq_model_step_plock_upsert(e,s,set,slot,value,st->locks[i].flags);if(status!=SEQ_PLOCK_OP_CREATED&&status!=SEQ_PLOCK_OP_UPDATED)return 0U;}}return (prepared==NULL||resolved_index==prepared->lock_count[e])?1U:0U;}
 static uint8_t apply_note_fx(uint8_t e,uint8_t active,const persist_control_entity_t*x){persist_entity_caps_t caps;if(persist_entity_caps_resolve(active,e,&caps)==0U)return 0U;if(caps.note_fx_owner==0U){const uint8_t*value=(const uint8_t*)&x->note_fx;for(uint8_t i=0U;i<sizeof(x->note_fx);++i)if(value[i]!=0U)return 0U;return 1U;}return note_fx_chain_state_install_track(e,&x->note_fx);}
 static uint8_t restore_polyphony_audio_fx(uint8_t entity,
     const polyphony_control_state_t*polyphony,const audio_fx_control_state_t*audio_fx)
@@ -614,7 +684,8 @@ static uint8_t apply_product_state(uint8_t entity,const persist_control_entity_t
     if(family==TRACK_FAMILY_SYNTH&&type==TRACK_TYPE_FM)return (uint8_t)x->fm_present;
     return (uint8_t)((x->asset_count==0U)&&(x->fm_present==0U));
 }
-static uint8_t apply_mod(uint8_t owner,uint8_t active,const persist_control_modulation_t*m){mod_lfo_control_bank_t lfos;for(uint8_t i=0U;i<3U;++i){mod_lfo_shape_t shape;mod_lfo_trig_mode_t trig;if(persist_key_lfo_shape_from_disk(m->lfos[i].shape_key,&shape)==0U||persist_key_lfo_trigger_from_disk(m->lfos[i].trigger_key,&trig)==0U)return 0U;lfos.lfo[i]=(mod_lfo_control_value_t){m->lfos[i].rate,(float)shape,(float)trig,m->lfos[i].phase_offset};}if(mod_lfo_v1_restore_track(owner,&lfos)==0U)return 0U;for(uint8_t i=0U;i<2U;++i){uint8_t a,b,s;if(persist_key_mod_source_from_disk(m->multi[i].source_a_key,&a)==0U||persist_key_mod_source_from_disk(m->multi[i].source_b_key,&b)==0U||persist_key_mod_source_from_disk(m->slew[i].source_key,&s)==0U||mod_matrix_set_multi_source(owner,i,0U,(float)a)==0U||mod_matrix_set_multi_source(owner,i,1U,(float)b)==0U||mod_matrix_set_slew_source(owner,i,(float)s)==0U||mod_matrix_set_slew_amount(owner,i,m->slew[i].amount)==0U)return 0U;}const mod_env3_control_state_t env={m->envelope.attack,m->envelope.decay,m->envelope.sustain,m->envelope.release,(float)m->envelope.retrigger_hard};if(mod_env3_control_restore(owner,&env)==0U)return 0U;for(uint8_t i=0U;i<8U;++i){const persist_control_mod_route_t*r=&m->routes[i];mod_destination_address_t address=MOD_DESTINATION_NONE;uint8_t source;if(persist_key_mod_source_from_disk(r->source_key,&source)==0U)return 0U;if(r->destination_parameter!=PERSIST_CONTROL_KEY_NONE){uint8_t entity;param_id_t param;if(persist_key_mod_destination_from_disk(r->destination_entity,r->destination_parameter,active,&entity,&param)==0U)return 0U;address=mod_destination_address_make(entity,param);}if(mod_matrix_set_slot_state(owner,i,source,address,r->depth,r->enabled)==0U)return 0U;}return 1U;}
+static uint8_t apply_mod(uint8_t owner,const persist_control_modulation_t*m,
+    const persistent_pattern_prepared_t *prepared){mod_lfo_control_bank_t lfos;for(uint8_t i=0U;i<3U;++i)lfos.lfo[i]=(mod_lfo_control_value_t){m->lfos[i].rate,(float)prepared->lfo_shape[owner][i],(float)prepared->lfo_trigger[owner][i],m->lfos[i].phase_offset};if(mod_lfo_v1_restore_track(owner,&lfos)==0U)return 0U;for(uint8_t i=0U;i<2U;++i){const uint8_t a=prepared->mod_source[owner][i*3U],b=prepared->mod_source[owner][i*3U+1U],s=prepared->mod_source[owner][i*3U+2U];if(mod_matrix_set_multi_source(owner,i,0U,(float)a)==0U||mod_matrix_set_multi_source(owner,i,1U,(float)b)==0U||mod_matrix_set_slew_source(owner,i,(float)s)==0U||mod_matrix_set_slew_amount(owner,i,m->slew[i].amount)==0U)return 0U;}const mod_env3_control_state_t env={m->envelope.attack,m->envelope.decay,m->envelope.sustain,m->envelope.release,(float)m->envelope.retrigger_hard};if(mod_env3_control_restore(owner,&env)==0U)return 0U;for(uint8_t i=0U;i<8U;++i){const persist_control_mod_route_t*r=&m->routes[i];if(mod_matrix_set_slot_state(owner,i,prepared->route_source[owner][i],prepared->route_destination[owner][i],r->depth,r->enabled)==0U)return 0U;}return 1U;}
 
 static void persist_debug_entity_failure(persist_dbg_validation_step_t step,
     persist_codec_result_t result, uint8_t entity,
@@ -639,9 +710,159 @@ static void persist_debug_entity_failure(persist_dbg_validation_step_t step,
         polyphony_control_get_voice_count(entity),saved->polyphony.voice_count);
 }
 
+static uint8_t persistent_pattern_prepare_control(
+    const persist_control_pattern_t *pattern,
+    persistent_pattern_prepared_t *prepared)
+{
+    seq_clock_src_t clock;
+    uint8_t mode;
+    if (!persist_key_clock_from_disk(pattern->globals.clock_source_key,&clock))
+        return 0U;
+    prepared->clock_source=(uint8_t)clock;
+    if(!persist_key_record_start_from_disk(pattern->globals.record_start_key,&mode))return 0U;
+    prepared->record_start=mode;
+    if(!persist_key_record_length_from_disk(pattern->globals.record_length_key,&mode))return 0U;
+    prepared->record_length=mode;
+    prepared->group_active=(pattern->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type
+        ==PERSIST_TYPE_GROUP)?1U:0U;
+    for(uint8_t entity=0U;entity<BRICK_ENTITY_CAPACITY;++entity)
+    {
+        track_family_t family;track_type_t type;track_midi_source_t midi;
+        const persist_control_entity_t *const saved=&pattern->entities[entity];
+        if(!persist_key_family_from_disk(saved->family,&family)
+            ||!persist_key_type_from_disk(saved->type,&type)
+            ||!persist_key_midi_source_from_disk(saved->midi_source_key,&midi))return 0U;
+        prepared->family[entity]=(uint8_t)family;
+        prepared->type[entity]=(uint8_t)type;
+        prepared->midi_source[entity]=(uint8_t)midi;
+        if(entity<TRACK_COUNT&&!persist_key_input_from_disk(saved->input_key,
+            &prepared->input[entity]))return 0U;
+        persist_entity_caps_t caps;
+        if(!persist_entity_caps_resolve(prepared->group_active,entity,&caps))return 0U;
+        if(!caps.active)continue;
+        const track_runtime_type_t runtime=track_runtime_type_from_ui(type);
+        if(saved->fm_present!=0U)
+        {if(runtime!=TRACK_RUNTIME_TYPE_FM||!fm_control_state_validate(&saved->fm))return 0U;}
+        else if(saved->tone_present!=0U)
+        {if(!tone_program_control_validate(&saved->tone,runtime))return 0U;}
+        if(!param_filter_control_validate(&saved->filter)
+            ||!vca_control_state_validate(&saved->vca)
+            ||!mixer_control_state_validate(&saved->mixer))return 0U;
+        polyphony_control_state_t polyphony;
+        if(!polyphony_control_prepare(&saved->polyphony,&polyphony)
+            ||!audio_fx_control_state_validate(&saved->audio_fx))return 0U;
+        if(runtime==TRACK_RUNTIME_TYPE_GROUP
+            &&(saved->audio_fx.model[0]==AUDIO_FX_MODEL_XFADE
+                ||saved->audio_fx.model[1]==AUDIO_FX_MODEL_XFADE))return 0U;
+        if(caps.note_fx_owner)
+        {note_fx_chain_state_t effective;if(!note_fx_chain_state_make_effective(
+                &saved->note_fx,&effective))return 0U;}
+        if(saved->modulation_present)
+        {
+            mod_lfo_control_bank_t lfos;
+            for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_LFO_COUNT;++i)
+            {mod_lfo_shape_t shape;mod_lfo_trig_mode_t trig;if(!persist_key_lfo_shape_from_disk(saved->modulation.lfos[i].shape_key,&shape)||!persist_key_lfo_trigger_from_disk(saved->modulation.lfos[i].trigger_key,&trig))return 0U;prepared->lfo_shape[entity][i]=(uint8_t)shape;prepared->lfo_trigger[entity][i]=(uint8_t)trig;lfos.lfo[i]=(mod_lfo_control_value_t){saved->modulation.lfos[i].rate,(float)shape,(float)trig,saved->modulation.lfos[i].phase_offset};}
+            mod_lfo_control_bank_t canonical;if(!mod_lfo_v1_prepare_bank(&lfos,&canonical))return 0U;
+            for(uint8_t i=0U;i<2U;++i){if(!persist_key_mod_source_from_disk(saved->modulation.multi[i].source_a_key,&prepared->mod_source[entity][i*3U])||!persist_key_mod_source_from_disk(saved->modulation.multi[i].source_b_key,&prepared->mod_source[entity][i*3U+1U])||!persist_key_mod_source_from_disk(saved->modulation.slew[i].source_key,&prepared->mod_source[entity][i*3U+2U]))return 0U;}
+            mod_env3_control_state_t env={saved->modulation.envelope.attack,saved->modulation.envelope.decay,saved->modulation.envelope.sustain,saved->modulation.envelope.release,(float)saved->modulation.envelope.retrigger_hard};
+            mod_env3_control_state_t canonical_env;if(!mod_env3_control_prepare(&env,&canonical_env))return 0U;
+            for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_ROUTE_COUNT;++i){if(!persist_key_mod_source_from_disk(saved->modulation.routes[i].source_key,&prepared->route_source[entity][i]))return 0U;prepared->route_destination[entity][i]=MOD_DESTINATION_NONE;if(saved->modulation.routes[i].destination_parameter!=PERSIST_CONTROL_KEY_NONE){uint8_t target;param_id_t param;if(!persist_key_mod_destination_from_disk(saved->modulation.routes[i].destination_entity,saved->modulation.routes[i].destination_parameter,prepared->group_active,&target,&param))return 0U;prepared->route_destination[entity][i]=mod_destination_address_make(target,param);}}
+        }
+    }
+    prepared->control_prepared=1U;
+    return 1U;
+}
+
+static uint8_t persistent_pattern_prepare_seq(
+    const persist_control_pattern_t *pattern,
+    persistent_pattern_prepared_t *prepared,
+    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
+{
+    seq_track_timing_config_t timing[SEQ_TIMING_TRACK_COUNT];
+    for(uint8_t entity=0U;entity<SEQ_TIMING_TRACK_COUNT;++entity)
+        timing[entity]=pattern->entities[entity].sequence.timing;
+    if(!seq_engine_control_prepare_begin(timing,workspace))return 0U;
+    const uint32_t samples=seq_runtime_samples_per_step_for_tempo(
+        pattern->globals.tempo_milli_bpm);
+    const seq_clock_src_t clock=(seq_clock_src_t)prepared->clock_source;
+    for(uint8_t entity=0U;entity<SEQ_LANE_CAPACITY;++entity)
+    {
+        const persist_control_entity_t *const saved=&pattern->entities[entity];
+        entity_topology_descriptor_t topology;
+        if(!entity_topology_resolve(prepared->group_active,entity,&topology))goto fail;
+        const track_family_t family=(track_family_t)prepared->family[entity];
+        const track_runtime_family_t runtime_family=track_runtime_family_from_ui(family);
+        const track_runtime_type_t runtime_type=track_runtime_type_from_ui(
+            (track_type_t)prepared->type[entity]);
+        const uint16_t capabilities=entity_topology_get_capabilities(&topology);
+        uint8_t logical=0U;
+        if((capabilities&TRACK_CAPABILITY_NOTES)!=0U)
+        {logical=(topology.role==ENTITY_ROLE_GROUP_CHILD)?SEQ_LOGICAL_CAPACITY_GROUP_CHILD:(topology.role!=ENTITY_ROLE_GROUP_MASTER?SEQ_PLAY_MAX_CAPACITY:0U);}
+        seq_pattern_prepare_track_t track={0};
+        track.capabilities=capabilities;track.logical_capacity=logical;
+        track.role=(uint8_t)topology.role;track.runtime_type=(uint8_t)runtime_type;
+        track.midi_channel_zero_based=(saved->midi_channel!=0U)?(uint8_t)(saved->midi_channel-1U):0U;
+        track.division=saved->sequence.division;track.muted=saved->muted;
+        track.active=topology.active;track.length=saved->sequence.length;
+        track.page_mask=saved->sequence.page_mask;track.direction=saved->sequence.direction;
+        track.rotate=saved->sequence.rotate;track.timing=saved->sequence.timing;
+        track.can_emit=(uint8_t)(topology.active&&entity_topology_can_emit_notes(&topology)
+            &&((capabilities&TRACK_CAPABILITY_NOTES)!=0U));
+        track.note_enabled=(uint8_t)(track.can_emit&&clock==SEQ_CLOCK_SRC_INTERNAL
+            &&runtime_family!=TRACK_RUNTIME_FAMILY_MIDI
+            &&runtime_family!=TRACK_RUNTIME_FAMILY_EXTERNAL);
+        track.lock_enabled=1U;track.fx_enabled=(uint8_t)((capabilities&TRACK_CAPABILITY_MIDI_FX)!=0U);
+        if(track.fx_enabled)track.note_fx=saved->note_fx;
+        (void)seq_model_play_base_capture(entity,&track.play_base);
+        if(!seq_engine_control_prepare_track(entity,&track,samples,
+            pattern->globals.groove_seed))goto fail;
+        for(uint8_t step=0U;step<SEQ_MAX_STEPS;++step)
+        {
+            const persist_control_step_t *const source=&saved->sequence.steps[step];
+            seq_pattern_prepare_step_t target={.trigger=source->trigger,
+                .roll=source->roll,.play_count=source->play_count,.lock_count=0U};
+            for(uint8_t voice=0U;voice<source->play_count;++voice)
+                target.play[voice]=(seq_pattern_prepare_play_t){source->play[voice].note,
+                    source->play[voice].velocity,source->play[voice].length,
+                    source->play[voice].microtiming,source->play[voice].present_mask};
+            for(uint8_t i=0U;i<source->lock_count;++i)
+            {
+                param_id_t id=PARAM_COUNT;uint8_t set=0U;seq_param_slot_t slot=0U;
+                seq_value16_t value=0U,base=0U;
+                if(persist_key_tone_slot_from_disk(source->locks[i].parameter,&slot))
+                {set=(uint8_t)SEQ_PLOCK_SET_TONE;if(!tone_param_codec_slot_to_param(runtime_type,slot,&id))goto fail;value=(seq_value16_t)(source->locks[i].value.f32*65535.0f+0.5f);}
+                else
+                {if(!persist_key_param_from_disk(source->locks[i].parameter,&id)||!apply_plock_value(id,&source->locks[i],&value))goto fail;uint8_t found=0U;for(set=0U;set<SEQ_PLOCK_SET_COUNT;++set)if(seq_param_iface_param_to_slot_for_type((uint8_t)runtime_type,topology.role==ENTITY_ROLE_GROUP_MASTER,set,id,&slot)){found=1U;break;}if(!found)goto fail;}
+                if(prepared->lock_count[entity]>=SEQ_ENGINE_LOCK_POOL_CAPACITY)goto fail;
+                seq_plock_key_t resolved;
+                if(!seq_param_iface_address_to_key(set,slot,&resolved))goto fail;
+                prepared->locks[entity][prepared->lock_count[entity]++]=resolved;
+                const uint8_t is_fx=(set==(uint8_t)SEQ_PLOCK_SET_MIDI_FX);
+                uint16_t flags=(uint16_t)id|((param_registry_temp_is_clearable(id)!=0U)?SEQ_ENGINE_PARAM_FLAG_CLEARABLE:0U);
+                if(is_fx)
+                {note_fx_chain_stage_t stage;uint8_t param;if(!track.fx_enabled||!note_fx_chain_param_map(id,&stage,&param)||!note_fx_chain_param_is_plockable(stage,param))goto fail;flags|=SEQ_ENGINE_PARAM_FLAG_NOTE_FX;base=(uint16_t)(((uint16_t)stage<<8U)|param);value=(uint16_t)(param_value_policy_decode_u16(&param_registry[id],value)+0.5f);}
+                else
+                {float base_value;if(!entity_topology_has_audio_source(&topology)||!prepared_pattern_value(saved,runtime_type,id,&base_value)||!seq_param_iface_encode_param_value(id,base_value,&base))goto fail;if(!param_registry_projected_track_param_is_applicable(id,family,runtime_type,topology.role==ENTITY_ROLE_GROUP_MASTER,topology.role==ENTITY_ROLE_GROUP_CHILD))goto fail;}
+                if(source->trigger!=0U)
+                {
+                    if(target.lock_count>=SEQ_STEP_MAX_LOCKS)goto fail;
+                    target.locks[target.lock_count++]=
+                        (seq_lock_pattern_t){flags,value,base};
+                }
+            }
+            if(!seq_engine_control_prepare_step(entity,step,&target))goto fail;
+        }
+    }
+    if(!seq_engine_control_prepare_finish(pattern->globals.keyboard.root,
+        pattern->globals.keyboard.scale,pattern->globals.groove_seed))goto fail;
+    prepared->seq_prepared=1U;return 1U;
+fail:
+    seq_engine_control_abort_prepared();return 0U;
+}
+
 static persist_codec_result_t persistent_pattern_control_install_internal(
     const persist_control_pattern_t *pattern,
-    uint8_t resume_transport)
+    const persistent_pattern_prepared_t *prepared)
 {
     const uint8_t group_active =
         (pattern->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type
@@ -654,23 +875,13 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
     uint8_t voice_counts[BRICK_ENTITY_CAPACITY];
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
-        track_family_t family;
-        track_type_t type;
-        track_midi_source_t midi_source;
-        (void)persist_key_family_from_disk(
-            pattern->entities[entity].family, &family);
-        (void)persist_key_type_from_disk(
-            pattern->entities[entity].type, &type);
-        (void)persist_key_midi_source_from_disk(
-            pattern->entities[entity].midi_source_key, &midi_source);
-        families[entity] = (uint8_t)family;
-        types[entity] = (uint8_t)type;
+        families[entity] = prepared->family[entity];
+        types[entity] = prepared->type[entity];
         midi_channels[entity] = pattern->entities[entity].midi_channel;
-        midi_sources[entity] = (uint8_t)midi_source;
+        midi_sources[entity] = prepared->midi_source[entity];
         voice_counts[entity] = pattern->entities[entity].polyphony.voice_count;
         if (entity < TRACK_COUNT)
-            (void)persist_key_input_from_disk(
-                pattern->entities[entity].input_key, &inputs[entity]);
+            inputs[entity] = prepared->input[entity];
     }
 
     const uint8_t current_group_active = entity_topology_group_is_active();
@@ -720,7 +931,7 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
             return PERSIST_CODEC_UNKNOWN_KEY;
         }
         if ((caps.sequence_owner != 0U)
-                && (apply_sequence(entity, saved) == 0U))
+                && (apply_sequence(entity, saved, prepared) == 0U))
         {
             persist_debug_entity_failure(PERSIST_DBG_VALIDATION_SEQUENCE,
                 PERSIST_CODEC_INVALID_ENTITY,entity,saved);
@@ -758,8 +969,8 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
         if (topology.active == 0U)
             continue;
         if ((pattern->entities[entity].modulation_present != 0U)
-                && (apply_mod(entity, group_active,
-                              &pattern->entities[entity].modulation) == 0U))
+                && (apply_mod(entity,&pattern->entities[entity].modulation,
+                              prepared) == 0U))
         {
             persist_debug_entity_failure(PERSIST_DBG_VALIDATION_MODULATION,
                 PERSIST_CODEC_INVALID_MODULATION,entity,
@@ -769,19 +980,9 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
     }
 
     seq_runtime_set_tempo_bpm_milli(pattern->globals.tempo_milli_bpm);
-    seq_clock_src_t clock;
-    uint8_t mode;
-    if ((persist_key_clock_from_disk(
-            pattern->globals.clock_source_key, &clock) == 0U)
-            || (persist_key_record_start_from_disk(
-                pattern->globals.record_start_key, &mode) == 0U))
-        return PERSIST_CODEC_UNKNOWN_KEY;
-    seq_runtime_set_clock_source(clock);
-    seq_runtime_set_rec_start_mode(mode);
-    if (persist_key_record_length_from_disk(
-            pattern->globals.record_length_key, &mode) == 0U)
-        return PERSIST_CODEC_UNKNOWN_KEY;
-    seq_runtime_set_rec_len_mode(mode);
+    seq_runtime_set_clock_source((seq_clock_src_t)prepared->clock_source);
+    seq_runtime_set_rec_start_mode(prepared->record_start);
+    seq_runtime_set_rec_len_mode(prepared->record_length);
     keyboard_runtime_set_root(pattern->globals.keyboard.root);
     keyboard_runtime_set_scale(pattern->globals.keyboard.scale);
     keyboard_runtime_set_omnichord(pattern->globals.keyboard.omnichord != 0U);
@@ -791,70 +992,73 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
     if (metronome_control_set_level(pattern->globals.metronome_level) == 0U)
         return PERSIST_CODEC_IO_ERROR;
     undo_v2_invalidate_history();
-    (void)resume_transport;
     return PERSIST_CODEC_OK;
 }
 
-persist_codec_result_t persistent_pattern_control_apply_with_seq_workspace(
-    const persist_control_pattern_t *pattern, uint8_t resume_transport,
+persist_codec_result_t persistent_pattern_control_prepare(
+    const persist_control_pattern_t *pattern,
+    persistent_pattern_prepared_t *prepared,
     seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
 {
-    g_persist_dbg.audio_publish_result = 1U;
-    g_persist_dbg.seq_publish_result = 1U;
-    if ((audio_state_snapshot_control_active() == 0U)
-            && (audio_state_snapshot_control_preflight() == 0U))
-        return PERSIST_CODEC_IO_ERROR;
-    if (audio_state_snapshot_control_begin(
-            CONTROL_AUDIO_STATE_PATTERN) == 0U)
-        return PERSIST_CODEC_IO_ERROR;
-    const persist_codec_result_t result =
-        persistent_pattern_control_install_into_active_snapshot(pattern, resume_transport);
-    if (result != PERSIST_CODEC_OK)
-    {
-        audio_state_snapshot_control_abort();
-        return result;
-    }
-    /* A stopped replacement still has to publish before AUDIO is rebound.
-     * Otherwise the first PLAY boundary can be rendered from the previous
-     * Pattern while the new track programs are already active.  Resetting the
-     * execution epoch also prevents old lock/note ownership from crossing the
-     * stopped replacement.  Running cycle recalls preserve their epoch. */
-    const uint8_t seq_published = (resume_transport == 0U)
-        ? seq_engine_control_replace_with_workspace(workspace)
-        : seq_engine_control_flush_with_workspace(workspace);
-    if (seq_published == 0U)
-    {
-        g_persist_dbg.seq_publish_result = 0U;
-        audio_state_snapshot_control_abort();
-        return PERSIST_CODEC_IO_ERROR;
-    }
-    g_persist_dbg.seq_publish_result = 2U;
-    if (audio_state_snapshot_control_commit() == 0U)
-    {
-        audio_state_snapshot_control_abort();
-        return PERSIST_CODEC_IO_ERROR;
-    }
-    g_persist_dbg.audio_publish_result = 2U;
+    if(pattern==NULL||prepared==NULL||workspace==NULL)
+        return PERSIST_CODEC_INVALID_ARGUMENT;
+    memset(prepared,0,sizeof(*prepared));
+    if(seq_engine_control_prepared()!=0U)return PERSIST_CODEC_IO_ERROR;
+    prepared->pattern=pattern;
+    const persist_codec_result_t validation=persistent_pattern_control_validate(pattern);
+    if(validation!=PERSIST_CODEC_OK)return validation;
+    if(audio_state_snapshot_control_preflight()==0U)return PERSIST_CODEC_IO_ERROR;
+    if(!persistent_pattern_prepare_control(pattern,prepared)
+        ||!persistent_pattern_prepare_seq(pattern,prepared,workspace))
+    {persistent_pattern_control_abort_prepared(prepared);return PERSIST_CODEC_INVALID_ENTITY;}
     return PERSIST_CODEC_OK;
 }
 
-persist_codec_result_t persistent_pattern_control_apply(
-    const persist_control_pattern_t *pattern, uint8_t resume_transport)
+void persistent_pattern_control_abort_prepared(
+    persistent_pattern_prepared_t *prepared)
 {
-    return persistent_pattern_control_apply_with_seq_workspace(
-        pattern, resume_transport, NULL);
+    if(prepared==NULL)return;
+    if(prepared->seq_prepared!=0U)seq_engine_control_abort_prepared();
+    memset(prepared,0,sizeof(*prepared));
 }
 
-persist_codec_result_t persistent_pattern_control_install_into_active_snapshot(
-    const persist_control_pattern_t *pattern,
-    uint8_t resume_transport)
+void persistent_pattern_control_commit_prepared_control(
+    persistent_pattern_prepared_t *prepared)
 {
-    if ((pattern == NULL) || (audio_state_snapshot_control_active() == 0U))
-        return PERSIST_CODEC_INVALID_ARGUMENT;
-    const persist_codec_result_t validation =
-        persistent_pattern_control_validate(pattern);
-    if (validation != PERSIST_CODEC_OK) return validation;
-    return persistent_pattern_control_install_internal(pattern, resume_transport);
+    if(prepared==NULL||prepared->pattern==NULL||!prepared->control_prepared
+        ||!prepared->seq_prepared||!seq_engine_control_prepared())
+    {Error_Handler();return;}
+    if(persistent_pattern_control_install_internal(prepared->pattern,prepared)
+        !=PERSIST_CODEC_OK)Error_Handler();
+}
+
+void persistent_pattern_control_commit_prepared_seq(
+    persistent_pattern_prepared_t *prepared,uint8_t resume_transport)
+{
+    if(prepared==NULL||!prepared->control_prepared||!prepared->seq_prepared
+        ||!seq_engine_control_prepared())
+    {Error_Handler();return;}
+    seq_engine_control_commit_prepared(resume_transport
+        ?SEQ_PATTERN_PREPARED_COMMIT_FLUSH:SEQ_PATTERN_PREPARED_COMMIT_REPLACE);
+    prepared->seq_prepared=0U;
+}
+
+void persistent_pattern_control_apply_prepared(
+    persistent_pattern_prepared_t *prepared,uint8_t resume_transport)
+{
+    g_persist_dbg.audio_publish_result=1U;g_persist_dbg.seq_publish_result=1U;
+    if(prepared==NULL||prepared->pattern==NULL||!prepared->control_prepared
+        ||!prepared->seq_prepared||audio_state_snapshot_control_active()!=0U)
+    {Error_Handler();return;}
+    if(!audio_state_snapshot_control_begin(CONTROL_AUDIO_STATE_PATTERN))
+    {Error_Handler();return;}
+    persistent_pattern_control_commit_prepared_control(prepared);
+    persistent_pattern_control_commit_prepared_seq(prepared,resume_transport);
+    g_persist_dbg.seq_publish_result=2U;
+    if(!audio_state_snapshot_control_commit())
+    {Error_Handler();return;}
+    g_persist_dbg.audio_publish_result=2U;prepared->control_prepared=0U;
+    prepared->pattern=NULL;
 }
 
 void persistent_pattern_control_sync_ui_after_commit(void)

@@ -10,6 +10,7 @@
 #include "Track/track_mute.h"
 #include "Track/track_runtime.h"
 #include "Keyboard/keyboard_params.h"
+#include "main.h"
 #include "stm32h7xx.h"
 #include <string.h>
 
@@ -34,6 +35,10 @@ static uint8_t g_last_running;
 static uint8_t g_seen_runtime_running;
 static uint32_t g_transport_epoch;
 static uint8_t g_execution_replace_pending;
+static uint8_t g_prepared_active;
+static uint8_t g_prepared_slot;
+static uint16_t g_prepared_track_mask;
+static uint64_t g_prepared_step_mask[SEQ_LANE_CAPACITY];
 static seq_runtime_shadow_seed_t g_build_seed;
 static seq_track_timing_config_t g_build_timing[SEQ_LANE_CAPACITY];
 static note_fx_chain_state_t g_build_fx_state[SEQ_LANE_CAPACITY];
@@ -121,6 +126,10 @@ void seq_engine_control_init(void)
     g_seen_runtime_running = seq_runtime_is_running();
     g_transport_epoch = 1U;
     g_execution_replace_pending = 0U;
+    g_prepared_active = 0U;
+    g_prepared_slot = 0U;
+    g_prepared_track_mask = 0U;
+    memset(g_prepared_step_mask, 0, sizeof(g_prepared_step_mask));
     memset(&g_build_seed, 0, sizeof(g_build_seed));
 }
 
@@ -344,6 +353,7 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
 static void seq_engine_control_poll_with_workspace(
     seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
 {
+    if (g_prepared_active != 0U) return;
     const uint8_t running = seq_runtime_is_running();
     uint8_t transport_changed = 0U;
     if (running != g_seen_runtime_running)
@@ -481,4 +491,245 @@ uint8_t seq_engine_control_replace_with_workspace(
     seq_param_iface_execution_replace();
     seq_engine_control_reset_note_fx_context();
     return seq_engine_control_flush_with_workspace(workspace);
+}
+
+uint8_t seq_engine_control_prepare_begin(
+    const seq_track_timing_config_t timing[SEQ_TIMING_TRACK_COUNT],
+    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
+{
+    if (timing == NULL || workspace == NULL || g_prepared_active != 0U)
+        return 0U;
+    if (seq_timing_geometry_build_begin_with_workspace(timing, workspace) == 0U)
+        return 0U;
+    g_build_track = 0U;
+    g_build_step = 0U;
+    g_prepared_slot = (uint8_t)(g_published_slot ^ 1U);
+    seq_pattern_t *const pattern = g_pattern[g_prepared_slot];
+    seq_lock_pattern_t *lock_pool[SEQ_LANE_CAPACITY];
+    memcpy(lock_pool, pattern->lock_pool, sizeof(lock_pool));
+    memset(pattern, 0, sizeof(*pattern));
+    memcpy(pattern->lock_pool, lock_pool, sizeof(lock_pool));
+    g_prepared_track_mask = 0U;
+    memset(g_prepared_step_mask, 0, sizeof(g_prepared_step_mask));
+    g_prepared_active = 1U;
+    return 1U;
+}
+
+uint8_t seq_engine_control_prepare_track(
+    uint8_t track, const seq_pattern_prepare_track_t *prepared,
+    uint32_t samples_per_step_q16, uint32_t groove_seed)
+{
+    if (g_prepared_active == 0U || prepared == NULL
+        || track >= SEQ_LANE_CAPACITY
+        || (g_prepared_track_mask & (uint16_t)(1U << track)) != 0U
+        || prepared->length == 0U || prepared->length > SEQ_MAX_STEPS
+        || prepared->division == 0U) return 0U;
+    seq_pattern_t *const pattern = g_pattern[g_prepared_slot];
+    pattern->track_length[track] = prepared->length;
+    pattern->track_page_mask[track] = prepared->page_mask;
+    pattern->track_div[track] = prepared->division;
+    pattern->track_direction[track] = prepared->direction;
+    pattern->track_rotate[track] = prepared->rotate;
+    pattern->track_muted[track] = prepared->muted;
+    pattern->track_can_emit[track] = prepared->can_emit;
+    pattern->track_note_enabled[track] = prepared->note_enabled;
+    pattern->track_lock_enabled[track] = prepared->lock_enabled;
+    pattern->track_fx_enabled[track] = prepared->fx_enabled;
+    pattern->track_exec[track] = (seq_track_exec_t){
+        .capabilities = prepared->capabilities,
+        .logical_capacity = prepared->logical_capacity,
+        .role = prepared->role,
+        .type = prepared->runtime_type,
+        .midi_channel_zero_based = prepared->midi_channel_zero_based,
+        .div = prepared->division,
+        .muted = prepared->muted,
+        .active = prepared->active
+    };
+    pattern->play_base[track] = prepared->play_base;
+    g_build_fx_state[track] = prepared->note_fx;
+    if (note_fx_chain_state_make_effective(&prepared->note_fx,
+            &pattern->fx_base_plan[track]) == 0U) return 0U;
+    seq_timing_compile(&prepared->timing, samples_per_step_q16, track,
+        groove_seed, (uint32_t)prepared->length * prepared->division << 16U,
+        &pattern->timing_plan[track]);
+    g_prepared_track_mask |= (uint16_t)(1U << track);
+    return 1U;
+}
+
+uint8_t seq_engine_control_prepare_step(
+    uint8_t track, uint8_t step,
+    const seq_pattern_prepare_step_t *prepared)
+{
+    if (g_prepared_active == 0U || prepared == NULL
+        || track >= SEQ_LANE_CAPACITY || step >= SEQ_MAX_STEPS
+        || (g_prepared_track_mask & (uint16_t)(1U << track)) == 0U
+        || (g_prepared_step_mask[track] & (UINT64_C(1) << step)) != 0U
+        || prepared->play_count > SEQ_PLAY_MAX_CAPACITY
+        || prepared->lock_count > SEQ_STEP_MAX_LOCKS) return 0U;
+    seq_pattern_t *const pattern = g_pattern[g_prepared_slot];
+    if ((uint32_t)pattern->lock_pool_count[track] + prepared->lock_count
+            > SEQ_ENGINE_LOCK_POOL_CAPACITY) return 0U;
+    seq_step_pattern_t *const target = &pattern->steps[track][step];
+    target->trig_roll = (uint8_t)((prepared->trigger & 1U)
+        | ((prepared->roll & 0x0FU) << 1U));
+    target->lock_count = prepared->lock_count;
+    pattern->lock_first[track][step] = pattern->lock_pool_count[track];
+    memcpy(&pattern->lock_pool[track][pattern->lock_pool_count[track]],
+        prepared->locks,
+        (size_t)prepared->lock_count * sizeof(prepared->locks[0]));
+    pattern->lock_pool_count[track] = (uint16_t)(
+        pattern->lock_pool_count[track] + prepared->lock_count);
+    for (uint8_t i = 1U; i < target->lock_count; ++i)
+    {
+        const uint16_t first = pattern->lock_first[track][step];
+        const seq_lock_pattern_t key = pattern->lock_pool[track][first + i];
+        uint8_t j = i;
+        while (j != 0U
+            && ((pattern->lock_pool[track][first + j - 1U].param_flags
+                    & SEQ_ENGINE_PARAM_ID_MASK)
+                > (key.param_flags & SEQ_ENGINE_PARAM_ID_MASK)))
+        {
+            pattern->lock_pool[track][first + j] =
+                pattern->lock_pool[track][first + j - 1U];
+            --j;
+        }
+        pattern->lock_pool[track][first + j] = key;
+    }
+    seq_play_snapshot_t *const top = (track < BRICK_ENTITY_TOP_LEVEL_COUNT)
+        ? &pattern->top_play[track][step] : NULL;
+    seq_play_item_t *const child = (track >= BRICK_ENTITY_TOP_LEVEL_COUNT)
+        ? &pattern->child_play[track - BRICK_ENTITY_TOP_LEVEL_COUNT][step]
+        : NULL;
+    if (top != NULL) memset(top, 0, sizeof(*top));
+    if (child != NULL) memset(child, 0, sizeof(*child));
+    const uint8_t voice_count = (child != NULL) ? 1U : prepared->play_count;
+    for (uint8_t voice = 0U; voice < voice_count; ++voice)
+    {
+        const seq_pattern_prepare_play_t *const play=&prepared->play[voice];
+        const int16_t values[SEQ_STEP_PLAY_FIELD_COUNT] = {
+            play->note, play->velocity, play->length, play->microtiming};
+        for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
+            if ((play->present_mask & (uint8_t)(1U << field)) != 0U)
+            {
+                if (top != NULL)
+                {
+                    if (seq_play_snapshot_set(top, voice,
+                            (seq_step_play_field_t)field,
+                            values[field]) == 0U) return 0U;
+                }
+                else
+                {
+                    seq_play_snapshot_t temporary = {0};
+                    temporary.items[0] = *child;
+                    if (seq_play_snapshot_set(&temporary, 0U,
+                            (seq_step_play_field_t)field,
+                            values[field]) == 0U) return 0U;
+                    *child = temporary.items[0];
+                }
+            }
+    }
+    if (seq_engine_compile_step_fx(pattern, track, step) == UINT8_MAX)
+        return 0U;
+    g_prepared_step_mask[track] |= UINT64_C(1) << step;
+    return 1U;
+}
+
+uint8_t seq_engine_control_prepare_finish(uint8_t root_index,
+    uint8_t scale_index, uint32_t groove_seed)
+{
+    if (g_prepared_active == 0U || g_prepared_track_mask != UINT16_MAX)
+        return 0U;
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+        if (g_prepared_step_mask[track] != UINT64_MAX) return 0U;
+    seq_pattern_t *const pattern = g_pattern[g_prepared_slot];
+    seq_runtime_capture_shadow_seed(&g_build_seed);
+    pattern->running = g_build_seed.running;
+    pattern->scale_index = scale_index;
+    pattern->root_index = root_index;
+    pattern->groove_seed = groove_seed;
+    pattern->seed_step_sample_q16 = g_build_seed.step_sample_q16;
+    pattern->samples_per_step_q16 = g_build_seed.samples_per_step_q16;
+    memcpy(pattern->seed_play_step, g_build_seed.play_step,
+           sizeof(pattern->seed_play_step));
+    memcpy(pattern->seed_traversal_phase, g_build_seed.traversal_phase,
+           sizeof(pattern->seed_traversal_phase));
+    memcpy(pattern->seed_div_phase, g_build_seed.track_div_phase,
+           sizeof(pattern->seed_div_phase));
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+        pattern->track_note_enabled[track] &= pattern->track_lock_enabled[track];
+    return 1U;
+}
+
+uint8_t seq_engine_control_prepared(void)
+{
+    return g_prepared_active;
+}
+
+void seq_engine_control_abort_prepared(void)
+{
+    if (g_prepared_active == 0U) return;
+    seq_timing_geometry_build_abort();
+    g_prepared_active = 0U;
+    g_prepared_track_mask = 0U;
+    memset(g_prepared_step_mask, 0, sizeof(g_prepared_step_mask));
+}
+
+void seq_engine_control_commit_prepared(seq_pattern_prepared_commit_t mode)
+{
+    uint8_t complete=(uint8_t)(g_prepared_active!=0U
+        &&g_prepared_track_mask==UINT16_MAX
+        &&(mode==SEQ_PATTERN_PREPARED_COMMIT_FLUSH
+            ||mode==SEQ_PATTERN_PREPARED_COMMIT_REPLACE));
+    for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track)
+        complete&=(uint8_t)(g_prepared_step_mask[track]==UINT64_MAX);
+    if (complete == 0U)
+    {
+        Error_Handler();
+        return;
+    }
+    seq_pattern_t *const pattern = g_pattern[g_prepared_slot];
+    seq_runtime_capture_shadow_seed(&g_build_seed);
+    pattern->running = g_build_seed.running;
+    pattern->seed_step_sample_q16 = g_build_seed.step_sample_q16;
+    pattern->samples_per_step_q16 = g_build_seed.samples_per_step_q16;
+    memcpy(pattern->seed_play_step, g_build_seed.play_step,
+           sizeof(pattern->seed_play_step));
+    memcpy(pattern->seed_traversal_phase, g_build_seed.traversal_phase,
+           sizeof(pattern->seed_traversal_phase));
+    memcpy(pattern->seed_div_phase, g_build_seed.track_div_phase,
+           sizeof(pattern->seed_div_phase));
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+        seq_timing_retime(&pattern->timing_plan[track],
+                          g_build_seed.samples_per_step_q16);
+    if (g_build_seed.running != g_last_running)
+    {
+        ++g_transport_epoch;
+        if (g_transport_epoch == 0U) g_transport_epoch = 1U;
+        g_last_running = g_build_seed.running;
+    }
+    if (mode == SEQ_PATTERN_PREPARED_COMMIT_REPLACE)
+    {
+        seq_param_iface_execution_replace();
+        seq_runtime_live_rec_discard_effective();
+        ++g_transport_epoch;
+        if (g_transport_epoch == 0U) g_transport_epoch = 1U;
+    }
+    seq_engine_control_mark_dirty();
+    pattern->generation = g_edit_generation;
+    pattern->transport_epoch = g_transport_epoch;
+    (void)brick_media_clock_now_sample(&pattern->effective_sample);
+    seq_timing_geometry_build_commit(pattern->timing_plan);
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    __DMB();
+    g_published_slot = g_prepared_slot;
+    __DMB();
+    g_published_generation = pattern->generation;
+    if (mode == SEQ_PATTERN_PREPARED_COMMIT_REPLACE)
+        seq_engine_execution_replace(pattern->generation);
+    __DMB();
+    __set_PRIMASK(primask);
+    g_prepared_active = 0U;
+    g_prepared_track_mask = 0U;
+    memset(g_prepared_step_mask, 0, sizeof(g_prepared_step_mask));
 }

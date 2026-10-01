@@ -91,7 +91,7 @@ uint8_t fm_control_state_get(uint8_t entity, fm_control_state_t *out_state)
     return 1U;
 }
 
-static uint8_t fm_control_state_get_public_param_from(
+uint8_t fm_control_state_get_public_param_from(
     const fm_control_state_t *state, param_id_t id, float *out_value);
 
 static uint8_t fm_control_state_publish_value(
@@ -262,7 +262,7 @@ uint8_t fm_control_state_set_public_param(uint8_t entity,
     return 1U;
 }
 
-static uint8_t fm_control_state_get_public_param_from(
+uint8_t fm_control_state_get_public_param_from(
     const fm_control_state_t *state, param_id_t id, float *out_value)
 {
     if ((state == NULL) || (out_value == NULL)) return 0U;

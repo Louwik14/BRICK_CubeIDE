@@ -93,7 +93,6 @@ static uint32_t seq_runtime_get_now_tick(void);
 static uint64_t seq_runtime_get_now_sample(void);
 static uint32_t seq_runtime_enter_critical(void);
 static void seq_runtime_exit_critical(uint32_t primask);
-static uint32_t seq_runtime_compute_samples_per_step_q16(uint32_t bpm_milli);
 static void seq_runtime_update_samples_per_step_from_tempo(void);
 static void seq_runtime_update_midi_clock_period_from_step_period(void);
 static void seq_runtime_send_transport_realtime(uint8_t status);
@@ -224,7 +223,7 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
     }
 }
 
-static uint32_t seq_runtime_compute_samples_per_step_q16(uint32_t bpm_milli)
+uint32_t seq_runtime_samples_per_step_for_tempo(uint32_t bpm_milli)
 {
     if (bpm_milli == 0U)
     {
@@ -243,7 +242,7 @@ static uint32_t seq_runtime_compute_samples_per_step_q16(uint32_t bpm_milli)
 
 static void seq_runtime_update_samples_per_step_from_tempo(void)
 {
-    g_seq_runtime.samples_per_step_q16 = seq_runtime_compute_samples_per_step_q16(
+    g_seq_runtime.samples_per_step_q16 = seq_runtime_samples_per_step_for_tempo(
         seq_runtime_get_effective_tempo_bpm_milli());
     seq_runtime_update_midi_clock_period_from_step_period();
 }

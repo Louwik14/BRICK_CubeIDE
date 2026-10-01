@@ -26,7 +26,8 @@ typedef enum
     PATTERN_CANDIDATE_EMPTY = 0,
     PATTERN_CANDIDATE_REQUESTED,
     PATTERN_CANDIDATE_LOADING,
-    PATTERN_CANDIDATE_PENDING
+    PATTERN_CANDIDATE_VALIDATED,
+    PATTERN_CANDIDATE_PREPARED
 } pattern_candidate_phase_t;
 
 typedef struct
@@ -107,6 +108,9 @@ static uint32_t pattern_candidate_next_generation(void)
 
 static void pattern_candidate_clear(void)
 {
+    if (g_pattern_io_workspace != NULL)
+        persistent_pattern_control_abort_prepared(
+            &g_pattern_io_workspace->prepared_pattern);
     memset(&g_pattern_candidate, 0, sizeof(g_pattern_candidate));
     pattern_debug_state();
 }
@@ -123,27 +127,16 @@ static void pattern_candidate_release_payload(void)
 
 static uint8_t pattern_candidate_apply(uint8_t resume_transport)
 {
-    if ((g_pattern_candidate.phase != PATTERN_CANDIDATE_PENDING)
+    if ((g_pattern_candidate.phase != PATTERN_CANDIDATE_PREPARED)
         || (g_pattern_io_workspace == NULL)
         || (g_pattern_io_operation != PATTERN_CONTROL_BANK_ASYNC_NONE))
         return 0U;
 
     persist_debug_stage(PERSIST_DBG_STAGE_APPLY, 0);
     ++g_persist_dbg.apply_attempted;
-    const persist_codec_result_t result =
-        persistent_pattern_control_apply_with_seq_workspace(
-            &g_pattern_io_workspace->pattern, resume_transport,
-            g_pattern_io_workspace->scratch.groove_build.track);
-    g_persist_dbg.apply_result = (uint32_t)result;
-    if (result != PERSIST_CODEC_OK)
-    {
-        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_FAILED;
-        g_persist_dbg.cancel_reason = PERSIST_DBG_CANCEL_APPLY_FAILED;
-        persist_debug_error(PERSIST_DBG_STAGE_APPLY,(int32_t)result);
-        pattern_candidate_clear();
-        pattern_candidate_release_payload();
-        return 0U;
-    }
+    persistent_pattern_control_apply_prepared(
+        &g_pattern_io_workspace->prepared_pattern, resume_transport);
+    g_persist_dbg.apply_result = (uint32_t)PERSIST_CODEC_OK;
 
     g_active_bank = g_pattern_candidate.bank;
     g_active_pattern = g_pattern_candidate.pattern;
@@ -183,7 +176,8 @@ static uint8_t pattern_candidate_arm_boundary(void)
 static void pattern_candidate_decoded(void)
 {
     if (g_pattern_candidate.phase != PATTERN_CANDIDATE_LOADING
-        && g_pattern_candidate.phase != PATTERN_CANDIDATE_REQUESTED)
+        && g_pattern_candidate.phase != PATTERN_CANDIDATE_REQUESTED
+        && g_pattern_candidate.phase != PATTERN_CANDIDATE_VALIDATED)
         return;
     const persist_codec_result_t validation =
         persistent_pattern_control_validate(&g_pattern_io_workspace->pattern);
@@ -196,7 +190,16 @@ static void pattern_candidate_decoded(void)
         return;
     }
 
-    g_pattern_candidate.phase = PATTERN_CANDIDATE_PENDING;
+    g_pattern_candidate.phase = PATTERN_CANDIDATE_VALIDATED;
+    const persist_codec_result_t prepared=persistent_pattern_control_prepare(
+        &g_pattern_io_workspace->pattern,
+        &g_pattern_io_workspace->prepared_pattern,
+        g_pattern_io_workspace->scratch.groove_build.track);
+    if(prepared==PERSIST_CODEC_IO_ERROR)
+    {g_persist_dbg.decision_reason=PERSIST_DBG_DECISION_PREFLIGHT_BLOCKED;pattern_debug_state();return;}
+    if(prepared!=PERSIST_CODEC_OK)
+    {g_persist_dbg.cancel_reason=PERSIST_DBG_CANCEL_VALIDATION_FAILED;persist_debug_error(PERSIST_DBG_STAGE_VALIDATE,(int32_t)prepared);pattern_candidate_clear();pattern_candidate_release_payload();return;}
+    g_pattern_candidate.phase = PATTERN_CANDIDATE_PREPARED;
     g_pattern_candidate.boundary_armed = 0U;
     g_pattern_candidate.boundary_generation = 0U;
     if (seq_runtime_is_running() != 0U)
@@ -327,6 +330,8 @@ void pattern_load_service(uint32_t byte_budget)
         return;
     }
 
+    if (g_pattern_candidate.phase == PATTERN_CANDIDATE_VALIDATED)
+    {pattern_candidate_decoded();return;}
     if (g_pattern_candidate.phase != PATTERN_CANDIDATE_REQUESTED) return;
     if ((g_pattern_io_workspace != 0)
         || (pattern_control_bank_async_busy() != 0U)) return;
@@ -379,12 +384,19 @@ void pattern_load_service(uint32_t byte_budget)
 uint8_t pattern_load_is_pending(void)
 {
     return ((g_pattern_candidate.phase == PATTERN_CANDIDATE_REQUESTED)
-            || (g_pattern_candidate.phase == PATTERN_CANDIDATE_LOADING))
+            || (g_pattern_candidate.phase == PATTERN_CANDIDATE_LOADING)
+            || (g_pattern_candidate.phase == PATTERN_CANDIDATE_VALIDATED)
+            || (g_pattern_candidate.phase == PATTERN_CANDIDATE_PREPARED))
         ? 1U : 0U;
 }
 
 void pattern_live_on_transport_stopped(void)
 {
+    if (g_pattern_candidate.phase == PATTERN_CANDIDATE_PREPARED)
+    {
+        (void)pattern_candidate_apply(0U);
+        return;
+    }
     (void)pattern_candidate_next_generation();
     g_persist_dbg.cancel_reason = PERSIST_DBG_CANCEL_TRANSPORT_STOPPED;
     pattern_candidate_clear();
@@ -457,7 +469,7 @@ uint8_t pattern_live_request_slot(uint8_t bank, uint8_t pattern)
 
 void pattern_live_service(void)
 {
-    if ((g_pattern_candidate.phase != PATTERN_CANDIDATE_PENDING)
+    if ((g_pattern_candidate.phase != PATTERN_CANDIDATE_PREPARED)
         || (g_pattern_io_workspace == NULL)
         || (g_pattern_io_operation != PATTERN_CONTROL_BANK_ASYNC_NONE)) return;
 
@@ -539,7 +551,7 @@ uint8_t pattern_live_get_pending(uint8_t *out_valid, uint8_t *out_bank, uint8_t 
     }
 
     *out_valid = (uint8_t)((g_pattern_candidate.phase
-            == PATTERN_CANDIDATE_PENDING)
+            == PATTERN_CANDIDATE_PREPARED)
         && (g_pattern_candidate.boundary_armed != 0U));
     *out_bank = g_pattern_candidate.bank;
     *out_pattern = g_pattern_candidate.pattern;
