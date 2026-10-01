@@ -62,7 +62,7 @@ Release ON versus OFF, measured from the linked ELF:
 
 | Region | ON - OFF |
 |---|---:|
-| FLASH | +10,120 bytes |
+| FLASH | +9,992 bytes |
 | DTCM | +64 bytes |
 | D1 SRAM | 0 bytes |
 | D2 DMA/non-cacheable | 0 bytes |
@@ -76,6 +76,20 @@ The OFF ELF has no `g_pattern_recall_diag`, no `pattern_recall_diag_*` symbol
 and no diagnostic section/buffer.  The AUDIO IRQ source after preprocessing is
 the production hot path: all diagnostic statements and the held-count helper
 are absent.
+
+## Logical activity and AUDIO endpoints
+
+`PreparedAudio.entity[].active` describes topology membership, not physical
+AUDIO ownership. An active top-level slot may carry PROGRAM OFF. PROGRAM MIDI
+is active for sequencing/routing but has no physical AUDIO endpoint; PROGRAM
+OFF has neither renderer nor AUDIO parameter endpoint. External and GROUP
+master remain physical AUDIO endpoints even when GROUP uses engine NONE.
+
+The runtime preflight therefore enforces the one-way topology invariant
+`inactive => PROGRAM OFF`; it does not require `active => PROGRAM non-OFF`.
+The real apply uses the same OFF/MIDI/physical endpoint classification: MIDI
+configuration is installed for every active logical slot, then Tone/Common/
+FX/Mute/Mod/Resource projection runs only for physical AUDIO endpoints.
 
 ## GDB capture
 

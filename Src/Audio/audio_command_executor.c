@@ -68,6 +68,43 @@ static track_tone_fm_base_voice_t g_audio_fm_base_projection[BRICK_ENTITY_CAPACI
 static uint8_t g_audio_state_rebind_deferred;
 static uint16_t g_audio_state_rebind_mask;
 
+typedef enum
+{
+    AUDIO_PREPARED_ENDPOINT_OFF = 0U,
+    AUDIO_PREPARED_ENDPOINT_MIDI,
+    AUDIO_PREPARED_ENDPOINT_PHYSICAL,
+    AUDIO_PREPARED_ENDPOINT_INVALID
+} audio_prepared_endpoint_class_t;
+
+/* Logical topology activity and physical AUDIO ownership are independent:
+ * an available top-level entity may legitimately have PROGRAM OFF, while a
+ * MIDI entity is active for routing without owning an AUDIO endpoint. */
+static audio_prepared_endpoint_class_t audio_prepared_endpoint_class(
+    const control_audio_program_descriptor_t *program)
+{
+    if (program == NULL) return AUDIO_PREPARED_ENDPOINT_INVALID;
+    if (program->family == TRACK_RUNTIME_FAMILY_OFF)
+        return ((program->engine == TRACK_RUNTIME_ENGINE_NONE)
+                && (program->type == TRACK_RUNTIME_TYPE_NONE))
+            ? AUDIO_PREPARED_ENDPOINT_OFF : AUDIO_PREPARED_ENDPOINT_INVALID;
+    if (program->family == TRACK_RUNTIME_FAMILY_MIDI)
+        return ((program->engine == TRACK_RUNTIME_ENGINE_NONE)
+                && (program->type == TRACK_RUNTIME_TYPE_MIDI))
+            ? AUDIO_PREPARED_ENDPOINT_MIDI : AUDIO_PREPARED_ENDPOINT_INVALID;
+    if ((program->family == TRACK_RUNTIME_FAMILY_EXTERNAL)
+            || (program->family == TRACK_RUNTIME_FAMILY_DRUM)
+            || (program->family == TRACK_RUNTIME_FAMILY_SAMPLER)
+            || (program->family == TRACK_RUNTIME_FAMILY_SYNTH))
+        return AUDIO_PREPARED_ENDPOINT_PHYSICAL;
+    if ((program->family == TRACK_RUNTIME_FAMILY_OTHER)
+            && (program->engine == TRACK_RUNTIME_ENGINE_NONE)
+            && (program->type == TRACK_RUNTIME_TYPE_GROUP)
+            && ((program->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER)
+                != 0U))
+        return AUDIO_PREPARED_ENDPOINT_PHYSICAL;
+    return AUDIO_PREPARED_ENDPOINT_INVALID;
+}
+
 typedef struct
 {
     uint32_t id;
@@ -944,7 +981,8 @@ static void audio_pattern_diag_param(uint8_t subsystem, uint8_t entity,
 static void audio_pattern_diag_entity_values(uint8_t entity,
     const prepared_audio_entity_state_t *target)
 {
-    if (target->program.family == TRACK_RUNTIME_FAMILY_MIDI) return;
+    if (audio_prepared_endpoint_class(&target->program)
+            != AUDIO_PREPARED_ENDPOINT_PHYSICAL) return;
     if (target->product_kind == PREPARED_AUDIO_PRODUCT_TONE)
     {
         const uint8_t count = tone_param_codec_count(target->product.tone.tag);
@@ -1084,6 +1122,8 @@ static uint8_t audio_pattern_diag_runtime_preflight(
             &state->entity[entity];
         const control_audio_program_descriptor_t *const program =
             &target->program;
+        const audio_prepared_endpoint_class_t endpoint =
+            audio_prepared_endpoint_class(program);
         track_audio_runtime_ctx_t current = {0};
         const uint8_t has_current = audio_note_engine_adapter_current_ctx(
             entity, &current);
@@ -1121,12 +1161,13 @@ static uint8_t audio_pattern_diag_runtime_preflight(
                     | ((uint32_t)current.family << 8U)
                     | ((uint32_t)current.type << 16U)
                     | ((uint32_t)current.flags << 24U)) : 0U);
-        if ((target->active == 0U)
-                != (program->family == TRACK_RUNTIME_FAMILY_OFF))
+        if ((target->active > 1U)
+                || ((target->active == 0U)
+                    && (endpoint != AUDIO_PREPARED_ENDPOINT_OFF)))
             audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_PROGRAM,
                 entity, 1U, PATTERN_DIAG_CODE_MISMATCH, target->active,
-                program->family != TRACK_RUNTIME_FAMILY_OFF, 1U,
-                control_audio_program_pack(program));
+                0U, 1U, (uint32_t)endpoint
+                    | (control_audio_program_pack(program) << 8U));
         if ((target->active != 0U)
                 && ((target->midi_channel < 1U)
                     || (target->midi_channel > 16U)
@@ -1158,14 +1199,6 @@ static uint8_t audio_pattern_diag_runtime_preflight(
                     ((uint32_t)current.program_route.engine << 8U)
                         | program->engine);
         }
-        if ((target->program.family == TRACK_RUNTIME_FAMILY_MIDI)
-                && ((target->modulation_present != 0U)
-                    || (target->resource.kind
-                        != PREPARED_AUDIO_RESOURCE_NONE)))
-            audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_PROGRAM,
-                entity, 2U, PATTERN_DIAG_CODE_ENDPOINT,
-                ((uint32_t)target->modulation_present << 8U)
-                    | target->resource.kind, 0U, 0U, program->family);
         if ((target->modulation_present != 0U)
                 && (entity >= PREPARED_AUDIO_TEMP_OWNER_COUNT))
             audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_MOD,
@@ -1450,11 +1483,14 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
     {
         const prepared_audio_entity_state_t *const target = &state->entity[entity];
         if (target->active == 0U) continue;
+        const audio_prepared_endpoint_class_t endpoint =
+            audio_prepared_endpoint_class(&target->program);
+        if (endpoint == AUDIO_PREPARED_ENDPOINT_INVALID) goto invalid;
         if (!audio_note_engine_adapter_apply_midi_config(entity,
                 target->midi_channel, target->midi_source)) goto invalid;
-        /* A MIDI PROGRAM is active for sequencing/routing but deliberately has
-         * no audio-routable Tone/Common/FX/Mute/Mod/Resource endpoint. */
-        if (target->program.family == TRACK_RUNTIME_FAMILY_MIDI) continue;
+        /* OFF and MIDI remain logical targets but deliberately have no
+         * audio-routable Tone/Common/FX/Mute/Mod/Resource endpoint. */
+        if (endpoint != AUDIO_PREPARED_ENDPOINT_PHYSICAL) continue;
 #if BRICK_PATTERN_RECALL_DIAG
         pattern_recall_diag_phase(PATTERN_DIAG_PHASE_PRODUCT_APPLY);
 #endif

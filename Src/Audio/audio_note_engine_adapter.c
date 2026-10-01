@@ -906,7 +906,8 @@ uint8_t audio_note_engine_adapter_apply_midi_config(
     brick_entity_id_t entity_id, uint8_t channel_1_16, uint8_t source)
 {
     if ((entity_id >= BRICK_ENTITY_CAPACITY)
-            || (channel_1_16 < 1U) || (channel_1_16 > 16U))
+            || (channel_1_16 < 1U) || (channel_1_16 > 16U)
+            || (source >= TRACK_MIDI_SOURCE_COUNT))
         return 0U;
     g_audio_track_ctx[entity_id].midi_channel_1_16 = channel_1_16;
     g_audio_track_ctx[entity_id].midi_source = source;
