@@ -197,6 +197,17 @@ uint8_t audio_wave_table_projection_clear_track(uint8_t track, uint8_t osc)
     return 1U;
 }
 
+uint8_t audio_wave_table_projection_capture_track(
+    uint8_t track, uint8_t osc, audio_wave_table_selection_t *out_selection)
+{
+    if ((track >= BRICK_ENTITY_CAPACITY)
+            || (osc >= AUDIO_WAVETABLE_OSC_COUNT)
+            || (out_selection == NULL)) return 0U;
+    *out_selection = g_control_selection[
+        track * AUDIO_WAVETABLE_OSC_COUNT + osc];
+    return 1U;
+}
+
 void audio_wave_table_projection_withdraw_slot(uint16_t slot,
                                                uint32_t generation)
 {

@@ -14,8 +14,8 @@
     (CONTROL_AUDIO_FIFO_MAX_PARAM_BURST + CONTROL_AUDIO_FIFO_MAX_NOTE_BURST \
      + CONTROL_AUDIO_FIFO_MAX_GENERAL_BURST)
 
-/* Large Pattern/Project replacements publish one prepared transaction COMMIT.
- * FM remains the largest ordinary single batch. */
+/* Pattern/Project replacements publish one PreparedAudio slot COMMIT.
+ * FM remains the largest ordinary live command batch. */
 #define CONTROL_AUDIO_FIFO_MAX_SINGLE_NON_HORIZON_BURST 160U
 /* Patch can rebuild every renderer/topology projection, then restore one FM
  * entity and its common owners/modulation. */
@@ -61,8 +61,8 @@ _Static_assert(CONTROL_AUDIO_FIFO_MAX_NOTE_BURST == 1024U,
                "music action conversion proof changed");
 _Static_assert(CONTROL_AUDIO_FIFO_CONTRACT_BURST == 2083U,
                "functional FIFO aggregate proof changed");
-_Static_assert(AUDIO_STATE_TRANSACTION_COMMAND_CAPACITY == 4618U,
-               "complete AUDIO projection bound changed");
+_Static_assert(AUDIO_STATE_TRANSACTION_COMMAND_CAPACITY == 2304U,
+               "Patch AUDIO projection bound changed");
 _Static_assert(CONTROL_AUDIO_FIFO_MAX_TRANSACTION_COMMITS_IN_FLIGHT == 1U,
                "single transaction lifecycle proof changed");
 _Static_assert(CONTROL_AUDIO_FIFO_MAX_ENCODER_ACCUMULATION == 540U,

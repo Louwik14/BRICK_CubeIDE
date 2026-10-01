@@ -118,6 +118,17 @@ static const param_id_t g_global_param_ids[GLOBAL_CONTROL_VALUE_COUNT] = {
     [GLOBAL_OUTPUT_COMP] = PARAM_OUTPUT_COMP,
 };
 
+uint8_t param_global_control_state_get_at(
+    const param_global_control_state_t *state, uint8_t index,
+    param_id_t *out_id, float *out_value)
+{
+    if ((state == NULL) || (out_id == NULL) || (out_value == NULL)
+            || (index >= GLOBAL_CONTROL_VALUE_COUNT)) return 0U;
+    *out_id = g_global_param_ids[index];
+    *out_value = ((const float *)state)[index];
+    return 1U;
+}
+
 static uint8_t global_slot(param_id_t id, param_global_slot_t *out)
 {
     param_global_slot_t slot;

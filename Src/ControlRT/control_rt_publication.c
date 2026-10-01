@@ -13,6 +13,7 @@
 #include "Sampler/audio_wave_table_projection.h"
 #include "ControlRT/audio_state_transaction.h"
 #include "ControlRT/audio_state_snapshot_control.h"
+#include "ControlRT/prepared_audio_state.h"
 #include "ControlRT/fm_dsp_projection.h"
 #include "Mod/mod_matrix.h"
 #include "Param/engine_model_catalog.h"
@@ -176,9 +177,12 @@ static uint8_t control_rt_command_is_structural(
                 && ((kind == CONTROL_AUDIO_PANIC_GLOBAL)
                     || (command->entity < BRICK_ENTITY_CAPACITY)));
         case CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT:
-            return (uint8_t)((kind <= CONTROL_AUDIO_STATE_PATCH)
-                && (command->entity == 0U) && (command->id == 0U)
-                && (command->value == 0U));
+            if (kind == CONTROL_AUDIO_STATE_PATCH)
+                return (uint8_t)((command->entity == 0U)
+                    && (command->id == 0U) && (command->value == 0U));
+            return (uint8_t)((kind <= CONTROL_AUDIO_STATE_PROJECT)
+                && (command->entity < PREPARED_AUDIO_SLOT_COUNT)
+                && (command->id == 0U) && (command->value != 0U));
         default:
             return 0U;
     }
@@ -198,6 +202,7 @@ typedef struct
 CONTROL_STATE_SDRAM static control_audio_horizon_t g_control_audio_horizon;
 static uint8_t g_audio_state_snapshot_depth;
 static control_audio_state_transition_kind_t g_audio_state_snapshot_transition;
+static uint8_t g_prepared_audio_install_active;
 static uint64_t g_control_rt_first_unpublished_sample;
 
 static uint8_t audio_state_snapshot_same_key(
@@ -240,8 +245,97 @@ static uint8_t audio_state_snapshot_command_is_projectable(
 void audio_state_snapshot_control_init(void)
 {
     memset(&g_audio_state_transaction, 0, sizeof(g_audio_state_transaction));
+    memset(g_prepared_audio_slots, 0, sizeof(g_prepared_audio_slots));
     g_audio_state_snapshot_depth = 0U;
-    g_audio_state_snapshot_transition = CONTROL_AUDIO_STATE_PATTERN;
+    g_audio_state_snapshot_transition = CONTROL_AUDIO_STATE_PATCH;
+    g_prepared_audio_install_active = 0U;
+}
+
+uint8_t prepared_audio_control_reserve(uint8_t *out_slot,
+                                       uint32_t *out_generation,
+                                       prepared_audio_state_t **out_state)
+{
+    if ((out_slot == NULL) || (out_generation == NULL) || (out_state == NULL)
+            || (g_prepared_audio_install_active != 0U)
+            || (audio_state_snapshot_control_active() != 0U)) return 0U;
+    prepared_audio_slot_t *const slot = &g_prepared_audio_slots[0];
+    if ((slot->reserved != 0U) || (slot->ready != 0U)) return 0U;
+    uint32_t generation = slot->generation + 1U;
+    if (generation == 0U) generation = 1U;
+    memset(&slot->state, 0, sizeof(slot->state));
+    slot->generation = generation;
+    slot->transition = CONTROL_AUDIO_STATE_PATTERN;
+    slot->reserved = 1U;
+    slot->ready = 0U;
+    *out_slot = 0U;
+    *out_generation = generation;
+    *out_state = &slot->state;
+    return 1U;
+}
+
+void prepared_audio_control_abort(uint8_t slot_id, uint32_t generation)
+{
+    if (slot_id >= PREPARED_AUDIO_SLOT_COUNT) return;
+    prepared_audio_slot_t *const slot = &g_prepared_audio_slots[slot_id];
+    if ((slot->generation != generation) || (slot->ready != 0U)) return;
+    slot->reserved = 0U;
+}
+
+uint8_t prepared_audio_control_preflight(uint8_t slot_id, uint32_t generation)
+{
+    if ((slot_id >= PREPARED_AUDIO_SLOT_COUNT)
+            || (g_prepared_audio_install_active != 0U)
+            || (audio_state_snapshot_control_active() != 0U)
+            || (control_rt_publication_free() < 1U)) return 0U;
+    const prepared_audio_slot_t *const slot = &g_prepared_audio_slots[slot_id];
+    return (uint8_t)((slot->reserved != 0U) && (slot->ready == 0U)
+        && (slot->generation == generation));
+}
+
+uint8_t prepared_audio_control_begin_install(uint8_t slot_id,
+                                             uint32_t generation)
+{
+    if (prepared_audio_control_preflight(slot_id, generation) == 0U) return 0U;
+    g_prepared_audio_install_active = 1U;
+    return 1U;
+}
+
+void prepared_audio_control_end_install(void)
+{
+    g_prepared_audio_install_active = 0U;
+}
+
+uint8_t prepared_audio_control_publish(uint8_t slot_id, uint32_t generation,
+                                       control_audio_state_transition_kind_t transition)
+{
+    if ((slot_id >= PREPARED_AUDIO_SLOT_COUNT)
+            || (transition > CONTROL_AUDIO_STATE_PROJECT)
+            || (g_prepared_audio_install_active != 0U)) return 0U;
+    prepared_audio_slot_t *const slot = &g_prepared_audio_slots[slot_id];
+    if ((slot->reserved == 0U) || (slot->ready != 0U)
+            || (slot->generation != generation)) return 0U;
+    slot->transition = (uint8_t)transition;
+    __DMB();
+    slot->ready = 1U;
+    __DMB();
+    control_audio_command_t commit = {
+        .value = generation,
+        .entity = slot_id,
+        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
+            CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT, transition)
+    };
+    if (control_rt_publish_batch_now(&commit, 1U) == 0U)
+    {
+        slot->ready = 0U;
+        return 0U;
+    }
+    const uint32_t commit_head = control_audio_fifo_control_head_snapshot();
+    while (control_audio_fifo_control_head_consumed(commit_head) == 0U)
+        __DMB();
+    __DMB();
+    slot->ready = 0U;
+    slot->reserved = 0U;
+    return 1U;
 }
 
 uint8_t audio_state_snapshot_control_active(void)
@@ -258,7 +352,7 @@ uint8_t audio_state_snapshot_control_preflight(void)
 uint8_t audio_state_snapshot_control_begin(
     control_audio_state_transition_kind_t transition)
 {
-    if ((transition > CONTROL_AUDIO_STATE_PATCH)
+    if ((transition != CONTROL_AUDIO_STATE_PATCH)
             || (g_audio_state_snapshot_depth == UINT8_MAX)) return 0U;
     if (g_audio_state_snapshot_depth == 0U)
     {
@@ -567,6 +661,16 @@ uint8_t control_rt_publish_batch_scheduled(
                 < g_control_rt_first_unpublished_sample))
         return 0U;
     uint8_t accepted = 0U;
+    if (g_prepared_audio_install_active != 0U)
+    {
+        for (uint16_t i = 0U; i < count; ++i)
+        {
+            const uint8_t opcode = CONTROL_AUDIO_COMMAND_OPCODE(&commands[i]);
+            if ((opcode != CONTROL_AUDIO_COMMAND_PROGRAM)
+                    && (opcode != CONTROL_AUDIO_COMMAND_PARAM)) return 0U;
+        }
+        return 1U;
+    }
     if (g_control_audio_horizon.active != 0U)
         accepted = (control_rt_publication_free() >= count)
             ? control_rt_publication_stage(commands, count) : 0U;

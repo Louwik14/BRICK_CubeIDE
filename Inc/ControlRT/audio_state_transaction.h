@@ -5,7 +5,15 @@
 
 #include "ControlRT/control_audio_command.h"
 
-#define AUDIO_STATE_TRANSACTION_COMMAND_CAPACITY 4618U
+/* Patch remains on the legacy command snapshot.  Its full final projection is
+ * bounded by 1922 unique keys and rollback may add 256 distinct temp clears. */
+#define AUDIO_STATE_PATCH_FINAL_KEY_BOUND 1922U
+#define AUDIO_STATE_PATCH_TEMP_CLEAR_BOUND 256U
+#define AUDIO_STATE_TRANSACTION_COMMAND_CAPACITY 2304U
+_Static_assert(AUDIO_STATE_TRANSACTION_COMMAND_CAPACITY
+                   >= AUDIO_STATE_PATCH_FINAL_KEY_BOUND
+                        + AUDIO_STATE_PATCH_TEMP_CLEAR_BOUND,
+               "Patch AUDIO transaction no longer covers its unique keys");
 typedef struct
 {
     uint16_t count;

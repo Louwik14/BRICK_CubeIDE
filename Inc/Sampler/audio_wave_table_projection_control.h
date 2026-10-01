@@ -13,6 +13,8 @@ void audio_wave_table_projection_install_prepared(
 uint8_t audio_wave_table_projection_publish_track(
     uint8_t track, uint8_t osc, uint16_t logical_slot);
 uint8_t audio_wave_table_projection_clear_track(uint8_t track, uint8_t osc);
+uint8_t audio_wave_table_projection_capture_track(
+    uint8_t track, uint8_t osc, audio_wave_table_selection_t *out_selection);
 void audio_wave_table_projection_withdraw_slot(uint16_t wavetable_slot,
                                                uint32_t generation);
 uint8_t audio_wave_table_projection_install_descriptor(

@@ -28,6 +28,9 @@ typedef struct
     uint8_t group_active;
     uint8_t control_prepared;
     uint8_t seq_prepared;
+    uint8_t audio_prepared;
+    uint8_t audio_slot;
+    uint32_t audio_generation;
 } persistent_pattern_prepared_t;
 
 typedef struct

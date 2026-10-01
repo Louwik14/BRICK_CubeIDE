@@ -106,8 +106,9 @@ strictement forward-only et aucun chemin d'echec ne rouvre implicitement
 l'ingress. Le Working Pattern suit avant cette frontiere le pipeline commun
 `DECODED -> VALIDATED -> PREPARED`: les owners CONTROL sont prevalides, les
 cles persistantes et adresses de p-lock sont resolues, les capacites sont
-prouvees et le `seq_pattern_t` inactif est entierement compile. La publication CONTROL
-finale installe Pattern et macros dans un unique snapshot AUDIO de type Project;
+prouvees, le `seq_pattern_t` inactif est entierement compile et le slot
+`PreparedAudio` type est construit. La publication CONTROL finale installe
+Pattern et macros puis publie ce slot dans un unique commit AUDIO de type Project;
 l'identite Pattern courante et le hook UI unique ne sont publies qu'apres le
 commit AUDIO reussi. Le chemin interne d'installation Pattern ne cree donc pas
 de transaction imbriquee et ne publie aucun etat UI intermediaire.
@@ -268,11 +269,16 @@ Le recall Pattern possede un seul candidat et une seule identite
 la validation structurelle utilise les familles, types, inputs et polyphonies du
 candidat complet; un budget de voix invalide est donc refuse avant APPLY. Le
 candidat devient `PREPARED` seulement apres validation des owners CONTROL,
-resolution des keys et compilation complete du slot SEQ inactif. Il est ensuite
+resolution des keys, compilation complete du slot SEQ inactif et construction
+du `PreparedAudio` final type. Il est ensuite
 soit applique immediatement, soit arme sur la boundary. Tout travail faillible
 est termine avant l'attente; CONTROL commit et SEQ commit n'ont plus de resultat
 utilisateur normal. Une impossibilite a ce stade est un invariant fatal.
-`AUDIO_STATE_COMMIT` et sa fence FIFO restent le mecanisme AUDIO existant.
+`AUDIO_STATE_COMMIT(slot,generation)` et sa fence FIFO restent le mecanisme
+AUDIO. Le `changed_program_mask` est calcule tardivement dans l'IRQ; les
+transitions conservent release-before-acquire, le rebind des held outputs pour
+Pattern et le PANIC/full rebuild pour Project. Pattern/Project ne construisent,
+ne dedupliquent et ne rejouent plus de transaction de commandes live.
 Cette boundary est globale au Pattern sortant et ne depend jamais de la lane
 selectionnee dans l'UI. Comme le modele ne porte pas de longueur globale
 separee, son cycle est celui de la lane sequencable dont la traversee complete

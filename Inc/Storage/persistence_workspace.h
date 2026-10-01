@@ -59,7 +59,7 @@ typedef struct
     } scratch;
 } persistence_project_restore_workspace_t;
 
-_Static_assert(sizeof(persistence_project_restore_workspace_t) == 958760U,
+_Static_assert(sizeof(persistence_project_restore_workspace_t) == 958768U,
                "Project Restore workspace size changed");
 
 _Static_assert(sizeof(persist_control_pattern_t)
@@ -77,7 +77,7 @@ typedef struct
     } scratch;
 } persistence_pattern_io_workspace_t;
 
-_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 583608U,
+_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 583616U,
                "Pattern IO workspace size changed");
 
 persistence_project_save_workspace_t *persistence_workspace_acquire_project_save(void);

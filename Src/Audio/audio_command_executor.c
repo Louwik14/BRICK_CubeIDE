@@ -6,9 +6,11 @@
 #include "Audio/control_audio_fifo_audio.h"
 #include "Seq/seq_engine.h"
 #include "ControlRT/audio_state_transaction.h"
+#include "ControlRT/prepared_audio_state.h"
 #include "ControlRT/live_parameter_event.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
+#include "Audio/audio_fx_runtime.h"
 #include "Audio/metronome_runtime.h"
 #include "Audio/mixer.h"
 #include "Audio/drum_synth.h"
@@ -32,6 +34,9 @@
 #include "Sampler/wavetable_config.h"
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
+#include "Param/param_global_control.h"
+#include "Param/param_registry.h"
+#include "Track/tone_param_codec.h"
 #include "Audio/sd_preview_audio.h"
 #include "Platform/brick_fatal.h"
 #include "Platform/memory_layout.h"
@@ -159,6 +164,19 @@ static audio_command_apply_result_t audio_command_install_program(
     if (audio_note_engine_adapter_install_prepared(&spec) == 0U)
         return AUDIO_COMMAND_APPLY_PROGRAM_INSTALL;
     return AUDIO_COMMAND_APPLY_OK;
+}
+
+static audio_command_apply_result_t audio_install_prepared_program(
+    uint8_t entity, const control_audio_program_descriptor_t *descriptor)
+{
+    if ((descriptor == NULL) || (entity >= BRICK_ENTITY_CAPACITY))
+        return AUDIO_COMMAND_APPLY_INVALID;
+    const audio_note_engine_install_spec_t spec = {
+        .entity_id = entity, .engine = descriptor->engine,
+        .family = descriptor->family, .type = descriptor->type,
+        .flags = descriptor->flags };
+    return (audio_note_engine_adapter_install_prepared(&spec) != 0U)
+        ? AUDIO_COMMAND_APPLY_OK : AUDIO_COMMAND_APPLY_PROGRAM_INSTALL;
 }
 
 static audio_command_apply_result_t audio_command_apply_program(
@@ -445,7 +463,7 @@ static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
     return 1U;
 }
 
-static audio_command_apply_result_t audio_command_apply_state_commit(
+static audio_command_apply_result_t audio_command_apply_patch_state_commit(
     const control_audio_command_t *commit)
 {
     const uint8_t transition = CONTROL_AUDIO_COMMAND_KIND(commit);
@@ -558,6 +576,369 @@ static audio_command_apply_result_t audio_command_apply_state_commit(
     return AUDIO_COMMAND_APPLY_OK;
 }
 
+static uint8_t audio_prepared_apply_float(uint8_t entity, param_id_t id,
+                                          float value, uint8_t scope)
+{
+    uint32_t bits = 0U;
+    memcpy(&bits, &value, sizeof(bits));
+    return live_parameter_audio_runtime_apply_param(entity, id, bits, scope);
+}
+
+static uint8_t audio_prepared_apply_tone(
+    uint8_t entity, const tone_program_control_t *tone)
+{
+    const uint8_t count = tone_param_codec_count(tone->tag);
+    for (uint8_t slot = 0U; slot < count; ++slot)
+    {
+        param_id_t id;
+        float value;
+        if (!tone_param_codec_slot_to_param(tone->tag, slot, &id)
+                || !tone_program_control_get_from(tone, id, &value)
+                || !audio_prepared_apply_float(entity, id, value,
+                    CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
+    }
+    return 1U;
+}
+
+static uint8_t audio_prepared_apply_fm(
+    uint8_t entity, const fm_control_state_t *fm)
+{
+    track_audio_runtime_ctx_t ctx;
+    if ((audio_note_engine_adapter_current_ctx(entity, &ctx) == 0U)
+            || (ctx.program_route.engine != TRACK_RUNTIME_ENGINE_FM)) return 0U;
+    brick6_fm_runtime_set_base_voice(ctx.program_route.instance_id, &fm->base);
+    if (audio_note_engine_adapter_project_track_configuration(entity) == 0U)
+        return 0U;
+    static const param_id_t macro_ids[] = {
+        PARAM_FM_RATIO, PARAM_FM_BRIGHT, PARAM_FM_BODY, PARAM_FM_DETAIL,
+        PARAM_FM_METAL, PARAM_FM_ENV_ATTACK, PARAM_FM_ENV_DECAY,
+        PARAM_FM_ENV_SUSTAIN, PARAM_FM_ENV_RELEASE, PARAM_FM_PLAY_VEL,
+        PARAM_FM_PLAY_KEY, PARAM_FM_PLAY_PITCH_ENV, PARAM_FM_PLAY_PITCH_TIME };
+    for (uint8_t i = 0U; i < (uint8_t)(sizeof(macro_ids)/sizeof(macro_ids[0])); ++i)
+    {
+        float value;
+        if (!fm_control_state_get_public_param_from(fm, macro_ids[i], &value)
+                || !audio_prepared_apply_float(entity, macro_ids[i], value,
+                    CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
+    }
+    return 1U;
+}
+
+static uint8_t audio_prepared_apply_common(
+    uint8_t entity, const prepared_audio_entity_state_t *state)
+{
+    static const param_id_t filter_ids[12U] = {
+        PARAM_FILTER_MORPH, PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE,
+        PARAM_FILTER_EG_AMT, PARAM_FILTER_ATTACK, PARAM_FILTER_DECAY,
+        PARAM_FILTER_SUSTAIN, PARAM_FILTER_RELEASE, PARAM_FILTER_KEYTRK,
+        PARAM_FILTER_ENVRST, PARAM_FILTER_ENVDLY, PARAM_ENV_RETRIG_FILTER };
+    static const param_id_t vca_ids[6U] = {
+        PARAM_VCA_ATTACK, PARAM_VCA_DECAY, PARAM_VCA_SUSTAIN,
+        PARAM_VCA_RELEASE, PARAM_FILTER_MODE, PARAM_ENV_RETRIG_VCA };
+    static const param_id_t mixer_ids[5U] = {
+        PARAM_MIX_LEVEL, PARAM_MIX_PAN, PARAM_MIX_SEND1,
+        PARAM_MIX_SEND2, PARAM_MIX_SEND3 };
+    const float *const filter = (const float *)&state->filter;
+    const float *const vca = (const float *)&state->vca;
+    const float *const mixer = (const float *)&state->mixer;
+    for (uint8_t i = 0U; i < 12U; ++i)
+        if (param_registry_projected_track_param_is_applicable(filter_ids[i],
+                (track_family_t)state->ui_family,
+                (track_runtime_type_t)state->program.type,
+                state->topology_role == ENTITY_ROLE_GROUP_MASTER,
+                state->topology_role == ENTITY_ROLE_GROUP_CHILD)
+                && !audio_prepared_apply_float(entity, filter_ids[i], filter[i],
+                    CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
+    for (uint8_t i = 0U; i < 6U; ++i)
+        if (param_registry_projected_track_param_is_applicable(vca_ids[i],
+                (track_family_t)state->ui_family,
+                (track_runtime_type_t)state->program.type,
+                state->topology_role == ENTITY_ROLE_GROUP_MASTER,
+                state->topology_role == ENTITY_ROLE_GROUP_CHILD)
+                && !audio_prepared_apply_float(entity, vca_ids[i], vca[i],
+                    CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
+    for (uint8_t i = 0U; i < 5U; ++i)
+        if (param_registry_projected_track_param_is_applicable(mixer_ids[i],
+                (track_family_t)state->ui_family,
+                (track_runtime_type_t)state->program.type,
+                state->topology_role == ENTITY_ROLE_GROUP_MASTER,
+                state->topology_role == ENTITY_ROLE_GROUP_CHILD)
+                && !audio_prepared_apply_float(entity, mixer_ids[i], mixer[i],
+                    CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
+    const uint8_t configurable_polyphony = (uint8_t)(
+        ((state->program.family == TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (state->program.type == TRACK_RUNTIME_TYPE_MULTI))
+        || ((state->program.family == TRACK_RUNTIME_FAMILY_SYNTH)
+            && ((state->program.type == TRACK_RUNTIME_TYPE_PRISM)
+                || (state->program.type == TRACK_RUNTIME_TYPE_STACK)
+                || (state->program.type == TRACK_RUNTIME_TYPE_WAVE)
+                || (state->program.type == TRACK_RUNTIME_TYPE_FM))));
+    if (configurable_polyphony != 0U)
+    {
+        const float voices = (float)state->polyphony.voice_count;
+        const uint8_t current_voices = synth_polyphony_get_voice_count(entity);
+        if ((state->polyphony.voice_count >= 1U)
+                && (state->polyphony.voice_count < current_voices))
+        {
+            seq_engine_control_disarm_track(entity);
+            audio_command_executor_close_outputs_from(
+                entity, state->polyphony.voice_count);
+        }
+        if (!audio_prepared_apply_float(entity,
+                (param_id_t)CONTROL_AUDIO_CONFIG_POLY_VOICES, voices,
+                CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)
+                || !audio_prepared_apply_float(entity, PARAM_CFG_POLY_SPREAD,
+                    state->polyphony.spread,
+                    CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
+    }
+    const audio_fx_control_state_t *const fx = &state->audio_fx;
+    if (entity < BRICK_ENTITY_TOP_LEVEL_COUNT)
+    {
+        if (!audio_fx_runtime_set_filter_pos(entity, fx->config.filter_position)
+                || !audio_fx_runtime_set_order(entity, fx->config.order)) return 0U;
+        for (uint8_t slot = 0U; slot < 2U; ++slot)
+            if (!audio_fx_runtime_set_spatial_mode(entity, (audio_fx_slot_t)slot,
+                    fx->config.spatial_mode[slot])) return 0U;
+    }
+    static const param_id_t fx_ids[8U] = {
+        PARAM_AUDIO_FX_MODEL, PARAM_AUDIO_FX_P1, PARAM_AUDIO_FX_P2,
+        PARAM_AUDIO_FX_P3, PARAM_AUDIO_FX_B_MODEL, PARAM_AUDIO_FX_B_P1,
+        PARAM_AUDIO_FX_B_P2, PARAM_AUDIO_FX_B_P3 };
+    const float fx_values[8U] = { (float)fx->model[0], fx->p1[0], fx->p2[0],
+        fx->p3[0], (float)fx->model[1], fx->p1[1], fx->p2[1], fx->p3[1] };
+    for (uint8_t i = 0U; i < 8U; ++i)
+        if (param_registry_projected_track_param_is_applicable(fx_ids[i],
+                (track_family_t)state->ui_family,
+                (track_runtime_type_t)state->program.type,
+                state->topology_role == ENTITY_ROLE_GROUP_MASTER,
+                state->topology_role == ENTITY_ROLE_GROUP_CHILD)
+                && !audio_prepared_apply_float(entity, fx_ids[i], fx_values[i],
+                    CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
+    for (uint8_t slot = 0U; slot < 2U; ++slot)
+    {
+        const param_id_t id = slot
+            ? PARAM_GROUP_FX_B_LEVEL : PARAM_GROUP_FX_A_LEVEL;
+        if (param_registry_projected_track_param_is_applicable(id,
+                (track_family_t)state->ui_family,
+                (track_runtime_type_t)state->program.type,
+                state->topology_role == ENTITY_ROLE_GROUP_MASTER,
+                state->topology_role == ENTITY_ROLE_GROUP_CHILD)
+                && !audio_prepared_apply_float(entity,id,fx->group_level[slot],
+                    CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
+    }
+    return 1U;
+}
+
+static uint8_t audio_prepared_apply_mod(
+    uint8_t entity, const prepared_audio_mod_state_t *mod)
+{
+    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+    {
+        const mod_lfo_control_value_t *const value = &mod->lfo.lfo[lfo];
+        const float fields[MOD_LFO_PARAM_COUNT] = {
+            value->rate, value->shape, value->trigger, value->phase };
+        for (uint8_t param = 0U; param < MOD_LFO_PARAM_COUNT; ++param)
+            if (!mod_lfo_v1_set_track_param_audio(entity, lfo,
+                    (mod_lfo_param_t)param, fields[param])) return 0U;
+    }
+    const float env[MOD_ENV3_PARAM_COUNT] = { mod->envelope.attack,
+        mod->envelope.decay, mod->envelope.sustain, mod->envelope.release };
+    for (uint8_t param = 0U; param < MOD_ENV3_PARAM_COUNT; ++param)
+        if (!mod_env3_audio_apply_track_param(entity,
+                (mod_env3_param_t)param, env[param])) return 0U;
+    mod_env3_audio_apply_retrigger(entity, mod->envelope.retrigger);
+    for (uint8_t op = 0U; op < 2U; ++op)
+    {
+        for (uint8_t input = 0U; input < 2U; ++input)
+            if (!audio_mod_matrix_set_multi_source(entity, op, input,
+                    mod->multi_source[op][input])) return 0U;
+        if (!audio_mod_matrix_set_slew_source(entity, op,
+                mod->slew_source[op])
+                || !audio_mod_matrix_set_slew_amount(entity, op,
+                    mod->slew_amount[op])) return 0U;
+    }
+    for (uint8_t route = 0U; route < 8U; ++route)
+    {
+        const prepared_audio_mod_route_t *const r = &mod->route[route];
+        if (!audio_mod_matrix_set_route_source(entity, route, r->source)
+                || !audio_mod_matrix_set_route_destination(entity, route,
+                    r->destination)
+                || !audio_mod_matrix_set_route_depth(entity, route, r->depth)
+                || !audio_mod_matrix_set_route_enabled(entity, route,
+                    r->enabled)) return 0U;
+    }
+    audio_mod_matrix_rebuild_track(entity);
+    return audio_note_engine_adapter_project_track_configuration(entity);
+}
+
+static uint8_t audio_prepared_apply_resource(
+    uint8_t entity, const prepared_audio_resource_state_t *resource)
+{
+    if (resource->kind == PREPARED_AUDIO_RESOURCE_NONE) return 1U;
+    if (resource->kind == PREPARED_AUDIO_RESOURCE_SAMPLER)
+    {
+        track_audio_runtime_ctx_t ctx;
+        if (audio_note_engine_adapter_current_ctx(entity, &ctx) == 0U) return 0U;
+        uint16_t current = UINT16_MAX;
+        if (ctx.type == TRACK_RUNTIME_TYPE_MULTI)
+        {
+            if ((brick6_sampler_runtime_get_multi_instrument(entity, &current)
+                    != 0U) && (current == resource->sampler_runtime)) return 1U;
+            brick6_sampler_runtime_set_multi_instrument(
+                entity, resource->sampler_runtime);
+            if ((resource->sampler_runtime != UINT16_MAX)
+                    && ((brick6_sampler_runtime_get_multi_instrument(
+                        entity, &current) == 0U)
+                        || (current != resource->sampler_runtime))) return 0U;
+        }
+        else
+        {
+            if ((brick6_sampler_runtime_get_sample(entity, &current) != 0U)
+                    && (current == resource->sampler_runtime)) return 1U;
+            brick6_sampler_runtime_set_sample(entity, resource->sampler_runtime);
+        }
+        g_audio_state_rebind_mask |= (uint16_t)(1U << entity);
+        return 1U;
+    }
+    if (resource->kind != PREPARED_AUDIO_RESOURCE_WAVETABLE) return 0U;
+    track_audio_runtime_ctx_t ctx;
+    if ((audio_note_engine_adapter_current_ctx(entity, &ctx) == 0U)
+            || (ctx.program_route.engine != TRACK_RUNTIME_ENGINE_WAVE)) return 0U;
+    const uint8_t voices = synth_polyphony_get_voice_count(entity);
+    if ((voices == 0U) || (voices > SYNTH_POLYPHONY_MAX_VOICES)) return 0U;
+    for (uint8_t voice = 0U; voice < voices; ++voice)
+    {
+        const uint8_t instance = synth_polyphony_get_slot(entity, voice);
+        if (instance >= BRICK6_WAVE_VOICE_INSTANCE_COUNT) return 0U;
+        for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
+            brick6_wave_runtime_set_osc_table_wavetable_generation(instance,
+                osc, resource->wavetable[osc].wavetable_slot,
+                resource->wavetable[osc].generation);
+    }
+    return 1U;
+}
+
+static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
+    const control_audio_command_t *commit)
+{
+    const uint8_t transition = CONTROL_AUDIO_COMMAND_KIND(commit);
+    if ((transition > CONTROL_AUDIO_STATE_PROJECT)
+            || (commit->entity >= PREPARED_AUDIO_SLOT_COUNT)
+            || (commit->value == 0U)) return AUDIO_COMMAND_APPLY_INVALID;
+    const prepared_audio_slot_t *const slot =
+        &g_prepared_audio_slots[commit->entity];
+    if ((slot->ready == 0U) || (slot->reserved == 0U)
+            || (slot->generation != commit->value)
+            || (slot->transition != transition)) return AUDIO_COMMAND_APPLY_INVALID;
+    __DMB();
+    const prepared_audio_state_t *const state = &slot->state;
+    uint16_t changed = 0U;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        const control_audio_program_descriptor_t *const target =
+            &state->entity[entity].program;
+        track_audio_runtime_ctx_t current;
+        const uint8_t same = (uint8_t)(
+            (audio_note_engine_adapter_current_ctx(entity, &current) != 0U)
+            && (current.program_route.engine == target->engine)
+            && (current.family == target->family)
+            && (current.type == target->type)
+            && (current.flags == target->flags));
+        if ((transition == CONTROL_AUDIO_STATE_PROJECT) || (same == 0U))
+            changed |= (uint16_t)(1U << entity);
+    }
+    if (transition == CONTROL_AUDIO_STATE_PROJECT)
+    {
+        const control_audio_command_t panic = { .opcode_kind =
+            CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PANIC,
+                                      CONTROL_AUDIO_PANIC_GLOBAL) };
+        if (!audio_command_apply_panic(&panic)) return AUDIO_COMMAND_APPLY_INVALID;
+    }
+    const control_audio_program_descriptor_t off = {
+        .family = TRACK_RUNTIME_FAMILY_OFF, .type = TRACK_RUNTIME_TYPE_NONE };
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+        if ((changed & (uint16_t)(1U << entity)) != 0U)
+            audio_command_close_entity(entity);
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+        if ((changed & (uint16_t)(1U << entity)) != 0U)
+        {
+            const audio_command_apply_result_t result =
+                audio_install_prepared_program(entity, &off);
+            if (result != AUDIO_COMMAND_APPLY_OK) return result;
+        }
+    g_audio_state_rebind_deferred = 1U;
+    g_audio_state_rebind_mask = changed;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+        if ((changed & (uint16_t)(1U << entity)) != 0U)
+        {
+            const audio_command_apply_result_t result =
+                audio_install_prepared_program(entity,
+                    &state->entity[entity].program);
+            if (result != AUDIO_COMMAND_APPLY_OK)
+            { g_audio_state_rebind_deferred = 0U; return result; }
+        }
+    brick6_fm_runtime_finalize_pending();
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        const prepared_audio_entity_state_t *const target = &state->entity[entity];
+        if (target->active == 0U) continue;
+        if (!audio_note_engine_adapter_apply_midi_config(entity,
+                target->midi_channel, target->midi_source)) goto invalid;
+        if (target->product_kind == PREPARED_AUDIO_PRODUCT_FM)
+        {
+            if (!audio_prepared_apply_fm(entity, &target->product.fm)) goto invalid;
+        }
+        else if ((target->product_kind != PREPARED_AUDIO_PRODUCT_TONE)
+                || !audio_prepared_apply_tone(entity, &target->product.tone))
+            goto invalid;
+        if (!audio_prepared_apply_common(entity, target)) goto invalid;
+        if ((target->modulation_present != 0U)
+                && !audio_prepared_apply_mod(entity, &target->modulation))
+            goto invalid;
+        if (!audio_prepared_apply_resource(entity, &target->resource)) goto invalid;
+    }
+    for (uint8_t index = 0U; index < PARAM_GLOBAL_CONTROL_VALUE_COUNT; ++index)
+    {
+        param_id_t id;
+        float value;
+        if (!param_global_control_state_get_at(&state->global,index,&id,&value)
+                || !audio_prepared_apply_float(0U,id,value,
+                    CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL)) goto invalid;
+    }
+    if (!brick6_audio_runtime_set_input_owner(0U,state->input_owner[0U])
+            || !brick6_audio_runtime_set_input_owner(1U,state->input_owner[1U])
+            || !audio_transport_runtime_set_tempo(state->tempo_milli_bpm)
+            || !audio_transport_runtime_set_step_q16(state->step_q16)) goto invalid;
+    metronome_runtime_set_level_u7(state->metronome_level);
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+        for (uint16_t word = 0U; word < PREPARED_AUDIO_PARAM_MASK_WORDS; ++word)
+        {
+            uint32_t pending = state->temp_clear_mask[entity][word];
+            while (pending != 0U)
+            {
+                const uint8_t bit = (uint8_t)__builtin_ctz(pending);
+                const param_id_t id = (param_id_t)(word * 32U + bit);
+                if (id >= PARAM_COUNT) goto invalid;
+                uint32_t zero = 0U;
+                if (!live_parameter_audio_runtime_apply_param(entity,id,zero,
+                        CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK)) goto invalid;
+                pending &= pending - 1U;
+            }
+        }
+    g_audio_state_rebind_deferred = 0U;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+        if ((g_audio_state_rebind_mask & (uint16_t)(1U << entity)) != 0U)
+            if (!audio_note_engine_adapter_initialize_held_outputs(entity))
+                return AUDIO_COMMAND_APPLY_REBIND;
+    g_audio_state_rebind_mask = 0U;
+    brick6_fm_runtime_finalize_pending();
+    audio_mod_matrix_finalize_dirty();
+    return AUDIO_COMMAND_APPLY_OK;
+invalid:
+    g_audio_state_rebind_deferred = 0U;
+    return AUDIO_COMMAND_APPLY_INVALID;
+}
+
 static audio_command_apply_result_t audio_command_apply(
     const control_audio_command_t *command)
 {
@@ -584,7 +965,10 @@ static audio_command_apply_result_t audio_command_apply(
             return (audio_command_apply_panic(command) != 0U)
                 ? AUDIO_COMMAND_APPLY_OK : AUDIO_COMMAND_APPLY_INVALID;
         case CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT:
-            return audio_command_apply_state_commit(command);
+            return (CONTROL_AUDIO_COMMAND_KIND(command)
+                    == CONTROL_AUDIO_STATE_PATCH)
+                ? audio_command_apply_patch_state_commit(command)
+                : audio_command_apply_prepared_state_commit(command);
         default: return AUDIO_COMMAND_APPLY_INVALID;
     }
 }

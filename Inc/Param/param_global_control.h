@@ -36,6 +36,9 @@ uint8_t param_global_control_get(param_id_t id, float *out_value);
 uint8_t param_global_control_set(param_id_t id, float value);
 uint8_t param_global_control_capture(param_global_control_state_t *out_state);
 uint8_t param_global_control_restore(const param_global_control_state_t *state);
+uint8_t param_global_control_state_get_at(
+    const param_global_control_state_t *state, uint8_t index,
+    param_id_t *out_id, float *out_value);
 
 #ifdef __cplusplus
 }

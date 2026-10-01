@@ -11,7 +11,7 @@
 #include "Seq/seq_runtime_control.h"
 #include "Track/control_music_output.h"
 #include "ControlRT/control_rt_publication.h"
-#include "ControlRT/audio_state_snapshot_control.h"
+#include "ControlRT/prepared_audio_state.h"
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
@@ -220,7 +220,9 @@ static void pattern_candidate_decoded(void)
     persist_debug_stage(PERSIST_DBG_STAGE_CANDIDATE, 0);
     pattern_debug_state();
     g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_TRANSPORT_STOPPED_APPLY;
-    if (audio_state_snapshot_control_preflight() != 0U)
+    if (prepared_audio_control_preflight(
+            g_pattern_io_workspace->prepared_pattern.audio_slot,
+            g_pattern_io_workspace->prepared_pattern.audio_generation) != 0U)
         (void)pattern_candidate_apply(0U);
     else
         g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_PREFLIGHT_BLOCKED;
@@ -482,7 +484,9 @@ void pattern_live_service(void)
             pattern_debug_state();
             return;
         }
-        if (audio_state_snapshot_control_preflight() == 0U)
+        if (prepared_audio_control_preflight(
+                g_pattern_io_workspace->prepared_pattern.audio_slot,
+                g_pattern_io_workspace->prepared_pattern.audio_generation) == 0U)
         {
             g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_PREFLIGHT_BLOCKED;
             return;

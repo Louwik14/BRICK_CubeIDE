@@ -1,7 +1,7 @@
 #include "Storage/project_product.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/wav_convert.h"
-#include "ControlRT/audio_state_snapshot_control.h"
+#include "ControlRT/prepared_audio_state.h"
 #include "Storage/audio_recorder.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/persistent_pattern_control.h"
@@ -20,6 +20,7 @@
 #include "App/name_contract.h"
 #include "Seq/seq_engine.h"
 #include "Seq/seq_runtime.h"
+#include "Param/param_registry.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_index.h"
 #include "Sampler/sample_cache.h"
@@ -1629,10 +1630,9 @@ void project_product_load_service(void)
         }
         g_persist_dbg.audio_publish_result=1U;
         g_persist_dbg.seq_publish_result=1U;
-        if(audio_state_snapshot_control_preflight()==0U)
-            PROJECT_PRODUCT_FATAL("PROJECT_AUDIO_PREFLIGHT_LOST_AFTER_PREPARED",
-                                  PROJECT_FATAL_PATTERN_APPLY);
-        if(audio_state_snapshot_control_begin(CONTROL_AUDIO_STATE_PROJECT)==0U)
+        if(prepared_audio_control_begin_install(
+                restore->prepared_pattern.audio_slot,
+                restore->prepared_pattern.audio_generation)==0U)
             PROJECT_PRODUCT_FATAL("PROJECT_AUDIO_BEGIN_FAILED_AFTER_PREPARED",
                                        PROJECT_FATAL_PATTERN_APPLY);
         persistent_pattern_control_commit_prepared_control(
@@ -1640,13 +1640,24 @@ void project_product_load_service(void)
         if(project_control_apply_macros(&restore->macros)==0U)
             PROJECT_PRODUCT_FATAL("PROJECT_MACRO_COMMIT_FAILED",
                                   PROJECT_FATAL_PATTERN_APPLY);
+        prepared_audio_state_t *const prepared_audio =
+            &g_prepared_audio_slots[restore->prepared_pattern.audio_slot].state;
+        for(uint8_t entity=0U;entity<BRICK_ENTITY_CAPACITY;++entity)
+            for(param_id_t id=0U;id<PARAM_COUNT;++id)
+                if(param_registry_temp_is_clearable(id)!=0U)
+                    prepared_audio->temp_clear_mask[entity][id>>5U]
+                        |=UINT32_C(1)<<(id&31U);
         /* Publish a fresh stopped SEQ epoch before AUDIO installs the
          * replacement programs.  No terminal event from the previous
          * Project may be interpreted against the new engine map. */
         persistent_pattern_control_commit_prepared_seq(
             &restore->prepared_pattern,0U);
         g_persist_dbg.seq_publish_result=2U;
-        if(audio_state_snapshot_control_commit()==0U)
+        prepared_audio_control_end_install();
+        if(prepared_audio_control_publish(
+                restore->prepared_pattern.audio_slot,
+                restore->prepared_pattern.audio_generation,
+                CONTROL_AUDIO_STATE_PROJECT)==0U)
             PROJECT_PRODUCT_FATAL("PROJECT_AUDIO_COMMIT_FAILED",
                                   PROJECT_FATAL_PATTERN_APPLY);
         g_persist_dbg.audio_publish_result=2U;
@@ -1656,6 +1667,7 @@ void project_product_load_service(void)
         persistent_pattern_control_sync_ui_after_commit();
         ui_macro_interaction_reset();
         restore->prepared_pattern.control_prepared=0U;
+        restore->prepared_pattern.audio_prepared=0U;
         restore->prepared_pattern.pattern=NULL;
         project_product_load_finish_success();
         return;

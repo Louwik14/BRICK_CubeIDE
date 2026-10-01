@@ -56,14 +56,16 @@ PROGRAM PARAM NOTE TRANSPORT RECORD PANIC AUDIO_STATE_COMMIT
 - `TRANSPORT` porte START, STOP, CONTINUE ou LOCATE.
 - `RECORD` porte START ou STOP, un `session_id`, une configuration et un client.
 - `PANIC` est global ou limite a une entite.
-- `AUDIO_STATE_COMMIT` rend visible une transaction locale Pattern/Project.
-  Ses champs `entity`, `id` et `value` restent nuls: aucun identifiant de
-  transaction, generation ou pointeur ne traverse la FIFO.
+- `AUDIO_STATE_COMMIT` rend visible un slot `PreparedAudio` pour Pattern et
+  Project. `entity` identifie le slot local et `value` sa generation; aucun
+  pointeur nu ne traverse la FIFO. Patch conserve provisoirement sa transaction
+  legacy et utilise les champs nuls.
 
 La classification `DURABLE_STATE`, `TRANSIENT_ACTION`,
 `RESOURCE_LIFECYCLE`, `REQUEST` est structurelle et independante du runtime
-AUDIO. La transaction absorbe exclusivement `DURABLE_STATE`; le caractere
-transitoire vient donc de la commande (`TEMP`/`CLEAR_TEMP`), jamais de l'ID PARAM.
+AUDIO. Elle reste utilisee par le snapshot Patch. Pattern et Project ne
+convertissent plus leur restore en commandes `PROGRAM`/`PARAM` et ne passent
+plus par cette classification.
 
 `effective_sample_time` utilise la timeline sample absolue. A date egale,
 l'ordre d'intention CONTROL est conserve. Les samples, wavetables, instruments
@@ -167,9 +169,23 @@ de ce contrat fonctionnel.
 
 ## Restore atomique
 
-Pattern, Project et Patch construisent hors IRQ un tableau local borne de
-commandes finales. CONTROL publie son contenu avec `DMB`, puis place un unique
-`AUDIO_STATE_COMMIT` dans la FIFO. AUDIO applique la transaction avant d'avancer
-`tail`; CONTROL attend ce franchissement avant de reutiliser le tableau. Cette
-  fence de duree de vie suffit sans checksum, magic ni maintenance cache CPU
-  vers CPU.
+`PreparedPattern` contient les preuves CONTROL et le slot SEQ compile, et
+reserve aussi un slot `PreparedAudio`. Ce dernier contient directement les 16
+descripteurs PROGRAM, les etats Tone/FM/Filter/VCA/Mixer/FX/Poly/Mod, les
+bindings de ressources, MIDI et les globals. Sa construction et ses resolutions
+statiques ont lieu hors IRQ. Les handles de ressources sont finalises cote
+CONTROL apres installation des assets et avant publication.
+
+Pattern et Project publient un unique `AUDIO_STATE_COMMIT(slot,generation)` dans
+la FIFO. A son timestamp, AUDIO compare encore les PROGRAM cibles au runtime
+effectif, car des commandes live peuvent preceder le commit. L'installer fait
+ensuite PANIC pour Project seulement, ferme tous les PROGRAM modifies, installe
+OFF pour liberer avant acquisition, installe tous les PROGRAM cibles, applique
+les familles finales et les ressources, puis rebind les held outputs Pattern.
+Le renderer ne reprend jamais entre ces phases.
+
+AUDIO avance `tail` uniquement apres le handler complet. CONTROL attend ce
+franchissement avant de rendre le slot reutilisable: la fence, le `DMB`, le bit
+`ready` et la generation forment le contrat de duree de vie. Patch reste sur un
+snapshot de commandes separe, borne a 2304 entrees; la borne historique 4618
+n'est plus possedee par Pattern/Project.
