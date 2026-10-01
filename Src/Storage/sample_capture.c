@@ -2,12 +2,12 @@
 
 #include "Board/board_audio_input.h"
 
-#include "IPC/control_audio_rec_bus.h"
+#include "Recorder/control_audio_rec_bus.h"
 #include "ControlRT/control_audio_timing.h"
 #include "ControlRT/control_music_publication.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_runtime.h"
-#include "IPC/audio_rec_level_reader.h"
+#include "Audio/Publications/audio_rec_level_reader.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_global_pool.h"

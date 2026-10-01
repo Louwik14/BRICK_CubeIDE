@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IPC/multi_sample_audio_projection.h"
+#include "Sampler/multi_sample_audio_projection.h"
 
 uint8_t multi_sample_audio_projection_is_ready(uint16_t instrument_id);
 uint8_t multi_sample_audio_projection_resolve(

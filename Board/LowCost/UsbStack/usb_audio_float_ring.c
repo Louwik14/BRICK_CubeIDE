@@ -1,4 +1,4 @@
-#include "IPC/usb_audio_float_ring.h"
+#include "Board/usb_audio_float_ring.h"
 
 #include <string.h>
 
@@ -28,7 +28,7 @@ _Static_assert(sizeof(g_usb_audio_float_rings.pc_to_brick.samples) == 2304U,
 _Static_assert(sizeof(g_usb_audio_float_rings.brick_to_pc.samples) == 2304U,
                "USB Audio BRICK-to-PC payload size changed");
 _Static_assert(sizeof(g_usb_audio_float_rings) < 8192U,
-               "USB Audio rings exceed the D3 IPC budget");
+               "USB Audio rings exceed the D3 IRQ-shared budget");
 
 static uint32_t usb_audio_float_available(const usb_audio_float_ring_t *ring)
 {

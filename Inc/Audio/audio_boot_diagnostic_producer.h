@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IPC/audio_boot_diagnostic.h"
+#include "Audio/Publications/audio_boot_diagnostic.h"
 
 void audio_boot_diag_producer_init(void);
 void audio_boot_diag_producer_publish_state(audio_init_state_t state,

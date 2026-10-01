@@ -13,7 +13,7 @@
 /*
  * Pointer-free SPSC transport contract.  The PC->BRICK ring is written by
  * USB and read by AUDIO.  The BRICK->PC ring is written by AUDIO and read by
- * USB.  The backing object is placed in the existing non-cacheable D3 IPC
+ * USB.  The backing object is placed in the existing non-cacheable D3 IRQ-shared
  * window; a future MCU port can preserve the same interleaved-float contract.
  * Finite host samples are preserved verbatim; NaN and infinities become 0.0f.
  */

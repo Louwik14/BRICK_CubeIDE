@@ -24,7 +24,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "IPC/audio_boot_diagnostic_reader.h"
+#include "Audio/Publications/audio_boot_diagnostic_reader.h"
 #include "main.h"
 #include "drv_display.h"
 #include "font.h"

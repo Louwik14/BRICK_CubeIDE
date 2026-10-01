@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#include "IPC/rec_source_contract.h"
+#include "Sampler/rec_source_contract.h"
 
 #include "Storage/audio_recorder_storage.h"
 #include "Storage/rec_source_waveform.h"

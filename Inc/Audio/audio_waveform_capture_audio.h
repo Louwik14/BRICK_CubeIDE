@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IPC/audio_waveform_contract.h"
+#include "Audio/Publications/audio_waveform_contract.h"
 #include "Track/entity_types.h"
 
 void audio_waveform_capture_init(void);

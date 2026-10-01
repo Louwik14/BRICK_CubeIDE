@@ -1,9 +1,9 @@
-#include "IPC/audio_wavetable_registry_contract.h"
-#include "IPC/multi_sample_audio_projection_contract.h"
-#include "IPC/sample_classic_audio_projection_contract.h"
-#include "IPC/rec_source_contract.h"
-#include "IPC/sampler_ram_audio_projection_contract.h"
-#include "IPC/sampler_ram_playhead_contract.h"
+#include "Sampler/audio_wavetable_registry_contract.h"
+#include "Sampler/multi_sample_audio_projection_contract.h"
+#include "Sampler/sample_classic_audio_projection_contract.h"
+#include "Sampler/rec_source_contract.h"
+#include "Sampler/sampler_ram_audio_projection_contract.h"
+#include "Sampler/sampler_ram_playhead_contract.h"
 #include "Platform/memory_layout.h"
 
 /* Physical storage only.  Initialization and publication remain in the

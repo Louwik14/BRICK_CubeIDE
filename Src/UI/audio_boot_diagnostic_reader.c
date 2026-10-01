@@ -1,5 +1,5 @@
-#include "IPC/audio_boot_diagnostic_reader.h"
-#include "IPC/audio_boot_diagnostic_layout.h"
+#include "Audio/Publications/audio_boot_diagnostic_reader.h"
+#include "Audio/Publications/audio_boot_diagnostic_layout.h"
 #include "stm32h7xx.h"
 
 void audio_boot_diag_read(audio_boot_diag_snapshot_t *out_diag)

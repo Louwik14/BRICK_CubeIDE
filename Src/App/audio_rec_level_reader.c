@@ -1,4 +1,4 @@
-#include "IPC/audio_rec_level_reader.h"
+#include "Audio/Publications/audio_rec_level_reader.h"
 #include "stm32h7xx.h"
 
 void audio_rec_level_control_publish_trigger_config(

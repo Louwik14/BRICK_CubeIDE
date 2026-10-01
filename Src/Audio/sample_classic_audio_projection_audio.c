@@ -1,4 +1,4 @@
-#include "IPC/sample_classic_audio_projection_contract.h"
+#include "Sampler/sample_classic_audio_projection_contract.h"
 #include "Audio/sample_classic_audio_projection_audio.h"
 
 #include "stm32h7xx.h"

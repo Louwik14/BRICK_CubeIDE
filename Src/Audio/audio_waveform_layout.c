@@ -1,4 +1,4 @@
-#include "IPC/audio_waveform_contract.h"
+#include "Audio/Publications/audio_waveform_contract.h"
 #include "Platform/memory_layout.h"
 
 STREAM_LOCAL_D2 int8_t

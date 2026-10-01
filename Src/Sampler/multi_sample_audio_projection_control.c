@@ -1,5 +1,5 @@
-#include "IPC/multi_sample_audio_projection_contract.h"
-#include "IPC/multi_sample_audio_projection_control.h"
+#include "Sampler/multi_sample_audio_projection_contract.h"
+#include "Sampler/multi_sample_audio_projection_control.h"
 
 #include <string.h>
 

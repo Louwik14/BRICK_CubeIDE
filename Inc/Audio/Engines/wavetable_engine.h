@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "IPC/audio_wave_table_projection.h"
+#include "Sampler/audio_wave_table_projection.h"
 
 #ifdef __cplusplus
 extern "C" {

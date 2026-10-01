@@ -1,4 +1,4 @@
-#include "IPC/audio_waveform_reader.h"
+#include "Audio/Publications/audio_waveform_reader.h"
 
 #include "stm32h7xx.h"
 #include <string.h>

@@ -1,5 +1,5 @@
 #include "Audio/audio_wavetable_registry.h"
-#include "IPC/audio_wavetable_registry_contract.h"
+#include "Sampler/audio_wavetable_registry_contract.h"
 
 #include <string.h>
 

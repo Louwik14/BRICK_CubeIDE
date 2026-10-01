@@ -15,7 +15,6 @@ endforeach()
 set(definition_args
     # The repository currently vendors only the H743 device register header.
     # The compiler ISA/FPU below are nevertheless the Cortex-M7 ones;
-    # H747 device headers arrive with the platform image, not this check.
     -DSTM32H743xx
     -DARM_MATH_CM7
     -DUSE_HAL_DRIVER
@@ -68,8 +67,7 @@ set(audio_forbidden_dependencies
     "_control.h")
 
 set(compiled_count 0)
-set(all_sources ${AUDIO_M7_SOURCES} ${AUDIO_M7_CONTRACT_SOURCES}
-    ${AUDIO_M7_SHARED_SOURCES})
+set(all_sources ${AUDIO_M7_SOURCES} ${AUDIO_M7_CONTRACT_SOURCES})
 set(object_manifest "")
 foreach(source IN LISTS all_sources)
     get_filename_component(extension "${source}" EXT)
@@ -100,9 +98,7 @@ foreach(source IN LISTS all_sources)
         message(FATAL_ERROR
             "Cortex-M7 compile failed for ${source}:\n${compile_stdout}${compile_stderr}")
     endif()
-    if(source IN_LIST AUDIO_M7_SHARED_SOURCES)
-        set(owner SHARED_BACKING)
-    elseif(source IN_LIST AUDIO_M7_CONTRACT_SOURCES)
+    if(source IN_LIST AUDIO_M7_CONTRACT_SOURCES)
         set(owner CONTRACTS)
     else()
         set(owner AUDIO)

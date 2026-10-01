@@ -10,9 +10,9 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 - CONTROL possede UI, preparation Pattern et catalogue Sample. SEQ possede transport musical, Pattern actif, ROLL, Note FX, p-locks, lifetimes, futures, admission et stealing musical. STORAGE possede le Stream, son I/O et son page-cache. AUDIO possede IRQ, mapping d'execution logique vers slot DSP, RELEASE physique, lecteurs, positions, moteurs et mixer.
 - Les objets nommes utilisent le contrat canonique partage: 32 caracteres visibles maximum, buffer de 33 octets, alphabet espace/ASCII alphanumerique/`_`/`-`, validation finale avec trim des espaces externes, sans allocation ni remplacement silencieux.
 - L'ordre fonctionnel CONTROL vers AUDIO traverse exclusivement la FIFO SPSC
-  unique PROGRAM/PARAM/NOTE/TRANSPORT/RECORD/PANIC. Les ABI inter-coeur restent
-  pointer-free; les data planes monocoeur Recorder et Streamer utilisent leurs
-  pointeurs locaux sans les faire traverser par une commande.
+  unique PROGRAM/PARAM/NOTE/TRANSPORT/RECORD/PANIC. Aucun pointeur ne traverse
+  cette FIFO; les data planes monocoeur utilisent des pointeurs locaux lorsque
+  leur duree de vie est protegee.
 - CONTROL valide l'etat logique final et ses budgets avant publication. AUDIO
   applique sans negociation; l'impossibilite d'appliquer une commande admise est
   un fatal source et non une erreur recuperable ou une commande depilee.
@@ -25,7 +25,7 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 ## Flux principaux
 
 ```text
-configuration CONTROL -> decision produit canonique -> contrat IPC structurel
+configuration CONTROL -> decision produit canonique -> contrat de domaine
 -> FIFO mecanique -> validation physique et application AUDIO
 SEQ/live -> identite semantique -> allocation handle et transitions CONTROL ordonnees -> AUDIO
 capture TIM5 -> conversion audio -> file datee -> segmentation -> rendu
@@ -49,7 +49,7 @@ Inc/ et Src/
 |-- App/                 bootstrap et orchestration produit
 |-- Audio/               runtime AUDIO, mixer, DSP et effets
 |   `-- Engines/         moteurs Prism, Stack, FM, TB-303, Wavetable et Sampler AUDIO
-|-- IPC/                 contrats, transports et projections CONTROL/AUDIO
+|-- Contracts/           contrats sans owner unique (Storage/AUDIO Preview)
 |-- Recorder/            ring monocoeur AUDIO IRQ vers STORAGE
 |-- Platform/            configuration physique, memoire, faults et diagnostics
 |-- Track/               identites, topologie et etat/runtime de piste
@@ -68,7 +68,7 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 
 ## Documents proprietaires
 
-- [z0_plateforme_cadence.md](z0_plateforme_cadence.md): plateforme, memoire, cache, cadence et IPC CONTROL/AUDIO.
+- [z0_plateforme_cadence.md](z0_plateforme_cadence.md): plateforme, memoire, cache, cadence et frontieres IRQ/superloop.
 - [z1_audio_hard_rt_mix.md](z1_audio_hard_rt_mix.md): moteurs, voix, mixer, GROUP et effets.
 - [z2_track_runtime_authority.md](z2_track_runtime_authority.md): identites, topologie, programmes, Streamer et External.
 - [z3_param_modulation_control.md](z3_param_modulation_control.md): parametres, valeur canonique, p-locks, modulation et commandes AUDIO datees.
@@ -84,7 +84,8 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 - [recorder_sd.md](recorder_sd.md): bus AUDIO REC unique, Recorder, REC_SOURCE A/B, export cooperatif et lecture Streamer.
 - [stream_rec_perf_baseline.md](stream_rec_perf_baseline.md): protocole et limites de la baseline CPU/DMA Streamer et Recorder H743.
 - [control_audio_functional_contract.md](control_audio_functional_contract.md): FIFO locale unique et consumer AUDIO.
-- [m7_m4_physical_return_contract.md](m7_m4_physical_return_contract.md): retours physiques minimaux, diagnostic et ownership des data planes.
+- [monocore_data_planes.md](monocore_data_planes.md): data planes locaux, cache, DMA et recyclage.
+- [audio_service_publications.md](audio_service_publications.md): publications AUDIO vers les services cooperatifs.
 # Optimisation Release
 
 Les unités BRICK des manifestes de domaine sont compilées en `-O2` avec LTO.

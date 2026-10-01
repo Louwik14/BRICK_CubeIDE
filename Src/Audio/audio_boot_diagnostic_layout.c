@@ -1,4 +1,4 @@
-#include "IPC/audio_boot_diagnostic_layout.h"
+#include "Audio/Publications/audio_boot_diagnostic_layout.h"
 #include "Platform/memory_layout.h"
 
 STREAM_LOCAL_D2 audio_boot_diag_layout_t g_audio_boot_diag_layout;

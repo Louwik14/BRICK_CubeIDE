@@ -5,7 +5,7 @@
 #include <math.h>
 
 #include "main.h"
-#include "IPC/audio_boot_diagnostic_reader.h"
+#include "Audio/Publications/audio_boot_diagnostic_reader.h"
 #include "drv_display.h"
 #include "font.h"
 #include "Keyboard/keyboard_runtime.h"
@@ -34,8 +34,8 @@
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Param/spectral_window.h"
-#include "IPC/audio_waveform_reader.h"
-#include "IPC/synth_waveform_reader.h"
+#include "Audio/Publications/audio_waveform_reader.h"
+#include "Audio/Publications/synth_waveform_reader.h"
 
 #define UI_TEMPLATE_FRAME_W          32
 #define UI_TEMPLATE_FRAME_H          38

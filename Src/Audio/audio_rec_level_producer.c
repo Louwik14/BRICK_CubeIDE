@@ -1,5 +1,5 @@
 #include "Audio/audio_rec_level_producer.h"
-#include "IPC/audio_rec_level_contract.h"
+#include "Audio/Publications/audio_rec_level_contract.h"
 #include "stm32h7xx.h"
 
 static uint32_t g_trigger_config_sequence;

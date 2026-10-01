@@ -74,7 +74,11 @@ la version 4 sont invalides et doivent etre reconstruits depuis les WAV.
 
 Sample RAM charge le payload FLOAT32 stereo directement dans son allocation, par etapes sous un budget cooperatif de 2 ms et avec lectures adaptatives de 4 ou 16 KiB. Wavetable applique le meme budget, ajoute parse, CRC, mipmaps et preview, puis ecrit le cache `.B6WT` transactionnel sur cold path. Le loader asynchrone valide et recharge directement ce cache lors des loads suivants; un cache absent, invalide ou obsolete relance seul le build. Le format WAVE interne canonique est mono FLOAT32 normalise, 1024 samples par frame, avec mipmaps FLOAT32 band-major 1024/512/256/128/64/32/16/8. Les strides physiques sont egaux aux tailles logiques, sauf la bande 8 dont le stride est 16 samples avec 8 floats de padding; chaque frame commence ainsi sur une limite de 32 octets et aucune duplication cyclique n'est stockee. La geometrie source 1024/2048 est un choix explicite de l'importeur; les API sans geometrie explicite choisissent 2048. Les cycles 2048 sont convertis en 1024 dans le domaine frequentiel. Chaque bande est ensuite generee directement depuis la FFT canonique 1024, avec transition raised-cosine, marge avant Nyquist et bin Nyquist nul; aucune cascade ni saturation post-IFFT n'est appliquee. Le cache prepare est en version physique 5 et sa revision de preparation est 9; les anciennes preparations sont rejetees et regenerees depuis le WAV source. L'ancien slot reste publie jusqu'au swap du candidat, puis ses pages sont liberees.
 
-Les payloads Sampler RAM/Wavetable sont des references `{region, offset, length}`. CONTROL clean avant publication, AUDIO invalidate avant installation. Un unload/remplacement suit `STOP -> invalidation voix synchrone -> avancee du tail FIFO -> FREE CONTROL`. Les ACK Multi/RAM/Wavetable et leur ring IPC ont ete supprimes; seul le fence du consumer physique est lu.
+Les descriptors Sampler RAM/Wavetable portent des pointeurs M7 locaux valides
+jusqu'au retrait AUDIO. Leur publication CPU vers CPU utilise `ready` et
+`DMB`, sans clean/invalidate. Un unload/remplacement ferme l'ingress, publie le
+STOP, attend la grace bornee de 192 frames, retire le descriptor puis libere
+les pages.
 
 Pour Multi, `sample_page_cache_clear_key` retire aussi l'ownership
 `static_resident` des pages de pre-socle. Une page sans lease est liberee
@@ -86,7 +90,7 @@ coherents, et non corriger seulement les compteurs publies.
 
 Le registre compact de leases Stream est fixe, seqlocke et place en SRAM D2
 cacheable locale au M7. Le seqlock et ses `DMB` synchronisent l'IRQ AUDIO avec
-le service STORAGE cooperatif; ils ne constituent pas un ABI inter-core. Les
+le service STORAGE cooperatif. Les
 snapshots de besoins, pins, use-counts et refcounts de pages ont ete supprimes.
 REC_SOURCE publie seulement une generation immutable READY; AUDIO conserve ses
 playheads et ses leases.

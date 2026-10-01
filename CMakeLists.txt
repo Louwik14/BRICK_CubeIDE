@@ -194,27 +194,27 @@ set(DOMAIN_CONTRACT_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param/param_spec.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Mod/mod_lfo_types.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Mod/mod_destination_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_rec_bus_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_rec_level_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_boot_diagnostic.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_boot_diagnostic_layout.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_waveform_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/fm_dsp_projection.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_wave_table_projection.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_wavetable_registry_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Recorder/audio_rec_bus_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/Publications/audio_rec_level_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/Publications/audio_boot_diagnostic.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/Publications/audio_boot_diagnostic_layout.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/Publications/audio_waveform_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/ControlRT/fm_dsp_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/audio_wave_table_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/audio_wavetable_registry_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/ControlRT/control_audio_command.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/ControlRT/control_audio_fifo_layout.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/ControlRT/live_parameter_event.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/multi_sample_audio_projection.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/multi_sample_audio_projection_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sample_classic_audio_projection_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/rec_source_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_audio_projection.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_audio_projection_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_playhead_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/usb_audio_float_ring.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/synth_waveform_contract.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sd_preview_ring_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/multi_sample_audio_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/multi_sample_audio_projection_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_classic_audio_projection_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/rec_source_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sampler_ram_audio_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sampler_ram_audio_projection_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sampler_ram_playhead_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Board/usb_audio_float_ring.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/Publications/synth_waveform_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Contracts/sd_preview_ring_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_audio_format.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/wavetable_config.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_audio_key.h"
@@ -237,8 +237,8 @@ file(GLOB_RECURSE BRICK_FIRST_PARTY_INVENTORY CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/*.cpp")
 list(FILTER BRICK_FIRST_PARTY_INVENTORY EXCLUDE REGEX "/Generated/")
 
-set(BRICK_DOMAIN_UNION ${DOMAIN_CONTROL} ${DOMAIN_STORAGE} ${DOMAIN_AUDIO} ${DOMAIN_CONTRACTS}
-    ${PLATFORM_H743} ${SHARED_BACKING})
+set(BRICK_DOMAIN_UNION ${DOMAIN_CONTROL} ${DOMAIN_STORAGE} ${DOMAIN_AUDIO}
+    ${DOMAIN_CONTRACTS} ${PLATFORM_H743})
 list(LENGTH BRICK_DOMAIN_UNION BRICK_DOMAIN_ENTRY_COUNT)
 set(BRICK_DOMAIN_UNIQUE ${BRICK_DOMAIN_UNION})
 list(REMOVE_DUPLICATES BRICK_DOMAIN_UNIQUE)
@@ -256,31 +256,24 @@ endif()
 if(BRICK_STALE_MANIFEST)
     message(FATAL_ERROR "Manifest entries do not exist in first-party inventory: ${BRICK_STALE_MANIFEST}")
 endif()
-foreach(platform_source IN LISTS PLATFORM_H743)
-    if(platform_source MATCHES "/Src/IPC/")
-        message(FATAL_ERROR "Src/IPC unit classified as PLATFORM_H743: ${platform_source}")
-    endif()
-endforeach()
-
 set(PLATFORM_H743_BUILD ${PLATFORM_H743_COMMON} ${PLATFORM_H743_LOWCOST} ${TINYUSB_SRC})
 set(DOMAIN_CONTROL_BUILD ${DOMAIN_CONTROL}
     ${FATFS_SRC} ${U8G2_SRC})
 set(DOMAIN_STORAGE_BUILD ${DOMAIN_STORAGE})
 set(DOMAIN_AUDIO_BUILD ${DOMAIN_AUDIO} ${CMSIS_DSP_SRC} ${MUTABLE_INSTRUMENTS_SRC})
-set(ALL_USER_SOURCES ${DOMAIN_CONTROL_BUILD} ${DOMAIN_STORAGE_BUILD} ${DOMAIN_AUDIO_BUILD}
-    ${DOMAIN_CONTRACTS} ${SHARED_BACKING} ${PLATFORM_H743_BUILD})
+set(ALL_USER_SOURCES ${DOMAIN_CONTROL_BUILD} ${DOMAIN_STORAGE_BUILD}
+    ${DOMAIN_AUDIO_BUILD} ${DOMAIN_CONTRACTS} ${PLATFORM_H743_BUILD})
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${ALL_USER_SOURCES})
 source_group("Domains/CONTROL" FILES ${DOMAIN_CONTROL})
 source_group("Domains/STORAGE" FILES ${DOMAIN_STORAGE})
 source_group("Domains/AUDIO" FILES ${DOMAIN_AUDIO})
 source_group("Domains/CONTRACTS" FILES ${DOMAIN_CONTRACTS} ${DOMAIN_CONTRACT_HEADERS})
-source_group("Domains/SHARED_BACKING" FILES ${SHARED_BACKING})
 source_group("Domains/PLATFORM_H743" FILES ${PLATFORM_H743})
 
-# Legacy CONTROL/STORAGE portability checks exclude the monocore Streamer,
-# whose AUDIO IRQ and cooperative STORAGE service now share one M7 image.
-set(DOMAIN_CONTROL_CM4 ${DOMAIN_CONTROL_BUILD} ${DOMAIN_STORAGE_BUILD})
-list(FILTER DOMAIN_CONTROL_CM4 INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
+# CONTROL/STORAGE portability checks exclude the monocore Streamer, whose
+# AUDIO IRQ and cooperative STORAGE service share the H743 M7 image.
+set(DOMAIN_CONTROL_PORTABLE ${DOMAIN_CONTROL_BUILD} ${DOMAIN_STORAGE_BUILD})
+list(FILTER DOMAIN_CONTROL_PORTABLE INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
 set(STREAMER_MONOCORE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_cache.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache.c"
@@ -293,7 +286,7 @@ set(STREAMER_MONOCORE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_manager.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_scheduler.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/brick6_stream_service_task.c")
-list(REMOVE_ITEM DOMAIN_CONTROL_CM4 ${STREAMER_MONOCORE_SOURCES})
+list(REMOVE_ITEM DOMAIN_CONTROL_PORTABLE ${STREAMER_MONOCORE_SOURCES})
 
 # --------------------------------------------------------------------------
 # Include directories
@@ -306,7 +299,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Board
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC
+    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Contracts
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/MIDI
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Storage
@@ -325,14 +318,14 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src
 )
 
-set(CONTROL_CM4_INCLUDE_DIRS
+set(CONTROL_DOMAIN_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/App"
     "${BRICK6_BOARD_USB_INC_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/Third_Party/FatFs/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/App"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Board"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Contracts"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Keyboard"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/MIDI"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Mod"
@@ -356,25 +349,25 @@ set(CONTROL_CM4_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src"
 )
 
-set(CONTROL_CM4_GENERATED_INC
+set(CONTROL_DOMAIN_GENERATED_INC
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Generated/Inc")
-list(APPEND CONTROL_CM4_INCLUDE_DIRS "${CONTROL_CM4_GENERATED_INC}")
+list(APPEND CONTROL_DOMAIN_INCLUDE_DIRS "${CONTROL_DOMAIN_GENERATED_INC}")
 
-set(CONTROL_CM4_STORAGE_SOURCES ${DOMAIN_STORAGE_BUILD})
-set(CONTROL_CM4_CONTRACT_HEADERS ${DOMAIN_CONTRACT_HEADERS} ${DOMAIN_CONTRACT_UNITS})
+set(CONTROL_DOMAIN_STORAGE_SOURCES ${DOMAIN_STORAGE_BUILD})
+set(CONTROL_DOMAIN_CONTRACT_HEADERS ${DOMAIN_CONTRACT_HEADERS} ${DOMAIN_CONTRACT_UNITS})
 
-set(CONTROL_CM4_MANIFEST
-    "${CMAKE_CURRENT_BINARY_DIR}/control_cm4_compile_manifest.cmake")
+set(CONTROL_DOMAIN_MANIFEST
+    "${CMAKE_CURRENT_BINARY_DIR}/control_domain_compile_manifest.cmake")
 configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/control_cm4_compile_manifest.cmake.in"
-    "${CONTROL_CM4_MANIFEST}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/control_domain_compile_manifest.cmake.in"
+    "${CONTROL_DOMAIN_MANIFEST}"
     @ONLY)
 
-add_custom_target(control_cm4_compile_check
+add_custom_target(control_domain_compile_check
     COMMAND "${CMAKE_COMMAND}"
-        -DMANIFEST=${CONTROL_CM4_MANIFEST}
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/control_cm4_compile_check.cmake"
-    SOURCES ${DOMAIN_CONTROL_CM4} ${DOMAIN_CONTRACTS}
+        -DMANIFEST=${CONTROL_DOMAIN_MANIFEST}
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/control_domain_compile_check.cmake"
+    SOURCES ${DOMAIN_CONTROL_PORTABLE} ${DOMAIN_CONTRACTS}
     COMMENT "Compile-check DOMAIN_CONTROL + DOMAIN_STORAGE for Cortex-M4"
     VERBATIM)
 
@@ -382,7 +375,7 @@ add_custom_target(control_cm4_compile_check
 # compiler-produced dependency files against CONTROL-private surfaces.
 set(DOMAIN_AUDIO_M7 ${DOMAIN_AUDIO_BUILD})
 list(FILTER DOMAIN_AUDIO_M7 INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
-set(AUDIO_M7_INCLUDE_DIRS ${CONTROL_CM4_INCLUDE_DIRS}
+set(AUDIO_M7_INCLUDE_DIRS ${CONTROL_DOMAIN_INCLUDE_DIRS}
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/Engines"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Include"
@@ -400,24 +393,6 @@ add_custom_target(audio_m7_compile_check
     SOURCES ${DOMAIN_AUDIO_M7}
     COMMENT "Compile-check DOMAIN_AUDIO for Cortex-M7"
     VERBATIM)
-
-get_filename_component(BRICK_TOOLCHAIN_BIN "${CMAKE_C_COMPILER}" DIRECTORY)
-set(DOMAIN_AUDIT_REPORT_DIR "${CMAKE_CURRENT_BINARY_DIR}/domain_symbol_audit")
-add_custom_target(domain_symbol_closure_check
-    COMMAND "${CMAKE_COMMAND}"
-        -DCONTROL_MANIFEST=${CMAKE_CURRENT_BINARY_DIR}/control_cm4_compile_check/objects.manifest
-        -DAUDIO_MANIFEST=${CMAKE_CURRENT_BINARY_DIR}/audio_m7_compile_check/objects.manifest
-        -DNM=${BRICK_TOOLCHAIN_BIN}/arm-none-eabi-nm${CMAKE_EXECUTABLE_SUFFIX}
-        -DREADELF=${BRICK_TOOLCHAIN_BIN}/arm-none-eabi-readelf${CMAKE_EXECUTABLE_SUFFIX}
-        -DLD=${BRICK_TOOLCHAIN_BIN}/arm-none-eabi-ld${CMAKE_EXECUTABLE_SUFFIX}
-        -DCONTROL_ALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/cmake/control_external_symbols.txt
-        -DAUDIO_ALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/cmake/audio_external_symbols.txt
-        -DREPORT_DIR=${DOMAIN_AUDIT_REPORT_DIR}
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/domain_symbol_audit.cmake"
-    DEPENDS control_cm4_compile_check audio_m7_compile_check
-    COMMENT "Audit real CM4/M7 objects, providers, relocations and sections"
-    VERBATIM)
-
 
 # --------------------------------------------------------------------------
 # Defines

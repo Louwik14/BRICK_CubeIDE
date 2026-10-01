@@ -1,4 +1,4 @@
-#include "IPC/sampler_ram_audio_projection_contract.h"
+#include "Sampler/sampler_ram_audio_projection_contract.h"
 #include "Audio/sampler_ram_audio_projection_audio.h"
 
 #include <string.h>

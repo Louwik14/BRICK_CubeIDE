@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "IPC/audio_rec_bus_contract.h"
+#include "Recorder/audio_rec_bus_contract.h"
 
 typedef struct
 {

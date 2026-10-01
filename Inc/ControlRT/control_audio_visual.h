@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "IPC/synth_waveform_contract.h"
+#include "Audio/Publications/synth_waveform_contract.h"
 #include "Track/entity_types.h"
 
 uint8_t control_audio_visual_waveform_request(brick_entity_id_t entity,

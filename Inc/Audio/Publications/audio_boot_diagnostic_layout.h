@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IPC/audio_boot_diagnostic.h"
+#include "Audio/Publications/audio_boot_diagnostic.h"
 
 typedef struct
 {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IPC/audio_wave_table_projection.h"
+#include "Sampler/audio_wave_table_projection.h"
 
 typedef struct
 {

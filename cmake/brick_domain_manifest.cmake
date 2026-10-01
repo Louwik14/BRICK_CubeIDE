@@ -73,6 +73,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_global_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_ram_audio_projection_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_ram_pool.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_audio_backing.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/wavetable_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/control_audio_transport.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_clipboard.c"
@@ -205,6 +206,8 @@ set(DOMAIN_STORAGE
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_recorder_writer.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/recorder_file_reservation.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sd_access_gate.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sd_preview_ring.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Recorder/audio_recorder_ring.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_cache.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache_backing.c"
@@ -236,6 +239,7 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/adsr_daisy.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_boot_diagnostic_layout.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_boot_diagnostic_producer.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_command_executor.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_domain.c"
@@ -247,7 +251,9 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_rec_bus_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_rec_overdub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_rec_level_producer.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_rec_level_layout.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_recorder_capture_audio.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_waveform_layout.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_transport_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_waveform_capture_audio.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_wavetable_registry_audio.c"
@@ -303,6 +309,7 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/sampler_ram_audio_projection_audio.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/sd_preview_audio.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/synth_waveform_audio.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/synth_waveform_layout.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/vca_env.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_destination_catalog.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_env3.c"
@@ -329,18 +336,6 @@ set(DOMAIN_CONTRACT_UNITS
 )
 
 set(DOMAIN_CONTRACTS ${DOMAIN_CONTRACT_UNITS})
-
-# Physical definitions for cross-domain externs.  These units contain no
-# functions, initialization or ownership policy.
-set(SHARED_BACKING
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_boot_diagnostic.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_rec_level_layout.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Recorder/audio_recorder_ring.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_waveform_layout.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/sd_preview_ring.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/synth_waveform_layout.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/SharedBacking/sampler_shared_backing.c"
-)
 
 set(PLATFORM_H743_COMMON
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_engine_port_h743.c"

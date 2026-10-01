@@ -4,7 +4,7 @@
 #include "Platform/brick_build_config.h"
 
 #include "Sampler/sample_global_pool.h"
-#include "IPC/sampler_ram_audio_projection.h"
+#include "Sampler/sampler_ram_audio_projection.h"
 #include "Storage/wav_parser.h"
 
 #ifdef __cplusplus

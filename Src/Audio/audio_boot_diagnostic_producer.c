@@ -1,5 +1,5 @@
 #include "Audio/audio_boot_diagnostic_producer.h"
-#include "IPC/audio_boot_diagnostic_layout.h"
+#include "Audio/Publications/audio_boot_diagnostic_layout.h"
 #include "stm32h7xx.h"
 #include <string.h>
 

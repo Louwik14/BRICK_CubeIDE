@@ -58,7 +58,7 @@ PROGRAM PARAM NOTE TRANSPORT RECORD PANIC AUDIO_STATE_COMMIT
 - `PANIC` est global ou limite a une entite.
 - `AUDIO_STATE_COMMIT` rend visible une transaction locale Pattern/Project.
   Ses champs `entity`, `id` et `value` restent nuls: aucun identifiant de
-  transport, generation ou pointeur ne traverse la FIFO.
+  transaction, generation ou pointeur ne traverse la FIFO.
 
 La classification `DURABLE_STATE`, `TRANSIENT_ACTION`,
 `RESOURCE_LIFECYCLE`, `REQUEST` est structurelle et independante du runtime
@@ -171,5 +171,5 @@ Pattern, Project et Patch construisent hors IRQ un tableau local borne de
 commandes finales. CONTROL publie son contenu avec `DMB`, puis place un unique
 `AUDIO_STATE_COMMIT` dans la FIFO. AUDIO applique la transaction avant d'avancer
 `tail`; CONTROL attend ce franchissement avant de reutiliser le tableau. Cette
-fence de duree de vie remplace l'ancienne generation, le checksum, le magic et
-les clean/invalidate inter-coeur.
+  fence de duree de vie suffit sans checksum, magic ni maintenance cache CPU
+  vers CPU.

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IPC/sampler_ram_audio_projection.h"
+#include "Sampler/sampler_ram_audio_projection.h"
 #include "Sampler/sample_page_cache_config.h"
 
 #define SAMPLER_RAM_AUDIO_SLOT_COUNT SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS

@@ -1,6 +1,6 @@
 #include "Audio/rec_source_audio.h"
 
-#include "IPC/rec_source_contract.h"
+#include "Sampler/rec_source_contract.h"
 #include "Sampler/sample_audio_format.h"
 #include "stm32h7xx.h"
 

@@ -25,7 +25,7 @@
 #include "Audio/live_parameter_audio_runtime.h"
 #include "Audio/audio_waveform_capture_audio.h"
 #include "Audio/synth_waveform_audio.h"
-#include "IPC/sampler_ram_audio_projection.h"
+#include "Sampler/sampler_ram_audio_projection.h"
 #include "Track/synth_polyphony.h"
 #include "Track/control_music_output.h"
 #include "Sampler/multi_sample_config.h"

@@ -30,7 +30,7 @@
 #include "Sampler/sample_page_cache_audio.h"
 #include "Sampler/sample_voice_reader.h"
 #include "Audio/sampler_ram_audio_projection_audio.h"
-#include "IPC/sampler_ram_playhead_contract.h"
+#include "Sampler/sampler_ram_playhead_contract.h"
 
 /* The sampler voice table is a lane resource.  GROUP children reuse this
  * table; they do not allocate a second sampler pool. */

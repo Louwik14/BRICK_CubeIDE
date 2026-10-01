@@ -11,7 +11,7 @@
 #include "Storage/wav_parser.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_port.h"
-#include "IPC/sampler_ram_audio_projection_control.h"
+#include "Sampler/sampler_ram_audio_projection_control.h"
 #include "ControlRT/control_rt_publication.h"
 #include "ControlRT/control_audio_timing.h"
 #include "Seq/seq_runtime.h"

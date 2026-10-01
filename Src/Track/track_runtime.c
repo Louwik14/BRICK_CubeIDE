@@ -8,7 +8,7 @@
 
 #include "Platform/memory_layout.h"
 #include "ControlRT/control_audio_command.h"
-#include "IPC/fm_dsp_projection.h"
+#include "ControlRT/fm_dsp_projection.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Track/control_music_output.h"
 #include "Platform/brick_build_config.h"

@@ -1,6 +1,6 @@
 #include "UI/ui_sampler_playhead.h"
 
-#include "IPC/sampler_ram_playhead_contract.h"
+#include "Sampler/sampler_ram_playhead_contract.h"
 #include "stm32h7xx.h"
 
 ui_sampler_playhead_view_t ui_sampler_playhead_view(

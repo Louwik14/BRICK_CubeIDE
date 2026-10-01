@@ -25,7 +25,7 @@ are fixed by the domain sizes and the dedicated overdub ID.
 ## Related sentinel audit
 
 Search scope: Sampler, Streamer, page cache, Multi, Classic, REC_SOURCE,
-Sampler RAM, Wavetable, AUDIO physical voices, Storage/SD, IPC and track
+Sampler RAM, Wavetable, AUDIO physical voices, Storage/SD, publications and track
 topology. A targeted `rg` search for `UINT8_MAX`, `UINT16_MAX`, `UINT32_MAX`
 and `uint8_t` casts returned 400 candidate lines in the core source/header
 directories. The relevant index and identity paths were traced from producer

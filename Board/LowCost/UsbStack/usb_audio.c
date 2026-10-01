@@ -4,7 +4,7 @@
 #include <limits.h>
 #include <string.h>
 
-#include "IPC/usb_audio_float_ring.h"
+#include "Board/usb_audio_float_ring.h"
 #include "Board/board_audio_format.h"
 #include "Platform/brick_fatal.h"
 #include "Platform/memory_layout.h"

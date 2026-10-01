@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IPC/synth_waveform_contract.h"
+#include "Audio/Publications/synth_waveform_contract.h"
 #include "Track/entity_types.h"
 
 #ifdef __cplusplus

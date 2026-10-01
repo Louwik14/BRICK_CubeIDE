@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "IPC/fm_dsp_projection.h"
+#include "ControlRT/fm_dsp_projection.h"
 #include "Param/param_ids.h"
 #include "Track/entity_topology.h"
 

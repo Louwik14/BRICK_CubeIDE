@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IPC/multi_sample_audio_projection.h"
+#include "Sampler/multi_sample_audio_projection.h"
 #include "Sampler/multi_sample_config.h"
 
 typedef struct
