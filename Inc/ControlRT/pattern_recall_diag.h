@@ -10,7 +10,8 @@
 #if BRICK_PATTERN_RECALL_DIAG
 
 #define PATTERN_RECALL_DIAG_MAGIC UINT32_C(0x44525042)
-#define PATTERN_RECALL_DIAG_VERSION 1U
+#define PATTERN_RECALL_DIAG_VERSION 2U
+#define PATTERN_RECALL_DIAG_CONTRACT_TAG UINT16_C(0x812F)
 #define PATTERN_RECALL_DIAG_RECORD_CAPACITY 128U
 
 typedef enum
@@ -128,7 +129,7 @@ typedef struct
     uint16_t record_count;
     uint16_t dropped_record_count;
     uint16_t changed_program_mask;
-    uint16_t reserved;
+    uint16_t contract_tag;
     pattern_recall_diag_polyphony_t polyphony[16U];
     pattern_recall_diag_record_t records[PATTERN_RECALL_DIAG_RECORD_CAPACITY];
 } pattern_recall_diag_t;
@@ -143,6 +144,7 @@ void pattern_recall_diag_identity(uint32_t candidate_generation,
                                   uint32_t prepared_audio_generation,
                                   uint8_t transition,
                                   uint64_t effective_sample_time);
+void pattern_recall_diag_runtime_begin(void);
 void pattern_recall_diag_phase(uint8_t phase);
 void pattern_recall_diag_failure(uint8_t runtime, uint8_t subsystem,
     uint8_t entity, uint16_t field, uint8_t code, uint32_t actual,

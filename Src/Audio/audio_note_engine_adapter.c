@@ -902,13 +902,19 @@ uint8_t audio_note_engine_adapter_install_prepared(
     return 1U;
 }
 
+uint8_t audio_note_engine_adapter_midi_config_is_valid(
+    brick_entity_id_t entity_id, uint8_t channel_1_16, uint8_t source)
+{
+    return (uint8_t)((entity_id < BRICK_ENTITY_CAPACITY)
+        && (channel_1_16 >= 1U) && (channel_1_16 <= 16U)
+        && (source < TRACK_MIDI_SOURCE_COUNT));
+}
+
 uint8_t audio_note_engine_adapter_apply_midi_config(
     brick_entity_id_t entity_id, uint8_t channel_1_16, uint8_t source)
 {
-    if ((entity_id >= BRICK_ENTITY_CAPACITY)
-            || (channel_1_16 < 1U) || (channel_1_16 > 16U)
-            || (source >= TRACK_MIDI_SOURCE_COUNT))
-        return 0U;
+    if (audio_note_engine_adapter_midi_config_is_valid(
+            entity_id, channel_1_16, source) == 0U) return 0U;
     g_audio_track_ctx[entity_id].midi_channel_1_16 = channel_1_16;
     g_audio_track_ctx[entity_id].midi_source = source;
     audio_mod_matrix_rebuild_track(entity_id);

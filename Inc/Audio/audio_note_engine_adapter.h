@@ -103,6 +103,8 @@ uint8_t audio_note_engine_adapter_project_track_configuration(
 void audio_note_engine_adapter_forget_outputs(brick_entity_id_t entity_id);
 uint8_t audio_note_engine_adapter_apply_polyphony(
     brick_entity_id_t entity_id, uint8_t voice_count, float spread);
+uint8_t audio_note_engine_adapter_midi_config_is_valid(
+    brick_entity_id_t entity_id, uint8_t channel_1_16, uint8_t source);
 uint8_t audio_note_engine_adapter_apply_midi_config(
     brick_entity_id_t entity_id, uint8_t channel_1_16, uint8_t source);
 uint8_t audio_note_engine_adapter_set_mute(brick_entity_id_t entity_id,

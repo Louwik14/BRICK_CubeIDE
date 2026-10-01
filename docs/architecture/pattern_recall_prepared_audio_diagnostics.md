@@ -33,6 +33,12 @@ maximum phase, both failure counters, 128 records of 24 bytes, and a six-byte
 polyphony preflight snapshot for each of the 16 logical entities.  Overflow is
 counted without overwriting earlier evidence.
 
+The block is NOLOAD and can survive a debugger flash/reset. Version 2 carries
+contract tag `0x812F`; AUDIO verifies magic/version/size/tag and starts each
+runtime transaction with an empty runtime record set. Thus records from an
+older firmware cannot be mistaken for failures emitted by the current
+preflight when generation counters restart after reset.
+
 The CONTROL sweep covers slot identity; all 16 topology/PROGRAM descriptors;
 Tone and FM contracts; Filter, VCA, Mixer, FX and polyphony canonical domains;
 LFO/ENV/routes and eight physical modulation/temp owners; sampler, Multi and
@@ -62,15 +68,15 @@ Release ON versus OFF, measured from the linked ELF:
 
 | Region | ON - OFF |
 |---|---:|
-| FLASH | +9,992 bytes |
+| FLASH | +9,816 bytes |
 | DTCM | +64 bytes |
-| D1 SRAM | 0 bytes |
+| D1 SRAM | -32 bytes (link/LTO layout variation) |
 | D2 DMA/non-cacheable | 0 bytes |
 | D2 cacheable | 0 bytes |
 | D2 SRAM2 diagnostic window | +3,232 bytes |
 | D3 | 0 bytes |
 | SDRAM (all arenas) | 0 bytes |
-| ITCM | -24 bytes (link/LTO layout variation) |
+| ITCM | -16 bytes (link/LTO layout variation) |
 
 The OFF ELF has no `g_pattern_recall_diag`, no `pattern_recall_diag_*` symbol
 and no diagnostic section/buffer.  The AUDIO IRQ source after preprocessing is

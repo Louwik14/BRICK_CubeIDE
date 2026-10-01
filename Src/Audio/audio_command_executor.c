@@ -105,6 +105,14 @@ static audio_prepared_endpoint_class_t audio_prepared_endpoint_class(
     return AUDIO_PREPARED_ENDPOINT_INVALID;
 }
 
+static uint8_t audio_prepared_endpoint_matches_topology(
+    uint8_t active, audio_prepared_endpoint_class_t endpoint)
+{
+    return (uint8_t)((active <= 1U)
+        && (endpoint != AUDIO_PREPARED_ENDPOINT_INVALID)
+        && ((active != 0U) || (endpoint == AUDIO_PREPARED_ENDPOINT_OFF)));
+}
+
 typedef struct
 {
     uint32_t id;
@@ -1161,17 +1169,15 @@ static uint8_t audio_pattern_diag_runtime_preflight(
                     | ((uint32_t)current.family << 8U)
                     | ((uint32_t)current.type << 16U)
                     | ((uint32_t)current.flags << 24U)) : 0U);
-        if ((target->active > 1U)
-                || ((target->active == 0U)
-                    && (endpoint != AUDIO_PREPARED_ENDPOINT_OFF)))
+        if (audio_prepared_endpoint_matches_topology(
+                target->active, endpoint) == 0U)
             audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_PROGRAM,
                 entity, 1U, PATTERN_DIAG_CODE_MISMATCH, target->active,
                 0U, 1U, (uint32_t)endpoint
                     | (control_audio_program_pack(program) << 8U));
         if ((target->active != 0U)
-                && ((target->midi_channel < 1U)
-                    || (target->midi_channel > 16U)
-                    || (target->midi_source >= TRACK_MIDI_SOURCE_COUNT)))
+                && (audio_note_engine_adapter_midi_config_is_valid(entity,
+                    target->midi_channel, target->midi_source) == 0U))
             audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_PROGRAM,
                 entity, CONTROL_AUDIO_PARAM_MIDI_CONFIG,
                 PATTERN_DIAG_CODE_DOMAIN,
@@ -1340,9 +1346,16 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
     const uint8_t transition = CONTROL_AUDIO_COMMAND_KIND(commit);
 #if BRICK_PATTERN_RECALL_DIAG
     if ((g_pattern_recall_diag.magic != PATTERN_RECALL_DIAG_MAGIC)
+            || (g_pattern_recall_diag.version
+                != PATTERN_RECALL_DIAG_VERSION)
+            || (g_pattern_recall_diag.size
+                != sizeof(g_pattern_recall_diag))
+            || (g_pattern_recall_diag.contract_tag
+                != PATTERN_RECALL_DIAG_CONTRACT_TAG)
             || (g_pattern_recall_diag.prepared_audio_generation
                 != commit->value))
         pattern_recall_diag_reset(commit->value, commit->value, commit->value);
+    pattern_recall_diag_runtime_begin();
     const uint16_t runtime_failures_at_enter =
         g_pattern_recall_diag.runtime_failure_count;
     pattern_recall_diag_phase(PATTERN_DIAG_PHASE_AUDIO_IRQ_ENTER);
@@ -1482,10 +1495,11 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
         const prepared_audio_entity_state_t *const target = &state->entity[entity];
-        if (target->active == 0U) continue;
         const audio_prepared_endpoint_class_t endpoint =
             audio_prepared_endpoint_class(&target->program);
-        if (endpoint == AUDIO_PREPARED_ENDPOINT_INVALID) goto invalid;
+        if (audio_prepared_endpoint_matches_topology(
+                target->active, endpoint) == 0U) goto invalid;
+        if (target->active == 0U) continue;
         if (!audio_note_engine_adapter_apply_midi_config(entity,
                 target->midi_channel, target->midi_source)) goto invalid;
         /* OFF and MIDI remain logical targets but deliberately have no

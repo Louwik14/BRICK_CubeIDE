@@ -24,6 +24,7 @@ void pattern_recall_diag_reset(uint32_t candidate_generation,
     g_pattern_recall_diag.version = PATTERN_RECALL_DIAG_VERSION;
     g_pattern_recall_diag.size = (uint16_t)sizeof(g_pattern_recall_diag);
     g_pattern_recall_diag.record_capacity = PATTERN_RECALL_DIAG_RECORD_CAPACITY;
+    g_pattern_recall_diag.contract_tag = PATTERN_RECALL_DIAG_CONTRACT_TAG;
     g_pattern_recall_diag.candidate_generation = candidate_generation;
     g_pattern_recall_diag.prepared_seq_generation = prepared_seq_generation;
     g_pattern_recall_diag.prepared_audio_generation = prepared_audio_generation;
@@ -40,6 +41,23 @@ void pattern_recall_diag_identity(uint32_t candidate_generation,
     g_pattern_recall_diag.prepared_audio_generation = prepared_audio_generation;
     g_pattern_recall_diag.transition = transition;
     g_pattern_recall_diag.effective_sample_time = effective_sample_time;
+}
+
+void pattern_recall_diag_runtime_begin(void)
+{
+    /* The diagnostic block lives in a NOLOAD shared-RAM window. A debugger
+     * flash/reset can therefore preserve records from a previous image whose
+     * generation happens to restart at the same value. Runtime evidence is
+     * transaction-local and starts empty once the static sweep has passed. */
+    g_pattern_recall_diag.runtime_failure_count = 0U;
+    g_pattern_recall_diag.changed_program_mask = 0U;
+    memset(g_pattern_recall_diag.polyphony, 0,
+           sizeof(g_pattern_recall_diag.polyphony));
+    if (g_pattern_recall_diag.static_failure_count == 0U)
+    {
+        g_pattern_recall_diag.record_count = 0U;
+        g_pattern_recall_diag.dropped_record_count = 0U;
+    }
 }
 
 void pattern_recall_diag_phase(uint8_t phase)
