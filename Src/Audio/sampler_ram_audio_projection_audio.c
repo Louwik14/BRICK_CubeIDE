@@ -13,11 +13,9 @@ uint8_t sampler_ram_audio_projection_resolve(uint16_t global_slot,
     const uint16_t i = g_sampler_ram_audio_global_to_slot[global_slot];
     __DMB();
     if (i >= SAMPLER_RAM_AUDIO_SLOT_COUNT) return 0U;
-    __DMB();
     const sampler_ram_audio_slot_t snap = g_sampler_ram_audio_slots[i];
     __DMB();
     if ((snap.ready == 0U) || (snap.descriptor.global_slot != global_slot)
-        || (snap.sequence != g_sampler_ram_audio_slots[i].sequence)
         || (g_sampler_ram_audio_slots[i].ready == 0U)) return 0U;
     *out = snap.descriptor;
     return 1U;

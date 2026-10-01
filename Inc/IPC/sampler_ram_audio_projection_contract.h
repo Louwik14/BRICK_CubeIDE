@@ -7,7 +7,6 @@
 
 typedef struct
 {
-    volatile uint32_t sequence;
     volatile uint8_t ready;
     uint8_t reserved[3];
     sampler_ram_audio_descriptor_t descriptor;

@@ -918,6 +918,8 @@ static void sampler_ram_pool_load_async_step(void)
              * post-load superloop consume a full frame quantum even when the
              * waveform page is never displayed. */
             sampler_ram_waveform_set_empty(&job->candidate);
+            sample_page_cache_port_mark_shared_cpu_clean(
+                job->candidate.first_page_slot, job->candidate.page_count);
             if (sampler_ram_audio_projection_build(
                     job->ram_slot, &job->candidate,
                     &job->prepared_descriptor) == 0U)

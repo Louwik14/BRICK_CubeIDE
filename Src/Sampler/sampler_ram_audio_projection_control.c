@@ -1,13 +1,9 @@
 #include "IPC/sampler_ram_audio_projection_contract.h"
 #include "IPC/sampler_ram_audio_projection_control.h"
-#include "IPC/shared_memory_ref_control.h"
 
 #include <string.h>
 
-#include "Platform/cache_maintenance.h"
-#include "Platform/memory_layout.h"
 #include "Sampler/sample_global_pool.h"
-#include "Sampler/sample_page_cache_port.h"
 #include "stm32h7xx_hal.h"
 
 void sampler_ram_audio_projection_init(void)
@@ -25,18 +21,15 @@ uint8_t sampler_ram_audio_projection_build(uint16_t ram_slot,
     if ((ram_slot >= SAMPLER_RAM_AUDIO_SLOT_COUNT) || (slot == NULL)
         || (slot->state != SAMPLER_RAM_SLOT_READY) || (slot->data == NULL)
         || (slot->frames == 0U) || (out == NULL)) return 0U;
-    audio_shared_memory_ref_t data;
-    const uint32_t data_bytes = slot->frames * slot->bytes_per_frame;
-    if (shared_memory_ref_make_page_pool(slot->first_page_slot, 0U,
-                                         data_bytes, &data) == 0U) return 0U;
-    dcache_clean_by_addr_aligned(slot->data, data_bytes);
-    dcache_invalidate_by_addr_aligned(slot->data, data_bytes);
-    sample_page_cache_port_mark_shared_cpu_clean(slot->first_page_slot,
-                                                 slot->page_count);
+    const uint64_t data_bytes = (uint64_t)slot->frames * slot->bytes_per_frame;
+    const uint64_t capacity_bytes =
+        (uint64_t)slot->page_count * SAMPLE_PAGE_BYTES;
+    if ((slot->page_count == 0U) || (data_bytes == 0U)
+        || (data_bytes > capacity_bytes)) return 0U;
     *out = (sampler_ram_audio_descriptor_t){
         .generation = slot->generation, .frames = slot->frames,
         .sample_rate = slot->sample_rate, .data_offset = slot->data_offset,
-        .data = data, .global_slot = slot->global_slot, .ram_slot = ram_slot,
+        .data = slot->data, .global_slot = slot->global_slot, .ram_slot = ram_slot,
         .channels = slot->channels, .bytes_per_frame = slot->bytes_per_frame,
         .format = (uint32_t)slot->format
     };
@@ -52,7 +45,6 @@ void sampler_ram_audio_projection_install_prepared(
     dst->ready = 0U;
     __DMB();
     dst->descriptor = *descriptor;
-    dst->sequence++;
     __DMB();
     dst->ready = 1U;
     __DMB();
@@ -78,7 +70,5 @@ void sampler_ram_audio_projection_withdraw(uint16_t ram_slot, uint32_t generatio
         g_sampler_ram_audio_global_to_slot[slot->descriptor.global_slot] =
             SAMPLER_RAM_POOL_INVALID_SLOT;
     slot->ready = 0U;
-    __DMB();
-    slot->sequence++;
     __DMB();
 }

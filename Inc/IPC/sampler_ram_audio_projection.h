@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 
-#include "IPC/shared_memory_ref.h"
 #include "Sampler/sample_page_cache_config.h"
 
 typedef enum
@@ -35,7 +34,7 @@ typedef struct
     uint32_t frames;
     uint32_t sample_rate;
     uint32_t data_offset;
-    audio_shared_memory_ref_t data;
+    const float *data;
     uint16_t global_slot;
     uint16_t ram_slot;
     uint16_t channels;
@@ -43,5 +42,5 @@ typedef struct
     sampler_ram_format_t format;
 } sampler_ram_audio_descriptor_t;
 
-_Static_assert(sizeof(sampler_ram_audio_descriptor_t) == 40U,
-               "Sample RAM AUDIO descriptor ABI changed");
+_Static_assert(sizeof(sampler_ram_audio_descriptor_t) == 32U,
+               "Sample RAM AUDIO descriptor layout changed");
