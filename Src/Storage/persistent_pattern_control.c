@@ -654,6 +654,9 @@ static uint8_t apply_product_state(uint8_t entity,const persist_control_entity_t
 {
     const track_family_t family=track_state_get_family(entity);
     const track_type_t type=track_state_get_type(entity);
+    /* A Pattern is a full target.  In particular, an empty asset list means
+     * unbound, not "keep the previous Pattern binding". */
+    if(project_control_track_assets_clear(entity)==0U)return 0U;
     if(family==TRACK_FAMILY_SAMPLER&&(type==TRACK_TYPE_STREAM||type==TRACK_TYPE_RAM||type==TRACK_TYPE_MULTI))
     {
         if(x->asset_count==0U)return 1U;
@@ -781,6 +784,11 @@ static uint8_t persistent_pattern_prepare_audio(
     prepared_audio_state_t *audio = NULL;
     if (!prepared_audio_control_reserve(&prepared->audio_slot,
             &prepared->audio_generation, &audio)) return 0U;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+        for (param_id_t id = 0U; id < PARAM_COUNT; ++id)
+            if (param_registry_temp_is_clearable(id) != 0U)
+                audio->temp_clear_mask[entity][id >> 5U]
+                    |= UINT32_C(1) << (id & 31U);
     audio->tempo_milli_bpm = pattern->globals.tempo_milli_bpm;
     audio->step_q16 = seq_runtime_samples_per_step_for_tempo(
         pattern->globals.tempo_milli_bpm);
@@ -805,7 +813,6 @@ static uint8_t persistent_pattern_prepare_audio(
                 (track_family_t)prepared->family[entity]);
             type = track_runtime_type_from_ui(
                 (track_type_t)prepared->type[entity]);
-            audio->active_mask |= (uint16_t)(1U << entity);
         }
         uint8_t flags = track_runtime_compute_flags(family, type);
         if ((entity_topology_get_capabilities(&topology)
@@ -888,7 +895,6 @@ static uint8_t persistent_pattern_prepare_audio(
         {
             target->resource.kind = PREPARED_AUDIO_RESOURCE_SAMPLER;
             target->resource.sampler_runtime = UINT16_MAX;
-            audio->rebind_candidate_mask |= (uint16_t)(1U << entity);
         }
         else if ((family == TRACK_RUNTIME_FAMILY_SYNTH)
                 && (type == TRACK_RUNTIME_TYPE_WAVE))
@@ -897,7 +903,6 @@ static uint8_t persistent_pattern_prepare_audio(
             for (uint8_t osc = 0U; osc < 2U; ++osc)
                 target->resource.wavetable[osc].wavetable_slot =
                     WAVETABLE_POOL_INVALID_SLOT;
-            audio->rebind_candidate_mask |= (uint16_t)(1U << entity);
         }
         if ((family == TRACK_RUNTIME_FAMILY_EXTERNAL)
                 && (entity < TRACK_COUNT))
@@ -913,7 +918,7 @@ fail:
     return 0U;
 }
 
-static uint8_t persistent_pattern_finalize_audio_resources(
+static uint8_t persistent_pattern_finalize_audio_from_control(
     persistent_pattern_prepared_t *prepared)
 {
     if ((prepared == NULL) || (prepared->audio_slot >= PREPARED_AUDIO_SLOT_COUNT))
@@ -928,28 +933,76 @@ static uint8_t persistent_pattern_finalize_audio_resources(
                 &global, &slot->state.global)) return 0U;
     slot->state.tempo_milli_bpm = seq_runtime_get_effective_tempo_bpm_milli();
     slot->state.step_q16 = seq_runtime_get_samples_per_step_q16();
+    slot->state.metronome_level = metronome_control_get_level();
+    for (uint8_t input = 0U; input < 2U; ++input)
+        slot->state.input_owner[input] = BRICK_ENTITY_INVALID_ID;
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
-        prepared_audio_entity_state_t *const target = &slot->state.entity[entity];
-        if (target->active != 0U)
+        const control_audio_program_descriptor_t expected_program =
+            slot->state.entity[entity].program;
+        prepared_audio_entity_state_t final = {0};
+        entity_topology_descriptor_t topology;
+        if (!entity_topology_get(entity, &topology)) return 0U;
+        final.active = topology.active;
+        final.topology_role = (uint8_t)topology.role;
+        final.ui_family = (uint8_t)track_state_get_family(entity);
+        if (topology.active != 0U)
         {
-            if ((target->product_kind == PREPARED_AUDIO_PRODUCT_FM)
-                    ? !fm_control_state_get(entity, &target->product.fm)
-                    : !tone_program_control_capture(entity,
-                        &target->product.tone)) return 0U;
-            if (!param_filter_control_capture(entity, &target->filter)
-                    || !vca_control_state_capture(entity, &target->vca)
-                    || !mixer_control_state_capture(entity, &target->mixer)
-                    || !audio_fx_control_state_capture(entity,
-                        &target->audio_fx)
-                    || !polyphony_control_capture(entity,
-                        &target->polyphony)) return 0U;
-            if (target->modulation_present != 0U)
+            const track_runtime_ctx_t *const runtime = track_runtime_get_ctx(entity);
+            if (runtime == NULL) return 0U;
+            uint8_t flags = runtime->flags;
+            if (topology.role == ENTITY_ROLE_GROUP_MASTER)
+                flags |= CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER;
+            else if (topology.role == ENTITY_ROLE_GROUP_CHILD)
+                flags |= CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD;
+            polyphony_control_state_t polyphony;
+            if (!polyphony_control_capture(entity, &polyphony)) return 0U;
+            polyphony.voice_count = track_runtime_effective_voice_count(
+                (track_runtime_family_t)runtime->family,
+                (track_runtime_type_t)runtime->type, polyphony.voice_count);
+            if (runtime->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+                flags |= CONTROL_AUDIO_PROGRAM_ENCODE_VOICES(
+                    polyphony.voice_count);
+            final.program = (control_audio_program_descriptor_t){
+                .engine = (uint8_t)track_runtime_choose_engine(
+                    (track_runtime_family_t)runtime->family,
+                    (track_runtime_type_t)runtime->type),
+                .family = runtime->family,
+                .type = runtime->type,
+                .flags = flags
+            };
+            final.polyphony = polyphony;
+            final.midi_channel = track_state_get_midi_channel(entity);
+            final.midi_source = (uint8_t)track_state_get_midi_source(entity);
+            const int8_t muted = track_mute_is_effectively_muted(entity);
+            if (muted < 0) return 0U;
+            final.muted = (uint8_t)muted;
+            if (final.program.type == TRACK_RUNTIME_TYPE_FM)
             {
+                final.product_kind = PREPARED_AUDIO_PRODUCT_FM;
+                if (!fm_control_state_get(entity, &final.product.fm)) return 0U;
+            }
+            else
+            {
+                final.product_kind = PREPARED_AUDIO_PRODUCT_TONE;
+                if (!tone_program_control_capture(entity,
+                        &final.product.tone)) return 0U;
+            }
+            if (!param_filter_control_capture(entity, &final.filter)
+                    || !vca_control_state_capture(entity, &final.vca)
+                    || !mixer_control_state_capture(entity, &final.mixer)
+                    || !audio_fx_control_state_capture(entity,
+                        &final.audio_fx)) return 0U;
+            persist_entity_caps_t caps;
+            if (!persist_entity_caps_resolve(
+                    entity_topology_group_is_active(),entity,&caps)) return 0U;
+            if (caps.modulation_owner != 0U)
+            {
+                final.modulation_present = 1U;
                 const track_sound_state_t *const sound =
                     track_sound_state_get_const(entity);
                 if ((sound == NULL) || !mod_env3_control_capture(
-                        entity, &target->modulation.envelope)) return 0U;
+                        entity, &final.modulation.envelope)) return 0U;
                 for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
                     for (uint8_t param = 0U; param < MOD_LFO_PARAM_COUNT; ++param)
                     {
@@ -957,30 +1010,57 @@ static uint8_t persistent_pattern_finalize_audio_resources(
                         if (!mod_lfo_v1_get_track_param(entity,lfo,
                                 (mod_lfo_param_t)param,&value)) return 0U;
                         float *const fields =
-                            &target->modulation.lfo.lfo[lfo].rate;
+                            &final.modulation.lfo.lfo[lfo].rate;
                         fields[param] = value;
                     }
                 for (uint8_t op = 0U; op < 2U; ++op)
                 {
-                    target->modulation.multi_source[op][0] =
+                    final.modulation.multi_source[op][0] =
                         sound->mod_multi_source[op][0];
-                    target->modulation.multi_source[op][1] =
+                    final.modulation.multi_source[op][1] =
                         sound->mod_multi_source[op][1];
-                    target->modulation.slew_source[op] =
+                    final.modulation.slew_source[op] =
                         sound->mod_slew_source[op];
-                    target->modulation.slew_amount[op] =
+                    final.modulation.slew_amount[op] =
                         sound->mod_slew_amount[op];
                 }
                 for (uint8_t route = 0U; route < 8U; ++route)
-                    target->modulation.route[route] =
+                    final.modulation.route[route] =
                         (prepared_audio_mod_route_t){
                             .source = sound->mod_matrix[route].source,
                             .enabled = sound->mod_matrix[route].enabled,
                             .destination = sound->mod_matrix[route].destination,
                             .depth = sound->mod_matrix[route].depth };
             }
+            if ((final.program.family == TRACK_RUNTIME_FAMILY_SAMPLER)
+                    && ((final.program.type == TRACK_RUNTIME_TYPE_STREAM)
+                        || (final.program.type == TRACK_RUNTIME_TYPE_RAM)
+                        || (final.program.type == TRACK_RUNTIME_TYPE_MULTI)))
+            {
+                final.resource.kind = PREPARED_AUDIO_RESOURCE_SAMPLER;
+                final.resource.sampler_runtime = UINT16_MAX;
+            }
+            else if ((final.program.family == TRACK_RUNTIME_FAMILY_SYNTH)
+                    && (final.program.type == TRACK_RUNTIME_TYPE_WAVE))
+            {
+                final.resource.kind = PREPARED_AUDIO_RESOURCE_WAVETABLE;
+                for (uint8_t osc = 0U; osc < 2U; ++osc)
+                    final.resource.wavetable[osc].wavetable_slot =
+                        WAVETABLE_POOL_INVALID_SLOT;
+            }
+            if ((final.program.family == TRACK_RUNTIME_FAMILY_EXTERNAL)
+                    && (entity < TRACK_COUNT))
+                slot->state.input_owner[track_state_get_external_input(entity)] =
+                    entity;
         }
-        if (target->resource.kind == PREPARED_AUDIO_RESOURCE_SAMPLER)
+        else
+        {
+            final.program = (control_audio_program_descriptor_t){
+                .family = TRACK_RUNTIME_FAMILY_OFF,
+                .type = TRACK_RUNTIME_TYPE_NONE
+            };
+        }
+        if (final.resource.kind == PREPARED_AUDIO_RESOURCE_SAMPLER)
         {
             uint16_t logical = 0U;
             uint16_t runtime = UINT16_MAX;
@@ -988,28 +1068,36 @@ static uint8_t persistent_pattern_finalize_audio_resources(
                     PROJECT_CONTROL_ASSET_SAMPLER, &logical) != 0U)
             {
                 uint8_t ok = 0U;
-                if (target->program.type == TRACK_RUNTIME_TYPE_MULTI)
+                if (final.program.type == TRACK_RUNTIME_TYPE_MULTI)
                     ok = project_control_resolve_multi_runtime(logical, &runtime);
                 else
                 {
-                    const uint32_t kind = (target->program.type
+                    const uint32_t kind = (final.program.type
                         == TRACK_RUNTIME_TYPE_STREAM)
                         ? PERSIST_ASSET_SAMPLE_STREAM : PERSIST_ASSET_SAMPLE_RAM;
                     ok = project_control_resolve_sample_runtime_kind(
                         kind, logical, &runtime);
                 }
-                if (ok != 0U) target->resource.present = 1U;
+                if (ok != 0U) final.resource.present = 1U;
             }
-            target->resource.sampler_runtime = runtime;
+            final.resource.sampler_runtime = runtime;
         }
-        else if (target->resource.kind == PREPARED_AUDIO_RESOURCE_WAVETABLE)
+        else if (final.resource.kind == PREPARED_AUDIO_RESOURCE_WAVETABLE)
         {
             for (uint8_t osc = 0U; osc < 2U; ++osc)
                 if (!audio_wave_table_projection_capture_track(
-                        entity, osc, &target->resource.wavetable[osc]))
+                        entity, osc, &final.resource.wavetable[osc]))
                     return 0U;
-            target->resource.present = 1U;
+            final.resource.present = 1U;
         }
+        /* PREPARE proves the DTO target; this late comparison proves that the
+         * CONTROL commit installed the same structural PROGRAM before AUDIO
+         * can observe the slot. */
+        if ((final.program.engine != expected_program.engine)
+                || (final.program.family != expected_program.family)
+                || (final.program.type != expected_program.type)
+                || (final.program.flags != expected_program.flags)) return 0U;
+        slot->state.entity[entity] = final;
     }
     return 1U;
 }
@@ -1275,7 +1363,7 @@ void persistent_pattern_control_commit_prepared_control(
     {Error_Handler();return;}
     if(persistent_pattern_control_install_internal(prepared->pattern,prepared)
         !=PERSIST_CODEC_OK)Error_Handler();
-    if(!persistent_pattern_finalize_audio_resources(prepared))Error_Handler();
+    if(!persistent_pattern_finalize_audio_from_control(prepared))Error_Handler();
 }
 
 void persistent_pattern_control_commit_prepared_seq(

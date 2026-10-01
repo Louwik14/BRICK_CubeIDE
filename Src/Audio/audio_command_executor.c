@@ -892,6 +892,9 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
                 || !audio_prepared_apply_tone(entity, &target->product.tone))
             goto invalid;
         if (!audio_prepared_apply_common(entity, target)) goto invalid;
+        if (!audio_prepared_apply_float(entity, PARAM_MIX_MUTE,
+                (float)target->muted,
+                CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) goto invalid;
         if ((target->modulation_present != 0U)
                 && !audio_prepared_apply_mod(entity, &target->modulation))
             goto invalid;
