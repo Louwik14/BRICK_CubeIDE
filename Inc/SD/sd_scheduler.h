@@ -45,6 +45,7 @@ typedef struct
     uint32_t sector_count;
     void *read_buffer;
     const void *write_buffer;
+    void *owner_context;
     uint32_t owner_generation;
     uint32_t media_epoch;
     sd_scheduler_reservation_t reservation;

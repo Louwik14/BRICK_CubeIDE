@@ -58,6 +58,36 @@ typedef struct
     uint8_t owner_client;
 } sd_block_device_async_completion_t;
 
+/* Stable zero-initialized caller-owned request. It must outlive
+ * completion/abort drainage. */
+typedef struct
+{
+    uint32_t lba;
+    uint32_t sector_count;
+    uint8_t *buffer;
+    uint32_t owner_generation;
+    uint32_t media_epoch;
+    uint32_t queued_tick;
+    uint32_t start_tick;
+    uint32_t perf_submit_cycles;
+    uint32_t perf_dma_cycles;
+    uint32_t perf_complete_cycles;
+    uint32_t token;
+    sd_block_device_operation_t operation;
+    sd_block_device_result_t result;
+    sd_block_device_result_t abort_result;
+    uint8_t owner_client;
+    uint8_t started;
+    uint8_t callback_seen;
+    uint8_t completed;
+    uint8_t read_destination_cpu_clean;
+    volatile uint8_t irq_complete;
+    volatile uint8_t irq_error;
+    uint8_t prepared;
+    uint8_t chained_next;
+    uint8_t queued;
+} sd_block_device_async_request_t;
+
 void sd_block_device_async_init(void);
 sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
                                                        uint32_t sector_count,
@@ -73,6 +103,10 @@ sd_block_device_result_t sd_block_device_async_read_submit(
 sd_block_device_result_t sd_block_device_async_read_submit_cpu_clean(
     uint32_t lba, uint32_t sector_count, void *dst,
     uint32_t owner_generation);
+sd_block_device_result_t sd_block_device_async_read_submit_request(
+    sd_block_device_async_request_t *request, uint32_t lba,
+    uint32_t sector_count, void *dst, uint32_t owner_generation,
+    uint8_t destination_cpu_clean);
 sd_block_device_result_t sd_block_device_async_write_submit(
     uint32_t lba,
     uint32_t sector_count,
@@ -81,6 +115,8 @@ sd_block_device_result_t sd_block_device_async_write_submit(
 void sd_block_device_async_poll(void);
 uint8_t sd_block_device_async_take_completion(
     sd_block_device_async_completion_t *out_completion);
+uint8_t sd_block_device_async_take_completion_request(
+    sd_block_device_async_request_t **out_request);
 uint32_t sd_block_device_async_pending_count(void);
 uint8_t sd_block_device_async_write_buffer_locked(const void *src);
 sd_block_device_hardware_state_t sd_block_device_async_hardware_state(void);
