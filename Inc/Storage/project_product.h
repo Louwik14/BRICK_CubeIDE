@@ -7,7 +7,13 @@ typedef enum
 {
     PROJECT_PRODUCT_RESULT_IN_PROGRESS = 0,
     PROJECT_PRODUCT_RESULT_SUCCESS,
-    PROJECT_PRODUCT_RESULT_FAILED
+    /* Generic failure remains used by Project Save.  Project Load publishes
+     * only the explicit results below. */
+    PROJECT_PRODUCT_RESULT_FAILED,
+    PROJECT_PRODUCT_RESULT_NOT_NOW,
+    PROJECT_PRODUCT_RESULT_MEDIA_ERROR,
+    PROJECT_PRODUCT_RESULT_INVALID_DOCUMENT,
+    PROJECT_PRODUCT_RESULT_FAILED_FORWARD_MEDIA
 } project_product_result_t;
 typedef struct
 {

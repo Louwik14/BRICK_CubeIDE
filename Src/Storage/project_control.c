@@ -147,9 +147,32 @@ static project_control_asset_result_t classic_failure_result(uint16_t logical)
 {
     const FRESULT result = (FRESULT)sample_cache_get_last_fresult(logical);
     return (result == FR_INT_ERR || result == FR_INVALID_OBJECT
-                || result == FR_INVALID_PARAMETER)
+                || result == FR_INVALID_PARAMETER || result == FR_INVALID_DRIVE
+                || result == FR_INVALID_NAME || result == FR_LOCKED
+                || result == FR_NOT_ENOUGH_CORE
+                || result == FR_TOO_MANY_OPEN_FILES)
         ? PROJECT_CONTROL_ASSET_FAILED_INTERNAL
         : PROJECT_CONTROL_ASSET_FAILED;
+}
+
+static project_control_asset_result_t classic_start_failure_result(void)
+{
+    switch(sample_global_pool_get_last_classic_load_error())
+    {
+        case SAMPLE_CLASSIC_LOAD_INVALID_ID:
+        case SAMPLE_CLASSIC_LOAD_INVALID_PATH:
+        case SAMPLE_CLASSIC_LOAD_PATH_TOO_LONG:
+        case SAMPLE_CLASSIC_LOAD_NO_FREE_SLOT:
+        case SAMPLE_CLASSIC_LOAD_SD_GATE_REFUSED:
+        case SAMPLE_CLASSIC_LOAD_SD_READ_INT_ERR:
+        case SAMPLE_CLASSIC_LOAD_SD_INVALID_OBJECT:
+        case SAMPLE_CLASSIC_LOAD_SD_NOT_ENOUGH_CORE:
+        case SAMPLE_CLASSIC_LOAD_TRANSPORT_ACTIVE:
+        case SAMPLE_CLASSIC_LOAD_RECORDER_ACTIVE:
+            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        default:
+            return PROJECT_CONTROL_ASSET_FAILED;
+    }
 }
 
 static project_control_asset_result_t classic_asset_status(uint16_t logical);
@@ -915,25 +938,46 @@ static project_control_asset_result_t classic_asset_status(uint16_t logical)
         const project_control_asset_result_t result = classic_failure_result(logical);
         if (result == PROJECT_CONTROL_ASSET_FAILED_INTERNAL)
             return result;
+        sample_global_pool_clear_classic(logical);
+        return PROJECT_CONTROL_ASSET_FAILED;
     }
     sample_global_pool_clear_classic(logical);
-    return PROJECT_CONTROL_ASSET_FAILED;
+    return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
 }
 
 static project_control_asset_result_t ram_start_failure_result(void)
 {
-    return (sampler_ram_pool_get_last_result() == SAMPLER_RAM_RESULT_INVALID_ARG
-                || sampler_ram_pool_get_last_result() == SAMPLER_RAM_RESULT_REGISTER_FAIL)
-        ? PROJECT_CONTROL_ASSET_FAILED_INTERNAL
-        : PROJECT_CONTROL_ASSET_FAILED;
+    switch(sampler_ram_pool_get_last_result())
+    {
+        case SAMPLER_RAM_RESULT_INVALID_ARG:
+        case SAMPLER_RAM_RESULT_POOL_FULL:
+        case SAMPLER_RAM_RESULT_GLOBAL_SLOT_FULL:
+        case SAMPLER_RAM_RESULT_PATH_TOO_LONG:
+        case SAMPLER_RAM_RESULT_REGISTER_FAIL:
+        case SAMPLER_RAM_RESULT_TRANSPORT_ACTIVE:
+        case SAMPLER_RAM_RESULT_RECORDER_ACTIVE:
+            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        default:
+            return PROJECT_CONTROL_ASSET_FAILED;
+    }
 }
 
 static project_control_asset_result_t wavetable_start_failure_result(void)
 {
-    return (wavetable_pool_get_last_result() == WAVETABLE_RESULT_INVALID_ARG
-                || wavetable_pool_get_last_result() == WAVETABLE_RESULT_REGISTER_FAIL)
-        ? PROJECT_CONTROL_ASSET_FAILED_INTERNAL
-        : PROJECT_CONTROL_ASSET_FAILED;
+    switch(wavetable_pool_get_last_result())
+    {
+        case WAVETABLE_RESULT_INVALID_ARG:
+        case WAVETABLE_RESULT_POOL_FULL:
+        case WAVETABLE_RESULT_GLOBAL_SLOT_FULL:
+        case WAVETABLE_RESULT_PATH_TOO_LONG:
+        case WAVETABLE_RESULT_SD_BUSY:
+        case WAVETABLE_RESULT_REGISTER_FAIL:
+        case WAVETABLE_RESULT_TRANSPORT_ACTIVE:
+        case WAVETABLE_RESULT_RECORDER_ACTIVE:
+            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        default:
+            return PROJECT_CONTROL_ASSET_FAILED;
+    }
 }
 
 static project_control_asset_result_t multi_load_result_classify(
@@ -942,7 +986,9 @@ static project_control_asset_result_t multi_load_result_classify(
     switch (result)
     {
         case MULTI_SAMPLE_LOAD_INVALID_ARG:
+        case MULTI_SAMPLE_LOAD_SD_BUSY:
         case MULTI_SAMPLE_LOAD_POOL_FAIL:
+        case MULTI_SAMPLE_LOAD_PATH_TOO_LONG:
         case MULTI_SAMPLE_LOAD_REGISTER_FAIL:
         case MULTI_SAMPLE_LOAD_TRANSPORT_ACTIVE:
         case MULTI_SAMPLE_LOAD_CANCELLED:
@@ -963,16 +1009,17 @@ static project_control_asset_result_t apply_bank_asset(uint32_t kind,uint16_t lo
     uint16_t runtime=PROJECT_CONTROL_INVALID_RUNTIME;
     if(kind==PERSIST_ASSET_SAMPLE_STREAM)
     {
-        if (logical >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
-                || sample_global_pool_load_classic(logical,canonical_path) == 0U)
-            return PROJECT_CONTROL_ASSET_FAILED;
+        if (logical >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        if(sample_global_pool_load_classic(logical,canonical_path)==0U)
+            return classic_start_failure_result();
         return PROJECT_CONTROL_ASSET_READY;
     }
     if(kind==PERSIST_ASSET_SAMPLE_RAM)
     {
         const uint16_t backend=sampler_ram_pool_find_free_slot();
         if (backend >= SAMPLER_RAM_POOL_MAX_SLOTS)
-            return PROJECT_CONTROL_ASSET_FAILED;
+            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
         if (bank_set(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
                      logical,kind,canonical_path,runtime)==0U)
             return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
@@ -988,7 +1035,7 @@ static project_control_asset_result_t apply_bank_asset(uint32_t kind,uint16_t lo
     {
         const uint16_t backend=wavetable_pool_find_free_slot();
         if (backend >= WAVETABLE_POOL_MAX_SLOTS)
-            return PROJECT_CONTROL_ASSET_FAILED;
+            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
         if (bank_set(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
                      logical,kind,canonical_path,runtime) == 0U)
             return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
@@ -1021,9 +1068,9 @@ static project_control_asset_result_t apply_bank_asset(uint32_t kind,uint16_t lo
             }
         (void)bank_remove(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,
                           logical);
-        return PROJECT_CONTROL_ASSET_FAILED;
+        return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
     }
-    return PROJECT_CONTROL_ASSET_FAILED;
+    return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
 }
 
 project_control_asset_result_t project_control_ensure_asset(uint32_t kind,const char*path,uint16_t*out_logical)
@@ -1034,7 +1081,10 @@ project_control_asset_result_t project_control_ensure_asset(uint32_t kind,const 
         if(classic_find(path,out_logical)!=0U)
             return classic_asset_status(*out_logical);
         const uint16_t slot=sample_global_pool_find_free_slot();
-        if(slot==SAMPLE_GLOBAL_POOL_INVALID_INDEX||sample_global_pool_load_classic(slot,path)==0U)return PROJECT_CONTROL_ASSET_FAILED;
+        if(slot==SAMPLE_GLOBAL_POOL_INVALID_INDEX)
+            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        if(sample_global_pool_load_classic(slot,path)==0U)
+            return classic_start_failure_result();
         *out_logical=slot;
         return classic_asset_status(slot);
     }
@@ -1066,7 +1116,7 @@ project_control_asset_result_t project_control_ensure_asset(uint32_t kind,const 
         return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
     }
     for(uint16_t i=0U;i<capacity;++i)if(!bank[i].used){const project_control_asset_result_t result=apply_bank_asset(kind,i,path);if(bank[i].used){*out_logical=i;return result;}return result;}
-    return PROJECT_CONTROL_ASSET_FAILED;
+    return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
 }
 
 project_control_asset_result_t project_control_prepare_asset(

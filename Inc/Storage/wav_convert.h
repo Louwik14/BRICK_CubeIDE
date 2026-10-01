@@ -46,7 +46,8 @@ wav_convert_path_status_t wav_convert_path_canonical_status(
     const char *path, wav_info_t *out_info);
 uint8_t wav_convert_path_needs_canonical(const char *path, wav_info_t *out_info);
 uint8_t wav_convert_start_destructive_canonical(const char *path);
-/* Project restore owns the closed mutation ingress while canonicalizing refs. */
+/* Project PREPARE may canonicalize crash-safely before T_FORWARD while the
+ * current live Project remains installed. */
 uint8_t wav_convert_start_destructive_canonical_project(const char *path);
 void wav_convert_service(uint32_t byte_budget);
 uint8_t wav_convert_cancel(void);

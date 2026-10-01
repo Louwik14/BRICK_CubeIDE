@@ -583,8 +583,8 @@ void ui_boot_loading_service(void)
             && (g_ui_boot_loading_progress.complete != 0U))
         {
             g_ui_boot_loading_phase =
-                (g_ui_boot_loading_progress.result == PROJECT_PRODUCT_RESULT_FAILED)
-                    ? UI_BOOT_LOADING_FAILED : UI_BOOT_LOADING_INACTIVE;
+                (g_ui_boot_loading_progress.result == PROJECT_PRODUCT_RESULT_SUCCESS)
+                    ? UI_BOOT_LOADING_INACTIVE : UI_BOOT_LOADING_FAILED;
         }
     }
 }

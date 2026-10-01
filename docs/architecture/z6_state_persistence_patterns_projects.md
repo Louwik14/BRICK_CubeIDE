@@ -64,29 +64,46 @@ le meme contrat que LOAD, sans toucher sequence, mute, MIDI, slot ou fichiers.
 
 ## Transactions
 
-Pour Project Load, P1 valide integralement le document Project avant le safe
-point: magic/version, taille exacte, sections, bornes, CRC, semantique des
-Patterns et coherence de leurs references avec le manifeste. P1 ne lit pas les
-fichiers d'assets externes. Un refus abandonne le workspace et le staging sans
-fermer l'ingress, PANIC ni retirer une ressource courante, et ne publie pas le
-contexte de boot. Apres STOP, quiescence et `T_safe`, l'ancien catalogue et ses
-gros payloads sont retires; les assets du nouveau Project sont alors charges
-sequentiellement dans la memoire liberee. Une erreur locale de fichier conserve
-la reference et la configuration Track, publie une source silencieuse et marque
-l'asset `UNAVAILABLE`; elle n'annule pas le Project. Pour Multi, toute erreur
-d'index ou de child invalide l'instrument entier. Un changement de media epoch,
-une SD absente ou un mount globalement perdu arrete le load. Le contexte de boot
-n'est publie qu'apres installation reussie du runtime. Les autres operations de
-persistence conservent leur prevalidation locale. Pattern Store/delete/clear
-construisent le namespace inactif puis publient `COMMIT.BIN`.
+Pour Project Load, PREPARE valide integralement le document avant la frontiere
+forward-only: magic/version, taille exacte, sections, bornes, CRC, semantique
+des Patterns, coherence de leurs references avec le manifeste, capacites fixes,
+staging du Pattern bank et preparation de son commit. La canonicalisation WAV
+crash-safe appartient aussi a PREPARE. Un refus `MEDIA_ERROR` ou
+`INVALID_DOCUMENT` abandonne uniquement ce candidat jamais publie: ingress,
+CONTROL, SEQ, AUDIO, assets et Pattern bank actifs restent intacts.
+
+`T_FORWARD` est defini une seule fois par l'appel de
+`project_load_quiesce_request()` et, concretement, par sa fermeture de l'ingress.
+PANIC et retrait des gros payloads rendent alors l'ancien Project definitivement
+mort. `pattern_control_bank_commit()` et `AUDIO_STATE_COMMIT` sont des
+publications techniques post-forward, jamais d'autres commits produit. Apres
+`T_FORWARD`, une erreur locale de fichier asset conserve la reference et la
+configuration Track, publie une source silencieuse et marque l'asset
+`UNAVAILABLE`; elle n'annule pas le Project. Slot, pool, registration,
+descriptor, resolution runtime, publication CONTROL/SEQ/AUDIO ou etat machine
+impossibles apres leur preuve sont des invariants fatals.
+
+Une perte de media ou un changement de `media_epoch` post-forward produit
+`FAILED_FORWARD_MEDIA`: transport arrete, ingress ferme, aucun contexte de boot
+du candidat publie et aucune restauration de l'ancien Project. Les chargements
+partiels sont annules/retires vers l'avant. Un nouveau Project Load ou Blank
+explicite peut reprendre quand le media revient; seul son FINALIZE reouvre
+l'ingress. Le contexte de boot n'est publie qu'apres installation reussie du
+runtime. Les resultats Project Load exposes sont `NOT_NOW`, `MEDIA_ERROR`,
+`INVALID_DOCUMENT`, `FAILED_FORWARD_MEDIA` et le succes.
+Project Blank suit exactement la meme machine; une construction ou validation
+impossible du candidat canonique est fatale, tandis qu'un echec SD du Pattern
+bank reste une erreur media.
 Les Save utilisent des tranches DATA de 4096 octets et des etapes METADATA
 separees; `.TMP` n'est publie qu'apres header final, sync et close, avec `.BAK`
 recuperable.
 
-La fin de P1 et l'appel de quiescence definissent explicitement `T_commit` pour
-Project Load. Avant `T_commit`, workspace et bank inactif peuvent etre jetes
-sans mutation live. Apres `T_commit`, le remplacement est forward-only: les
-payloads retires ne declenchent pas un rollback tardif. La publication CONTROL
+La fin de PREPARE et l'appel de quiescence definissent explicitement
+`T_FORWARD` pour Project Load. Avant `T_FORWARD`, workspace et bank inactif
+peuvent etre jetes parce que le live n'a jamais ete modifie; ce cleanup de
+candidat n'est pas un rollback runtime. Apres `T_FORWARD`, le remplacement est
+strictement forward-only et aucun chemin d'echec ne rouvre implicitement
+l'ingress. La publication CONTROL
 finale installe Pattern et macros dans un unique snapshot AUDIO de type Project;
 l'identite Pattern courante et le hook UI unique ne sont publies qu'apres le
 commit AUDIO reussi. Le chemin interne d'installation Pattern ne cree donc pas
@@ -186,7 +203,7 @@ remplace. Les STOP de ressources et les requetes de waveform restent exclus. Les
 de selection exposes a l'UI sont `EMPTY`, `LOADED` et `UNAVAILABLE`. Patch garde
 sa transaction asset locale distincte.
 
-Une application Pattern ou Project reussie reconstruit runtime/AUDIO et invalide Undo/Redo. Un Project structurellement rejete conserve integralement l'etat courant; apres entree en remplacement, aucun rollback complet des gros assets n'est maintenu.
+Une application Pattern ou Project reussie reconstruit runtime/AUDIO et invalide Undo/Redo. Un Project structurellement rejete conserve integralement l'etat courant; apres `T_FORWARD`, aucun rollback runtime ni restauration de l'ancien Project n'existe.
 
 Le DTO Pattern porte sous forme typee Keyboard, niveau de metronome, structure
 Track/MIDI, nombre de voix, routing Audio FX et configuration Mod. Ces champs
@@ -256,7 +273,7 @@ Son payload reste dans le workspace `PATTERN_IO`, owner unique et scope jusqu'au
 commit ou a l'annulation. Un STOP vide le candidat et libere ce workspace; une
 completion asynchrone d'une generation remplacee termine seulement son cleanup
 et ne peut plus publier. Project Load et Project Blank annulent le candidat
-avant leur staging.
+immediatement apres leur `T_FORWARD`; PREPARE ne modifie pas ce candidat live.
 
 Apres chaque application Pattern reussie, le hook UI de restauration globale
 ferme les gestes/Undo d'edition encore ouverts, normalise la lane active vers une
