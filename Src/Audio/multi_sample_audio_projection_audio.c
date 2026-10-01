@@ -25,6 +25,7 @@ uint8_t multi_sample_audio_projection_resolve(uint16_t instrument_id,
     if (out != NULL) memset(out, 0, sizeof(*out));
     if ((out == NULL) || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
         return 0U;
+    if (g_multi_audio_instruments[instrument_id].ready == 0U) return 0U;
     __DMB();
     const multi_audio_instrument_t snap = g_multi_audio_instruments[instrument_id];
     __DMB();
@@ -80,6 +81,5 @@ uint8_t multi_sample_audio_projection_resolve(uint16_t instrument_id,
     out->velocity_layer_count_for_note = layer_count;
     out->zone_is_single_velocity_layer = (layer_count == 1U) ? 1U : 0U;
     __DMB();
-    return (snap.sequence == g_multi_audio_instruments[instrument_id].sequence
-            && g_multi_audio_instruments[instrument_id].ready != 0U) ? 1U : 0U;
+    return (g_multi_audio_instruments[instrument_id].ready != 0U) ? 1U : 0U;
 }

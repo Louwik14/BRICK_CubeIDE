@@ -5,7 +5,6 @@
 
 typedef struct
 {
-    volatile uint32_t sequence;
     volatile uint8_t ready;
     uint8_t reserved;
     uint16_t first_zone_id;

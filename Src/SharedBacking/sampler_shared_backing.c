@@ -12,11 +12,11 @@ AUDIO_STATE_SHARED_SDRAM sample_classic_audio_source_t
     g_sample_classic_audio_source[SAMPLE_CLASSIC_CAPACITY];
 AUDIO_STATE_SHARED_SDRAM rec_source_projection_t g_rec_source_projection;
 
-D2_IPC multi_audio_instrument_t
+AUDIO_M7_PRIVATE_SDRAM multi_audio_instrument_t
     g_multi_audio_instruments[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
-AUDIO_SHARED_MULTI_SDRAM multi_audio_zone_t
+AUDIO_M7_PRIVATE_SDRAM multi_audio_zone_t
     g_multi_audio_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
-AUDIO_SHARED_MULTI_SDRAM multi_sample_audio_source_t
+AUDIO_M7_PRIVATE_SDRAM multi_sample_audio_source_t
     g_multi_audio_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 
 AUDIO_M7_PRIVATE_SDRAM sampler_ram_audio_slot_t
@@ -34,8 +34,8 @@ _Static_assert(sizeof(sample_classic_audio_source_t) == 28U,
                "Classic source layout changed");
 _Static_assert(sizeof(rec_source_projection_t) == 24U,
                "REC source projection layout changed");
-_Static_assert(sizeof(multi_audio_instrument_t) == 16U,
-               "Multi instrument ABI changed");
+_Static_assert(sizeof(multi_audio_instrument_t) == 10U,
+               "Multi instrument layout changed");
 _Static_assert(sizeof(multi_audio_zone_t) == 8U,
                "Multi zone ABI changed");
 _Static_assert(sizeof(multi_sample_audio_source_t) == 40U,

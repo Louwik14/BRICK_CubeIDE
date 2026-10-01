@@ -108,7 +108,6 @@
 #define SDRAM_STREAM_SERVICE SEC_ATTR(".sdram_stream_service") ALIGN32
 #define SDRAM_STREAM_SCRATCH SEC_ATTR(".sdram_stream_scratch") ALIGN32
 #define SDRAM_MULTI_POOL SEC_ATTR(".sdram_multi_pool") ALIGN32
-#define AUDIO_SHARED_MULTI_SDRAM AUDIO_STORAGE_SHARED_SDRAM
 #define SDRAM_MULTI_LOAD SEC_ATTR(".sdram_multi_load") ALIGN32
 #define SDRAM_MULTI_IMPORT SEC_ATTR(".sdram_multi_import") ALIGN32
 #define SDRAM_CLASSIC_POOL SEC_ATTR(".sdram_classic_pool") ALIGN32

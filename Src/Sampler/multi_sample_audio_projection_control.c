@@ -20,8 +20,6 @@ void multi_sample_audio_projection_withdraw(uint16_t instrument_id)
     if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS) return;
     g_multi_audio_instruments[instrument_id].ready = 0U;
     __DMB();
-    g_multi_audio_instruments[instrument_id].sequence++;
-    __DMB();
 }
 
 uint8_t multi_sample_audio_projection_publish(uint16_t instrument_id)
@@ -64,7 +62,6 @@ uint8_t multi_sample_audio_projection_publish(uint16_t instrument_id)
     dst->zone_count = instrument->zone_count;
     dst->first_sample_id = instrument->first_sample_id;
     dst->sample_count = instrument->sample_count;
-    dst->sequence++;
     __DMB();
     dst->ready = 1U;
     __DMB();
