@@ -73,7 +73,6 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_global_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_ram_audio_projection_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_ram_pool.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/shared_memory_ref_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/wavetable_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/control_audio_transport.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_clipboard.c"

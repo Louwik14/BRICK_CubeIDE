@@ -43,24 +43,18 @@
 #define STREAM_LOCAL_D2 SEC_ATTR(".ram_d2_local_cacheable") ALIGN32
 
 /* Sequencer runtime/model state placed in internal D2 (non-SDRAM). */
-#define SEQ_STATE_D2 SEC_ATTR(".ram_d2_m4")
+#define SEQ_STATE_D2 SEC_ATTR(".ram_seq_state")
 #define SEQ_HOT_D1 SEC_ATTR(".ram_d1_audio")
 #define SEQ_STATE_SDRAM SEC_ATTR(".seq_state_sdram") ALIGN32
 
-/* CONTROL state local to SRAM2/D2, reserved for the future M4 owner. */
-#define CONTROL_M4_SRAM2 SEC_ATTR(".ram_control_m4_sram2")
+/* CONTROL state local to SRAM2/D2. */
+#define CONTROL_STATE_SRAM2 SEC_ATTR(".ram_control_state_sram2")
 
-/* Explicit CONTROL/AUDIO IPC contract.  The linkers place this section in the
- * upper 32 KiB of SRAM4 and both boards map that window shareable,
- * non-cacheable.  Objects here must remain pointer-free and single-owner. */
-#define D3_IPC SEC_ATTR(".ram_d3_ipc") ALIGN32
+/* IRQ/superloop publications requiring deterministic uncached visibility. */
+#define IRQ_SHARED_D3 SEC_ATTR(".ram_d3_irq_shared") ALIGN32
 
-/* Bulk pointer-free IPC registries use SRAM3. MPU region 6 maps the complete
- * 32 KiB window shareable/non-cacheable on every H743 image. */
-#define D2_IPC SEC_ATTR(".ram_d2_ipc") ALIGN32
-
-/* CONTROL-only bulk restore validation workspace.  Despite the historical
- * section name, this object is never published to AUDIO and has no doorbell. */
+/* Larger IRQ-visible diagnostics kept in the uncached SRAM3 window. */
+#define IRQ_SHARED_D2 SEC_ATTR(".ram_d2_irq_shared") ALIGN32
 
 /* Low-rate control/flags */
 #define CTRL_STATE SEC_ATTR(".ram_d3_ctrl")
@@ -116,11 +110,11 @@
 #define SDRAM_RECORDER SEC_ATTR(".sdram_recorder") ALIGN32
 /* CPU-produced Recorder PCM. Separate from the non-cacheable shared arena. */
 #define SDRAM_RECORDER_RING SEC_ATTR(".sdram_recorder_ring") ALIGN32
-#define AUDIO_STATE_SHARED_SDRAM SEC_ATTR(".sdram_audio_state_snapshot") ALIGN32
+#define AUDIO_PUBLICATION_SDRAM SEC_ATTR(".sdram_audio_publication") ALIGN32
 
 /* Large cold audio history (delay/grain/reverb tails) */
 #define AUDIO_COLD_SDRAM SEC_ATTR(".sdram_audio_cold") ALIGN32
-/* M7-only bulk state. It is cacheable and never part of an inter-core ABI. */
+/* M7-only bulk state in cacheable SDRAM. */
 #define AUDIO_M7_PRIVATE_SDRAM AUDIO_COLD_SDRAM
 
 /* Shared global send-delay pool. */

@@ -2,32 +2,30 @@
 
 #include <stdint.h>
 
+#include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_io.h"
-#include "IPC/shared_memory_ref.h"
 #include "ff.h"
 
 typedef struct
 {
-    audio_shared_memory_ref_t data;
+    void *data;
     uint32_t capacity_bytes;
     uint16_t first_slot;
     uint16_t page_count;
 } sample_page_loader_allocation_t;
 
-uint8_t sample_page_cache_port_alloc_shared(
+uint8_t sample_page_cache_port_alloc_local(
     uint32_t bytes, sample_page_loader_allocation_t *out);
-void sample_page_cache_port_release_shared(uint16_t first_slot,
-                                           uint16_t page_count);
-void sample_page_cache_port_mark_shared_cpu_clean(uint16_t first_slot,
-                                                  uint16_t page_count);
-void *sample_page_cache_port_resolve_shared(
+void sample_page_cache_port_release_local(uint16_t first_slot,
+                                          uint16_t page_count);
+void sample_page_cache_port_mark_local_cpu_clean(uint16_t first_slot,
+                                                 uint16_t page_count);
+void *sample_page_cache_port_resolve_local(
     const sample_page_loader_allocation_t *allocation);
-uint32_t sample_page_cache_port_shared_total_bytes(void);
-uint32_t sample_page_cache_port_shared_free_bytes(void);
+uint32_t sample_page_cache_port_local_total_bytes(void);
+uint32_t sample_page_cache_port_local_free_bytes(void);
 
-/* H743 local adapter for the future M4-loader <-> M7-page-owner boundary.
- * Loader clients never receive a page pointer and only exchange immutable
- * registration, load-token and completion values. */
+/* H743 local adapter between loader clients and the page-cache owner. */
 uint8_t sample_page_cache_port_register_path(sample_audio_key_t key,
                                              const char *path,
                                              const wav_info_t *info,

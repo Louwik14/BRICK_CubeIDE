@@ -7,15 +7,10 @@ typedef struct
     volatile uint32_t sequence;
     volatile uint32_t wrap_count;
     volatile uint32_t tick_hz;
-} brick_media_clock_shared_state_t;
+} brick_media_clock_state_t;
 
-#if defined(BRICK_MEDIA_CLOCK_SHARED_STATE_ADDRESS)
-#define BRICK_MEDIA_CLOCK_STATE \
-    (*(brick_media_clock_shared_state_t *)(uintptr_t)BRICK_MEDIA_CLOCK_SHARED_STATE_ADDRESS)
-#else
-static brick_media_clock_shared_state_t g_media_clock_state;
+static brick_media_clock_state_t g_media_clock_state;
 #define BRICK_MEDIA_CLOCK_STATE g_media_clock_state
-#endif
 
 static uint32_t brick_media_clock_tim5_frequency(void)
 {
@@ -70,7 +65,7 @@ static uint8_t brick_media_clock_snapshot(uint32_t *out_tick,
              || (sequence_before != sequence_after));
 
     /* If UPDATE is pending, the sole IRQ owner has not published this wrap
-     * yet.  Project it for this read without modifying the shared state. */
+     * yet.  Project it for this read without modifying the published state. */
     if (((status & TIM_SR_UIF) != 0U) || (tick_after < tick_before))
     {
         ++wraps;

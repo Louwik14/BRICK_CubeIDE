@@ -322,13 +322,13 @@ static void wavetable_pool_slot_error_at(uint16_t wavetable_slot,
         g_wavetable_pool.slots[wavetable_slot].generation = wavetable_pool_next_generation();
         if (g_wavetable_pool.slots[wavetable_slot].page_count != 0U)
         {
-            sample_page_cache_port_release_shared(
+            sample_page_cache_port_release_local(
                 g_wavetable_pool.slots[wavetable_slot].first_page_slot,
                 g_wavetable_pool.slots[wavetable_slot].page_count);
         }
         if (g_wavetable_pool.slots[wavetable_slot].mipmap.page_count != 0U)
         {
-            sample_page_cache_port_release_shared(
+            sample_page_cache_port_release_local(
                 g_wavetable_pool.slots[wavetable_slot].mipmap.first_page_slot,
                 g_wavetable_pool.slots[wavetable_slot].mipmap.page_count);
         }
@@ -387,13 +387,13 @@ void wavetable_pool_reset(void)
         g_wavetable_pool.slots[i].generation = wavetable_pool_next_generation();
         if (g_wavetable_pool.slots[i].page_count != 0U)
         {
-            sample_page_cache_port_release_shared(
+            sample_page_cache_port_release_local(
                 g_wavetable_pool.slots[i].first_page_slot,
                 g_wavetable_pool.slots[i].page_count);
         }
         if (g_wavetable_pool.slots[i].mipmap.page_count != 0U)
         {
-            sample_page_cache_port_release_shared(
+            sample_page_cache_port_release_local(
                 g_wavetable_pool.slots[i].mipmap.first_page_slot,
                 g_wavetable_pool.slots[i].mipmap.page_count);
         }

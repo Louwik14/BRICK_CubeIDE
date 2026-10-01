@@ -277,58 +277,50 @@ SECTIONS
     . = ALIGN(32);
   } >SRAM1_D2_CACHEABLE
 
-  .ram_d2_m4_sram1 (NOLOAD) :
+  .ram_seq_state_sram1 (NOLOAD) :
   {
     . = ALIGN(32);
-    *(.ram_d2_m4)
+    *(.ram_seq_state)
     . = ALIGN(32);
   } >SRAM1_D2_CACHEABLE
 
-  .ram_d2_m4_sram2 (NOLOAD) :
+  .ram_seq_state_sram2 (NOLOAD) :
   {
     . = ALIGN(32);
-    *(.ram_d2_m4_sram2)
-    *(.ram_d2_m4_sram2.*)
+    *(.ram_seq_state_sram2)
+    *(.ram_seq_state_sram2.*)
     . = ALIGN(32);
   } >SRAM2_D2
-  ASSERT(SIZEOF(.ram_d2_m4_sram2) <= LENGTH(SRAM2_D2),
-         "SRAM2 D2 M4 contract overflow")
+  ASSERT(SIZEOF(.ram_seq_state_sram2) <= LENGTH(SRAM2_D2),
+         "SRAM2 D2 SEQ state overflow")
 
-  .ram_control_m4_sram2 (NOLOAD) :
+  .ram_control_state_sram2 (NOLOAD) :
   {
     . = ALIGN(32);
-    __ram_control_m4_sram2_start__ = .;
-    *(.ram_control_m4_sram2)
-    *(.ram_control_m4_sram2.*)
+    __ram_control_state_sram2_start__ = .;
+    *(.ram_control_state_sram2)
+    *(.ram_control_state_sram2.*)
     . = ALIGN(32);
-    __ram_control_m4_sram2_end__ = .;
+    __ram_control_state_sram2_end__ = .;
   } >SRAM2_D2
-  ASSERT(SIZEOF(.ram_control_m4_sram2) <= LENGTH(SRAM2_D2),
-         "SRAM2 D2 CONTROL M4 contract overflow")
+  ASSERT(SIZEOF(.ram_control_state_sram2) <= LENGTH(SRAM2_D2),
+         "SRAM2 D2 CONTROL state overflow")
 
-  .ram_d2_m7 (NOLOAD) :
+  .ram_seq_state_sram3 (NOLOAD) :
   {
     . = ALIGN(32);
-    *(.ram_d2_m7)
-    *(.ram_d2_m7*)
-    . = ALIGN(32);
-  } >SRAM2_D2
-
-  .ram_d2_m4_sram3 (NOLOAD) :
-  {
-    . = ALIGN(32);
-    *(.ram_d2_m4_sram3)
-    *(.ram_d2_m4_sram3.*)
+    *(.ram_seq_state_sram3)
+    *(.ram_seq_state_sram3.*)
     . = ALIGN(32);
   } >SRAM3_D2
-  ASSERT(SIZEOF(.ram_d2_m4_sram3) <= LENGTH(SRAM3_D2),
-         "SRAM3 D2 M4 contract overflow")
+  ASSERT(SIZEOF(.ram_seq_state_sram3) <= LENGTH(SRAM3_D2),
+         "SRAM3 D2 SEQ state overflow")
 
-  .ram_d2_ipc (NOLOAD) :
+  .ram_d2_irq_shared (NOLOAD) :
   {
     . = ALIGN(32);
-    *(.ram_d2_ipc)
-    *(.ram_d2_ipc*)
+    *(.ram_d2_irq_shared)
+    *(.ram_d2_irq_shared*)
     . = ALIGN(32);
   } >SRAM3_D2
 
@@ -342,27 +334,15 @@ SECTIONS
   ASSERT(SIZEOF(.ram_d3_ctrl) <= 32K,
          "SRAM4 cacheable CONTROL half overflow")
 
-  .ram_d3_restore_ipc ORIGIN(RAM_D3) + 32K (NOLOAD) :
+  .ram_d3_irq_shared ORIGIN(RAM_D3) + 32K (NOLOAD) :
   {
     . = ALIGN(32);
-    __restore_ipc_start__ = .;
-    KEEP(*(.ram_d3_restore_ipc))
-    KEEP(*(.ram_d3_restore_ipc.*))
-    . = ALIGN(32);
-    __restore_ipc_end__ = .;
-  } >RAM_D3
-  ASSERT(SIZEOF(.ram_d3_restore_ipc) <= 64,
-         "Restore IPC exceeds its 64-byte contract")
-
-  .ram_d3_ipc ORIGIN(RAM_D3) + 32K + SIZEOF(.ram_d3_restore_ipc) (NOLOAD) :
-  {
-    . = ALIGN(32);
-    *(.ram_d3_ipc)
-    *(.ram_d3_ipc*)
+    *(.ram_d3_irq_shared)
+    *(.ram_d3_irq_shared*)
     . = ALIGN(32);
   } >RAM_D3
-  ASSERT(SIZEOF(.ram_d3_restore_ipc) + SIZEOF(.ram_d3_ipc) <= 32K,
-         "SRAM4 non-cacheable IPC half overflow")
+  ASSERT(SIZEOF(.ram_d3_irq_shared) <= 32K,
+         "SRAM4 non-cacheable IRQ-shared half overflow")
 
   .backup_sram ORIGIN(BKPSRAM) (NOLOAD) :
   {
@@ -561,11 +541,11 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
-  .sdram_audio_state_snapshot (NOLOAD) :
+  .sdram_audio_publication (NOLOAD) :
   {
     . = ALIGN(32);
-    *(.sdram_audio_state_snapshot)
-    *(.sdram_audio_state_snapshot*)
+    *(.sdram_audio_publication)
+    *(.sdram_audio_publication*)
     . = ALIGN(32);
   } >SDRAM
 

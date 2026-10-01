@@ -8,9 +8,9 @@
 
 /* Physical storage only.  Initialization and publication remain in the
  * STORAGE/AUDIO owners declared by the contracts above. */
-AUDIO_STATE_SHARED_SDRAM sample_classic_audio_source_t
+AUDIO_PUBLICATION_SDRAM sample_classic_audio_source_t
     g_sample_classic_audio_source[SAMPLE_CLASSIC_CAPACITY];
-AUDIO_STATE_SHARED_SDRAM rec_source_projection_t g_rec_source_projection;
+AUDIO_PUBLICATION_SDRAM rec_source_projection_t g_rec_source_projection;
 
 AUDIO_M7_PRIVATE_SDRAM multi_audio_instrument_t
     g_multi_audio_instruments[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];

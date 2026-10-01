@@ -113,7 +113,7 @@ void sampler_ram_pool_load_async_cancel(void)
     }
     if (job->allocation.page_count != 0U)
     {
-        sample_page_cache_port_release_shared(job->allocation.first_slot,
+        sample_page_cache_port_release_local(job->allocation.first_slot,
                                               job->allocation.page_count);
     }
     if (job->global_reserved != 0U)
@@ -624,7 +624,7 @@ uint8_t sampler_ram_pool_reset_quiesced(void)
         g_sampler_ram_pool.slots[i].generation = sampler_ram_next_generation();
         if (g_sampler_ram_pool.slots[i].page_count != 0U)
         {
-            sample_page_cache_port_release_shared(
+            sample_page_cache_port_release_local(
                 g_sampler_ram_pool.slots[i].first_page_slot,
                 g_sampler_ram_pool.slots[i].page_count);
         }
@@ -678,7 +678,7 @@ static void sampler_ram_load_fail(sampler_ram_result_t result)
     sampler_ram_restore_retained_old();
     if (job->allocation.page_count != 0U)
     {
-        sample_page_cache_port_release_shared(job->allocation.first_slot,
+        sample_page_cache_port_release_local(job->allocation.first_slot,
                                                        job->allocation.page_count);
         memset(&job->allocation, 0, sizeof(job->allocation));
     }
@@ -861,7 +861,7 @@ static void sampler_ram_pool_load_async_step(void)
                 sampler_ram_load_fail(SAMPLER_RAM_RESULT_GLOBAL_BUDGET_FULL);
                 return;
             }
-            if (sample_page_cache_port_alloc_shared(data_bytes, &job->allocation) == 0U)
+            if (sample_page_cache_port_alloc_local(data_bytes, &job->allocation) == 0U)
             {
                 sampler_ram_load_fail(SAMPLER_RAM_RESULT_RAM_POOL_FULL);
                 return;
@@ -881,7 +881,7 @@ static void sampler_ram_pool_load_async_step(void)
             candidate->page_count = job->allocation.page_count;
             candidate->data_bytes = data_bytes;
             candidate->cost_bytes_aligned = job->allocation.capacity_bytes;
-            candidate->data = (float *)sample_page_cache_port_resolve_shared(
+            candidate->data = (float *)sample_page_cache_port_resolve_local(
                 &job->allocation);
             candidate->error = SAMPLER_RAM_RESULT_OK;
             job->state = SAMPLER_RAM_LOAD_SEEK;
@@ -918,7 +918,7 @@ static void sampler_ram_pool_load_async_step(void)
              * post-load superloop consume a full frame quantum even when the
              * waveform page is never displayed. */
             sampler_ram_waveform_set_empty(&job->candidate);
-            sample_page_cache_port_mark_shared_cpu_clean(
+            sample_page_cache_port_mark_local_cpu_clean(
                 job->candidate.first_page_slot, job->candidate.page_count);
             if (sampler_ram_audio_projection_build(
                     job->ram_slot, &job->candidate,
@@ -979,7 +979,7 @@ static void sampler_ram_pool_load_async_step(void)
         sampler_ram_audio_projection_install_prepared(
             &job->prepared_descriptor);
         if (old_snapshot.page_count != 0U)
-            sample_page_cache_port_release_shared(old_snapshot.first_page_slot,
+            sample_page_cache_port_release_local(old_snapshot.first_page_slot,
                                                   old_snapshot.page_count);
         job->retain_old_for_commit = 0U;
         job->quiesce_committed = 0U;
@@ -1234,7 +1234,7 @@ static void sampler_ram_pool_finalize_clear(uint16_t ram_slot)
     }
     if (old.page_count != 0U)
     {
-        sample_page_cache_port_release_shared(old.first_page_slot,
+        sample_page_cache_port_release_local(old.first_page_slot,
                                                        old.page_count);
     }
     sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_RAM, ram_slot);
@@ -1351,14 +1351,14 @@ uint32_t sampler_ram_pool_get_cost(uint16_t ram_slot)
 
 uint32_t sampler_ram_pool_get_used_bytes(void)
 {
-    const uint32_t total = sample_page_cache_port_shared_total_bytes();
-    const uint32_t free_bytes = sample_page_cache_port_shared_free_bytes();
+    const uint32_t total = sample_page_cache_port_local_total_bytes();
+    const uint32_t free_bytes = sample_page_cache_port_local_free_bytes();
     return (free_bytes >= total) ? 0U : (total - free_bytes);
 }
 
 uint32_t sampler_ram_pool_get_free_bytes(void)
 {
-    return sample_page_cache_port_shared_free_bytes();
+    return sample_page_cache_port_local_free_bytes();
 }
 
 sampler_ram_result_t sampler_ram_pool_get_last_result(void)

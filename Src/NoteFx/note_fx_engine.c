@@ -25,12 +25,12 @@ typedef struct { note_fx_generator_runtime_t generator[NOTE_FX_TRACK_COUNT];
  uint64_t transport_position_q16,block_start;uint32_t pattern_position_q16[NOTE_FX_TRACK_COUNT];
  uint8_t pattern_length[NOTE_FX_TRACK_COUNT];
 } note_fx_engine_context_t;
-static CONTROL_M4_SRAM2 note_fx_engine_context_t g_seq_context;
-static CONTROL_M4_SRAM2 note_fx_held_pitch_t
+static CONTROL_STATE_SRAM2 note_fx_engine_context_t g_seq_context;
+static CONTROL_STATE_SRAM2 note_fx_held_pitch_t
     g_held[2][SEQ_PRODUCT_HELD_STATE_CAPACITY];
-static CONTROL_M4_SRAM2 uint64_t
+static CONTROL_STATE_SRAM2 uint64_t
     g_held_active_mask[2][SEQ_PRODUCT_HARMONY_FANOUT_MAX];
-static CONTROL_M4_SRAM2 note_fx_held_bank_runtime_t
+static CONTROL_STATE_SRAM2 note_fx_held_bank_runtime_t
     g_family[NOTE_FX_TRACK_COUNT][2];
 static SEQ_STATE_D2 uint64_t
     g_generated_until[NOTE_FX_TRACK_COUNT];

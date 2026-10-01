@@ -4,7 +4,7 @@
 #include "stm32h7xx.h"
 #include <string.h>
 
-static CONTROL_M4_SRAM2 seq_runtime_state_t g_state;
+static CONTROL_STATE_SRAM2 seq_runtime_state_t g_state;
 static volatile uint64_t g_sample_timeline;
 static volatile uint32_t g_external_pulses;
 static uint32_t g_transport_step;

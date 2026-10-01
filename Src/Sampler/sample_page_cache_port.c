@@ -3,10 +3,9 @@
 #include <string.h>
 
 #include "Sampler/sample_page_cache.h"
-#include "IPC/shared_memory_ref_control.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 
-uint8_t sample_page_cache_port_alloc_shared(
+uint8_t sample_page_cache_port_alloc_local(
     uint32_t bytes, sample_page_loader_allocation_t *out)
 {
     if (out != NULL) memset(out, 0, sizeof(*out));
@@ -14,44 +13,37 @@ uint8_t sample_page_cache_port_alloc_shared(
     sample_page_raw_allocation_t local;
     if (sample_page_cache_alloc_slot_pool_bytes(bytes, &local) == 0U)
         return 0U;
-    if (shared_memory_ref_make_page_pool(local.first_slot, 0U, bytes,
-                                     &out->data) == 0U)
-    {
-        sample_page_cache_release_slot_pool_allocation(local.first_slot,
-                                                       local.page_count);
-        return 0U;
-    }
+    out->data = local.data;
     out->capacity_bytes = local.capacity_bytes;
     out->first_slot = local.first_slot;
     out->page_count = local.page_count;
     return 1U;
 }
 
-void sample_page_cache_port_release_shared(uint16_t first_slot,
-                                           uint16_t page_count)
+void sample_page_cache_port_release_local(uint16_t first_slot,
+                                          uint16_t page_count)
 {
     sample_page_cache_release_slot_pool_allocation(first_slot, page_count);
 }
 
-void sample_page_cache_port_mark_shared_cpu_clean(uint16_t first_slot,
-                                                  uint16_t page_count)
+void sample_page_cache_port_mark_local_cpu_clean(uint16_t first_slot,
+                                                 uint16_t page_count)
 {
     sample_page_cache_mark_slot_pool_payload_cpu_clean(first_slot, page_count);
 }
 
-void *sample_page_cache_port_resolve_shared(
+void *sample_page_cache_port_resolve_local(
     const sample_page_loader_allocation_t *allocation)
 {
-    return (allocation != NULL)
-        ? shared_memory_ref_control_resolve_page_pool(&allocation->data) : NULL;
+    return (allocation != NULL) ? allocation->data : NULL;
 }
 
-uint32_t sample_page_cache_port_shared_total_bytes(void)
+uint32_t sample_page_cache_port_local_total_bytes(void)
 {
     return sample_page_cache_slot_pool_total_bytes();
 }
 
-uint32_t sample_page_cache_port_shared_free_bytes(void)
+uint32_t sample_page_cache_port_local_free_bytes(void)
 {
     return sample_page_cache_slot_pool_free_bytes();
 }

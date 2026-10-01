@@ -17,8 +17,8 @@
 static seq_pattern_t g_pattern_slot_a;
 static SEQ_STATE_D2 seq_pattern_t g_pattern_slot_b;
 static seq_lock_pattern_t g_locks_a_d1[4][SEQ_ENGINE_LOCK_POOL_CAPACITY];
-static CONTROL_M4_SRAM2 seq_lock_pattern_t g_locks_a_sram2[7][SEQ_ENGINE_LOCK_POOL_CAPACITY];
-static D3_IPC seq_lock_pattern_t g_locks_a_d3[5][SEQ_ENGINE_LOCK_POOL_CAPACITY];
+static CONTROL_STATE_SRAM2 seq_lock_pattern_t g_locks_a_sram2[7][SEQ_ENGINE_LOCK_POOL_CAPACITY];
+static IRQ_SHARED_D3 seq_lock_pattern_t g_locks_a_d3[5][SEQ_ENGINE_LOCK_POOL_CAPACITY];
 static SEQ_STATE_D2 seq_lock_pattern_t g_locks_b[SEQ_LANE_CAPACITY][SEQ_ENGINE_LOCK_POOL_CAPACITY];
 static seq_pattern_t *const g_pattern[SEQ_ENGINE_SNAPSHOT_SLOTS] = {
     &g_pattern_slot_a, &g_pattern_slot_b

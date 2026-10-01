@@ -7,9 +7,9 @@
 #include "sdmmc.h"
 #include "stm32h7xx.h"
 
-D2_IPC volatile rec_sd_trace_entry_t
+IRQ_SHARED_D2 volatile rec_sd_trace_entry_t
     g_rec_sd_trace[REC_SD_TRACE_CAPACITY] __attribute__((used, externally_visible));
-D2_IPC volatile uint32_t g_rec_sd_trace_next
+IRQ_SHARED_D2 volatile uint32_t g_rec_sd_trace_next
     __attribute__((used, externally_visible));
 
 static void rec_sd_trace_write(rec_sd_trace_event_t event, uint32_t states,

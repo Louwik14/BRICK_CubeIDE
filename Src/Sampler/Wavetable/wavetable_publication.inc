@@ -19,12 +19,12 @@ static void wavetable_pool_finalize_clear(uint16_t wavetable_slot)
     }
     if (old.page_count != 0U)
     {
-        sample_page_cache_port_release_shared(old.first_page_slot,
+        sample_page_cache_port_release_local(old.first_page_slot,
                                                        old.page_count);
     }
     if (old.mipmap.page_count != 0U)
     {
-        sample_page_cache_port_release_shared(old.mipmap.first_page_slot,
+        sample_page_cache_port_release_local(old.mipmap.first_page_slot,
                                                        old.mipmap.page_count);
     }
     sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_WAVETABLE, wavetable_slot);
@@ -163,14 +163,14 @@ const wavetable_preview_t *wavetable_pool_get_preview_for_global(uint16_t global
 
 uint32_t wavetable_pool_get_used_bytes(void)
 {
-    const uint32_t total = sample_page_cache_port_shared_total_bytes();
-    const uint32_t free_bytes = sample_page_cache_port_shared_free_bytes();
+    const uint32_t total = sample_page_cache_port_local_total_bytes();
+    const uint32_t free_bytes = sample_page_cache_port_local_free_bytes();
     return (free_bytes >= total) ? 0U : (total - free_bytes);
 }
 
 uint32_t wavetable_pool_get_free_bytes(void)
 {
-    return sample_page_cache_port_shared_free_bytes();
+    return sample_page_cache_port_local_free_bytes();
 }
 
 wavetable_result_t wavetable_pool_get_last_result(void)

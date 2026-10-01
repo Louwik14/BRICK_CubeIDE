@@ -41,7 +41,7 @@ typedef struct
 _Static_assert(sizeof(seq_runtime_project_data_t) == 81152U,
                "sequencer project storage size changed");
 
-SEC_ATTR(".ram_d2_m4_sram2") static seq_runtime_project_data_t g_seq_project;
+SEC_ATTR(".ram_seq_state_sram2") static seq_runtime_project_data_t g_seq_project;
 
 static uint8_t seq_step_play_field_mask(seq_step_play_field_t field)
 {

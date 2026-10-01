@@ -15,11 +15,8 @@
  * media timestamps.  The platform implementation owns the sole logical
  * 32-to-64-bit extension.
  *
- * H747 port contract: M7 alone calls brick_media_clock_init() and owns the
- * TIM5 update IRQ.  Define BRICK_MEDIA_CLOCK_SHARED_STATE_ADDRESS to the same
- * non-cacheable/coherent shared-SRAM address in both images; M4 only calls the
- * read/conversion API.  The shared seqlock state replaces neither TIM5 nor its
- * ticks with an anchor or mailbox.
+ * The M7 calls brick_media_clock_init() and owns the TIM5 update IRQ.  The
+ * seqlock protects IRQ readers from the 32-to-64-bit wrap publication.
  */
 void brick_media_clock_init(void);
 void brick_media_clock_on_tim5_update_irq(void);

@@ -35,17 +35,17 @@ typedef struct
 _Static_assert(sizeof(control_music_output_t) == 24U,
                "terminal NOTE record must remain compact");
 
-CONTROL_M4_SRAM2 static control_music_output_t
+CONTROL_STATE_SRAM2 static control_music_output_t
     g_control_music_outputs[BRICK_ENTITY_CAPACITY][CONTROL_MUSIC_OUTPUTS_PER_ENTITY];
 static uint32_t g_control_music_output_age;
 static uint32_t g_control_music_next_output_handle;
 static control_music_output_death_observer_t
     g_control_music_output_death_observer[
         CONTROL_MUSIC_OUTPUT_DEATH_OBSERVER_CAPACITY];
-CONTROL_M4_SRAM2 static control_music_output_t
+CONTROL_STATE_SRAM2 static control_music_output_t
     g_control_music_outputs_staged[BRICK_ENTITY_CAPACITY][CONTROL_MUSIC_OUTPUTS_PER_ENTITY];
 static uint32_t g_control_music_output_age_staged;
-CONTROL_M4_SRAM2 static uint16_t
+CONTROL_STATE_SRAM2 static uint16_t
     g_control_music_multi_instrument[BRICK_ENTITY_CAPACITY];
 
 typedef struct
@@ -54,7 +54,7 @@ typedef struct
     brick_entity_id_t entity_id;
 } control_music_output_death_t;
 
-SEC_ATTR(".ram_d2_m4_sram3") static control_music_output_death_t
+SEC_ATTR(".ram_seq_state_sram3") static control_music_output_death_t
     g_control_music_output_staged_death[CONTROL_MUSIC_ACTION_CAPACITY];
 static uint16_t g_control_music_output_staged_death_count;
 
@@ -83,9 +83,9 @@ typedef struct
     uint16_t count;
 } control_music_window_external_t;
 
-SEC_ATTR(".ram_d2_m4_sram3") static control_music_window_internal_t
+SEC_ATTR(".ram_seq_state_sram3") static control_music_window_internal_t
     g_control_music_window_internal;
-SEC_ATTR(".ram_d2_m4_sram3") static control_music_window_external_t
+SEC_ATTR(".ram_seq_state_sram3") static control_music_window_external_t
     g_control_music_window_external;
 static uint64_t g_control_music_window_first;
 static uint16_t g_control_music_window_frames;

@@ -19,7 +19,7 @@ typedef struct
     usb_audio_float_ring_t brick_to_pc;
 } usb_audio_float_rings_t;
 
-D3_IPC static usb_audio_float_rings_t g_usb_audio_float_rings;
+IRQ_SHARED_D3 static usb_audio_float_rings_t g_usb_audio_float_rings;
 
 _Static_assert(sizeof(float) == 4U,
                "USB Audio float ring requires 32-bit float");

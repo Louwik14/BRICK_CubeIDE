@@ -16,7 +16,7 @@
 static uint8_t logical_step_for_fx(const seq_pattern_t *p, uint8_t track,
                                    uint8_t physical);
 
-static SEC_ATTR(".ram_d2_m4_sram3") note_event_t g_seq_fx_a[NOTE_FX_BATCH_CAPACITY];
+static SEC_ATTR(".ram_seq_state_sram3") note_event_t g_seq_fx_a[NOTE_FX_BATCH_CAPACITY];
 static SEQ_STATE_SDRAM note_event_t g_seq_source_cohort[NOTE_FX_BATCH_CAPACITY];
 static SEQ_STATE_SDRAM seq_source_cursor_t
     g_seq_sources[SEQ_PRODUCT_MAX_SOURCE_GENERATIONS]
@@ -47,9 +47,9 @@ static void collect_reference_capture(const seq_engine_core_t *core,
      sizeof(reference->track_div_phase));}
 typedef struct {uint32_t source_id;uint8_t track,lane,active,order;} seq_live_lane_t;
 _Static_assert(sizeof(seq_live_lane_t)==8U,"live lane binding budget");
-static SEC_ATTR(".ram_d2_m4_sram3") seq_live_lane_t g_seq_live_lane[SEQ_ENGINE_LEDGER_CAPACITY];
+static SEC_ATTR(".ram_seq_state_sram3") seq_live_lane_t g_seq_live_lane[SEQ_ENGINE_LEDGER_CAPACITY];
 static SEQ_STATE_SDRAM uint32_t g_seq_ledger_source_id[SEQ_ENGINE_LEDGER_CAPACITY];
-static SEC_ATTR(".ram_d2_m4_sram3") uint8_t g_seq_live_source_count[SEQ_LANE_CAPACITY];
+static SEC_ATTR(".ram_seq_state_sram3") uint8_t g_seq_live_source_count[SEQ_LANE_CAPACITY];
 _Static_assert(sizeof(g_seq_live_source_count)==SEQ_LANE_CAPACITY,
     "live source counters must remain one byte per track");
 static uint32_t source_musical_key(uint8_t track,uint8_t logical_slot,

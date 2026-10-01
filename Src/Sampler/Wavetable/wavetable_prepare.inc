@@ -269,12 +269,12 @@ static void wavetable_pool_candidate_release(wavetable_slot_t *candidate)
     }
     if (candidate->page_count != 0U)
     {
-        sample_page_cache_port_release_shared(candidate->first_page_slot,
+        sample_page_cache_port_release_local(candidate->first_page_slot,
                                                        candidate->page_count);
     }
     if (candidate->mipmap.page_count != 0U)
     {
-        sample_page_cache_port_release_shared(
+        sample_page_cache_port_release_local(
             candidate->mipmap.first_page_slot,
             candidate->mipmap.page_count);
     }
@@ -504,8 +504,8 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
         return WAVETABLE_RESULT_TOO_LARGE;
     const uint32_t brick_cost = brick_pages * SAMPLE_PAGE_BYTES;
     const uint32_t mipmap_cost = mipmap_pages * SAMPLE_PAGE_BYTES;
-    if ((brick_cost > sample_page_cache_port_shared_total_bytes())
-        || (mipmap_cost > sample_page_cache_port_shared_total_bytes())
+    if ((brick_cost > sample_page_cache_port_local_total_bytes())
+        || (mipmap_cost > sample_page_cache_port_local_total_bytes())
         || (brick_cost > (UINT32_MAX - mipmap_cost)))
     {
         return WAVETABLE_RESULT_TOO_LARGE;
@@ -521,15 +521,15 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
     sample_page_loader_allocation_t mipmap_allocation;
     memset(&brick_allocation, 0, sizeof(brick_allocation));
     memset(&mipmap_allocation, 0, sizeof(mipmap_allocation));
-    if (sample_page_cache_port_alloc_shared(brick_bytes,
+    if (sample_page_cache_port_alloc_local(brick_bytes,
                                                 &brick_allocation) == 0U)
     {
         return WAVETABLE_RESULT_RAM_POOL_FULL;
     }
-    if (sample_page_cache_port_alloc_shared(mipmap_bytes,
+    if (sample_page_cache_port_alloc_local(mipmap_bytes,
                                                 &mipmap_allocation) == 0U)
     {
-        sample_page_cache_port_release_shared(
+        sample_page_cache_port_release_local(
             brick_allocation.first_slot,
             brick_allocation.page_count);
         return WAVETABLE_RESULT_RAM_POOL_FULL;
@@ -540,10 +540,10 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
                                  sizeof(candidate->path),
                                  path) == 0U)
     {
-        sample_page_cache_port_release_shared(
+        sample_page_cache_port_release_local(
             brick_allocation.first_slot,
             brick_allocation.page_count);
-        sample_page_cache_port_release_shared(
+        sample_page_cache_port_release_local(
             mipmap_allocation.first_slot,
             mipmap_allocation.page_count);
         return WAVETABLE_RESULT_PATH_TOO_LONG;
@@ -556,11 +556,11 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
     candidate->first_page_slot = brick_allocation.first_slot;
     candidate->page_count = brick_allocation.page_count;
     candidate->data_bytes = brick_bytes;
-    candidate->data = (float *)sample_page_cache_port_resolve_shared(
+    candidate->data = (float *)sample_page_cache_port_resolve_local(
         &brick_allocation);
     candidate->cost_bytes_aligned =
         brick_allocation.capacity_bytes + mipmap_allocation.capacity_bytes;
-    candidate->mipmap.data = (float *)sample_page_cache_port_resolve_shared(
+    candidate->mipmap.data = (float *)sample_page_cache_port_resolve_local(
         &mipmap_allocation);
     candidate->mipmap.data_bytes = mipmap_bytes;
     candidate->mipmap.first_page_slot = mipmap_allocation.first_slot;
@@ -999,12 +999,12 @@ static void wavetable_pool_release_slot_allocations(
 {
     if (slot->page_count != 0U)
     {
-        sample_page_cache_port_release_shared(slot->first_page_slot,
+        sample_page_cache_port_release_local(slot->first_page_slot,
                                                        slot->page_count);
     }
     if (slot->mipmap.page_count != 0U)
     {
-        sample_page_cache_port_release_shared(
+        sample_page_cache_port_release_local(
             slot->mipmap.first_page_slot,
             slot->mipmap.page_count);
     }

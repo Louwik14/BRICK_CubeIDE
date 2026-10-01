@@ -7,7 +7,6 @@
 #include "ff.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_port.h"
-#include "IPC/shared_memory_ref_control.h"
 #include "Platform/cache_maintenance.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Sampler/audio_wave_table_projection_control.h"
@@ -204,9 +203,9 @@ static void wavetable_pool_mark_payload_cpu_clean(
     dcache_clean_by_addr_aligned(slot->data, slot->data_bytes);
     dcache_clean_by_addr_aligned(slot->mipmap.data,
                                  slot->mipmap.data_bytes);
-    sample_page_cache_port_mark_shared_cpu_clean(slot->first_page_slot,
+    sample_page_cache_port_mark_local_cpu_clean(slot->first_page_slot,
                                                  slot->page_count);
-    sample_page_cache_port_mark_shared_cpu_clean(slot->mipmap.first_page_slot,
+    sample_page_cache_port_mark_local_cpu_clean(slot->mipmap.first_page_slot,
                                                  slot->mipmap.page_count);
 }
 
@@ -324,7 +323,7 @@ uint8_t wavetable_pool_inspect_source(const wav_info_t *info,
     const uint64_t total_bytes = (uint64_t)base_pages * SAMPLE_PAGE_BYTES
                                + (uint64_t)mipmap_pages * SAMPLE_PAGE_BYTES;
     if ((base_pages == 0U) || (mipmap_pages == 0U)
-        || (total_bytes > sample_page_cache_port_shared_total_bytes()))
+        || (total_bytes > sample_page_cache_port_local_total_bytes()))
     {
         return 0U;
     }
