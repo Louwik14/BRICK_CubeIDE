@@ -15,6 +15,7 @@
 #include "Storage/wav_convert.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/project_product.h"
+#include "Storage/project_storage_paths.h"
 #include "Storage/patch_product.h"
 #include "Storage/project_load_quiesce.h"
 #include "SD/sd_scheduler_runtime.h"

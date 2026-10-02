@@ -30,14 +30,10 @@ _Static_assert(sizeof(persist_control_asset_ref_t) == 168U,
 
 typedef struct
 {
-    persist_control_pattern_t working_pattern;
     persist_control_asset_ref_t assets[PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY];
     persist_control_macros_t macros;
-    persist_control_pattern_record_t record_scratch;
+    uint8_t encode_scratch[PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES];
 } persistence_project_save_workspace_t;
-
-_Static_assert(sizeof(persistence_project_save_workspace_t) == 1010324U,
-               "Project Save workspace size changed");
 
 typedef struct
 {
@@ -49,9 +45,6 @@ typedef struct
     uint16_t asset_count;
     uint8_t working_valid;
     uint8_t macros_valid;
-    uint8_t pattern_bank_started;
-    uint8_t pattern_bank_staged;
-    uint8_t active_pattern_seen;
     union
     {
         persist_codec_project_workspace_t codec_scratch;
@@ -59,12 +52,6 @@ typedef struct
     } scratch;
 } persistence_project_restore_workspace_t;
 
-_Static_assert(sizeof(persistence_project_restore_workspace_t) == 958768U,
-               "Project Restore workspace size changed");
-
-_Static_assert(sizeof(persist_control_pattern_t)
-                   >= PERSISTENCE_PATTERN_ENCODED_MAX_BYTES,
-               "Project Save pattern scratch is too small for Pattern files");
 
 typedef struct
 {

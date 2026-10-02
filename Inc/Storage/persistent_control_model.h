@@ -351,14 +351,6 @@ typedef struct
 
 typedef struct
 {
-    uint8_t bank;
-    uint8_t pattern;
-    uint8_t present;
-    persist_control_pattern_t content;
-} persist_control_pattern_record_t;
-
-typedef struct
-{
     uint16_t name_length;
     char name[PERSIST_CONTROL_PATCH_NAME_BYTES];
     persist_control_family_key_t family;

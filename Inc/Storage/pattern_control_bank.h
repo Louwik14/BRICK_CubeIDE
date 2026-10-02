@@ -10,29 +10,24 @@ typedef enum
     PATTERN_CONTROL_BANK_ASYNC_LOAD
 } pattern_control_bank_async_operation_t;
 
+typedef enum
+{
+    PATTERN_CONTROL_BANK_PROJECT_LOAD_ERROR = 0,
+    PATTERN_CONTROL_BANK_PROJECT_LOAD_OK,
+    PATTERN_CONTROL_BANK_PROJECT_LOAD_EMPTY
+} pattern_control_bank_project_load_result_t;
+
 void pattern_control_bank_init(void);
+uint8_t pattern_control_bank_activate_project(uint8_t slot);
+uint8_t pattern_control_bank_validate_project(uint8_t slot);
+void pattern_control_bank_deactivate_project(void);
+uint8_t pattern_control_bank_active_project(uint8_t *out_slot);
+void pattern_control_bank_publish_empty_project(uint8_t slot);
 uint8_t pattern_control_bank_delete(uint8_t bank,uint8_t pattern);
 uint8_t pattern_control_bank_present(uint8_t bank,uint8_t pattern);
 uint16_t pattern_control_bank_count(void);
-uint8_t pattern_control_bank_project_snapshot_begin(uint32_t *out_generation,
-                                                    uint16_t *out_count);
-uint8_t pattern_control_bank_project_snapshot_is_current(uint32_t generation);
-void pattern_control_bank_project_snapshot_end(uint32_t generation);
-uint8_t pattern_control_bank_get_ordinal_project(uint16_t ordinal,persist_control_pattern_record_t*out);
-uint8_t pattern_control_bank_get_ordinal_project_path(uint16_t ordinal,
-                                                      char *out_path,
-                                                      uint32_t path_capacity,
-                                                      uint8_t *out_bank,
-                                                      uint8_t *out_pattern);
-uint8_t pattern_control_bank_put_record_project(const persist_control_pattern_record_t*record);
-uint8_t pattern_control_bank_begin_project(void);
-uint8_t pattern_control_bank_staging_present(uint8_t bank, uint8_t pattern);
-uint8_t pattern_control_bank_project_staging_can_begin(void);
-uint8_t pattern_control_bank_project_staging_is_active(void);
-uint8_t pattern_control_bank_prepare_commit(void);
-uint8_t pattern_control_bank_commit_is_prepared(void);
-uint8_t pattern_control_bank_commit(void*context);
-void pattern_control_bank_abort(void*context);
+pattern_control_bank_project_load_result_t pattern_control_bank_load_project(
+    uint8_t slot,uint8_t bank,uint8_t pattern,persist_control_pattern_t *out);
 uint8_t pattern_control_bank_store_async_begin(
     uint8_t bank,
     uint8_t pattern,

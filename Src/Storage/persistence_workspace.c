@@ -16,11 +16,11 @@ typedef union
     (((_bytes) + PERSISTENCE_WORKSPACE_ALIGN_BYTES - 1U) \
         & ~(PERSISTENCE_WORKSPACE_ALIGN_BYTES - 1U))
 
-_Static_assert(sizeof(persistence_workspace_storage_t) == 1010328U,
-               "Persistence workspace union size changed");
+_Static_assert(sizeof(persistence_workspace_storage_t) <= 1010328U,
+               "Persistence workspace exceeds its SDRAM budget");
 _Static_assert(PERSISTENCE_WORKSPACE_ALIGN_UP(
-                   sizeof(persistence_workspace_storage_t)) == 1010336U,
-               "Persistence workspace aligned allocation changed");
+                   sizeof(persistence_workspace_storage_t)) <= 1010336U,
+               "Aligned persistence workspace exceeds its SDRAM budget");
 
 STORAGE_STATE_SDRAM static persistence_workspace_storage_t g_persistence_workspace;
 static persistence_workspace_owner_t g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_FREE;

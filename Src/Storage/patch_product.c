@@ -15,6 +15,7 @@
 #include "Storage/project_control.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/project_product.h"
+#include "Storage/project_storage_paths.h"
 #include "Storage/sd_access_gate.h"
 #include "Track/track_catalog.h"
 #include "Track/entity_topology.h"
@@ -31,7 +32,6 @@ typedef enum
 {
     PATCH_IO_IDLE = 0,
     PATCH_IO_MOUNT,
-    PATCH_IO_MKDIR_BRICK,
     PATCH_IO_MKDIR_PATCH,
     PATCH_IO_RECOVER,
     PATCH_IO_OPEN_READ,
@@ -90,8 +90,15 @@ typedef struct
 
 static uint8_t path(char *out, uint32_t size, uint16_t slot)
 {
-    const int written = snprintf(out, size, "0:/BRICK/PATCH/P%04u.B6C", slot);
-    return (written > 0) && ((uint32_t)written < size);
+    return project_storage_patch_file(out,size,slot);
+}
+
+static FRESULT patch_mkdir(void)
+{
+    char directory[32];
+    if(project_storage_patches_root(directory,sizeof(directory))==0U)
+        return FR_INVALID_NAME;
+    return f_mkdir(directory);
 }
 
 static uint8_t side_path(char *out, uint32_t size, const char *final_path,
@@ -730,22 +737,11 @@ void patch_product_service(void)
             else
             {
                 g_patch_io.state = (g_patch_io.operation == PATCH_PRODUCT_OPERATION_LOAD)
-                    ? PATCH_IO_OPEN_READ : PATCH_IO_MKDIR_BRICK;
-            }
-            break;
-        case PATCH_IO_MKDIR_BRICK:
-            file_result = f_mkdir("0:/BRICK");
-            if ((file_result != FR_OK) && (file_result != FR_EXIST))
-            {
-                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
-            }
-            else
-            {
-                g_patch_io.state = PATCH_IO_MKDIR_PATCH;
+                    ? PATCH_IO_OPEN_READ : PATCH_IO_MKDIR_PATCH;
             }
             break;
         case PATCH_IO_MKDIR_PATCH:
-            file_result = f_mkdir("0:/BRICK/PATCH");
+            file_result = patch_mkdir();
             if ((file_result != FR_OK) && (file_result != FR_EXIST))
             {
                 patch_io_fail(PATCH_PRODUCT_IO_ERROR);
@@ -946,8 +942,7 @@ void patch_product_init(void)
     {
         return;
     }
-    (void)f_mkdir("0:/BRICK");
-    (void)f_mkdir("0:/BRICK/PATCH");
+    (void)patch_mkdir();
     for (uint16_t slot = 0U; slot < PATCH_PRODUCT_SLOT_COUNT; ++slot)
     {
         char final_path[48];

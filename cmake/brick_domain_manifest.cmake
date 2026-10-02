@@ -112,6 +112,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_load_quiesce.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_product.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_storage_paths.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sample_capture.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sd_preview.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/storage_shared_io.c"

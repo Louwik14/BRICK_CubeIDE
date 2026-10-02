@@ -101,6 +101,32 @@ static uint8_t ui_asset_scan_document(const char *document, const char *source)
     return result;
 }
 
+static uint8_t ui_asset_scan_project_patterns(uint8_t slot,const char *source)
+{
+    char directory[64],document[96];DIR dir;FILINFO info;
+    if(project_storage_patterns_dir(directory,sizeof(directory),slot)==0U)
+        return 2U;
+    FRESULT fr=f_opendir(&dir,directory);
+    if(fr==FR_NO_FILE||fr==FR_NO_PATH)return 0U;
+    if(fr!=FR_OK)return 2U;
+    uint8_t result=0U;
+    while(result==0U)
+    {
+        fr=f_readdir(&dir,&info);
+        if(fr!=FR_OK){result=2U;break;}
+        if(info.fname[0]=='\0')break;
+        if((info.fattrib&AM_DIR)!=0U||strlen(info.fname)!=11U
+            ||info.fname[0]!='B'||info.fname[3]!='_'
+            ||info.fname[4]!='P'||strcmp(&info.fname[7],".B6C")!=0)continue;
+        const int length=snprintf(document,sizeof(document),"%s/%s",
+                                  directory,info.fname);
+        if(length<=0||(uint32_t)length>=sizeof(document)){result=2U;break;}
+        result=ui_asset_scan_document(document,source);
+    }
+    if(f_closedir(&dir)!=FR_OK&&result==0U)result=2U;
+    return result;
+}
+
 static uint8_t ui_asset_has_saved_reference(const char *source)
 {
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U) return 2U;
@@ -110,14 +136,15 @@ static uint8_t ui_asset_has_saved_reference(const char *source)
     for (uint16_t slot = 0U; slot < PATCH_PRODUCT_SLOT_COUNT && result == 0U; ++slot)
     {
         char path[48];
-        (void)snprintf(path, sizeof(path), "0:/BRICK/PATCH/P%04u.B6C", slot);
-        result = ui_asset_scan_document(path, source);
+        if(project_storage_patch_file(path,sizeof(path),slot)!=0U)
+            result = ui_asset_scan_document(path, source);
     }
     for (uint8_t slot = 0U; slot < PROJECT_PRODUCT_SLOT_COUNT && result == 0U; ++slot)
     {
-        char path[48];
-        (void)snprintf(path, sizeof(path), "0:/BRICK/PROJECT/P%02u.B6C", slot);
-        result = ui_asset_scan_document(path, source);
+        char project_path[64];
+        if(project_storage_project_file(project_path,sizeof(project_path),slot)!=0U)
+            result = ui_asset_scan_document(project_path, source);
+        if(result==0U)result=ui_asset_scan_project_patterns(slot,source);
     }
 done:
     sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);

@@ -23,10 +23,10 @@ SAVE replaces the focused Project without changing its name; RENAME changes
 only the document name by transactional copy; BLANK creates an unsaved working
 state. Invalid or unnamed files are excluded from the list.
 
-Project files remain `0:/BRICK/PROJECT/P00.B6C` through `P15.B6C`. The slot
-is the identity used by Save, Load, boot restoration, and recovery files.
-Current valid Project documents remain readable without migration. The UI
-never derives a display name from a slot.
+Each slot is a visible directory, from `0:/PROJECTS/P00/` through `P15/`,
+containing `PROJECT.B6C` and `PATTERNS/`. The slot is the identity used by
+Save, Load and boot restoration. There is no legacy fallback or migration;
+the UI never derives a display name from a slot.
 
 Patch keeps its existing filters and visible list. NEW performs the former
 PAGE 1 creation flow. SAVE replaces the focused Patch at its existing slot,
@@ -36,7 +36,8 @@ clears the target track to its default state.
 
 Asset LOAD is unavailable when that source is already loaded. UNLOAD refuses
 an asset referenced by an active track. SD RENAME and DELETE refuse assets
-currently loaded or referenced by an active track or saved Patch/Project. They
+currently loaded or referenced by an active track, a saved Patch, a
+`PROJECT.B6C`, or one of a Project's canonical Pattern files. They
 also refuse while transport, recording or SD asset work is active. DELETE
 requires confirmation. Multi rename updates its directory, index filename and
 instrument name. Wavetable rename/delete purges derived caches. REFRESH rescans

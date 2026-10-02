@@ -1,693 +1,161 @@
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistent_fatfs_io.h"
-#include "SD/sd_scheduler_runtime.h"
-#include "Storage/sd_access_gate.h"
 #include "Storage/project_load_quiesce.h"
-#include "Storage/persistence_debug.h"
+#include "Storage/project_storage_paths.h"
+#include "Storage/sd_access_gate.h"
+#include "SD/sd_scheduler_runtime.h"
 #include "ff.h"
 #include <stdio.h>
 #include <string.h>
 
 #define BANKS 16U
 #define SLOTS 16U
-#define SET_COUNT 2U
-#define INVALID_SET 0xFFU
-#define COMMIT_BYTES 44U
+#define INVALID_PROJECT 0xFFU
 
 static uint8_t g_present[BANKS][SLOTS];
-static uint8_t g_active_set;
-static uint8_t g_staging_set = INVALID_SET;
-static uint32_t g_generation;
-static uint32_t g_content_generation;
-static uint8_t g_staging_bitmap[32];
-static uint8_t g_staging_commit_prepared;
-static uint8_t g_project_snapshot_active;
+static uint8_t g_active_project=INVALID_PROJECT;
 
-typedef enum
-{
-    PATTERN_ASYNC_IDLE = 0,
-    PATTERN_ASYNC_MOUNT,
-    PATTERN_ASYNC_RECOVER,
-    PATTERN_ASYNC_OPEN,
-    PATTERN_ASYNC_ALLOCATE,
-    PATTERN_ASYNC_TRANSFER,
-    PATTERN_ASYNC_SYNC,
-    PATTERN_ASYNC_CLOSE,
-    PATTERN_ASYNC_COMMIT,
-    PATTERN_ASYNC_DECODE,
-    PATTERN_ASYNC_CLEANUP_CLOSE,
-    PATTERN_ASYNC_CLEANUP_TEMP,
-    PATTERN_ASYNC_DONE
-} pattern_async_state_t;
+typedef enum { PATTERN_ASYNC_IDLE=0,PATTERN_ASYNC_MOUNT,PATTERN_ASYNC_RECOVER,
+    PATTERN_ASYNC_OPEN,PATTERN_ASYNC_ALLOCATE,PATTERN_ASYNC_TRANSFER,
+    PATTERN_ASYNC_SYNC,PATTERN_ASYNC_CLOSE,PATTERN_ASYNC_COMMIT,
+    PATTERN_ASYNC_DECODE,PATTERN_ASYNC_CLEANUP_CLOSE,
+    PATTERN_ASYNC_CLEANUP_TEMP,PATTERN_ASYNC_DONE } pattern_async_state_t;
 
-typedef struct
-{
-    persistent_fatfs_file_t file;
-    persist_control_pattern_t *load_out;
-    uint8_t *encoded;
-    uint32_t encoded_capacity;
-    uint32_t encoded_size;
-    uint32_t offset;
-    uint32_t media_epoch;
-    pattern_async_state_t state;
-    pattern_control_bank_async_operation_t operation;
-    uint8_t bank;
-    uint8_t pattern;
-    uint8_t file_open;
-    uint8_t result_ready;
-    uint8_t success;
-    char final_path[48];
-    char temporary_path[52];
-    char backup_path[52];
+typedef struct {
+    persistent_fatfs_file_t file;persist_control_pattern_t *load_out;
+    uint8_t *encoded;uint32_t encoded_capacity,encoded_size,offset,media_epoch;
+    pattern_async_state_t state;pattern_control_bank_async_operation_t operation;
+    uint8_t bank,pattern,file_open,result_ready,success;
+    char final_path[80],temporary_path[84],backup_path[84];
 } pattern_async_context_t;
 
-typedef struct
-{
-    uint8_t *data;
-    uint32_t capacity;
-    uint32_t position;
-} pattern_memory_io_t;
-
+typedef struct {uint8_t *data;uint32_t capacity,position;} pattern_memory_io_t;
 static pattern_async_context_t g_pattern_async;
 
-static void pattern_content_changed(void)
-{
-    ++g_content_generation;
-    if(g_content_generation==0U)++g_content_generation;
-}
-
 static uint8_t valid(uint8_t b,uint8_t p){return(b<BANKS&&p<SLOTS)?1U:0U;}
-static uint8_t path_for_set(char*out,uint32_t size,uint8_t set,uint8_t b,uint8_t p){int n=snprintf(out,size,"0:/PATTERN/S%u/B%02u_P%02u.B6C",set,b,p);return(n>0&&(uint32_t)n<size)?1U:0U;}
-static uint8_t commit_path(char*out,uint32_t size,uint8_t set,uint8_t temporary){int n=snprintf(out,size,"0:/PATTERN/S%u/COMMIT.%s",set,temporary?"TMP":"BIN");return(n>0&&(uint32_t)n<size)?1U:0U;}
-static uint8_t acquire(void){if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PATTERN)==0U)return 0U;if(sd_access_fs_mount_if_needed()==0U){sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return 0U;}return 1U;}
-static uint32_t crc32(uint32_t crc,const uint8_t*d,uint32_t n){for(uint32_t i=0U;i<n;++i){crc^=d[i];for(uint8_t b=0U;b<8U;++b)crc=(crc>>1U)^(0xEDB88320UL&((uint32_t)-(int32_t)(crc&1U)));}return crc;}
-static uint32_t le32(const uint8_t*p){return(uint32_t)p[0]|((uint32_t)p[1]<<8U)|((uint32_t)p[2]<<16U)|((uint32_t)p[3]<<24U);}
-static void put32(uint8_t*p,uint32_t v){for(uint8_t i=0U;i<4U;++i)p[i]=(uint8_t)(v>>(8U*i));}
 static uint8_t side_path(char*out,uint32_t size,const char*base,const char*suffix){int n=snprintf(out,size,"%s.%s",base,suffix);return(n>0&&(uint32_t)n<size)?1U:0U;}
-static void recover_slot(uint8_t set,uint8_t b,uint8_t p){char x[48],tmp[52],bak[52];if(path_for_set(x,sizeof(x),set,b,p)&&side_path(tmp,sizeof(tmp),x,"TMP")&&side_path(bak,sizeof(bak),x,"BAK"))(void)persistent_fatfs_recover_replace(x,tmp,bak);}
+static uint8_t acquire(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PATTERN))return 0U;if(!sd_access_fs_mount_if_needed()){sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return 0U;}return 1U;}
 
-typedef struct
+static uint8_t pattern_name_slot(const char*n,uint8_t*b,uint8_t*p)
 {
-    uint8_t final[32];
-    uint8_t temporary[32];
-    uint8_t backup[32];
-    uint8_t commit_bin;
-    uint8_t commit_tmp;
-    uint8_t commit_bak;
-} pattern_set_files_t;
-
-static uint8_t pattern_set_file_slot(const char *name,const char *suffix,
-                                     uint8_t *out_bank,uint8_t *out_pattern)
-{
-    if(name==NULL||suffix==NULL||out_bank==NULL||out_pattern==NULL)return 0U;
-    if(strlen(name)!=(size_t)(11U+strlen(suffix))||name[0]!='B'
-        ||name[3]!='_'||name[4]!='P'||name[7]!='.'
-        ||name[8]!='B'||name[9]!='6'||name[10]!='C'
-        ||memcmp(&name[11],suffix,strlen(suffix))!=0)return 0U;
-    if(name[1]<'0'||name[1]>'9'||name[2]<'0'||name[2]>'9'
-        ||name[5]<'0'||name[5]>'9'||name[6]<'0'||name[6]>'9')return 0U;
-    const uint8_t bank=(uint8_t)((name[1]-'0')*10+(name[2]-'0'));
-    const uint8_t pattern=(uint8_t)((name[5]-'0')*10+(name[6]-'0'));
+    if(n==NULL||b==NULL||p==NULL||strlen(n)<11U||n[0]!='B'||n[3]!='_'
+       ||n[4]!='P'||n[7]!='.'||n[8]!='B'||n[9]!='6'||n[10]!='C'
+       ||n[1]<'0'||n[1]>'9'||n[2]<'0'||n[2]>'9'
+       ||n[5]<'0'||n[5]>'9'||n[6]<'0'||n[6]>'9')return 0U;
+    uint8_t bank=(uint8_t)((n[1]-'0')*10+(n[2]-'0'));
+    uint8_t pattern=(uint8_t)((n[5]-'0')*10+(n[6]-'0'));
     if(!valid(bank,pattern))return 0U;
-    *out_bank=bank;*out_pattern=pattern;return 1U;
+    *b=bank;*p=pattern;return 1U;
 }
 
-static uint8_t pattern_set_collect(uint8_t set,pattern_set_files_t *files)
+static uint8_t scan_project(uint8_t slot)
 {
-    char directory[24];DIR dir;FILINFO info;
-    if(files==NULL)return 0U;
-    memset(files,0,sizeof(*files));
-    const int n=snprintf(directory,sizeof(directory),"0:/PATTERN/S%u",set);
-    if(n<=0||(uint32_t)n>=sizeof(directory)||f_opendir(&dir,directory)!=FR_OK)return 0U;
-    for(;;)
-    {
-        if(f_readdir(&dir,&info)!=FR_OK){(void)f_closedir(&dir);return 0U;}
+    char directory[64];DIR dir;FILINFO info;memset(g_present,0,sizeof(g_present));
+    if(!project_storage_patterns_dir(directory,sizeof(directory),slot)
+       ||f_opendir(&dir,directory)!=FR_OK)return 0U;
+    for(;;){if(f_readdir(&dir,&info)!=FR_OK){(void)f_closedir(&dir);return 0U;}
         if(info.fname[0]=='\0')break;
-        uint8_t bank=0U,pattern=0U;
-        if(pattern_set_file_slot(info.fname,"",&bank,&pattern)!=0U)
-            files->final[((uint16_t)bank*SLOTS+pattern)>>3U]|=(uint8_t)(1U<<(((uint16_t)bank*SLOTS+pattern)&7U));
-        else if(pattern_set_file_slot(info.fname,".TMP",&bank,&pattern)!=0U)
-            files->temporary[((uint16_t)bank*SLOTS+pattern)>>3U]|=(uint8_t)(1U<<(((uint16_t)bank*SLOTS+pattern)&7U));
-        else if(pattern_set_file_slot(info.fname,".BAK",&bank,&pattern)!=0U)
-            files->backup[((uint16_t)bank*SLOTS+pattern)>>3U]|=(uint8_t)(1U<<(((uint16_t)bank*SLOTS+pattern)&7U));
-        else if(strcmp(info.fname,"COMMIT.BIN")==0)files->commit_bin=1U;
-        else if(strcmp(info.fname,"COMMIT.TMP")==0)files->commit_tmp=1U;
-        else if(strcmp(info.fname,"COMMIT.BAK")==0)files->commit_bak=1U;
-    }
+        uint8_t b=0U,p=0U;
+        if(!pattern_name_slot(info.fname,&b,&p))continue;
+        char x[80],tmp[84],bak[84];FILINFO final_info;
+        if(!project_storage_pattern_file(x,sizeof(x),slot,b,p)
+           ||!side_path(tmp,sizeof(tmp),x,"TMP")||!side_path(bak,sizeof(bak),x,"BAK"))continue;
+        (void)persistent_fatfs_recover_replace(x,tmp,bak);
+        if(f_stat(x,&final_info)==FR_OK)g_present[b][p]=1U;}
     (void)f_closedir(&dir);return 1U;
 }
 
-static uint8_t pattern_bitmap_has(const uint8_t *bitmap,uint8_t b,uint8_t p)
+void pattern_control_bank_init(void){memset(g_present,0,sizeof(g_present));memset(&g_pattern_async,0,sizeof(g_pattern_async));g_active_project=INVALID_PROJECT;}
+uint8_t pattern_control_bank_activate_project(uint8_t slot){if(slot>=PROJECT_STORAGE_SLOT_COUNT||g_pattern_async.state!=PATTERN_ASYNC_IDLE||!acquire())return 0U;uint8_t ok=scan_project(slot);if(ok)g_active_project=slot;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
+uint8_t pattern_control_bank_validate_project(uint8_t slot)
 {
-    const uint16_t slot=(uint16_t)b*SLOTS+p;
-    return (uint8_t)((bitmap[slot>>3U]&(uint8_t)(1U<<(slot&7U)))!=0U);
+    if(slot>=PROJECT_STORAGE_SLOT_COUNT||!acquire())return 0U;
+    char directory[64];DIR dir;uint8_t ok=(uint8_t)(
+        project_storage_patterns_dir(directory,sizeof(directory),slot)
+        &&f_opendir(&dir,directory)==FR_OK);
+    if(ok)(void)f_closedir(&dir);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;
+}
+void pattern_control_bank_deactivate_project(void){if(g_pattern_async.state==PATTERN_ASYNC_IDLE){g_active_project=INVALID_PROJECT;memset(g_present,0,sizeof(g_present));}}
+uint8_t pattern_control_bank_active_project(uint8_t*out){if(out==NULL||g_active_project>=PROJECT_STORAGE_SLOT_COUNT)return 0U;*out=g_active_project;return 1U;}
+void pattern_control_bank_publish_empty_project(uint8_t slot){if(slot<PROJECT_STORAGE_SLOT_COUNT&&g_pattern_async.state==PATTERN_ASYNC_IDLE){g_active_project=slot;memset(g_present,0,sizeof(g_present));}}
+uint8_t pattern_control_bank_present(uint8_t b,uint8_t p){return valid(b,p)?g_present[b][p]:0U;}
+uint16_t pattern_control_bank_count(void){uint16_t n=0U;for(uint8_t b=0;b<BANKS;++b)for(uint8_t p=0;p<SLOTS;++p)n+=g_present[b][p]?1U:0U;return n;}
+uint8_t pattern_control_bank_delete(uint8_t b,uint8_t p){if(g_active_project>=PROJECT_STORAGE_SLOT_COUNT||!valid(b,p)||!acquire())return 0U;char x[80],tmp[84],bak[84];uint8_t ok=project_storage_pattern_file(x,sizeof(x),g_active_project,b,p)&&side_path(tmp,sizeof(tmp),x,"TMP")&&side_path(bak,sizeof(bak),x,"BAK");if(ok){FRESULT r=f_unlink(x);ok=(r==FR_OK||r==FR_NO_FILE);(void)f_unlink(tmp);(void)f_unlink(bak);}if(ok)g_present[b][p]=0U;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
+
+static uint8_t mem_write(void*c,const uint8_t*d,uint32_t n){pattern_memory_io_t*m=c;if(m==NULL||d==NULL||m->position>m->capacity||n>m->capacity-m->position)return 0U;memcpy(&m->data[m->position],d,n);m->position+=n;return 1U;}
+static uint8_t mem_read(void*c,uint8_t*d,uint32_t n){pattern_memory_io_t*m=c;if(m==NULL||d==NULL||m->position>m->capacity||n>m->capacity-m->position)return 0U;memcpy(d,&m->data[m->position],n);m->position+=n;return 1U;}
+static uint8_t mem_reset(void*c){pattern_memory_io_t*m=c;if(m==NULL)return 0U;m->position=0U;return 1U;}
+static uint8_t mem_size(void*c,uint32_t*n){pattern_memory_io_t*m=c;if(m==NULL||n==NULL)return 0U;*n=m->capacity;return 1U;}
+static void async_finish(uint8_t ok){g_pattern_async.file_open=0U;g_pattern_async.success=ok?1U:0U;g_pattern_async.result_ready=1U;g_pattern_async.state=PATTERN_ASYNC_DONE;}
+static void async_fail(void){if(g_pattern_async.file_open)g_pattern_async.state=PATTERN_ASYNC_CLEANUP_CLOSE;else if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)g_pattern_async.state=PATTERN_ASYNC_CLEANUP_TEMP;else async_finish(0U);}
+static uint8_t async_abort(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_BACKGROUND))return 0U;if(g_pattern_async.file_open)(void)persistent_fatfs_close_result(&g_pattern_async.file);g_pattern_async.file_open=0U;if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)(void)f_unlink(g_pattern_async.temporary_path);sd_access_gate_release(SD_ACCESS_CLIENT_BACKGROUND);async_finish(0U);return 1U;}
+static sd_scheduler_background_admission_t admit(sd_scheduler_background_kind_t kind,uint32_t bytes){const sd_scheduler_background_request_t r={bytes,g_pattern_async.media_epoch,kind};return sd_scheduler_runtime_background_try_begin(&r);}
+
+uint8_t pattern_control_bank_store_async_begin(uint8_t b,uint8_t p,const persist_control_pattern_t*in,uint8_t*encoded,uint32_t capacity)
+{
+    if(project_replacement_is_active()||g_active_project>=PROJECT_STORAGE_SLOT_COUNT||!valid(b,p)||in==NULL||encoded==NULL||capacity==0U||g_pattern_async.state!=PATTERN_ASYNC_IDLE)return 0U;
+    pattern_memory_io_t memory={encoded,capacity,0U};const persist_codec_sink_t sink={mem_write,&memory};uint32_t size=0U;
+    if(persist_codec_encode_pattern(in,&sink,&size)!=PERSIST_CODEC_OK)return 0U;
+    memset(&g_pattern_async,0,sizeof(g_pattern_async));g_pattern_async.operation=PATTERN_CONTROL_BANK_ASYNC_SAVE;g_pattern_async.state=PATTERN_ASYNC_MOUNT;g_pattern_async.bank=b;g_pattern_async.pattern=p;g_pattern_async.encoded=encoded;g_pattern_async.encoded_capacity=capacity;g_pattern_async.encoded_size=size;g_pattern_async.media_epoch=sd_access_media_epoch();
+    if(!project_storage_pattern_file(g_pattern_async.final_path,sizeof(g_pattern_async.final_path),g_active_project,b,p)||!side_path(g_pattern_async.temporary_path,sizeof(g_pattern_async.temporary_path),g_pattern_async.final_path,"TMP")||!side_path(g_pattern_async.backup_path,sizeof(g_pattern_async.backup_path),g_pattern_async.final_path,"BAK")){memset(&g_pattern_async,0,sizeof(g_pattern_async));return 0U;}return 1U;
 }
 
-static uint8_t pattern_remove_file(const char *path)
+uint8_t pattern_control_bank_load_async_begin(uint8_t b,uint8_t p,uint8_t*encoded,uint32_t capacity,persist_control_pattern_t*out)
 {
-    const FRESULT result=f_unlink(path);
-    return (uint8_t)((result==FR_OK||result==FR_NO_FILE)?1U:0U);
+    if(project_replacement_is_active()||g_active_project>=PROJECT_STORAGE_SLOT_COUNT||!valid(b,p)||encoded==NULL||capacity==0U||out==NULL||!g_present[b][p]||g_pattern_async.state!=PATTERN_ASYNC_IDLE)return 0U;
+    memset(&g_pattern_async,0,sizeof(g_pattern_async));g_pattern_async.operation=PATTERN_CONTROL_BANK_ASYNC_LOAD;g_pattern_async.state=PATTERN_ASYNC_MOUNT;g_pattern_async.bank=b;g_pattern_async.pattern=p;g_pattern_async.encoded=encoded;g_pattern_async.encoded_capacity=capacity;g_pattern_async.load_out=out;g_pattern_async.media_epoch=sd_access_media_epoch();
+    if(!project_storage_pattern_file(g_pattern_async.final_path,sizeof(g_pattern_async.final_path),g_active_project,b,p)){memset(&g_pattern_async,0,sizeof(g_pattern_async));return 0U;}return 1U;
 }
 
-static void scan_active(void)
+pattern_control_bank_project_load_result_t pattern_control_bank_load_project(
+    uint8_t slot,uint8_t b,uint8_t p,persist_control_pattern_t*out)
 {
-    pattern_set_files_t files;
-    memset(g_present,0,sizeof(g_present));
-    if(pattern_set_collect(g_active_set,&files)==0U)return;
-    for(uint8_t b=0U;b<BANKS;++b)for(uint8_t p=0U;p<SLOTS;++p)
-        if(pattern_bitmap_has(files.final,b,p)||pattern_bitmap_has(files.temporary,b,p)
-            ||pattern_bitmap_has(files.backup,b,p))
-        {
-            char x[48];FILINFO info;recover_slot(g_active_set,b,p);
-            if(path_for_set(x,sizeof(x),g_active_set,b,p)&&f_stat(x,&info)==FR_OK)
-                g_present[b][p]=1U;
-        }
-}
-
-static uint8_t clear_set(uint8_t set)
-{
-    pattern_set_files_t files;
-    if(pattern_set_collect(set,&files)==0U)return 0U;
-    uint8_t ok=1U;
-    char x[52];
-    if(files.commit_bin&&commit_path(x,sizeof(x),set,0U))ok&=pattern_remove_file(x);
-    if(files.commit_tmp&&commit_path(x,sizeof(x),set,1U))ok&=pattern_remove_file(x);
-    if(files.commit_bak)
+    if(slot>=PROJECT_STORAGE_SLOT_COUNT||!valid(b,p)||out==NULL||!acquire())
+        return PATTERN_CONTROL_BANK_PROJECT_LOAD_ERROR;
+    char path[80];FILINFO info;FRESULT stat_result=FR_INVALID_NAME;
+    if(project_storage_pattern_file(path,sizeof(path),slot,b,p))
+        stat_result=f_stat(path,&info);
+    if(stat_result==FR_NO_FILE||stat_result==FR_NO_PATH)
     {
-        char commit[48];
-        if(commit_path(commit,sizeof(commit),set,0U)&&side_path(x,sizeof(x),commit,"BAK"))ok&=pattern_remove_file(x);
+        sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);
+        return PATTERN_CONTROL_BANK_PROJECT_LOAD_EMPTY;
     }
-    for(uint8_t b=0U;b<BANKS;++b)for(uint8_t p=0U;p<SLOTS;++p)
+    persistent_fatfs_file_t file;
+    uint8_t ok=(stat_result==FR_OK)&&persistent_fatfs_open_read(&file,path);
+    if(ok)
     {
-        if(!pattern_bitmap_has(files.final,b,p)&&!pattern_bitmap_has(files.temporary,b,p)
-            &&!pattern_bitmap_has(files.backup,b,p))continue;
-        if(!path_for_set(x,sizeof(x),set,b,p))continue;
-        if(pattern_bitmap_has(files.final,b,p))ok&=pattern_remove_file(x);
-        char side[52];
-        if(pattern_bitmap_has(files.temporary,b,p)&&side_path(side,sizeof(side),x,"TMP"))ok&=pattern_remove_file(side);
-        if(pattern_bitmap_has(files.backup,b,p)&&side_path(side,sizeof(side),x,"BAK"))ok&=pattern_remove_file(side);
+        persist_codec_source_t source=persistent_fatfs_source(&file);
+        ok=(persist_codec_decode_pattern(&source,
+            (persist_codec_pattern_staging_t*)out)==PERSIST_CODEC_OK);
+        if(persistent_fatfs_close_result(&file)!=FR_OK)ok=0U;
     }
-    return ok;
-}
-static uint8_t write_commit(uint8_t set,uint32_t generation,const uint8_t*bitmap){uint8_t r[COMMIT_BYTES]={0};r[0]='B';r[1]='6';r[2]='P';r[3]='B';r[4]=1U;r[5]=set;put32(&r[8],generation);memcpy(&r[12],bitmap,32U);put32(&r[40],~crc32(0xFFFFFFFFUL,r,40U));char x[48],tmp[48];FIL f;UINT n=0U;if(!commit_path(x,sizeof(x),set,0U)||!commit_path(tmp,sizeof(tmp),set,1U)||f_open(&f,tmp,FA_CREATE_ALWAYS|FA_WRITE)!=FR_OK)return 0U;uint8_t ok=(f_write(&f,r,sizeof(r),&n)==FR_OK&&n==sizeof(r)&&f_sync(&f)==FR_OK);if(f_close(&f)!=FR_OK)ok=0U;if(ok){(void)f_unlink(x);ok=(f_rename(tmp,x)==FR_OK);}if(!ok)(void)f_unlink(tmp);return ok;}
-static uint8_t read_commit(uint8_t set,uint32_t*out_generation){uint8_t r[COMMIT_BYTES];char x[48];FIL f;UINT n=0U;if(!commit_path(x,sizeof(x),set,0U)||f_open(&f,x,FA_READ)!=FR_OK)return 0U;uint8_t ok=((uint32_t)f_size(&f)==sizeof(r)&&f_read(&f,r,sizeof(r),&n)==FR_OK&&n==sizeof(r));if(f_close(&f)!=FR_OK)ok=0U;ok=(ok&&r[0]=='B'&&r[1]=='6'&&r[2]=='P'&&r[3]=='B'&&r[4]==1U&&r[5]==set&&r[6]==0U&&r[7]==0U&&le32(&r[40])==~crc32(0xFFFFFFFFUL,r,40U));if(ok)*out_generation=le32(&r[8]);return ok;}
-static uint8_t store_to_set(uint8_t set,uint8_t b,uint8_t p,const persist_control_pattern_t*in){char x[48],tmp[52];persistent_fatfs_file_t f;uint8_t ok=path_for_set(x,sizeof(x),set,b,p);if(ok){snprintf(tmp,sizeof(tmp),"%s.TMP",x);ok=persistent_fatfs_open_write(&f,tmp);if(ok){persist_codec_sink_t s=persistent_fatfs_sink(&f);ok=(persist_codec_encode_pattern(in,&s,NULL)==PERSIST_CODEC_OK)&&(f_sync(&f.file)==FR_OK);if(persistent_fatfs_close_result(&f)!=FR_OK)ok=0U;}if(ok){(void)f_unlink(x);ok=(f_rename(tmp,x)==FR_OK);}else(void)f_unlink(tmp);}return ok;}
-
-static uint8_t begin_staging(void){if(g_project_snapshot_active!=0U||g_active_set>=SET_COUNT||g_staging_set!=INVALID_SET)return 0U;g_staging_set=(uint8_t)(g_active_set^1U);if(clear_set(g_staging_set)==0U){g_staging_set=INVALID_SET;return 0U;}memset(g_staging_bitmap,0,sizeof(g_staging_bitmap));g_staging_commit_prepared=0U;return 1U;}
-uint8_t pattern_control_bank_staging_present(uint8_t bank,uint8_t pattern)
-{
-    if ((g_staging_set == INVALID_SET) || (bank >= BANKS) || (pattern >= SLOTS))
-        return 0U;
-    const uint16_t slot = (uint16_t)bank * SLOTS + pattern;
-    return ((g_staging_bitmap[slot >> 3U] & (uint8_t)(1U << (slot & 7U))) != 0U)
-        ? 1U : 0U;
-}
-
-
-static uint8_t pattern_memory_write(void *context,
-                                    const uint8_t *data,
-                                    uint32_t length)
-{
-    pattern_memory_io_t *const io = context;
-    if ((io == NULL) || (data == NULL) || (io->position > io->capacity)
-        || (length > (io->capacity - io->position)))
-    {
-        return 0U;
-    }
-    memcpy(&io->data[io->position], data, length);
-    io->position += length;
-    return 1U;
-}
-
-static uint8_t pattern_memory_read(void *context,
-                                   uint8_t *data,
-                                   uint32_t length)
-{
-    pattern_memory_io_t *const io = context;
-    if ((io == NULL) || (data == NULL) || (io->position > io->capacity)
-        || (length > (io->capacity - io->position)))
-    {
-        return 0U;
-    }
-    memcpy(data, &io->data[io->position], length);
-    io->position += length;
-    return 1U;
-}
-
-static uint8_t pattern_memory_reset(void *context)
-{
-    pattern_memory_io_t *const io = context;
-    if (io == NULL)
-    {
-        return 0U;
-    }
-    io->position = 0U;
-    return 1U;
-}
-
-static uint8_t pattern_memory_size(void *context, uint32_t *out_size)
-{
-    pattern_memory_io_t *const io = context;
-    if ((io == NULL) || (out_size == NULL))
-    {
-        return 0U;
-    }
-    *out_size = io->capacity;
-    return 1U;
-}
-
-static void pattern_async_finish(uint8_t success)
-{
-    g_pattern_async.file_open = 0U;
-    g_pattern_async.success = (success != 0U) ? 1U : 0U;
-    g_pattern_async.result_ready = 1U;
-    g_pattern_async.state = PATTERN_ASYNC_DONE;
-}
-
-static uint8_t pattern_async_abort_now(void)
-{
-    const uint8_t gate_acquired = sd_access_gate_try_acquire(
-        SD_ACCESS_CLIENT_BACKGROUND);
-    if (gate_acquired == 0U) return 0U;
-    if (g_pattern_async.file_open != 0U)
-    {
-        (void)persistent_fatfs_close_result(&g_pattern_async.file);
-    }
-    g_pattern_async.file_open = 0U;
-    if (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
-        (void)f_unlink(g_pattern_async.temporary_path);
-    sd_access_gate_release(SD_ACCESS_CLIENT_BACKGROUND);
-    pattern_async_finish(0U);
-    return 1U;
-}
-
-static void pattern_async_fail(void)
-{
-    if (g_pattern_async.file_open != 0U)
-    {
-        g_pattern_async.state = PATTERN_ASYNC_CLEANUP_CLOSE;
-    }
-    else if (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
-    {
-        g_pattern_async.state = PATTERN_ASYNC_CLEANUP_TEMP;
-    }
-    else
-    {
-        pattern_async_finish(0U);
-    }
-}
-
-static sd_scheduler_background_admission_t pattern_async_admit(
-    sd_scheduler_background_kind_t kind,
-    uint32_t byte_count)
-{
-    const sd_scheduler_background_request_t request = {
-        .byte_count = byte_count,
-        .media_epoch = g_pattern_async.media_epoch,
-        .kind = kind,
-    };
-    return sd_scheduler_runtime_background_try_begin(&request);
-}
-
-uint8_t pattern_control_bank_store_async_begin(
-    uint8_t bank,
-    uint8_t pattern,
-    const persist_control_pattern_t *in,
-    uint8_t *encoded,
-    uint32_t encoded_capacity)
-{
-    if (project_replacement_is_active() != 0U
-        || g_project_snapshot_active != 0U) return 0U;
-    if (!valid(bank, pattern) || (in == NULL) || (encoded == NULL)
-        || (encoded_capacity == 0U)
-        || (g_active_set >= SET_COUNT)
-        || (g_pattern_async.state != PATTERN_ASYNC_IDLE))
-    {
-        return 0U;
-    }
-
-    pattern_memory_io_t memory = {
-        .data = encoded,
-        .capacity = encoded_capacity,
-        .position = 0U,
-    };
-    const persist_codec_sink_t sink = {
-        .write = pattern_memory_write,
-        .context = &memory,
-    };
-    uint32_t encoded_size = 0U;
-    const persist_codec_result_t codec_result=persist_codec_encode_pattern(in,&sink,&encoded_size);
-    if (codec_result != PERSIST_CODEC_OK)
-    {
-        return 0U;
-    }
-
-    memset(&g_pattern_async, 0, sizeof(g_pattern_async));
-    g_pattern_async.operation = PATTERN_CONTROL_BANK_ASYNC_SAVE;
-    g_pattern_async.state = PATTERN_ASYNC_MOUNT;
-    g_pattern_async.bank = bank;
-    g_pattern_async.pattern = pattern;
-    g_pattern_async.encoded = encoded;
-    g_pattern_async.encoded_capacity = encoded_capacity;
-    g_pattern_async.encoded_size = encoded_size;
-    g_pattern_async.media_epoch = sd_access_media_epoch();
-    if (!path_for_set(g_pattern_async.final_path,
-                      sizeof(g_pattern_async.final_path),
-                      g_active_set, bank, pattern)
-        || !side_path(g_pattern_async.temporary_path,
-                      sizeof(g_pattern_async.temporary_path),
-                      g_pattern_async.final_path, "TMP")
-        || !side_path(g_pattern_async.backup_path,
-                      sizeof(g_pattern_async.backup_path),
-                      g_pattern_async.final_path, "BAK"))
-    {
-        memset(&g_pattern_async, 0, sizeof(g_pattern_async));
-        return 0U;
-    }
-    return 1U;
-}
-
-uint8_t pattern_control_bank_load_async_begin(
-    uint8_t bank,
-    uint8_t pattern,
-    uint8_t *encoded,
-    uint32_t encoded_capacity,
-    persist_control_pattern_t *out)
-{
-    if (project_replacement_is_active() != 0U) return 0U;
-    if (!valid(bank, pattern) || (encoded == NULL) || (encoded_capacity == 0U)
-        || (out == NULL) || (g_active_set >= SET_COUNT) || !g_present[bank][pattern]
-        || (g_pattern_async.state != PATTERN_ASYNC_IDLE))
-    {
-        return 0U;
-    }
-    memset(&g_pattern_async, 0, sizeof(g_pattern_async));
-    g_pattern_async.operation = PATTERN_CONTROL_BANK_ASYNC_LOAD;
-    g_pattern_async.state = PATTERN_ASYNC_MOUNT;
-    g_pattern_async.bank = bank;
-    g_pattern_async.pattern = pattern;
-    g_pattern_async.encoded = encoded;
-    g_pattern_async.encoded_capacity = encoded_capacity;
-    g_pattern_async.load_out = out;
-    g_pattern_async.media_epoch = sd_access_media_epoch();
-    if (!path_for_set(g_pattern_async.final_path,
-                      sizeof(g_pattern_async.final_path),
-                      g_active_set, bank, pattern))
-    {
-        memset(&g_pattern_async, 0, sizeof(g_pattern_async));
-        return 0U;
-    }
-    return 1U;
+    sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);
+    return ok?PATTERN_CONTROL_BANK_PROJECT_LOAD_OK
+        :PATTERN_CONTROL_BANK_PROJECT_LOAD_ERROR;
 }
 
 void pattern_control_bank_async_service(void)
 {
-    if ((g_pattern_async.state == PATTERN_ASYNC_IDLE)
-        || (g_pattern_async.state == PATTERN_ASYNC_DONE))
-    {
-        return;
-    }
-
-    if (g_pattern_async.state == PATTERN_ASYNC_DECODE)
-    {
-        persist_debug_object(PERSIST_DBG_OBJECT_PATTERN,
-            ((uint32_t)g_pattern_async.bank<<16U)|g_pattern_async.pattern,0U);
-        pattern_memory_io_t memory = {
-            .data = g_pattern_async.encoded,
-            .capacity = g_pattern_async.encoded_size,
-            .position = 0U,
-        };
-        const persist_codec_source_t source = {
-            .read = pattern_memory_read,
-            .reset = pattern_memory_reset,
-            .size = pattern_memory_size,
-            .context = &memory,
-        };
-        const persist_codec_result_t result = persist_codec_decode_pattern(
-            &source, (persist_codec_pattern_staging_t *)g_pattern_async.load_out);
-        persist_debug_filesystem((int32_t)FR_OK,memory.position);
-        persist_debug_object(PERSIST_DBG_OBJECT_PATTERN,
-            ((uint32_t)g_pattern_async.bank<<16U)|g_pattern_async.pattern,
-            (g_pattern_async.encoded_size>4U)?g_pattern_async.encoded[4]:UINT32_MAX);
-        if(result!=PERSIST_CODEC_OK)
-        {
-            persist_debug_details((uint32_t)result,g_pattern_async.encoded_size,
-                                  memory.position,g_pattern_async.encoded_capacity);
-            persist_debug_error(PERSIST_DBG_STAGE_DECODE,(int32_t)result);
-        }
-        pattern_async_finish((result == PERSIST_CODEC_OK) ? 1U : 0U);
-        return;
-    }
-
-    uint32_t chunk = 0U;
-    sd_scheduler_background_kind_t kind = SD_SCHEDULER_BACKGROUND_METADATA;
-    if (g_pattern_async.state == PATTERN_ASYNC_TRANSFER)
-    {
-        chunk = g_pattern_async.encoded_size - g_pattern_async.offset;
-        if (chunk > SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES)
-        {
-            chunk = SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES;
-        }
-        kind = SD_SCHEDULER_BACKGROUND_DATA;
-    }
-
-    const sd_scheduler_background_admission_t admission =
-        pattern_async_admit(kind, chunk);
-    if (admission == SD_SCHEDULER_BACKGROUND_NOT_NOW)
-    {
-        return;
-    }
-    if (admission != SD_SCHEDULER_BACKGROUND_GO)
-    {
-        (void)pattern_async_abort_now();
-        return;
-    }
-
-    FRESULT fr = FR_OK;
-    UINT transferred = 0U;
-    switch (g_pattern_async.state)
-    {
-        case PATTERN_ASYNC_MOUNT:
-            persist_debug_stage(PERSIST_DBG_STAGE_MOUNT, 0);
-            if (sd_access_fs_mount_if_needed() == 0U)
-            {
-                pattern_async_fail();
-            }
-            else
-            {
-                g_pattern_async.state =
-                    (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
-                        ? PATTERN_ASYNC_RECOVER : PATTERN_ASYNC_OPEN;
-            }
-            break;
-
-        case PATTERN_ASYNC_RECOVER:
-            fr = persistent_fatfs_recover_replace(g_pattern_async.final_path,
-                                                   g_pattern_async.temporary_path,
-                                                   g_pattern_async.backup_path);
-            if (fr == FR_OK) g_pattern_async.state = PATTERN_ASYNC_OPEN;
-            else pattern_async_fail();
-            break;
-
-        case PATTERN_ASYNC_OPEN:
-            persist_debug_stage(PERSIST_DBG_STAGE_OPEN, 0);
-            if (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
-            {
-                fr = persistent_fatfs_open_write_result(
-                    &g_pattern_async.file, g_pattern_async.temporary_path);
-            }
-            else if (persistent_fatfs_open_read(
-                         &g_pattern_async.file, g_pattern_async.final_path) == 0U)
-            {
-                fr = FR_DISK_ERR;
-            }
-            if (fr != FR_OK)
-            {
-                persist_debug_object(PERSIST_DBG_OBJECT_FILESYSTEM,
-                    ((uint32_t)g_pattern_async.bank<<16U)|g_pattern_async.pattern,
-                    (uint32_t)g_pattern_async.operation);
-                persist_debug_filesystem((int32_t)fr,g_pattern_async.offset);
-                persist_debug_details((uint32_t)fr,0U,0U,g_pattern_async.encoded_capacity);
-                persist_debug_error(PERSIST_DBG_STAGE_OPEN,PERSIST_DBG_ERROR_FILESYSTEM);
-                pattern_async_fail();
-                break;
-            }
-            g_pattern_async.file_open = 1U;
-            if (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_LOAD)
-            {
-                g_pattern_async.encoded_size = g_pattern_async.file.size;
-                if ((g_pattern_async.encoded_size < PERSIST_CODEC_HEADER_BYTES)
-                    || (g_pattern_async.encoded_size
-                        > g_pattern_async.encoded_capacity))
-                {
-                    pattern_async_fail();
-                    break;
-                }
-            }
-            g_pattern_async.state =
-                (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
-                    ? PATTERN_ASYNC_ALLOCATE : PATTERN_ASYNC_TRANSFER;
-            break;
-
-        case PATTERN_ASYNC_ALLOCATE:
-            fr = f_lseek(&g_pattern_async.file.file,
-                         (FSIZE_t)(g_pattern_async.encoded_size - 1U));
-            if (fr == FR_OK)
-            {
-                fr = f_write(&g_pattern_async.file.file,
-                             &g_pattern_async.encoded[
-                                 g_pattern_async.encoded_size - 1U],
-                             1U, &transferred);
-            }
-            if ((fr == FR_OK) && (transferred == 1U))
-            {
-                fr = f_lseek(&g_pattern_async.file.file, 0U);
-            }
-            if (fr == FR_OK) g_pattern_async.state = PATTERN_ASYNC_TRANSFER;
-            else pattern_async_fail();
-            break;
-
-        case PATTERN_ASYNC_TRANSFER:
-            persist_debug_stage((g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)
-                ?PERSIST_DBG_STAGE_WRITE:PERSIST_DBG_STAGE_READ,0);
-            if (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
-            {
-                fr = f_write(&g_pattern_async.file.file,
-                             &g_pattern_async.encoded[g_pattern_async.offset],
-                             chunk, &transferred);
-            }
-            else
-            {
-                fr = f_read(&g_pattern_async.file.file,
-                            &g_pattern_async.encoded[g_pattern_async.offset],
-                            chunk, &transferred);
-            }
-            if ((fr != FR_OK) || (transferred != chunk))
-            {
-                persist_debug_object(PERSIST_DBG_OBJECT_FILESYSTEM,
-                    ((uint32_t)g_pattern_async.bank<<16U)|g_pattern_async.pattern,
-                    (uint32_t)g_pattern_async.operation);
-                persist_debug_filesystem((int32_t)fr,g_pattern_async.offset);
-                persist_debug_details((uint32_t)fr,chunk,transferred,g_pattern_async.encoded_capacity);
-                persist_debug_error((g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)
-                    ?PERSIST_DBG_STAGE_WRITE:PERSIST_DBG_STAGE_READ,PERSIST_DBG_ERROR_FILESYSTEM);
-                pattern_async_fail();
-                break;
-            }
-            g_pattern_async.offset += chunk;
-            if (g_pattern_async.offset == g_pattern_async.encoded_size)
-            {
-                g_pattern_async.state =
-                    (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
-                        ? PATTERN_ASYNC_SYNC : PATTERN_ASYNC_CLOSE;
-            }
-            break;
-
-        case PATTERN_ASYNC_SYNC:
-            persist_debug_stage(PERSIST_DBG_STAGE_WRITE,0);
-            fr=f_sync(&g_pattern_async.file.file);
-            if (fr == FR_OK)
-                g_pattern_async.state = PATTERN_ASYNC_CLOSE;
-            else pattern_async_fail();
-            break;
-
-        case PATTERN_ASYNC_CLOSE:
-            persist_debug_stage(PERSIST_DBG_STAGE_CLOSE,0);
-            fr = persistent_fatfs_close_result(&g_pattern_async.file);
-            g_pattern_async.file_open = 0U;
-            if (fr != FR_OK)
-            {
-                pattern_async_fail();
-            }
-            else if (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
-            {
-                g_pattern_async.state = PATTERN_ASYNC_COMMIT;
-            }
-            else
-            {
-                g_pattern_async.state = PATTERN_ASYNC_DECODE;
-            }
-            break;
-
-        case PATTERN_ASYNC_COMMIT:
-            persist_debug_stage(PERSIST_DBG_STAGE_BANK_COMMIT,0);
-            fr = persistent_fatfs_commit_replace(g_pattern_async.final_path,
-                                                  g_pattern_async.temporary_path,
-                                                  g_pattern_async.backup_path);
-            if (fr == FR_OK)
-            {
-                g_present[g_pattern_async.bank][g_pattern_async.pattern] = 1U;
-                pattern_content_changed();
-                pattern_async_finish(1U);
-                persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
-            }
-            else
-            {
-                pattern_async_fail();
-            }
-            break;
-
-        case PATTERN_ASYNC_CLEANUP_CLOSE:
-            (void)persistent_fatfs_close_result(&g_pattern_async.file);
-            g_pattern_async.file_open = 0U;
-            g_pattern_async.state =
-                (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
-                    ? PATTERN_ASYNC_CLEANUP_TEMP : PATTERN_ASYNC_DONE;
-            if (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_LOAD)
-                pattern_async_finish(0U);
-            break;
-
-        case PATTERN_ASYNC_CLEANUP_TEMP:
-            fr = f_unlink(g_pattern_async.temporary_path);
-            (void)fr;
-            pattern_async_finish(0U);
-            break;
-
-        default:
-            pattern_async_finish(0U);
-            break;
-    }
+    if(g_pattern_async.state==PATTERN_ASYNC_IDLE||g_pattern_async.state==PATTERN_ASYNC_DONE)return;
+    if(g_pattern_async.state==PATTERN_ASYNC_DECODE){pattern_memory_io_t m={g_pattern_async.encoded,g_pattern_async.encoded_size,0U};const persist_codec_source_t s={mem_read,mem_reset,mem_size,&m};async_finish(persist_codec_decode_pattern(&s,(persist_codec_pattern_staging_t*)g_pattern_async.load_out)==PERSIST_CODEC_OK);return;}
+    uint32_t chunk=0U;sd_scheduler_background_kind_t kind=SD_SCHEDULER_BACKGROUND_METADATA;if(g_pattern_async.state==PATTERN_ASYNC_TRANSFER){chunk=g_pattern_async.encoded_size-g_pattern_async.offset;if(chunk>SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES)chunk=SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES;kind=SD_SCHEDULER_BACKGROUND_DATA;}
+    sd_scheduler_background_admission_t a=admit(kind,chunk);if(a==SD_SCHEDULER_BACKGROUND_NOT_NOW)return;if(a!=SD_SCHEDULER_BACKGROUND_GO){(void)async_abort();return;}
+    FRESULT fr=FR_OK;UINT done=0U;
+    switch(g_pattern_async.state){
+    case PATTERN_ASYNC_MOUNT:if(!sd_access_fs_mount_if_needed())async_fail();else g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_RECOVER:PATTERN_ASYNC_OPEN;break;
+    case PATTERN_ASYNC_RECOVER:fr=persistent_fatfs_recover_replace(g_pattern_async.final_path,g_pattern_async.temporary_path,g_pattern_async.backup_path);if(fr==FR_OK)g_pattern_async.state=PATTERN_ASYNC_OPEN;else async_fail();break;
+    case PATTERN_ASYNC_OPEN:if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)fr=persistent_fatfs_open_write_result(&g_pattern_async.file,g_pattern_async.temporary_path);else if(!persistent_fatfs_open_read(&g_pattern_async.file,g_pattern_async.final_path))fr=FR_DISK_ERR;if(fr!=FR_OK){async_fail();break;}g_pattern_async.file_open=1U;if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_LOAD){g_pattern_async.encoded_size=g_pattern_async.file.size;if(g_pattern_async.encoded_size<PERSIST_CODEC_HEADER_BYTES||g_pattern_async.encoded_size>g_pattern_async.encoded_capacity){async_fail();break;}}g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_ALLOCATE:PATTERN_ASYNC_TRANSFER;break;
+    case PATTERN_ASYNC_ALLOCATE:fr=f_lseek(&g_pattern_async.file.file,(FSIZE_t)(g_pattern_async.encoded_size-1U));if(fr==FR_OK)fr=f_write(&g_pattern_async.file.file,&g_pattern_async.encoded[g_pattern_async.encoded_size-1U],1U,&done);if(fr==FR_OK&&done==1U)fr=f_lseek(&g_pattern_async.file.file,0U);if(fr==FR_OK)g_pattern_async.state=PATTERN_ASYNC_TRANSFER;else async_fail();break;
+    case PATTERN_ASYNC_TRANSFER:if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)fr=f_write(&g_pattern_async.file.file,&g_pattern_async.encoded[g_pattern_async.offset],chunk,&done);else fr=f_read(&g_pattern_async.file.file,&g_pattern_async.encoded[g_pattern_async.offset],chunk,&done);if(fr!=FR_OK||done!=chunk){async_fail();break;}g_pattern_async.offset+=chunk;if(g_pattern_async.offset==g_pattern_async.encoded_size)g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_SYNC:PATTERN_ASYNC_CLOSE;break;
+    case PATTERN_ASYNC_SYNC:if(f_sync(&g_pattern_async.file.file)==FR_OK)g_pattern_async.state=PATTERN_ASYNC_CLOSE;else async_fail();break;
+    case PATTERN_ASYNC_CLOSE:fr=persistent_fatfs_close_result(&g_pattern_async.file);g_pattern_async.file_open=0U;if(fr!=FR_OK)async_fail();else g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_COMMIT:PATTERN_ASYNC_DECODE;break;
+    case PATTERN_ASYNC_COMMIT:fr=persistent_fatfs_commit_replace(g_pattern_async.final_path,g_pattern_async.temporary_path,g_pattern_async.backup_path);if(fr==FR_OK){g_present[g_pattern_async.bank][g_pattern_async.pattern]=1U;async_finish(1U);}else async_fail();break;
+    case PATTERN_ASYNC_CLEANUP_CLOSE:(void)persistent_fatfs_close_result(&g_pattern_async.file);g_pattern_async.file_open=0U;if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)g_pattern_async.state=PATTERN_ASYNC_CLEANUP_TEMP;else async_finish(0U);break;
+    case PATTERN_ASYNC_CLEANUP_TEMP:(void)f_unlink(g_pattern_async.temporary_path);async_finish(0U);break;
+    default:async_finish(0U);break;}
     sd_scheduler_runtime_background_end();
 }
 
-uint8_t pattern_control_bank_async_busy(void)
-{
-    return (g_pattern_async.state != PATTERN_ASYNC_IDLE) ? 1U : 0U;
-}
-
-uint8_t pattern_control_bank_async_take_result(
-    pattern_control_bank_async_operation_t *operation,
-    uint8_t *bank,
-    uint8_t *pattern,
-    uint8_t *success)
-{
-    if ((g_pattern_async.state != PATTERN_ASYNC_DONE)
-        || (g_pattern_async.result_ready == 0U))
-    {
-        return 0U;
-    }
-    if (operation != NULL) *operation = g_pattern_async.operation;
-    if (bank != NULL) *bank = g_pattern_async.bank;
-    if (pattern != NULL) *pattern = g_pattern_async.pattern;
-    if (success != NULL) *success = g_pattern_async.success;
-    memset(&g_pattern_async, 0, sizeof(g_pattern_async));
-    return 1U;
-}
-
-void pattern_control_bank_init(void){memset(g_present,0,sizeof(g_present));memset(&g_pattern_async,0,sizeof(g_pattern_async));g_active_set=INVALID_SET;g_staging_set=INVALID_SET;g_staging_commit_prepared=0U;g_project_snapshot_active=0U;g_generation=0U;g_content_generation=1U;if(!acquire())return;(void)f_mkdir("0:/PATTERN");(void)f_mkdir("0:/PATTERN/S0");(void)f_mkdir("0:/PATTERN/S1");uint32_t g0=0U,g1=0U;uint8_t v0=read_commit(0U,&g0),v1=read_commit(1U,&g1);if(v0&&v1&&g0!=g1){g_active_set=((int32_t)(g1-g0)>0)?1U:0U;g_generation=(g_active_set==1U)?g1:g0;}else if(v0&&!v1){g_active_set=0U;g_generation=g0;}else if(v1&&!v0){g_active_set=1U;g_generation=g1;}if(g_active_set==INVALID_SET){clear_set(0U);clear_set(1U);uint8_t blank[32]={0};if(write_commit(0U,1U,blank)){g_active_set=0U;g_generation=1U;}}if(g_active_set<SET_COUNT)scan_active();else memset(g_present,0,sizeof(g_present));g_content_generation=(g_generation!=0U)?g_generation:1U;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);}
-uint8_t pattern_control_bank_present(uint8_t b,uint8_t p){return valid(b,p)?g_present[b][p]:0U;}
-uint8_t pattern_control_bank_delete(uint8_t b,uint8_t p){if(g_project_snapshot_active!=0U||!valid(b,p)||!acquire())return 0U;char x[48],tmp[52],bak[52];uint8_t ok=path_for_set(x,sizeof(x),g_active_set,b,p)&&side_path(tmp,sizeof(tmp),x,"TMP")&&side_path(bak,sizeof(bak),x,"BAK");if(ok){FRESULT r=f_unlink(x);ok=(r==FR_OK||r==FR_NO_FILE);(void)f_unlink(tmp);(void)f_unlink(bak);}if(ok){g_present[b][p]=0U;pattern_content_changed();}sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
-uint16_t pattern_control_bank_count(void){uint16_t n=0U;for(uint8_t b=0;b<BANKS;++b)for(uint8_t p=0;p<SLOTS;++p)n+=g_present[b][p]?1U:0U;return n;}
-uint8_t pattern_control_bank_project_snapshot_begin(uint32_t*out_generation,uint16_t*out_count){if(out_generation==NULL||out_count==NULL||g_project_snapshot_active!=0U||g_active_set>=SET_COUNT||g_staging_set!=INVALID_SET||(g_pattern_async.state!=PATTERN_ASYNC_IDLE&&g_pattern_async.state!=PATTERN_ASYNC_DONE))return 0U;g_project_snapshot_active=1U;*out_generation=g_content_generation;*out_count=pattern_control_bank_count();return 1U;}
-uint8_t pattern_control_bank_project_snapshot_is_current(uint32_t generation){return(g_project_snapshot_active!=0U&&generation==g_content_generation)?1U:0U;}
-void pattern_control_bank_project_snapshot_end(uint32_t generation){(void)generation;g_project_snapshot_active=0U;}
-uint8_t pattern_control_bank_get_ordinal_project(uint16_t ordinal,persist_control_pattern_record_t*out){if(out==NULL)return 0U;for(uint8_t b=0;b<BANKS;++b)for(uint8_t p=0;p<SLOTS;++p)if(g_present[b][p]&&ordinal--==0U){char x[48];persistent_fatfs_file_t f;memset(out,0,sizeof(*out));out->bank=b;out->pattern=p;out->present=1U;uint8_t ok=path_for_set(x,sizeof(x),g_active_set,b,p)&&persistent_fatfs_open_read(&f,x);if(ok){persist_codec_source_t s=persistent_fatfs_source(&f);ok=(persist_codec_decode_pattern(&s,(persist_codec_pattern_staging_t*)&out->content)==PERSIST_CODEC_OK);if(persistent_fatfs_close_result(&f)!=FR_OK)ok=0U;}return ok;}return 0U;}
-uint8_t pattern_control_bank_get_ordinal_project_path(uint16_t ordinal,char*out_path,uint32_t path_capacity,uint8_t*out_bank,uint8_t*out_pattern){if(out_path==NULL||path_capacity==0U||out_bank==NULL||out_pattern==NULL||g_active_set>=SET_COUNT)return 0U;for(uint8_t b=0U;b<BANKS;++b)for(uint8_t p=0U;p<SLOTS;++p)if(g_present[b][p]&&ordinal--==0U){if(!path_for_set(out_path,path_capacity,g_active_set,b,p))return 0U;*out_bank=b;*out_pattern=p;return 1U;}return 0U;}
-uint8_t pattern_control_bank_begin_project(void){return begin_staging();}
-uint8_t pattern_control_bank_project_staging_can_begin(void){return(uint8_t)(g_project_snapshot_active==0U&&g_active_set<SET_COUNT&&g_staging_set==INVALID_SET);}
-uint8_t pattern_control_bank_project_staging_is_active(void){return(uint8_t)(g_project_snapshot_active==0U&&g_active_set<SET_COUNT&&g_staging_set<SET_COUNT);}
-uint8_t pattern_control_bank_put_record_project(const persist_control_pattern_record_t*r){if(r==NULL||r->present!=1U||!valid(r->bank,r->pattern)||g_staging_set>=SET_COUNT||!store_to_set(g_staging_set,r->bank,r->pattern,&r->content))return 0U;uint8_t slot=(uint8_t)(r->bank*SLOTS+r->pattern);g_staging_bitmap[slot>>3U]|=(uint8_t)(1U<<(slot&7U));return 1U;}
-uint8_t pattern_control_bank_prepare_commit(void){if(g_staging_set>=SET_COUNT)return 0U;const uint32_t next=g_generation+1U;uint8_t record[COMMIT_BYTES]={0};char temporary[48];FIL file;UINT written=0U;record[0]='B';record[1]='6';record[2]='P';record[3]='B';record[4]=1U;record[5]=g_staging_set;put32(&record[8],next);memcpy(&record[12],g_staging_bitmap,32U);put32(&record[40],~crc32(0xFFFFFFFFUL,record,40U));if(!commit_path(temporary,sizeof(temporary),g_staging_set,1U)||f_open(&file,temporary,FA_CREATE_ALWAYS|FA_WRITE)!=FR_OK)return 0U;uint8_t ok=(f_write(&file,record,sizeof(record),&written)==FR_OK&&written==sizeof(record)&&f_sync(&file)==FR_OK)?1U:0U;if(f_close(&file)!=FR_OK)ok=0U;if(ok==0U){(void)f_unlink(temporary);return 0U;}g_staging_commit_prepared=1U;return 1U;}
-uint8_t pattern_control_bank_commit_is_prepared(void){return(uint8_t)(g_project_snapshot_active==0U&&g_staging_set<SET_COUNT&&g_staging_commit_prepared!=0U);}
-uint8_t pattern_control_bank_commit(void*context){(void)context;if(g_project_snapshot_active!=0U||g_staging_set>=SET_COUNT||g_staging_commit_prepared==0U)return 0U;const uint8_t old=g_active_set;const uint32_t next=g_generation+1U;char final_path[48],temporary[48];if(!commit_path(final_path,sizeof(final_path),g_staging_set,0U)||!commit_path(temporary,sizeof(temporary),g_staging_set,1U))return 0U;(void)f_unlink(final_path);if(f_rename(temporary,final_path)!=FR_OK)return 0U;g_active_set=g_staging_set;g_generation=next;g_staging_set=INVALID_SET;g_staging_commit_prepared=0U;memset(g_present,0,sizeof(g_present));for(uint8_t b=0U;b<BANKS;++b)for(uint8_t p=0U;p<SLOTS;++p)g_present[b][p]=pattern_bitmap_has(g_staging_bitmap,b,p);pattern_content_changed();clear_set(old);return 1U;}
-void pattern_control_bank_abort(void*context){(void)context;if(g_staging_set<SET_COUNT){if(acquire()!=0U){clear_set(g_staging_set);sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);}g_staging_set=INVALID_SET;g_staging_commit_prepared=0U;}}
+uint8_t pattern_control_bank_async_busy(void){return(g_pattern_async.state!=PATTERN_ASYNC_IDLE)?1U:0U;}
+uint8_t pattern_control_bank_async_take_result(pattern_control_bank_async_operation_t*op,uint8_t*b,uint8_t*p,uint8_t*ok){if(g_pattern_async.state!=PATTERN_ASYNC_DONE||!g_pattern_async.result_ready)return 0U;if(op)*op=g_pattern_async.operation;if(b)*b=g_pattern_async.bank;if(p)*p=g_pattern_async.pattern;if(ok)*ok=g_pattern_async.success;memset(&g_pattern_async,0,sizeof(g_pattern_async));return 1U;}

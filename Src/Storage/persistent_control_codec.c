@@ -2,6 +2,7 @@
 #include "Storage/asset_ref.h"
 #include "Storage/persistent_entity_topology.h"
 #include "Storage/persistent_key_catalog.h"
+#include "Param/param_global_control.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_model.h"
 
@@ -18,7 +19,6 @@
 #define SECTION_PROJECT_CORE 0x2001U
 #define SECTION_PROJECT_ASSETS 0x2002U
 #define SECTION_PROJECT_MACROS 0x2003U
-#define SECTION_PROJECT_BANK 0x2004U
 #define SECTION_PATCH_BODY 0x3001U
 
 #define PERSIST_TYPED_KBD_ROOT           0x4B420001UL
@@ -540,7 +540,9 @@ persist_codec_result_t persist_codec_validate_pattern(const persist_control_patt
             || (p->globals.keyboard.note_order > 1U)
             || (p->globals.keyboard.chord_override > 1U)
             || (p->globals.keyboard.mono_last > 1U)
-            || (p->globals.metronome_level > 127U)) return PERSIST_CODEC_INVALID_ENTITY;
+            || (p->globals.metronome_level > 127U)
+            || (param_global_control_validate(&p->globals.audio) == 0U))
+        return PERSIST_CODEC_INVALID_ENTITY;
     return PERSIST_CODEC_OK;
 }
 
@@ -591,22 +593,14 @@ static persist_codec_result_t codec_write_document(uint8_t kind,uint16_t section
 static void codec_expect_section(codec_io_t *io,uint16_t expected,codec_body_fn fn,void *object)
 {uint16_t type=0U,version=0U;uint32_t length=0U;codec_u16(io,&type);codec_u16(io,&version);codec_u32(io,&length);if((io->result!=PERSIST_CODEC_OK)||(type!=expected)||(version!=1U)||(io->count>io->limit)||(length>io->limit-io->count)){io->result=PERSIST_CODEC_BAD_SECTION;return;}uint32_t old=io->limit,start=io->count;io->limit=start+length;fn(io,object);if((io->result==PERSIST_CODEC_OK)&&(io->count!=io->limit))io->result=PERSIST_CODEC_BAD_LENGTH;io->limit=old;}
 
-typedef struct{const persist_codec_project_source_t*source;uint8_t seen[PERSIST_CONTROL_PATTERN_BANK_COUNT*PERSIST_CONTROL_PATTERN_PER_BANK];} project_encode_ctx_t;
-static persist_codec_result_t codec_validate_project_pattern(const persist_control_pattern_t*p){return persist_codec_validate_pattern(p);}
 persist_codec_result_t persist_codec_validate_macros(const persist_control_macros_t*m){if(m==NULL)return PERSIST_CODEC_UNKNOWN_KEY;for(uint8_t macro=0U;macro<PERSIST_CONTROL_MACRO_COUNT;++macro){const persist_control_macro_t*entry=&m->macros[macro];if(entry->lock_count>PERSIST_CONTROL_MACRO_LOCK_COUNT)return PERSIST_CODEC_CAPACITY_EXCEEDED;for(uint8_t i=0U;i<entry->lock_count;++i){const persist_control_macro_lock_t*l=&entry->locks[i];param_id_t id;persist_param_descriptor_t d;if(l->entity>=PERSIST_CONTROL_ENTITY_COUNT||persist_key_param_from_disk(l->parameter,&id)==0U||persist_key_param_descriptor(id,&d)==0U||d.key==0U||d.scope!=PERSIST_PARAM_SCOPE_ENTITY||d.kind!=PERSIST_VALUE_FLOAT32||!isfinite(l->target_value)||l->target_value<param_registry[id].min||l->target_value>param_registry[id].max)return PERSIST_CODEC_UNKNOWN_KEY;for(uint8_t j=0U;j<i;++j)if(entry->locks[j].entity==l->entity&&entry->locks[j].parameter==l->parameter)return PERSIST_CODEC_DUPLICATE;}}return PERSIST_CODEC_OK;}
 static persist_codec_result_t codec_validate_asset_ref(const persist_control_asset_ref_t*a){return(asset_ref_is_canonical(a)!=0U&&codec_asset_kind_valid(a->kind))?PERSIST_CODEC_OK:PERSIST_CODEC_INVALID_ASSET;}
-static void codec_project_core_encode(codec_io_t*io,void*v){project_encode_ctx_t*c=v;persist_codec_project_metadata_t m=c->source->metadata;codec_u16(io,&m.name_length);if(m.name_length==0U||m.name_length>PERSIST_CODEC_PROJECT_NAME_BYTES){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}codec_bytes(io,(uint8_t*)m.name,m.name_length);codec_u8(io,&m.active_pattern_bank);codec_u8(io,&m.active_pattern);codec_u16(io,&m.pattern_count);const persist_control_pattern_t*p=(c->source->working_pattern.get!=NULL)?c->source->working_pattern.get(c->source->working_pattern.context):NULL;if(m.active_pattern_bank>=PERSIST_CONTROL_PATTERN_BANK_COUNT||m.active_pattern>=PERSIST_CONTROL_PATTERN_PER_BANK||m.pattern_count>PERSIST_CONTROL_PATTERN_BANK_COUNT*PERSIST_CONTROL_PATTERN_PER_BANK||p==NULL){io->result=PERSIST_CODEC_INVALID_ENTITY;return;}persist_codec_result_t r=codec_validate_project_pattern(p);if(r!=PERSIST_CODEC_OK){io->result=r;return;}codec_pattern_body(io,(persist_control_pattern_t*)p);}
-static void codec_project_assets_encode(codec_io_t*io,void*v){project_encode_ctx_t*c=v;uint16_t count=c->source->assets.count;codec_u16(io,&count);if(count>PERSIST_CONTROL_ASSET_COUNT||c->source->assets.get==NULL){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}for(uint16_t i=0U;i<count;++i){const persist_control_asset_ref_t*a=c->source->assets.get(c->source->assets.context,i);persist_codec_result_t r=codec_validate_asset_ref(a);if(r!=PERSIST_CODEC_OK){io->result=r;return;}codec_asset(io,(persist_control_asset_ref_t*)a);}}
-static void codec_project_macros_encode(codec_io_t*io,void*v){project_encode_ctx_t*c=v;persist_codec_result_t r=persist_codec_validate_macros(c->source->macros);if(r!=PERSIST_CODEC_OK){io->result=r;return;}codec_macros(io,(persist_control_macros_t*)c->source->macros);}
-static void codec_project_bank_encode(codec_io_t*io,void*v){project_encode_ctx_t*c=v;memset(c->seen,0,sizeof(c->seen));uint16_t count=c->source->metadata.pattern_count;codec_u16(io,&count);for(uint16_t i=0U;i<count;++i){const persist_control_pattern_record_t*r=(c->source->patterns.get!=NULL)?c->source->patterns.get(c->source->patterns.context,i):NULL;if(r==NULL){io->result=PERSIST_CODEC_IO_ERROR;return;}persist_control_pattern_record_t*record=(persist_control_pattern_record_t*)r;codec_u8(io,&record->bank);codec_u8(io,&record->pattern);codec_u8(io,&record->present);codec_pattern_body(io,&record->content);if(record->bank>=PERSIST_CONTROL_PATTERN_BANK_COUNT||record->pattern>=PERSIST_CONTROL_PATTERN_PER_BANK||record->present!=1U){io->result=PERSIST_CODEC_INVALID_ENTITY;return;}uint8_t slot=(uint8_t)(record->bank*PERSIST_CONTROL_PATTERN_PER_BANK+record->pattern);if(c->seen[slot]){io->result=PERSIST_CODEC_DUPLICATE;return;}c->seen[slot]=1U;persist_codec_result_t valid=codec_validate_project_pattern(&record->content);if(valid!=PERSIST_CODEC_OK){io->result=valid;return;}}}
-static void codec_project_payload(codec_io_t*io,void*v){codec_section_version(io,SECTION_PROJECT_CORE,2U,codec_project_core_encode,v);codec_section(io,SECTION_PROJECT_ASSETS,codec_project_assets_encode,v);codec_section_version(io,SECTION_PROJECT_MACROS,2U,codec_project_macros_encode,v);codec_section(io,SECTION_PROJECT_BANK,codec_project_bank_encode,v);}
 static void codec_pattern_payload(codec_io_t *io,void *v){codec_section(io,SECTION_PATTERN_BODY,codec_pattern_adapter,v);}
 static void codec_patch_body(codec_io_t *io,void *v){persist_control_patch_t *p=v;codec_u16(io,&p->name_length);if(p->name_length>PERSIST_CONTROL_PATCH_NAME_BYTES){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}codec_bytes(io,(uint8_t *)p->name,p->name_length);codec_u32(io,&p->family);codec_u32(io,&p->type);codec_u8(io,&p->asset_count);if(p->asset_count>PERSIST_CONTROL_TRACK_ASSET_COUNT){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}for(uint8_t i=0U;i<p->asset_count;++i)codec_asset(io,&p->assets[i]);codec_u8(io,&p->fm_present);if(p->fm_present)codec_fm_state(io,&p->fm);codec_u8(io,&p->tone_present);if(p->tone_present)codec_tone(io,&p->tone);codec_filter(io,&p->filter);codec_vca(io,&p->vca);codec_audio_fx(io,&p->audio_fx);codec_polyphony(io,&p->polyphony);codec_u8(io,&p->modulation_present);if(p->modulation_present!=0U)codec_modulation(io,&p->modulation);}
 static void codec_patch_payload(codec_io_t *io,void *v){codec_section(io,SECTION_PATCH_BODY,codec_patch_body,v);}
 
 persist_codec_result_t persist_codec_encode_pattern(const persist_control_pattern_t *p,const persist_codec_sink_t *s,uint32_t *n){persist_codec_result_t r=persist_codec_validate_pattern(p);return(r==PERSIST_CODEC_OK)?codec_write_document(PERSIST_CODEC_DOCUMENT_PATTERN,1U,codec_pattern_payload,(void *)p,s,n):r;}
 persist_codec_result_t persist_codec_encode_patch(const persist_control_patch_t *p,const persist_codec_sink_t *s,uint32_t *n){persist_codec_result_t r=persist_codec_validate_patch(p);return(r==PERSIST_CODEC_OK)?codec_write_document(PERSIST_CODEC_DOCUMENT_PATCH,2U,codec_patch_payload,(void *)p,s,n):r;}
-persist_codec_result_t persist_codec_encode_project(const persist_codec_project_source_t*p,const persist_codec_sink_t*s,uint32_t*n){if(p==NULL||p->working_pattern.get==NULL||p->assets.get==NULL||p->macros==NULL||p->patterns.get==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;project_encode_ctx_t c={.source=p};return codec_write_document(PERSIST_CODEC_DOCUMENT_PROJECT,4U,codec_project_payload,&c,s,n);}
 
 static persist_codec_result_t codec_emit_project_fragment(codec_io_t *io,
                                                           const persist_codec_sink_t *sink,
@@ -623,23 +617,17 @@ static persist_codec_result_t codec_emit_project_fragment(codec_io_t *io,
 
 persist_codec_result_t persist_codec_encode_project_core_payload(
     const persist_codec_project_metadata_t *metadata,
-    const persist_control_pattern_t *working_pattern,
     const persist_codec_sink_t *sink,
     uint32_t *out_bytes)
 {
-    if ((metadata == NULL) || (working_pattern == NULL) || (sink == NULL)
+    if ((metadata == NULL) || (sink == NULL)
             || (sink->write == NULL))
         return PERSIST_CODEC_INVALID_ARGUMENT;
     if ((metadata->active_pattern_bank >= PERSIST_CONTROL_PATTERN_BANK_COUNT)
             || (metadata->active_pattern >= PERSIST_CONTROL_PATTERN_PER_BANK)
             || (metadata->name_length == 0U)
-            || (metadata->name_length > PERSIST_CODEC_PROJECT_NAME_BYTES)
-            || (metadata->pattern_count
-                > PERSIST_CONTROL_PATTERN_BANK_COUNT
-                    * PERSIST_CONTROL_PATTERN_PER_BANK))
+            || (metadata->name_length > PERSIST_CODEC_PROJECT_NAME_BYTES))
         return PERSIST_CODEC_INVALID_ENTITY;
-    persist_codec_result_t result = codec_validate_project_pattern(working_pattern);
-    if (result != PERSIST_CODEC_OK) return result;
     codec_io_t io = {.mode=CODEC_WRITE,.sink=sink,
                      .limit=PERSIST_CODEC_MAX_DOCUMENT_BYTES,
                      .result=PERSIST_CODEC_OK};
@@ -648,8 +636,6 @@ persist_codec_result_t persist_codec_encode_project_core_payload(
     codec_bytes(&io, (uint8_t *)copy.name, copy.name_length);
     codec_u8(&io, &copy.active_pattern_bank);
     codec_u8(&io, &copy.active_pattern);
-    codec_u16(&io, &copy.pattern_count);
-    codec_pattern_body(&io, (persist_control_pattern_t *)working_pattern);
     return codec_emit_project_fragment(&io, sink, out_bytes);
 }
 
@@ -694,30 +680,6 @@ persist_codec_result_t persist_codec_encode_project_macros_payload(
     return codec_emit_project_fragment(&io, sink, out_bytes);
 }
 
-persist_codec_result_t persist_codec_encode_project_pattern_record_payload(
-    const persist_control_pattern_record_t *record,
-    const persist_codec_sink_t *sink,
-    uint32_t *out_bytes)
-{
-    if ((record == NULL) || (sink == NULL) || (sink->write == NULL))
-        return PERSIST_CODEC_INVALID_ARGUMENT;
-    if ((record->bank >= PERSIST_CONTROL_PATTERN_BANK_COUNT)
-            || (record->pattern >= PERSIST_CONTROL_PATTERN_PER_BANK)
-            || (record->present != 1U))
-        return PERSIST_CODEC_INVALID_ENTITY;
-    persist_codec_result_t result = codec_validate_project_pattern(&record->content);
-    if (result != PERSIST_CODEC_OK) return result;
-    codec_io_t io = {.mode=CODEC_WRITE,.sink=sink,
-                     .limit=PERSIST_CODEC_MAX_DOCUMENT_BYTES,
-                     .result=PERSIST_CODEC_OK};
-    persist_control_pattern_record_t *copy = (persist_control_pattern_record_t *)record;
-    codec_u8(&io, &copy->bank);
-    codec_u8(&io, &copy->pattern);
-    codec_u8(&io, &copy->present);
-    codec_pattern_body(&io, &copy->content);
-    return codec_emit_project_fragment(&io, sink, out_bytes);
-}
-
 uint8_t persist_codec_build_project_section_header(
     persist_codec_project_section_t section,
     uint32_t payload_bytes,
@@ -725,15 +687,15 @@ uint8_t persist_codec_build_project_section_header(
 {
     static const uint16_t types[PERSIST_CODEC_PROJECT_SECTION_COUNT] = {
         SECTION_PROJECT_CORE, SECTION_PROJECT_ASSETS,
-        SECTION_PROJECT_MACROS, SECTION_PROJECT_BANK};
+        SECTION_PROJECT_MACROS};
     if ((section >= PERSIST_CODEC_PROJECT_SECTION_COUNT)
             || (out_header == NULL))
         return 0U;
     const uint16_t type = types[section];
     out_header[0] = (uint8_t)type;
     out_header[1] = (uint8_t)(type >> 8U);
-    out_header[2] = ((section == PERSIST_CODEC_PROJECT_SECTION_CORE)
-                     || (section == PERSIST_CODEC_PROJECT_SECTION_MACROS)) ? 2U : 1U;
+    out_header[2] = (section == PERSIST_CODEC_PROJECT_SECTION_CORE) ? 3U
+        : ((section == PERSIST_CODEC_PROJECT_SECTION_MACROS) ? 2U : 1U);
     out_header[3] = 0U;
     for (uint8_t i = 0U; i < 4U; ++i)
         out_header[4U + i] = (uint8_t)(payload_bytes >> (8U * i));
@@ -753,7 +715,7 @@ uint8_t persist_codec_build_project_document_header(
     out_header[2]=CODEC_MAGIC_2;out_header[3]=CODEC_MAGIC_3;
     out_header[4]=(uint8_t)PERSIST_CODEC_VERSION;
     out_header[6]=PERSIST_CODEC_DOCUMENT_PROJECT;
-    out_header[8]=4U;
+    out_header[8]=3U;
     for(uint8_t i=0U;i<4U;++i)
     {
         out_header[12U+i]=(uint8_t)(total_bytes>>(8U*i));
@@ -772,43 +734,86 @@ static persist_codec_result_t codec_decode_end(codec_io_t *io,uint32_t expected)
 
 persist_codec_result_t persist_codec_decode_pattern(const persist_codec_source_t *s,persist_codec_pattern_staging_t *st){if(st==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;memset(st,0,sizeof(*st));codec_io_t io;uint32_t crc;persist_codec_result_t r=codec_decode_begin(s,PERSIST_CODEC_DOCUMENT_PATTERN,1U,&io,&crc);if(r!=PERSIST_CODEC_OK)return r;codec_expect_section(&io,SECTION_PATTERN_BODY,codec_pattern_adapter,&st->pattern);r=codec_decode_end(&io,crc);return(r==PERSIST_CODEC_OK)?persist_codec_validate_pattern(&st->pattern):r;}
 persist_codec_result_t persist_codec_decode_patch(const persist_codec_source_t *s,persist_codec_patch_staging_t *st){if(st==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;memset(st,0,sizeof(*st));codec_io_t io;uint32_t crc;persist_codec_result_t r=codec_decode_begin(s,PERSIST_CODEC_DOCUMENT_PATCH,2U,&io,&crc);if(r!=PERSIST_CODEC_OK)return r;codec_expect_section(&io,SECTION_PATCH_BODY,codec_patch_body,&st->patch);r=codec_decode_end(&io,crc);return(r==PERSIST_CODEC_OK)?persist_codec_validate_patch(&st->patch):r;}
-typedef struct{persist_codec_project_workspace_t*w;const persist_codec_project_consumer_t*project;const persist_codec_pattern_consumer_t*patterns;persist_codec_project_metadata_t metadata;uint8_t mutate;uint8_t pattern_seen[256];} project_decode_ctx_t;
-static void codec_project_core_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;memset(&c->w->unit.pattern_record,0,sizeof(c->w->unit.pattern_record));codec_u16(io,&c->metadata.name_length);if(c->metadata.name_length==0U||c->metadata.name_length>PERSIST_CODEC_PROJECT_NAME_BYTES){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}codec_bytes(io,(uint8_t*)c->metadata.name,c->metadata.name_length);codec_u8(io,&c->metadata.active_pattern_bank);codec_u8(io,&c->metadata.active_pattern);codec_u16(io,&c->metadata.pattern_count);codec_pattern_body(io,&c->w->unit.pattern_record.content);if(io->result!=PERSIST_CODEC_OK)return;if(c->metadata.active_pattern_bank>=PERSIST_CONTROL_PATTERN_BANK_COUNT||c->metadata.active_pattern>=PERSIST_CONTROL_PATTERN_PER_BANK||c->metadata.pattern_count>PERSIST_CONTROL_PATTERN_BANK_COUNT*PERSIST_CONTROL_PATTERN_PER_BANK)io->result=PERSIST_CODEC_INVALID_ENTITY;else io->result=codec_validate_project_pattern(&c->w->unit.pattern_record.content);}
-static void codec_expect_project_core(codec_io_t*io,project_decode_ctx_t*c){uint16_t type=0U,version=0U;uint32_t length=0U;codec_u16(io,&type);codec_u16(io,&version);codec_u32(io,&length);if((io->result!=PERSIST_CODEC_OK)||(type!=SECTION_PROJECT_CORE)||(version!=2U)||(io->count>io->limit)||(length>io->limit-io->count)){io->result=PERSIST_CODEC_BAD_SECTION;return;}uint32_t old=io->limit,start=io->count;io->limit=start+length;codec_project_core_decode(io,c);if((io->result==PERSIST_CODEC_OK)&&(io->count!=io->limit))io->result=PERSIST_CODEC_BAD_LENGTH;io->limit=old;}
+typedef struct{persist_codec_project_workspace_t*w;const persist_codec_project_consumer_t*project;persist_codec_project_metadata_t metadata;uint8_t mutate;} project_decode_ctx_t;
 static void codec_project_assets_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;codec_u16(io,&c->metadata.asset_count);if(c->metadata.asset_count>PERSIST_CONTROL_ASSET_COUNT||c->metadata.asset_count>c->project->asset_capacity){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}for(uint16_t i=0U;i<c->metadata.asset_count;++i){persist_control_asset_ref_t*asset=c->project->asset_target(c->project->context,i);if(asset==NULL){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}memset(asset,0,sizeof(*asset));codec_asset(io,asset);if(io->result!=PERSIST_CODEC_OK)return;persist_codec_result_t r=codec_validate_asset_ref(asset);if(r!=PERSIST_CODEC_OK){io->result=r;return;}for(uint16_t j=0U;j<i;++j){const persist_control_asset_ref_t*previous=c->project->asset_target(c->project->context,j);if(previous==NULL){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}if(previous->kind==asset->kind&&previous->path_length==asset->path_length&&memcmp(previous->canonical_path,asset->canonical_path,asset->path_length)==0){io->result=PERSIST_CODEC_DUPLICATE;return;}}if(c->project->validate_asset(c->project->context,asset)==0U){io->result=PERSIST_CODEC_INVALID_ASSET;return;}}}
-static void codec_project_macros_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;memset(&c->w->unit.macros,0,sizeof(c->w->unit.macros));codec_macros(io,&c->w->unit.macros);if(io->result!=PERSIST_CODEC_OK)return;if(c->mutate&&c->project->apply_macros(c->project->context,&c->w->unit.macros)==0U)io->result=PERSIST_CODEC_IO_ERROR;}
+static void codec_project_macros_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;memset(&c->w->macros,0,sizeof(c->w->macros));codec_macros(io,&c->w->macros);if(io->result!=PERSIST_CODEC_OK)return;if(c->mutate&&c->project->apply_macros(c->project->context,&c->w->macros)==0U)io->result=PERSIST_CODEC_IO_ERROR;}
 static void codec_expect_project_macros(codec_io_t *io,project_decode_ctx_t *c)
 {
     uint16_t type=0U,version=0U;
     uint32_t length=0U;
     codec_u16(io,&type);codec_u16(io,&version);codec_u32(io,&length);
     if(io->result!=PERSIST_CODEC_OK||type!=SECTION_PROJECT_MACROS
-        ||(version!=1U&&version!=2U)||io->count>io->limit
+        ||version!=2U||io->count>io->limit
         ||length>io->limit-io->count){io->result=PERSIST_CODEC_BAD_SECTION;return;}
     const uint32_t end=io->count+length;
-    if(version==1U)
-    {
-        uint8_t scratch[32];
-        memset(&c->w->unit.macros,0,sizeof(c->w->unit.macros));
-        while(io->count<end)
-        {
-            const uint32_t remaining=end-io->count;
-            codec_bytes(io,scratch,remaining<sizeof(scratch)?remaining:sizeof(scratch));
-            if(io->result!=PERSIST_CODEC_OK)return;
-        }
-        if(c->mutate&&c->project->apply_macros(c->project->context,
-                &c->w->unit.macros)==0U)io->result=PERSIST_CODEC_IO_ERROR;
-        return;
-    }
     const uint32_t old_limit=io->limit;
     io->limit=end;
     codec_project_macros_decode(io,c);
     if(io->result==PERSIST_CODEC_OK&&io->count!=end)io->result=PERSIST_CODEC_BAD_LENGTH;
     io->limit=old_limit;
 }
-static void codec_project_bank_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;uint16_t count=0U;codec_u16(io,&count);if(count!=c->metadata.pattern_count){io->result=PERSIST_CODEC_BAD_LENGTH;return;}memset(c->pattern_seen,0,sizeof(c->pattern_seen));for(uint16_t i=0U;i<count;++i){persist_control_pattern_record_t*r=&c->w->unit.pattern_record;memset(r,0,sizeof(*r));codec_u8(io,&r->bank);codec_u8(io,&r->pattern);codec_u8(io,&r->present);codec_pattern_body(io,&r->content);if(io->result!=PERSIST_CODEC_OK)return;if(r->bank>=PERSIST_CONTROL_PATTERN_BANK_COUNT||r->pattern>=PERSIST_CONTROL_PATTERN_PER_BANK||r->present!=1U){io->result=PERSIST_CODEC_INVALID_ENTITY;return;}uint8_t slot=(uint8_t)(r->bank*PERSIST_CONTROL_PATTERN_PER_BANK+r->pattern);if(c->pattern_seen[slot]){io->result=PERSIST_CODEC_DUPLICATE;return;}c->pattern_seen[slot]=1U;io->result=codec_validate_project_pattern(&r->content);if(io->result!=PERSIST_CODEC_OK)return;if(c->mutate&&c->patterns->put(c->patterns->context,r)==0U){io->result=PERSIST_CODEC_IO_ERROR;return;}}}
-static persist_codec_result_t codec_project_decode_pass(const persist_codec_source_t*s,project_decode_ctx_t*c)
-{if(s->reset(s->context)==0U)return PERSIST_CODEC_IO_ERROR;memset(c->w,0,sizeof(*c->w));memset(&c->metadata,0,sizeof(c->metadata));codec_io_t io;uint32_t crc;persist_codec_result_t r=codec_decode_begin(s,PERSIST_CODEC_DOCUMENT_PROJECT,4U,&io,&crc);if(r!=PERSIST_CODEC_OK)return r;codec_expect_project_core(&io,c);codec_expect_section(&io,SECTION_PROJECT_ASSETS,codec_project_assets_decode,c);if(io.result==PERSIST_CODEC_OK&&c->mutate&&c->project->apply_working(c->project->context,&c->metadata,&c->w->unit.pattern_record.content)==0U)io.result=PERSIST_CODEC_IO_ERROR;codec_expect_project_macros(&io,c);codec_expect_section(&io,SECTION_PROJECT_BANK,codec_project_bank_decode,c);return codec_decode_end(&io,crc);}
+static void codec_project_current_core_decode(codec_io_t *io,void *value)
+{
+    project_decode_ctx_t *context=value;
+    codec_u16(io,&context->metadata.name_length);
+    if(context->metadata.name_length==0U
+        ||context->metadata.name_length>PERSIST_CODEC_PROJECT_NAME_BYTES)
+    {io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}
+    codec_bytes(io,(uint8_t*)context->metadata.name,
+                context->metadata.name_length);
+    codec_u8(io,&context->metadata.active_pattern_bank);
+    codec_u8(io,&context->metadata.active_pattern);
+    if(context->metadata.active_pattern_bank>=PERSIST_CONTROL_PATTERN_BANK_COUNT
+        ||context->metadata.active_pattern>=PERSIST_CONTROL_PATTERN_PER_BANK)
+        io->result=PERSIST_CODEC_INVALID_ENTITY;
+}
 
-persist_codec_result_t persist_codec_decode_project_progressive(const persist_codec_source_t*s,persist_codec_project_workspace_t*w,const persist_codec_project_consumer_t*project,const persist_codec_pattern_consumer_t*patterns)
-{if(s==NULL||w==NULL||project==NULL||project->begin_assets==NULL||project->asset_target==NULL||project->validate_asset==NULL||project->apply_working==NULL||project->apply_macros==NULL||project->asset_capacity==0U||patterns==NULL||patterns->begin==NULL||patterns->put==NULL||patterns->commit==NULL||patterns->abort==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;if(project->begin_assets(project->context)==0U)return PERSIST_CODEC_IO_ERROR;project_decode_ctx_t c={.w=w,.project=project,.patterns=patterns,.mutate=0U};persist_codec_result_t r=codec_project_decode_pass(s,&c);if(r!=PERSIST_CODEC_OK)return r;if(patterns->begin(patterns->context)==0U)return PERSIST_CODEC_IO_ERROR;c.mutate=1U;r=codec_project_decode_pass(s,&c);if(r==PERSIST_CODEC_OK&&patterns->commit(patterns->context)==0U)r=PERSIST_CODEC_IO_ERROR;if(r!=PERSIST_CODEC_OK)patterns->abort(patterns->context);return r;}
+static void codec_expect_project_current_core(codec_io_t *io,
+                                              project_decode_ctx_t *context)
+{
+    uint16_t type=0U,version=0U;uint32_t length=0U;
+    codec_u16(io,&type);codec_u16(io,&version);codec_u32(io,&length);
+    if(io->result!=PERSIST_CODEC_OK||type!=SECTION_PROJECT_CORE||version!=3U
+        ||io->count>io->limit||length>io->limit-io->count)
+    {io->result=PERSIST_CODEC_BAD_SECTION;return;}
+    const uint32_t old_limit=io->limit;const uint32_t end=io->count+length;
+    io->limit=end;codec_project_current_core_decode(io,context);
+    if(io->result==PERSIST_CODEC_OK&&io->count!=end)io->result=PERSIST_CODEC_BAD_LENGTH;
+    io->limit=old_limit;
+}
+
+static persist_codec_result_t codec_project_current_decode_pass(
+    const persist_codec_source_t *source,project_decode_ctx_t *context)
+{
+    if(source->reset(source->context)==0U)return PERSIST_CODEC_IO_ERROR;
+    memset(context->w,0,sizeof(*context->w));memset(&context->metadata,0,sizeof(context->metadata));
+    codec_io_t io;uint32_t crc;
+    persist_codec_result_t result=codec_decode_begin(source,
+        PERSIST_CODEC_DOCUMENT_PROJECT,3U,&io,&crc);
+    if(result!=PERSIST_CODEC_OK)return result;
+    codec_expect_project_current_core(&io,context);
+    codec_expect_section(&io,SECTION_PROJECT_ASSETS,codec_project_assets_decode,context);
+    if(io.result==PERSIST_CODEC_OK&&context->mutate
+        &&context->project->apply_metadata(context->project->context,
+                                           &context->metadata)==0U)
+        io.result=PERSIST_CODEC_IO_ERROR;
+    codec_expect_project_macros(&io,context);
+    return codec_decode_end(&io,crc);
+}
+
+persist_codec_result_t persist_codec_decode_project_current(
+    const persist_codec_source_t *source,persist_codec_project_workspace_t *workspace,
+    const persist_codec_project_consumer_t *project)
+{
+    if(source==NULL||workspace==NULL||project==NULL
+        ||project->begin_assets==NULL||project->asset_target==NULL
+        ||project->validate_asset==NULL||project->apply_metadata==NULL
+        ||project->apply_macros==NULL||project->asset_capacity==0U)
+        return PERSIST_CODEC_INVALID_ARGUMENT;
+    if(project->begin_assets(project->context)==0U)return PERSIST_CODEC_IO_ERROR;
+    project_decode_ctx_t context={.w=workspace,.project=project,.mutate=0U};
+    persist_codec_result_t result=codec_project_current_decode_pass(source,&context);
+    if(result!=PERSIST_CODEC_OK)return result;
+    context.mutate=1U;
+    return codec_project_current_decode_pass(source,&context);
+}

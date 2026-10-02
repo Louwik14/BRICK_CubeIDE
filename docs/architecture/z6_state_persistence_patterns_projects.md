@@ -2,16 +2,16 @@
 
 ## Modele et format
 
-Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 13. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. La section Macro Project version 2 contient 14 macros natives, chacune avec ses valeurs cibles `(track, parametre, valeur)`. Une ancienne section Macro version 1 est lue puis remise a zero; le reste du Project est preserve. Aucun dump de structure n'est lu. AUDIO_GLOBAL contient exactement 51 floats, FILTER douze floats, et aucun type Drum Analog historique n'est accepte. Les enveloppes courantes sont 115 300 octets pour un Pattern et 29 799 358 octets pour un Project, cette derniere borne acceptant encore la taille de l'ancienne section Macro.
+Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 13. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. La section Macro Project version 2 contient 14 macros natives, chacune avec ses valeurs cibles `(track, parametre, valeur)`. Aucun dump de structure n'est lu. AUDIO_GLOBAL contient exactement 51 floats, FILTER douze floats, et aucun type Drum Analog historique n'est accepte. Les enveloppes courantes sont 115 300 octets pour un Pattern et 174 116 octets pour un Project.
 
 Les cles persistantes de famille, type, parametre, MIDI, clock, modulation et asset sont explicites et independantes des ordinaux C. Les FLOAT32 conservent leurs bits. Les indices runtime, contextes AUDIO installes, pointeurs, caches, voix, phases, playheads et UI sont exclus. Note FX persiste directement son unique bloc brut de seize octets `GENERATOR/VOICER/SCALER/TRIG`; il n'existe plus de cle de modele, count, slot ou ORDER, ni de migration depuis les anciennes chaines.
 
 Pattern contient les seize identites. La configuration des children inactifs est conservee, mais pas leurs parametres, assets, routes, modulation, Note FX ou sequence dynamique. En GROUP, chaque child actif est obligatoirement `SAMPLER/RAM`; le master seul persiste MOD, LFO, ENV3 et operateurs, tandis que les children gardent leur lane a un PLAY et leurs niveaux A/B.
 
 Patch contient une entite, ses parametres logiques, zero a deux references
-d'assets typees et, pour FM, le DTO de l'owner. Project contient metadata,
-Pattern de travail, manifeste d'assets, 14 macros et jusqu'a 256 records
-Pattern diffuses progressivement.
+d'assets typees et, pour FM, le DTO de l'owner. `PROJECT.B6C` contient metadata,
+manifeste d'assets et 14 macros. Jusqu'a 256 documents Pattern canoniques vivent
+separement sous `PROJECTS/P##/PATTERNS/`.
 Quand `modulation_present` est actif, ENV3 n'existe qu'une fois dans le Patch,
 dans l'enveloppe de modulation; capture, Init, codec et application utilisent
 cette representation unique.
@@ -64,18 +64,19 @@ le meme contrat que LOAD, sans toucher sequence, mute, MIDI, slot ou fichiers.
 
 ## Transactions
 
-Pour Project Load, PREPARE valide integralement le document avant la frontiere
+Pour Project Load, PREPARE valide integralement `PROJECT.B6C` et charge le seul
+Pattern actif directement depuis le dossier du Project avant la frontiere
 forward-only: magic/version, taille exacte, sections, bornes, CRC, semantique
-des Patterns, coherence de leurs references avec le manifeste, capacites fixes,
-staging du Pattern bank et preparation de son commit. La canonicalisation WAV
+du Pattern actif, coherence de ses references avec le manifeste et capacites fixes.
+La canonicalisation WAV
 crash-safe appartient aussi a PREPARE. Un refus `MEDIA_ERROR` ou
 `INVALID_DOCUMENT` abandonne uniquement ce candidat jamais publie: ingress,
-CONTROL, SEQ, AUDIO, assets et Pattern bank actifs restent intacts.
+CONTROL, SEQ, AUDIO, assets et racine Pattern actifs restent intacts.
 
 `T_FORWARD` est defini une seule fois par l'appel de
 `project_load_quiesce_request()` et, concretement, par sa fermeture de l'ingress.
 PANIC et retrait des gros payloads rendent alors l'ancien Project definitivement
-mort. `pattern_control_bank_commit()` et `AUDIO_STATE_COMMIT` sont des
+mort. Le changement de racine Pattern active et `AUDIO_STATE_COMMIT` sont des
 publications techniques post-forward, jamais d'autres commits produit. Apres
 `T_FORWARD`, une erreur locale de fichier asset conserve la reference et la
 configuration Track, publie une source silencieuse et marque l'asset
@@ -92,23 +93,27 @@ l'ingress. Le contexte de boot n'est publie qu'apres installation reussie du
 runtime. Les resultats Project Load exposes sont `NOT_NOW`, `MEDIA_ERROR`,
 `INVALID_DOCUMENT`, `FAILED_FORWARD_MEDIA` et le succes.
 Project Blank suit exactement la meme machine; une construction ou validation
-impossible du candidat canonique est fatale, tandis qu'un echec SD du Pattern
-bank reste une erreur media.
+impossible du candidat canonique est fatale, tandis qu'un echec SD du dossier
+Pattern reste une erreur media.
 Les Save utilisent des tranches DATA de 4096 octets et des etapes METADATA
 separees; `.TMP` n'est publie qu'apres header final, sync et close, avec `.BAK`
 recuperable.
 
 La fin de PREPARE et l'appel de quiescence definissent explicitement
-`T_FORWARD` pour Project Load. Avant `T_FORWARD`, workspace et bank inactif
+`T_FORWARD` pour Project Load. Avant `T_FORWARD`, workspace et candidat
 peuvent etre jetes parce que le live n'a jamais ete modifie; ce cleanup de
 candidat n'est pas un rollback runtime. Apres `T_FORWARD`, le remplacement est
 strictement forward-only et aucun chemin d'echec ne rouvre implicitement
 l'ingress. Le Working Pattern suit avant cette frontiere le pipeline commun
-`DECODED -> VALIDATED -> PREPARED`: les owners CONTROL sont prevalides, les
+`DECODED -> PREPARE -> PREPARED`: le codec a valide le document, les owners
+CONTROL sont ensuite prevalides une seule fois, les
 cles persistantes et adresses de p-lock sont resolues, les capacites sont
 prouvees, le `seq_pattern_t` inactif est entierement compile et le slot
-`PreparedAudio` type est construit. La publication CONTROL finale installe
-Pattern et macros puis publie ce slot dans un unique commit AUDIO de type Project;
+`PreparedAudio` type est construit. Les 51 valeurs `AUDIO_GLOBAL` sont validees
+par leur contrat Param complet (finitude, domaine, enum/type et mapping AUDIO)
+avant que le candidat puisse devenir `PREPARED`. La publication CONTROL finale
+installe Pattern et macros, finalise le slot depuis les owners CONTROL installes,
+puis le publie dans un unique commit AUDIO de type Project;
 l'identite Pattern courante et le hook UI unique ne sont publies qu'apres le
 commit AUDIO reussi. Le chemin interne d'installation Pattern ne cree donc pas
 de transaction imbriquee et ne publie aucun etat UI intermediaire.
@@ -172,7 +177,7 @@ du Track. Le cache RAM passe a EMPTY uniquement apres les unlink storage.
 Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Multi utilisent l'admission Background cooperative de `sd_scheduler_runtime`. Toute demande RT ou transaction active produit `NOT_NOW`; le client conserve son etat et rend la main.
 
 Le nom Project canonique (32 caracteres maximum, contrat `name_contract`) fait
-partie du CORE Project version 2 et est donc engage dans la meme transaction
+partie du CORE Project version 3 et est donc engage dans la meme transaction
 temporaire/backup que le snapshot. Cette version CORE est la seule acceptee.
 Project Save revalide que le
 transport est arrete avant le snapshot; un refus ou une erreur ne publie ni STOP
@@ -194,7 +199,7 @@ pages ne sont liberees qu'apres installation.
 
 Project Load ne double-bufferise pas les gros payloads RAM, Wavetable ou Multi:
 le quiesce reste ferme, l'ancien payload est retire, puis le loader cooperatif
-canonique reutilise ses pages. Seuls le DTO Project, le Pattern bank inactif et
+canonique reutilise ses pages. Seuls le DTO Project, le Pattern actif prepare et
 un catalogue borne de references indisponibles coexistent temporairement. Le
 retrait publie d'abord un STOP de ressource vers AUDIO. Une FIFO fonctionnelle
 momentanement pleine est une contre-pression: le service attend un passage
@@ -242,13 +247,9 @@ storage is not a second persistent representation for FM.
 
 # Project-load storage cost
 
-The Pattern bank no longer probes all 256 slot names and transactional variants
-on the nominal path. `g_present` remains the active-set index, the staging
-bitmap remains the authority for the set under construction, and the dedicated
-`S0`/`S1` directories are enumerated to discover only files that actually
-exist. The same enumeration recovers and removes `.TMP`/`.BAK` crash residue.
-Commit publishes the staging bitmap directly and cleans only real entries from
-the retired set.
+Project Load changes the active Pattern root to `PROJECTS/P##/PATTERNS/` and
+enumerates only that directory to build `g_present` and recover `.TMP`/`.BAK`
+residue. It neither copies nor rebuilds a bank of 256 files.
 
 Project decode retains one complete non-mutating pass before staging and one
 application pass. Semantic validation and CRC now share the first pass; the
@@ -265,12 +266,16 @@ calibration. Aucun de ces stores ne possede de fallback Flash interne.
 
 Le recall Pattern possede un seul candidat et une seule identite
 `{generation, bank, pattern, boundary}`. Ses phases sont `EMPTY`, `REQUESTED`,
-`LOADING`, `VALIDATED` et `PREPARED`; READY et queue ne sont plus deux autorites. Apres decode,
+`LOADING`, `DECODED` et `PREPARED`; READY et queue ne sont plus deux autorites. Apres decode,
 la validation structurelle utilise les familles, types, inputs et polyphonies du
 candidat complet; un budget de voix invalide est donc refuse avant APPLY. Le
 candidat devient `PREPARED` seulement apres validation des owners CONTROL,
 resolution des keys, compilation complete du slot SEQ inactif et construction
-du `PreparedAudio` final type. Il est ensuite
+du slot `PreparedAudio` type. Une cible provisoire est preparee hors IRQ; ses
+descripteurs PROGRAM, etats owners, mutes et handles de ressources sont tous
+reconstruits depuis CONTROL apres l'installation. Le slot final est une cible
+complete : OFF, default et absence de ressource effacent explicitement l'etat
+du Pattern precedent. Il est ensuite
 soit applique immediatement, soit arme sur la boundary. Tout travail faillible
 est termine avant l'attente; CONTROL commit et SEQ commit n'ont plus de resultat
 utilisateur normal. Une impossibilite a ce stade est un invariant fatal.
@@ -279,6 +284,11 @@ AUDIO. Le `changed_program_mask` est calcule tardivement dans l'IRQ; les
 transitions conservent release-before-acquire, le rebind des held outputs pour
 Pattern et le PANIC/full rebuild pour Project. Pattern/Project ne construisent,
 ne dedupliquent et ne rejouent plus de transaction de commandes live.
+Les tailles de reference ARM finales sont `PreparedPattern = 8 876` octets,
+`PreparedAudio = 8 728` octets et slot `PreparedAudio = 8 736` octets. Le
+workspace Persistence reste une union bornee par son budget SDRAM; Project Save
+ne reserve plus de DTO Pattern ni de record de banque. La
+transaction AUDIO legacy de `36 872` octets appartient uniquement a Patch.
 Cette boundary est globale au Pattern sortant et ne depend jamais de la lane
 selectionnee dans l'UI. Comme le modele ne porte pas de longueur globale
 separee, son cycle est celui de la lane sequencable dont la traversee complete
@@ -303,20 +313,15 @@ resynchronise la page courante. Project Load et Project Blank empruntent ce meme
 point d'application; l'identite current est publiee avant ce hook et aucune page
 ne porte une seconde logique de resynchronisation.
 
-Project Save materialise toujours le Pattern de travail capture comme record du
-slot actif dans la section bank. Il remplace le record bank plus ancien, ou
-l'ajoute si le slot etait jusque-la absent. Le CORE et le bank ne peuvent donc
-pas diverger sur le Pattern actif et tout Project produit contient le record que
-Project Load exige. Le nombre d'assets admis au Save est borne par la capacite
-Restore effective afin qu'un fichier nouvellement cree reste rechargeable.
-Au debut du Save, un token de generation fige le namespace Pattern bank et son
-nombre de records jusqu'au replace final ou au cleanup. Store, delete et
-staging Project sont refuses pendant cette lecture; le token est reverifie juste
-avant la publication du `.TMP`. Le Save conserve ainsi une vue logique stable
-sans copier les 256 Patterns ni ajouter un second bank RAM.
+Project Save reecrit uniquement `PROJECTS/P##/PROJECT.B6C` avec son cycle
+`.TMP`/`.BAK`; il ne lit et ne reencode aucun Pattern. Pattern Save reecrit
+uniquement le document du slot concerne dans `PATTERNS/`. Un fichier absent
+represente un slot vide. La creation construit d'abord un candidat sous
+`BRICK/TRANSACTIONS/PROJECT/`, puis publie le dossier; aucune seconde banque
+persistante ne subsiste apres publication.
 
 Le workspace Persistence est une union a ownership exclusif. Pattern IO le garde
-jusqu'au commit/annulation du candidat. Project Save porte son record scratch
+jusqu'au commit/annulation du candidat. Project Save porte son scratch d'encodage
 dans son propre membre jusqu'au commit/cleanup; Project Restore porte de meme
 son scratch codec et ses DTO finaux dans son membre Restore. L'ancienne zone
 record partagee et sa lease multi-owner n'existent plus. Aucun pointeur scratch
