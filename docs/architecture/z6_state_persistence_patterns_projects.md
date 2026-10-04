@@ -372,6 +372,11 @@ sont pas appliquees au data-plane AUDIO.
 # Asset identity and FM ownership
 
 Persistent asset selections are typed canonical references `{kind, path}`.
+An empty reference is the single persistent OFF representation. Asset selectors
+always expose OFF before their compatible loaded assets. Pool removal clears and
+publishes every matching Track reference before retiring the STREAM, RAM, MULTI
+or WAVETABLE resource, so later Pattern/Project saves serialize OFF rather than
+the removed path.
 Quand un slot Multi est retire, l'admission des notes liee a ce slot est retiree aussi. A la publication du nouveau runtime READY, `project_control` reprojette les selections de pistes portant la meme reference canonique vers AUDIO et retablit leur liaison de notes. La reference affichee seule ne prouve pas que cette projection est active.
 Une publication PROGRAM qui reconstruit une piste reinitialise le selecteur d'instrument dans AUDIO. La publication structurelle reprojette donc ensuite l'asset Sampler canonique deja selectionne et disponible; sinon le nom reste visible dans CONTROL alors que le NOTE_ON voit un instrument invalide dans AUDIO. Une entite rendue inactive par la fermeture d'un GROUP n'a plus de descriptor ni de selecteur engine-owned: sa reprojection asset est un no-op valide, tandis que sa configuration persistante reste conservee pour une activation ulterieure. La barre du selecteur Tone provient de la valeur UI de ce parametre, pas du nombre de pages effectivement lisibles.
 La fin du chargement Multi annonce READY seulement apres la publication de la projection AUDIO et l'association du runtime logique; une erreur a cette etape suit le chemin d'echec du chargement.

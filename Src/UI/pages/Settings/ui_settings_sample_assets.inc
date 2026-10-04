@@ -249,11 +249,6 @@ static void ui_page_settings_sample_request_replace(uint16_t slot, const char *p
 
 static void ui_page_settings_sample_confirm_clear(uint16_t slot)
 {
-    if (ui_page_settings_asset_used_by_track(PERSIST_ASSET_SAMPLE_STREAM, slot) != 0U)
-    {
-        ui_page_settings_status("USED BY TRACK");
-        return;
-    }
     uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if ((ui_page_settings_stream_backend_from_global(slot, &backend_slot) == 0U)
         || (sample_global_pool_get_classic_state(backend_slot) == SAMPLE_CLASSIC_SLOT_EMPTY))
@@ -340,14 +335,13 @@ static void ui_page_settings_sample_confirm_accept(void)
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CLEAR)
     {
         const uint16_t deleted_logical = g_ui_settings.confirm_logical;
-        if (ui_page_settings_asset_used_by_track(PERSIST_ASSET_SAMPLE_STREAM,
-                                                 deleted_logical) != 0U)
+        ui_page_settings_select_neighbor_before_delete();
+        if (project_control_remove_sample(deleted_logical) == 0U)
         {
-            ui_page_settings_status("USED BY TRACK");
+            g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+            ui_page_settings_status("CLEAR BUSY");
             return;
         }
-        ui_page_settings_select_neighbor_before_delete();
-        (void)project_control_remove_sample(deleted_logical);
         sample_global_pool_clear_classic(g_ui_settings.confirm_slot);
         ui_page_settings_refresh_sampler_slots();
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
@@ -407,14 +401,13 @@ static void ui_page_settings_sample_confirm_accept(void)
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_UNLOAD)
     {
         const uint16_t deleted_logical = g_ui_settings.confirm_logical;
-        if (ui_page_settings_asset_used_by_track(PERSIST_ASSET_MULTI,
-                                                 deleted_logical) != 0U)
+        ui_page_settings_select_neighbor_before_delete();
+        if (project_control_remove_multi(deleted_logical) == 0U)
         {
-            ui_page_settings_status("USED BY TRACK");
+            g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+            ui_page_settings_status("UNLOAD BUSY");
             return;
         }
-        ui_page_settings_select_neighbor_before_delete();
-        (void)project_control_remove_multi(deleted_logical);
         if (multi_sample_pool_clear_instrument(g_ui_settings.confirm_slot) != 0U)
         {
             ui_page_settings_status("UNLOAD OK");
@@ -594,12 +587,6 @@ static void ui_page_settings_ram_copy_right(uint8_t shift_down)
     }
 
     uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if (ui_page_settings_asset_used_by_track(PERSIST_ASSET_SAMPLE_RAM,
-            g_ui_settings.sample_slot_selected) != 0U)
-    {
-        ui_page_settings_status("USED BY TRACK");
-        return;
-    }
     if (ui_page_settings_ram_backend_from_global(g_ui_settings.sample_slot_selected,
                                                  &backend_slot) == 0U)
     {
@@ -608,7 +595,11 @@ static void ui_page_settings_ram_copy_right(uint8_t shift_down)
     }
     const uint16_t deleted_logical = g_ui_settings.sample_slot_selected;
     ui_page_settings_select_neighbor_before_delete();
-    (void)project_control_remove_sample(deleted_logical);
+    if (project_control_remove_sample(deleted_logical) == 0U)
+    {
+        ui_page_settings_status("CLEAR BUSY");
+        return;
+    }
     sampler_ram_pool_clear(backend_slot);
     ui_page_settings_refresh_ram_slots();
     ui_page_settings_status("CLEAR OK");
@@ -690,12 +681,6 @@ static void ui_page_settings_wavetable_copy_right(uint8_t shift_down)
     }
 
     uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if (ui_page_settings_asset_used_by_track(PERSIST_ASSET_WAVETABLE,
-            g_ui_settings.sample_slot_selected) != 0U)
-    {
-        ui_page_settings_status("USED BY TRACK");
-        return;
-    }
     if (ui_page_settings_wavetable_backend_from_global(g_ui_settings.sample_slot_selected,
                                                        &backend_slot) == 0U)
     {
@@ -704,7 +689,11 @@ static void ui_page_settings_wavetable_copy_right(uint8_t shift_down)
     }
     const uint16_t deleted_logical = g_ui_settings.sample_slot_selected;
     ui_page_settings_select_neighbor_before_delete();
-    (void)project_control_remove_wavetable(deleted_logical);
+    if (project_control_remove_wavetable(deleted_logical) == 0U)
+    {
+        ui_page_settings_status("CLEAR BUSY");
+        return;
+    }
     wavetable_pool_clear(backend_slot);
     ui_page_settings_refresh_wavetable_slots();
     ui_page_settings_status("CLEAR OK");

@@ -137,9 +137,12 @@ static uint8_t ui_param_local_control_get(param_id_t id, uint8_t track,
             : (id == UI_PARAM_LOCAL_WAVE_OSC1
                 ? PROJECT_CONTROL_ASSET_WAVE_OSC1
                 : PROJECT_CONTROL_ASSET_WAVE_OSC2);
-        uint16_t logical = 0U;
+        uint16_t logical = PROJECT_CONTROL_ASSET_NONE;
         if (project_control_track_asset_get_logical(track, role, &logical) == 0U)
-            return 0U;
+        {
+            *out_value = NAN;
+            return 1U;
+        }
         *out_value = (float)logical;
         return 1U;
     }
@@ -178,18 +181,21 @@ static uint8_t ui_param_local_control_apply(param_id_t id, uint8_t track,
                 (ui_get_track_type(track) == TRACK_TYPE_STREAM)
                     ? PERSIST_ASSET_SAMPLE_STREAM : PERSIST_ASSET_SAMPLE_RAM,
                 list, SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
-        if (count == 0U) return 0U;
-        uint16_t pos = 0U;
-        while ((pos < count) && (list[pos] != (uint16_t)(current + 0.5f))) ++pos;
-        if (pos == count) pos = (delta > 0) ? 0U : (uint16_t)(count - 1U);
-        else
+        uint16_t pos = 0U; /* Position zero is always the explicit OFF choice. */
+        if (isnan(current) == 0)
         {
-            int32_t moved = (int32_t)pos + delta;
-            if (moved < 0) moved = 0;
-            if (moved >= (int32_t)count) moved = (int32_t)count - 1;
-            pos = (uint16_t)moved;
+            while (pos < count && list[pos] != (uint16_t)(current + 0.5f))
+                ++pos;
+            pos = (pos < count) ? (uint16_t)(pos + 1U) : 0U;
         }
-        return project_control_track_asset_assign_logical(track, role, list[pos]);
+        int32_t moved = (int32_t)pos + delta;
+        if (moved < 0) moved = 0;
+        if (moved > (int32_t)count) moved = (int32_t)count;
+        pos = (uint16_t)moved;
+        return (pos == 0U)
+            ? project_control_track_asset_clear(track, role)
+            : project_control_track_asset_assign_logical(track, role,
+                list[pos - 1U]);
     }
     if (id == UI_PARAM_LOCAL_FM_OPERATOR)
     {

@@ -949,7 +949,9 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             {
                 if ((id == UI_PARAM_LOCAL_WAVE_OSC1) || (id == UI_PARAM_LOCAL_WAVE_OSC2))
                 {
-                    const uint16_t logical_slot = (uint16_t)((value < 0.0f) ? 0.0f : value + 0.5f);
+                    const uint16_t logical_slot = (isnan(value) != 0)
+                        ? PROJECT_CONTROL_ASSET_NONE
+                        : (uint16_t)((value < 0.0f) ? 0.0f : value + 0.5f);
                     uint16_t runtime_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
                     const sample_global_slot_t *asset = NULL;
                     if (project_control_resolve_wavetable_runtime(
@@ -964,7 +966,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                     }
                     else
                     {
-                        (void)snprintf(out_value, out_value_len, "NO TABLE");
+                        (void)snprintf(out_value, out_value_len, "OFF");
                     }
                 }
                 else if ((id == PARAM_WAVE_TUNE) || (id == PARAM_WAVE_DETUNE))
@@ -1044,7 +1046,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                     && (out_value != NULL) && (out_value_len > 0U))
             {
                 if (isnan(value) != 0)
-                    (void)snprintf(out_value, out_value_len, "NONE");
+                    (void)snprintf(out_value, out_value_len, "OFF");
                 else
                     (void)snprintf(out_value, out_value_len, "S%03u",
                                    (unsigned int)((value < 0.0f) ? 0U
@@ -1064,7 +1066,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         if ((out_value != NULL) && (out_value_len > 0U))
         {
             if (isnan(value) != 0)
-                (void)snprintf(out_value, out_value_len, "NONE");
+                (void)snprintf(out_value, out_value_len, "OFF");
             else
                 (void)snprintf(out_value, out_value_len, "S%03u",
                                (unsigned int)((value < 0.0f) ? 0U
@@ -1095,7 +1097,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                             (uint16_t)(selector + 0.5f), out_value, out_value_len) != 0U);
                 if (has_selection == 0U)
                 {
-                    (void)snprintf(out_value, out_value_len, "NONE");
+                    (void)snprintf(out_value, out_value_len, "OFF");
                 }
             }
 

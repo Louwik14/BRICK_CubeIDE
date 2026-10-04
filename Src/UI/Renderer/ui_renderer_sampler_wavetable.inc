@@ -45,7 +45,7 @@ static void ui_renderer_template_sampler_ram_sample_label(char *out, uint32_t ou
         return;
     }
 
-    (void)snprintf(out, out_len, "NO SAMPLE");
+    (void)snprintf(out, out_len, "OFF");
 
     const uint16_t sample_index = ui_renderer_template_sampler_ram_selected_global_slot();
     const sample_global_slot_t *const sample_slot = sample_global_pool_get_slot(sample_index);

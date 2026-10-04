@@ -38,6 +38,9 @@ typedef enum {
     PROJECT_CONTROL_ASSET_UNAVAILABLE
 } project_control_asset_availability_t;
 
+/* Canonical selector value for an explicit unassigned/OFF asset. */
+#define PROJECT_CONTROL_ASSET_NONE UINT16_MAX
+
 void project_control_init(void);
 void project_control_reset_macros(void);
 uint8_t project_control_get_default_macros(persist_control_macros_t *out);
@@ -121,6 +124,8 @@ uint8_t project_control_republish_track_asset(uint8_t entity);
 uint8_t project_control_track_asset_assign_logical(uint8_t entity,
                                                    project_control_asset_role_t role,
                                                    uint16_t logical);
+uint8_t project_control_track_asset_clear(uint8_t entity,
+                                          project_control_asset_role_t role);
 uint8_t project_control_track_asset_restore(uint8_t entity,
                                             project_control_asset_role_t role,
                                             const persist_control_asset_ref_t *asset);

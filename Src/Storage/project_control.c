@@ -29,7 +29,7 @@
 #include <math.h>
 
 #define PROJECT_CONTROL_ASSET_PATH_BYTES (PERSIST_CONTROL_ASSET_PATH_BYTES + 1U)
-#define PROJECT_CONTROL_INVALID_RUNTIME 0xFFFFU
+#define PROJECT_CONTROL_INVALID_RUNTIME PROJECT_CONTROL_ASSET_NONE
 
 typedef struct { uint8_t used; uint32_t kind; char canonical_path[PROJECT_CONTROL_ASSET_PATH_BYTES]; uint16_t runtime; uint16_t pending_runtime; } project_control_bank_slot_t;
 
@@ -538,9 +538,63 @@ project_control_asset_result_t project_control_complete_multi_runtime(uint16_t l
     }
     return PROJECT_CONTROL_ASSET_READY;
 }
-uint8_t project_control_remove_sample(uint16_t logical){const sample_global_slot_t*s=sample_global_pool_get_slot(logical);if(s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC){sample_global_pool_clear_classic(logical);return 1U;}return bank_remove(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);}
-uint8_t project_control_remove_wavetable(uint16_t logical){return bank_remove(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);}
-uint8_t project_control_remove_multi(uint16_t logical){if(logical>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||g_multi_bank[logical].used==0U)return 0U;g_multi_bank[logical].runtime=PROJECT_CONTROL_INVALID_RUNTIME;g_multi_bank[logical].pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME;return bank_remove(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,logical);}
+static uint8_t project_control_remove_asset_consumers(
+    const persist_control_asset_ref_t *asset)
+{
+    if (asset == NULL || asset->path_length == 0U) return 0U;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+        for (uint8_t role = 0U; role < PROJECT_CONTROL_ASSET_ROLE_COUNT; ++role)
+        {
+            const persist_control_asset_ref_t *const selected =
+                &g_track_assets[entity][role];
+            if (selected->kind == asset->kind
+                && selected->path_length == asset->path_length
+                && memcmp(selected->canonical_path, asset->canonical_path,
+                          asset->path_length) == 0
+                && project_control_track_asset_clear(
+                    entity, (project_control_asset_role_t)role) == 0U)
+                return 0U;
+        }
+    return 1U;
+}
+
+uint8_t project_control_remove_sample(uint16_t logical)
+{
+    persist_control_asset_ref_t asset;
+    const sample_global_slot_t *const slot = sample_global_pool_get_slot(logical);
+    const uint32_t kind = (slot != NULL && slot->kind == SAMPLE_GLOBAL_KIND_CLASSIC)
+        ? PERSIST_ASSET_SAMPLE_STREAM : PERSIST_ASSET_SAMPLE_RAM;
+    if (project_control_get_logical_asset(kind, logical, &asset) == 0U
+        || project_control_remove_asset_consumers(&asset) == 0U) return 0U;
+    if (kind == PERSIST_ASSET_SAMPLE_STREAM)
+    {
+        sample_global_pool_clear_classic(logical);
+        return 1U;
+    }
+    return bank_remove(g_sample_bank, SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS, logical);
+}
+
+uint8_t project_control_remove_wavetable(uint16_t logical)
+{
+    persist_control_asset_ref_t asset;
+    if (project_control_get_logical_asset(PERSIST_ASSET_WAVETABLE, logical,
+            &asset) == 0U
+        || project_control_remove_asset_consumers(&asset) == 0U) return 0U;
+    return bank_remove(g_wavetable_bank, SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS, logical);
+}
+
+uint8_t project_control_remove_multi(uint16_t logical)
+{
+    persist_control_asset_ref_t asset;
+    if (logical >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS
+        || g_multi_bank[logical].used == 0U
+        || project_control_get_logical_asset(PERSIST_ASSET_MULTI, logical,
+            &asset) == 0U
+        || project_control_remove_asset_consumers(&asset) == 0U) return 0U;
+    g_multi_bank[logical].runtime = PROJECT_CONTROL_INVALID_RUNTIME;
+    g_multi_bank[logical].pending_runtime = PROJECT_CONTROL_INVALID_RUNTIME;
+    return bank_remove(g_multi_bank, MULTI_SAMPLE_POOL_MAX_INSTRUMENTS, logical);
+}
 uint8_t project_control_has_sample(uint16_t logical,uint32_t*out_kind){const sample_global_slot_t*s=sample_global_pool_get_slot(logical);if(s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC){if(out_kind!=NULL)*out_kind=PERSIST_ASSET_SAMPLE_STREAM;return 1U;}return bank_has(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical,out_kind);}
 uint16_t project_control_sample_projection_count(uint32_t kind)
 {
@@ -755,6 +809,38 @@ uint8_t project_control_track_asset_assign_logical(uint8_t entity,
             && (descriptor.type == TRACK_RUNTIME_TYPE_STREAM))
         return param_registry_apply_track_value(
             PARAM_SAMPLER_CLIP_SOURCE, entity, 0.0f);
+    return 1U;
+}
+
+uint8_t project_control_track_asset_clear(uint8_t entity,
+                                          project_control_asset_role_t role)
+{
+    if (entity >= BRICK_ENTITY_CAPACITY
+        || role >= PROJECT_CONTROL_ASSET_ROLE_COUNT) return 0U;
+    uint8_t published = 1U;
+    if (entity_topology_is_active(entity) != 0U)
+    {
+        track_runtime_descriptor_t descriptor;
+        if (track_runtime_get_descriptor(entity, &descriptor) == 0U) return 0U;
+        if (role == PROJECT_CONTROL_ASSET_SAMPLER)
+        {
+            if (descriptor.type == TRACK_RUNTIME_TYPE_STREAM
+                || descriptor.type == TRACK_RUNTIME_TYPE_RAM
+                || descriptor.type == TRACK_RUNTIME_TYPE_MULTI)
+                published = control_rt_publish_param_now(entity,
+                    CONTROL_AUDIO_SAMPLER_ASSET, PROJECT_CONTROL_ASSET_NONE, 0U);
+        }
+        else if (descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
+            published = audio_wave_table_projection_clear_track(entity,
+                (uint8_t)(role - PROJECT_CONTROL_ASSET_WAVE_OSC1));
+    }
+    if (published == 0U) return 0U;
+    memset(&g_track_assets[entity][role], 0,
+           sizeof(g_track_assets[entity][role]));
+    g_track_asset_availability[entity][role] = PROJECT_CONTROL_ASSET_EMPTY;
+    if (role == PROJECT_CONTROL_ASSET_SAMPLER)
+        control_music_output_bind_multi_instrument(
+            entity, MULTI_SAMPLE_POOL_INVALID_ID);
     return 1U;
 }
 

@@ -562,7 +562,12 @@ static void ui_page_settings_apply_action(void)
             {
                 if (project_replacement_is_active() != 0U) return;
                 ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-                (void)project_control_remove_sample(g_ui_settings.sample_slot_selected);
+                if (project_control_remove_sample(
+                        g_ui_settings.sample_slot_selected) == 0U)
+                {
+                    ui_page_settings_status("CLEAR BUSY");
+                    return;
+                }
                 sample_global_pool_clear_classic(g_ui_settings.selected_slot);
                 ui_page_settings_refresh_sampler_slots();
                 ui_page_settings_status("CLEAR OK");
@@ -740,9 +745,7 @@ static uint8_t ui_page_settings_asset_action_enabled(ui_settings_view_t view,
             return project_control_resolve_wavetable_runtime(logical, &runtime) == 0U;
         return project_control_resolve_sample_runtime_kind(kind, logical, &runtime) == 0U;
     }
-    if (action == UI_BROWSER_ACTION_UNLOAD)
-        return ui_page_settings_asset_used_by_track(kind,
-            g_ui_settings.sample_slot_selected) == 0U;
+    if (action == UI_BROWSER_ACTION_UNLOAD) return 1U;
     if (action == UI_BROWSER_ACTION_RENAME || action == UI_BROWSER_ACTION_DELETE)
         return project_control_find_asset(kind, path, &logical) == 0U;
     return 1U;

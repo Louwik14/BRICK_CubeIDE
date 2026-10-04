@@ -802,28 +802,6 @@ static uint8_t ui_page_settings_wavetable_scan_slice(void)
     return 1U;
 }
 
-static uint8_t ui_page_settings_asset_used_by_track(uint32_t kind, uint16_t logical)
-{
-    persist_control_asset_ref_t wanted;
-    if (project_control_get_logical_asset(kind, logical, &wanted) == 0U)
-        return 0U;
-    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
-    {
-        for (uint8_t role = 0U; role < PROJECT_CONTROL_ASSET_ROLE_COUNT; ++role)
-        {
-            persist_control_asset_ref_t selected;
-            if (project_control_track_asset_get(entity,
-                    (project_control_asset_role_t)role, &selected) != 0U
-                && selected.kind == wanted.kind
-                && selected.path_length == wanted.path_length
-                && memcmp(selected.canonical_path, wanted.canonical_path,
-                          wanted.path_length) == 0)
-                return 1U;
-        }
-    }
-    return 0U;
-}
-
 static uint8_t ui_page_settings_wavetable_browser_request(const char *path)
 {
     if ((path == 0) || (path[0] == '\0')) return 0U;

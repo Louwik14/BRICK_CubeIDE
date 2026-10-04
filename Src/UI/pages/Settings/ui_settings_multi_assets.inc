@@ -564,12 +564,6 @@ static void ui_page_settings_multi_confirm_unload(uint8_t slot)
         ui_page_settings_status("SLOT EMPTY");
         return;
     }
-    if (ui_page_settings_asset_used_by_track(PERSIST_ASSET_MULTI,
-            g_ui_settings.sample_slot_selected) != 0U)
-    {
-        ui_page_settings_status("USED BY TRACK");
-        return;
-    }
     g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_UNLOAD;
     g_ui_settings.confirm_slot = slot;
     g_ui_settings.confirm_logical = g_ui_settings.sample_slot_selected;
@@ -663,7 +657,12 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
 
     if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
     {
-        (void)project_control_remove_multi(g_ui_settings.sample_slot_selected);
+        if (project_control_remove_multi(
+                g_ui_settings.sample_slot_selected) == 0U)
+        {
+            ui_page_settings_multi_prepare_finish("UNLOAD BUSY");
+            return;
+        }
         (void)multi_sample_pool_clear_instrument(slot);
     }
 

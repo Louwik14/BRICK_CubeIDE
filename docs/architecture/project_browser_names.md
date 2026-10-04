@@ -41,9 +41,11 @@ preserving its name. A family or type change may move it outside the current
 filter; the browser then selects the next visible Patch and reports this. INIT
 clears the target track to its default state.
 
-Asset LOAD is unavailable when that source is already loaded. UNLOAD refuses
-an asset referenced by an active track. SD RENAME and DELETE refuse assets
-currently loaded or referenced by an active track, a saved Patch, a
+Asset LOAD is unavailable when that source is already loaded. Removing an
+asset from the runtime Pool
+first publishes OFF to every matching Track selector, clears the canonical
+references used by persistence, then retires the resource. SD RENAME and
+DELETE refuse assets currently loaded or referenced by an active track, a saved Patch, a
 `PROJECT.B6C`, or one of a Project's canonical Pattern files. They
 also refuse while transport, recording or SD asset work is active. DELETE
 requires confirmation. Multi rename updates its directory, index filename and
