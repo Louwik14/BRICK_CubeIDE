@@ -12,11 +12,21 @@ static inline void ui_browser_draw_shift_footer(uint8_t y,
     const uint8_t shift = button_down(BTN_SHIFT);
     drv_display_set_font(&FONT_4X6);
     if (shift != 0U) {
-        drv_display_fill_rect(0U, (uint8_t)(y - 1U), 8U, 7U);
-        drv_display_draw_text_inverted(2U, y, "^");
+        drv_display_fill_rect(0U, (uint8_t)(y - 1U), 7U, 7U);
+        drv_display_draw_pixel(3U, (uint8_t)(y + 1U), false);
+        drv_display_draw_pixel(2U, (uint8_t)(y + 2U), false);
+        drv_display_draw_pixel(3U, (uint8_t)(y + 2U), false);
+        drv_display_draw_pixel(4U, (uint8_t)(y + 2U), false);
+        drv_display_draw_pixel(3U, (uint8_t)(y + 3U), false);
+        drv_display_draw_pixel(3U, (uint8_t)(y + 4U), false);
     } else {
-        drv_display_draw_rect(0U, (uint8_t)(y - 1U), 8U, 7U);
-        drv_display_draw_text(2U, y, "^");
+        drv_display_draw_rect(0U, (uint8_t)(y - 1U), 7U, 7U);
+        drv_display_draw_pixel(3U, (uint8_t)(y + 1U), true);
+        drv_display_draw_pixel(2U, (uint8_t)(y + 2U), true);
+        drv_display_draw_pixel(3U, (uint8_t)(y + 2U), true);
+        drv_display_draw_pixel(4U, (uint8_t)(y + 2U), true);
+        drv_display_draw_pixel(3U, (uint8_t)(y + 3U), true);
+        drv_display_draw_pixel(3U, (uint8_t)(y + 4U), true);
     }
     for (uint8_t page = 0U; page < 4U; ++page) {
         const uint8_t x = (uint8_t)(9U + page * 30U);
