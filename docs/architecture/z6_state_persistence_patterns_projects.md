@@ -247,18 +247,9 @@ storage is not a second persistent representation for FM.
 
 # Project-load storage cost
 
-L'identite Project courante a une source unique: `0x00..0x0f` designe
-`PROJECTS/P00..P15`, et `0xff` designe le Blank sous
-`0:/BRICK/WORKSPACE/`. La resolution commune fournit la racine, le
-`PROJECT.B6C`, `PATTERNS/` et chaque `B##_P##.B6C`. Les helpers du Browser
-restent strictement bornes a P00..P15; aucune identite ne peut produire
-`PROJECTS/P255`.
-
-Project Load changes the active Pattern root to the directory resolved from
-that identity and enumerates only that directory to build `g_present` and
-recover `.TMP`/`.BAK` residue. It neither copies nor rebuilds a bank of 256
-files. La creation et la restauration persistantes de WORKSPACE ne font pas
-encore partie de ce contrat.
+Project Load changes the active Pattern root to `PROJECTS/P##/PATTERNS/` and
+enumerates only that directory to build `g_present` and recover `.TMP`/`.BAK`
+residue. It neither copies nor rebuilds a bank of 256 files.
 
 Project decode retains one complete non-mutating pass before staging and one
 application pass. Semantic validation and CRC now share the first pass; the

@@ -100,6 +100,12 @@ uint8_t ui_core_pattern_handle_mode_event(const ui_event_t *ev,
         }
         else
         {
+            if(requested==UI_PATTERN_MODE_STORE
+                &&pattern_live_store_available()==0U)
+            {
+                if(feedback!=0)feedback("NO PROJECT");
+                return 1U;
+            }
             g_ui_core_pattern.mode = requested;
             ui_core_pattern_reset_selection_only();
         }
@@ -143,7 +149,8 @@ uint8_t ui_core_pattern_handle_mode_event(const ui_event_t *ev,
 
     if (feedback != 0)
     {
-        feedback("PAT FAIL");
+        feedback((g_ui_core_pattern.mode==UI_PATTERN_MODE_STORE
+            &&pattern_live_store_available()==0U)?"NO PROJECT":"PAT FAIL");
     }
     ui_core_pattern_exit_to_previous_mode(set_hall_mode);
     return 1U;

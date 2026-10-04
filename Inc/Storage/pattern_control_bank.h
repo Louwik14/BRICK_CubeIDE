@@ -21,6 +21,7 @@ typedef enum
 {
     PATTERN_CONTROL_BANK_STORE_BEGIN_OK = 0,
     PATTERN_CONTROL_BANK_STORE_BEGIN_POLICY,
+    PATTERN_CONTROL_BANK_STORE_BEGIN_NO_PROJECT,
     PATTERN_CONTROL_BANK_STORE_BEGIN_ARGUMENT,
     PATTERN_CONTROL_BANK_STORE_BEGIN_BUSY,
     PATTERN_CONTROL_BANK_STORE_BEGIN_CODEC,
@@ -45,7 +46,8 @@ void pattern_control_bank_init(void);
 uint8_t pattern_control_bank_activate_project(uint8_t slot);
 uint8_t pattern_control_bank_validate_project(uint8_t slot);
 void pattern_control_bank_deactivate_project(void);
-void pattern_control_bank_publish_empty_project(void);
+uint8_t pattern_control_bank_active_project(uint8_t *out_slot);
+void pattern_control_bank_publish_empty_project(uint8_t slot);
 uint8_t pattern_control_bank_delete(uint8_t bank,uint8_t pattern);
 uint8_t pattern_control_bank_present(uint8_t bank,uint8_t pattern);
 uint16_t pattern_control_bank_count(void);

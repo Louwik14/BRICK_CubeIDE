@@ -17,7 +17,6 @@
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/project_load_quiesce.h"
-#include "Storage/project_product.h"
 #include "Storage/persistence_debug.h"
 
 #define PATTERN_BANK_COUNT 16U
@@ -452,14 +451,15 @@ void pattern_live_cancel_recall(void)
 enum
 {
     PATTERN_SAVE_DETAIL_INVALID_SLOT = 1U,
-    PATTERN_SAVE_DETAIL_WORKSPACE_BUSY = 3U,
-    PATTERN_SAVE_DETAIL_CAPTURE_FAILED = 4U,
-    PATTERN_SAVE_DETAIL_RECORDER_ACTIVE = 5U,
-    PATTERN_SAVE_DETAIL_STORE_POLICY = 6U,
-    PATTERN_SAVE_DETAIL_STORE_ARGUMENT = 7U,
-    PATTERN_SAVE_DETAIL_STORE_BUSY = 8U,
-    PATTERN_SAVE_DETAIL_STORE_CODEC = 9U,
-    PATTERN_SAVE_DETAIL_STORE_PATH = 10U
+    PATTERN_SAVE_DETAIL_NO_PROJECT,
+    PATTERN_SAVE_DETAIL_WORKSPACE_BUSY,
+    PATTERN_SAVE_DETAIL_CAPTURE_FAILED,
+    PATTERN_SAVE_DETAIL_RECORDER_ACTIVE,
+    PATTERN_SAVE_DETAIL_STORE_POLICY,
+    PATTERN_SAVE_DETAIL_STORE_ARGUMENT,
+    PATTERN_SAVE_DETAIL_STORE_BUSY,
+    PATTERN_SAVE_DETAIL_STORE_CODEC,
+    PATTERN_SAVE_DETAIL_STORE_PATH
 };
 
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
@@ -473,7 +473,14 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    const uint8_t active_project=project_product_current_identity();
+    uint8_t active_project=0xFFU;
+    if(pattern_control_bank_active_project(&active_project)==0U)
+    {
+        g_persist_dbg.detail=PATTERN_SAVE_DETAIL_NO_PROJECT;
+        persist_debug_details(PATTERN_SAVE_DETAIL_NO_PROJECT,0xFFU,bank,pattern);
+        persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);
+        return 0U;
+    }
 
     if ((g_pattern_io_workspace != 0)
         || (pattern_control_bank_async_busy() != 0U))
@@ -537,7 +544,9 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
         persist_dbg_stage_t stage=PERSIST_DBG_STAGE_POLICY;
         persist_dbg_error_t error=PERSIST_DBG_ERROR_POLICY;
         uint32_t detail=PATTERN_SAVE_DETAIL_STORE_POLICY;
-        if(begin_result==PATTERN_CONTROL_BANK_STORE_BEGIN_ARGUMENT)
+        if(begin_result==PATTERN_CONTROL_BANK_STORE_BEGIN_NO_PROJECT)
+            detail=PATTERN_SAVE_DETAIL_NO_PROJECT;
+        else if(begin_result==PATTERN_CONTROL_BANK_STORE_BEGIN_ARGUMENT)
         {stage=PERSIST_DBG_STAGE_VALIDATE;error=PERSIST_DBG_ERROR_VALIDATE;detail=PATTERN_SAVE_DETAIL_STORE_ARGUMENT;}
         else if(begin_result==PATTERN_CONTROL_BANK_STORE_BEGIN_BUSY)
         {stage=PERSIST_DBG_STAGE_WORKSPACE;error=PERSIST_DBG_ERROR_WORKSPACE;detail=PATTERN_SAVE_DETAIL_STORE_BUSY;}
@@ -553,6 +562,12 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
     g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_SAVE;
     persist_debug_stage(PERSIST_DBG_STAGE_ASYNC, 0);
     return 1U;
+}
+
+uint8_t pattern_live_store_available(void)
+{
+    uint8_t active_project=0U;
+    return pattern_control_bank_active_project(&active_project);
 }
 
 uint8_t pattern_live_request_slot(uint8_t bank, uint8_t pattern)
