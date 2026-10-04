@@ -7,6 +7,7 @@ extern "C" {
 #endif
 
 #define BRICK6_TB303_INSTANCE_COUNT 16U
+#define BRICK6_TB303_PREVIEW_INSTANCE_ID 0xFFU
 
 void brick6_tb303_runtime_init(void);
 void brick6_tb303_runtime_reset_instance(uint8_t instance_id);

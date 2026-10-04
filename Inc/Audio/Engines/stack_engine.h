@@ -14,6 +14,7 @@ extern "C" {
 
 #define BRICK6_STACK_MAX_INSTANCES 8U
 #define BRICK6_STACK_VOICE_INSTANCE_COUNT 16U
+#define BRICK6_STACK_PREVIEW_INSTANCE_ID 0xFFU
 typedef struct
 {
     uint8_t model;

@@ -28,6 +28,7 @@ typedef struct
 
 #define BRICK6_BRAIDS_MAX_INSTANCES 8U
 #define BRICK6_BRAIDS_VOICE_INSTANCE_COUNT 16U
+#define BRICK6_BRAIDS_PREVIEW_INSTANCE_ID 0xFFU
 #include "Param/engine_model_catalog.h"
 
 void brick6_braids_runtime_init(void);

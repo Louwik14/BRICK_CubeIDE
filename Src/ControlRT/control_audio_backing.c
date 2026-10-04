@@ -12,8 +12,8 @@ CONTROL_STATE_SDRAM control_audio_command_t
 CONTROL_STATE_SDRAM audio_state_transaction_t g_audio_state_transaction;
 CONTROL_STATE_SDRAM prepared_audio_slot_t
     g_prepared_audio_slots[PREPARED_AUDIO_SLOT_COUNT];
-CONTROL_STATE_SDRAM patch_preview_fm_publication_t
-    g_patch_preview_fm_publication[PATCH_PREVIEW_PUBLICATION_SLOT_COUNT];
+CONTROL_STATE_SDRAM patch_preview_publication_t
+    g_patch_preview_publication[PATCH_PREVIEW_PUBLICATION_SLOT_COUNT];
 CONTROL_STATE_SDRAM volatile uint32_t g_patch_preview_audio_consumed_generation;
 
 #if BRICK_PATTERN_RECALL_DIAG

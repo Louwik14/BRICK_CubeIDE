@@ -27,6 +27,7 @@ void mod_lfo_v1_process_poly_voice(uint8_t track,
                                    const struct track_audio_runtime_ctx_s *ctx,
                                    uint32_t frames);
 void mod_lfo_v1_note_release(uint8_t track);
+uint32_t mod_lfo_v1_phase_inc_from_rate(float rate, uint32_t bpm_milli);
 mod_lfo_trig_mode_t mod_lfo_v1_effective_trig(uint8_t track, uint8_t lfo_index);
 
 #ifdef __cplusplus

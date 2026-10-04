@@ -44,6 +44,13 @@ typedef struct {
     uint8_t vcf_state,vca_state,vca_timer1,vca_timer2,slide_timer,cut_timer;
 } acid_voice_t;
 static acid_voice_t g_acid[BRICK6_ACID_INSTANCE_COUNT];
+static acid_voice_t g_acid_preview;
+
+static acid_voice_t *acid_instance(uint8_t id)
+{
+    if (id == BRICK6_ACID_PREVIEW_INSTANCE_ID) return &g_acid_preview;
+    return (id < BRICK6_ACID_INSTANCE_COUNT) ? &g_acid[id] : NULL;
+}
 
 static float acid_clamp(float x,float lo,float hi)
 { return x<lo?lo:(x>hi?hi:x); }
@@ -191,8 +198,7 @@ static void acid_env_step(acid_voice_t *v)
 }
 void brick6_acid_runtime_reset_instance(uint8_t id)
 {
-    if(id>=BRICK6_ACID_INSTANCE_COUNT)return;
-    acid_voice_t *v=&g_acid[id];memset(v,0,sizeof(*v));
+    acid_voice_t *v=acid_instance(id);if(v==NULL)return;memset(v,0,sizeof(*v));
     v->note=255U;v->slide_timer=255U;v->slide_alpha=acid_alpha(0.00909f);
     v->vcf_attack_alpha=acid_alpha(0.15f);
     v->vca_attack_mul=powf(1.076f,ACID_RATIO);
@@ -206,11 +212,10 @@ void brick6_acid_runtime_reset_instance(uint8_t id)
     v->vcf_decay_coeff=acid_decay_coeff(acid_decay[(unsigned)(v->decay*1023.0f)]);
 }
 void brick6_acid_runtime_init(void)
-{for(uint8_t i=0U;i<BRICK6_ACID_INSTANCE_COUNT;++i)brick6_acid_runtime_reset_instance(i);}
+{for(uint8_t i=0U;i<BRICK6_ACID_INSTANCE_COUNT;++i)brick6_acid_runtime_reset_instance(i);brick6_acid_runtime_reset_instance(BRICK6_ACID_PREVIEW_INSTANCE_ID);}
 void brick6_acid_runtime_restart_voice(uint8_t id)
 {
-    if(id>=BRICK6_ACID_INSTANCE_COUNT)return;
-    acid_voice_t *v=&g_acid[id];
+    acid_voice_t *v=acid_instance(id);if(v==NULL)return;
     v->gate=0U;v->active=0U;v->pending_release=0U;
     v->vca_state=0U;v->vcf_state=0U;v->vca_env=0.0f;v->vcf_env=0.0f;
     v->cap1=v->cap2=v->cap3=v->cap4=v->cap_out=0.0f;
@@ -228,8 +233,7 @@ void brick6_acid_runtime_sync_voice(uint8_t source,uint8_t destination)
 }
 void brick6_acid_runtime_note_on(uint8_t id,uint8_t note,uint8_t velocity)
 {
-    (void)velocity;if(id>=BRICK6_ACID_INSTANCE_COUNT)return;
-    acid_voice_t *v=&g_acid[id];
+    (void)velocity;acid_voice_t *v=acid_instance(id);if(v==NULL)return;
     const uint8_t legato=(uint8_t)(v->slide&&(v->gate||v->pending_release));
     /* Digix0x retriggers by changing the envelope states; the capacitor
      * values themselves are continuous.  In particular, the first plain
@@ -245,17 +249,15 @@ void brick6_acid_runtime_initialize_held_note(uint8_t id,uint8_t note,uint8_t ve
 {brick6_acid_runtime_note_on(id,note,velocity);}
 void brick6_acid_runtime_note_off(uint8_t id,uint8_t note)
 {
-    if(id>=BRICK6_ACID_INSTANCE_COUNT)return;
-    acid_voice_t *v=&g_acid[id];if(!v->gate||v->note!=note)return;
+    acid_voice_t *v=acid_instance(id);if(v==NULL)return;if(!v->gate||v->note!=note)return;
     if(v->slide)v->pending_release=1U;
     else {v->gate=0U;v->last_vca_env=0.0f;v->vca_state=3U;}
 }
 void brick6_acid_runtime_all_notes_off(uint8_t id)
-{if(id<BRICK6_ACID_INSTANCE_COUNT){acid_voice_t *v=&g_acid[id];v->gate=0U;v->active=0U;v->vca_state=0U;v->vcf_state=0U;}}
+{acid_voice_t*v=acid_instance(id);if(v!=NULL){v->gate=0U;v->active=0U;v->vca_state=0U;v->vcf_state=0U;}}
 __attribute__((noinline)) uint8_t brick6_acid_runtime_render_instance(uint8_t id,float *out,uint32_t frames)
 {
-    if(id>=BRICK6_ACID_INSTANCE_COUNT||!out||frames>AUDIO_BLOCK_SIZE)return 0U;
-    acid_voice_t *v=&g_acid[id];
+    acid_voice_t *v=acid_instance(id);if(v==NULL||!out||frames>AUDIO_BLOCK_SIZE)return 0U;
     if(v->pending_release){v->pending_release=0U;v->gate=0U;v->last_vca_env=0.0f;v->vca_state=3U;}
     for(uint32_t n=0U;n<frames;++n){
         if(!v->active){out[n]=0.0f;continue;}
@@ -280,16 +282,15 @@ __attribute__((noinline)) uint8_t brick6_acid_runtime_render_instance(uint8_t id
     }
     return v->active;
 }
-void brick6_acid_runtime_set_wave(uint8_t id,uint8_t x){if(id<BRICK6_ACID_INSTANCE_COUNT)g_acid[id].wave=x!=0U;}
-void brick6_acid_runtime_set_tune(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_COUNT){g_acid[id].tune=acid_clamp(x,-12.0f,12.0f);acid_set_pitch(&g_acid[id],g_acid[id].slide_cap);}}
-void brick6_acid_runtime_set_cut(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_COUNT)g_acid[id].cut=acid_clamp(x,0.0f,1.0f);}
-void brick6_acid_runtime_set_res(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_COUNT){g_acid[id].res=acid_clamp(x,0.0f,1.0f);acid_update_res(&g_acid[id]);}}
-void brick6_acid_runtime_set_env_mod(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_COUNT)g_acid[id].env_mod=acid_clamp(x,0.0f,1.0f);}
-void brick6_acid_runtime_set_decay(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_COUNT){acid_voice_t*v=&g_acid[id];v->decay=acid_clamp(x,0.0f,1.0f);v->vcf_decay_coeff=acid_decay_coeff(v->accent>0.0f?0.9972f:acid_decay[(unsigned)(v->decay*1023.0f)]);}}
+void brick6_acid_runtime_set_wave(uint8_t id,uint8_t x){acid_voice_t*v=acid_instance(id);if(v!=NULL)v->wave=x!=0U;}
+void brick6_acid_runtime_set_tune(uint8_t id,float x){acid_voice_t*v=acid_instance(id);if(v!=NULL){v->tune=acid_clamp(x,-12.0f,12.0f);acid_set_pitch(v,v->slide_cap);}}
+void brick6_acid_runtime_set_cut(uint8_t id,float x){acid_voice_t*v=acid_instance(id);if(v!=NULL)v->cut=acid_clamp(x,0.0f,1.0f);}
+void brick6_acid_runtime_set_res(uint8_t id,float x){acid_voice_t*v=acid_instance(id);if(v!=NULL){v->res=acid_clamp(x,0.0f,1.0f);acid_update_res(v);}}
+void brick6_acid_runtime_set_env_mod(uint8_t id,float x){acid_voice_t*v=acid_instance(id);if(v!=NULL)v->env_mod=acid_clamp(x,0.0f,1.0f);}
+void brick6_acid_runtime_set_decay(uint8_t id,float x){acid_voice_t*v=acid_instance(id);if(v!=NULL){v->decay=acid_clamp(x,0.0f,1.0f);v->vcf_decay_coeff=acid_decay_coeff(v->accent>0.0f?0.9972f:acid_decay[(unsigned)(v->decay*1023.0f)]);}}
 void brick6_acid_runtime_set_accent(uint8_t id,float x)
 {
-    if(id<BRICK6_ACID_INSTANCE_COUNT){
-        acid_voice_t*v=&g_acid[id];
+    acid_voice_t*v=acid_instance(id);if(v!=NULL){
         const float accent=acid_clamp(x,0.0f,1.0f);
         /* accent_knob is the next-note control, while accent is the DSP latch
          * consumed by the running envelopes.  A p-lock restore must update
@@ -300,5 +301,5 @@ void brick6_acid_runtime_set_accent(uint8_t id,float x)
             :acid_decay[(unsigned)(v->decay*1023.0f)]);
     }
 }
-void brick6_acid_runtime_set_slide(uint8_t id,uint8_t x){if(id<BRICK6_ACID_INSTANCE_COUNT)g_acid[id].slide=x!=0U;}
+void brick6_acid_runtime_set_slide(uint8_t id,uint8_t x){acid_voice_t*v=acid_instance(id);if(v!=NULL)v->slide=x!=0U;}
 void brick6_acid_runtime_set_vcf_rate(uint8_t id,uint8_t x){(void)id;(void)x;}

@@ -78,6 +78,7 @@ enum { STACK_POLY_D2_COUNT = BRICK6_STACK_VOICE_INSTANCE_COUNT - BRICK6_STACK_MA
 /* Poly overflow instances are not the primary mono hot path; keep DTCM
  * available for bounded active render state when ACID is linked. */
 static brick6_stack_runtime_instance_t g_stack_poly_runtime_d2[STACK_POLY_D2_COUNT];
+AUDIO_HOT static brick6_stack_runtime_instance_t g_stack_preview;
 static uint32_t g_stack_continuous_version;
 AUDIO_HOT static int32_t g_stack_native_scratch[AUDIO_BLOCK_SIZE];
 AUDIO_HOT static int32_t g_stack_acc_scratch[AUDIO_BLOCK_SIZE];
@@ -134,6 +135,8 @@ static const brick6_stack_model_desc_t *brick6_stack_runtime_model_desc(brick6_s
 
 static brick6_stack_runtime_instance_t *brick6_stack_runtime_get_instance_mut(uint8_t instance_id)
 {
+    if (instance_id == BRICK6_STACK_PREVIEW_INSTANCE_ID)
+        return &g_stack_preview;
     if (instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT)
     {
         return NULL;
@@ -146,6 +149,8 @@ static brick6_stack_runtime_instance_t *brick6_stack_runtime_get_instance_mut(ui
 
 static const brick6_stack_runtime_instance_t *brick6_stack_runtime_get_instance(uint8_t instance_id)
 {
+    if (instance_id == BRICK6_STACK_PREVIEW_INSTANCE_ID)
+        return &g_stack_preview;
     if (instance_id >= BRICK6_STACK_VOICE_INSTANCE_COUNT)
     {
         return NULL;
@@ -164,6 +169,14 @@ static void brick6_stack_runtime_touch_continuous(
     uint8_t param)
 {
     if ((instance == NULL) || (param >= STACK_CONT_COUNT)) return;
+    if (instance == &g_stack_preview)
+    {
+        uint32_t version = instance->continuous_epoch + 1U;
+        if (version == 0U) version = 1U;
+        instance->continuous_version[param] = version;
+        instance->continuous_epoch = version;
+        return;
+    }
     g_stack_continuous_version++;
     if (g_stack_continuous_version == 0U) g_stack_continuous_version = 1U;
     instance->continuous_version[param] = g_stack_continuous_version;
@@ -811,6 +824,7 @@ void brick6_stack_runtime_init(void)
         brick6_stack_runtime_init_instance(
             brick6_stack_runtime_get_instance_mut(instance));
     }
+    brick6_stack_runtime_init_instance(&g_stack_preview);
 }
 
 void brick6_stack_runtime_reset_instance(uint8_t instance_id)

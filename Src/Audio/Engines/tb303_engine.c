@@ -77,6 +77,7 @@ typedef struct
 } tb303_runtime_t;
 
 AUDIO_HOT static tb303_runtime_t g_tb303[BRICK6_TB303_INSTANCE_COUNT];
+AUDIO_HOT static tb303_runtime_t g_tb303_preview;
 #include "tb303_tables.inc"
 
 static float tb303_clamp(float x,float lo,float hi)
@@ -219,10 +220,15 @@ static float tb303_osc(tb303_runtime_t *v,float inc,uint8_t mip)
 
 static float tb303_note_hz(uint8_t note,float tune);
 
+static tb303_runtime_t *tb303_instance(uint8_t id)
+{
+    if (id == BRICK6_TB303_PREVIEW_INSTANCE_ID) return &g_tb303_preview;
+    return (id < BRICK6_TB303_INSTANCE_COUNT) ? &g_tb303[id] : NULL;
+}
+
 void brick6_tb303_runtime_reset_instance(uint8_t id)
 {
-    if(id>=BRICK6_TB303_INSTANCE_COUNT)return;
-    tb303_runtime_t *v=&g_tb303[id];memset(v,0,sizeof(*v));
+    tb303_runtime_t *v=tb303_instance(id);if(v==NULL)return;memset(v,0,sizeof(*v));
     v->note=0xFFU;
     v->cut=0.5f;v->env_mod=0.25f;v->decay=0.699f;v->pitch_coeff=expf(-1.0f/(0.012f*TB303_FS));
     tb303_update_env_map(v);tb303_update_resonance(v);tb303_update_decay(v,0U);tb303_onepole_hp(&v->pre_hp,44.486f,TB303_FS);
@@ -231,10 +237,10 @@ void brick6_tb303_runtime_reset_instance(uint8_t id)
     tb303_biquad_notch(&v->notch,7.5164f,4.7f,TB303_FS);
 }
 void brick6_tb303_runtime_init(void)
-{ for(uint8_t i=0;i<BRICK6_TB303_INSTANCE_COUNT;++i)brick6_tb303_runtime_reset_instance(i); }
+{ for(uint8_t i=0;i<BRICK6_TB303_INSTANCE_COUNT;++i)brick6_tb303_runtime_reset_instance(i);brick6_tb303_runtime_reset_instance(BRICK6_TB303_PREVIEW_INSTANCE_ID); }
 
 void brick6_tb303_runtime_restart_voice(uint8_t id)
-{ if(id<BRICK6_TB303_INSTANCE_COUNT)tb303_clear_signal_state(&g_tb303[id]); }
+{ tb303_runtime_t*v=tb303_instance(id);if(v!=NULL)tb303_clear_signal_state(v); }
 void brick6_tb303_runtime_sync_voice(uint8_t source,uint8_t destination)
 {
     if((source>=BRICK6_TB303_INSTANCE_COUNT)||(destination>=BRICK6_TB303_INSTANCE_COUNT)
@@ -252,7 +258,7 @@ static float tb303_note_hz(uint8_t note,float tune)
 { return 440.0f*powf(2.0f,(((float)note+tune)-69.0f)/12.0f); }
 void brick6_tb303_runtime_note_on(uint8_t id,uint8_t note,uint8_t velocity)
 {
-    (void)velocity;if(id>=BRICK6_TB303_INSTANCE_COUNT)return;tb303_runtime_t *v=&g_tb303[id];
+    (void)velocity;tb303_runtime_t *v=tb303_instance(id);if(v==NULL)return;
     const uint8_t legato=(uint8_t)((v->slide!=0U)&&((v->gate!=0U)||(v->pending_release!=0U)));
     if(legato==0U)tb303_clear_signal_state(v);
     v->pending_release=0U;v->target_frequency=tb303_note_hz(note,v->tune);v->note=note;
@@ -264,17 +270,15 @@ void brick6_tb303_runtime_initialize_held_note(uint8_t id,uint8_t note,uint8_t v
 { brick6_tb303_runtime_note_on(id,note,velocity); }
 void brick6_tb303_runtime_note_off(uint8_t id,uint8_t note)
 {
-    if(id>=BRICK6_TB303_INSTANCE_COUNT)return;
-    tb303_runtime_t *v=&g_tb303[id];if((v->gate==0U)||(note!=v->note))return;
+    tb303_runtime_t *v=tb303_instance(id);if(v==NULL)return;if((v->gate==0U)||(note!=v->note))return;
     if(v->slide!=0U)v->pending_release=1U;else v->gate=0U;
 }
 void brick6_tb303_runtime_all_notes_off(uint8_t id)
-{ if(id<BRICK6_TB303_INSTANCE_COUNT)tb303_clear_signal_state(&g_tb303[id]); }
+{ tb303_runtime_t*v=tb303_instance(id);if(v!=NULL)tb303_clear_signal_state(v); }
 
 uint8_t brick6_tb303_runtime_render_instance(uint8_t id,float *out,uint32_t frames)
 {
-    if((id>=BRICK6_TB303_INSTANCE_COUNT)||(out==NULL))return 0U;
-    tb303_runtime_t *v=&g_tb303[id];
+    tb303_runtime_t *v=tb303_instance(id);if((v==NULL)||(out==NULL))return 0U;
     if(v->pending_release!=0U){v->pending_release=0U;v->gate=0U;}
     for(uint32_t n=0;n<frames;++n)
     {
@@ -297,12 +301,12 @@ uint8_t brick6_tb303_runtime_render_instance(uint8_t id,float *out,uint32_t fram
     return v->active;
 }
 
-void brick6_tb303_runtime_set_wave(uint8_t id,uint8_t x){if(id<BRICK6_TB303_INSTANCE_COUNT)g_tb303[id].wave=(x!=0U);}
-void brick6_tb303_runtime_set_tune(uint8_t id,float x){if(id<BRICK6_TB303_INSTANCE_COUNT){tb303_runtime_t*v=&g_tb303[id];v->tune=tb303_clamp(x,-12.0f,12.0f);if(v->note<128U)v->target_frequency=tb303_note_hz(v->note,v->tune);}}
-void brick6_tb303_runtime_set_cut(uint8_t id,float x){if(id<BRICK6_TB303_INSTANCE_COUNT){g_tb303[id].cut=tb303_clamp(x,0,1);tb303_update_env_map(&g_tb303[id]);}}
-void brick6_tb303_runtime_set_res(uint8_t id,float x){if(id<BRICK6_TB303_INSTANCE_COUNT){g_tb303[id].res=tb303_clamp(x,0,1);tb303_update_resonance(&g_tb303[id]);}}
-void brick6_tb303_runtime_set_env_mod(uint8_t id,float x){if(id<BRICK6_TB303_INSTANCE_COUNT){g_tb303[id].env_mod=tb303_clamp(x,0,1);tb303_update_env_map(&g_tb303[id]);}}
-void brick6_tb303_runtime_set_decay(uint8_t id,float x){if(id<BRICK6_TB303_INSTANCE_COUNT){g_tb303[id].decay=tb303_clamp(x,0,1);tb303_update_decay(&g_tb303[id],g_tb303[id].accent>0);}}
-void brick6_tb303_runtime_set_accent(uint8_t id,float x){if(id<BRICK6_TB303_INSTANCE_COUNT)g_tb303[id].accent=tb303_clamp(x,0,1);}
-void brick6_tb303_runtime_set_slide(uint8_t id,uint8_t x){if(id<BRICK6_TB303_INSTANCE_COUNT)g_tb303[id].slide=(x!=0U);}
-void brick6_tb303_runtime_set_vcf_rate(uint8_t id,uint8_t x){if(id<BRICK6_TB303_INSTANCE_COUNT){tb303_runtime_t*v=&g_tb303[id];const uint8_t rate=(x!=0U);if(v->vcf_rate!=rate){v->vcf_rate=rate;v->vcf_interp_remaining=0U;}}}
+void brick6_tb303_runtime_set_wave(uint8_t id,uint8_t x){tb303_runtime_t*v=tb303_instance(id);if(v!=NULL)v->wave=(x!=0U);}
+void brick6_tb303_runtime_set_tune(uint8_t id,float x){tb303_runtime_t*v=tb303_instance(id);if(v!=NULL){v->tune=tb303_clamp(x,-12.0f,12.0f);if(v->note<128U)v->target_frequency=tb303_note_hz(v->note,v->tune);}}
+void brick6_tb303_runtime_set_cut(uint8_t id,float x){tb303_runtime_t*v=tb303_instance(id);if(v!=NULL){v->cut=tb303_clamp(x,0,1);tb303_update_env_map(v);}}
+void brick6_tb303_runtime_set_res(uint8_t id,float x){tb303_runtime_t*v=tb303_instance(id);if(v!=NULL){v->res=tb303_clamp(x,0,1);tb303_update_resonance(v);}}
+void brick6_tb303_runtime_set_env_mod(uint8_t id,float x){tb303_runtime_t*v=tb303_instance(id);if(v!=NULL){v->env_mod=tb303_clamp(x,0,1);tb303_update_env_map(v);}}
+void brick6_tb303_runtime_set_decay(uint8_t id,float x){tb303_runtime_t*v=tb303_instance(id);if(v!=NULL){v->decay=tb303_clamp(x,0,1);tb303_update_decay(v,v->accent>0);}}
+void brick6_tb303_runtime_set_accent(uint8_t id,float x){tb303_runtime_t*v=tb303_instance(id);if(v!=NULL)v->accent=tb303_clamp(x,0,1);}
+void brick6_tb303_runtime_set_slide(uint8_t id,uint8_t x){tb303_runtime_t*v=tb303_instance(id);if(v!=NULL)v->slide=(x!=0U);}
+void brick6_tb303_runtime_set_vcf_rate(uint8_t id,uint8_t x){tb303_runtime_t*v=tb303_instance(id);if(v!=NULL){const uint8_t rate=(x!=0U);if(v->vcf_rate!=rate){v->vcf_rate=rate;v->vcf_interp_remaining=0U;}}}

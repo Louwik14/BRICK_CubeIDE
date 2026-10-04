@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include "ControlRT/fm_dsp_projection.h"
+#include "Param/param_ids.h"
 #include "Param/engine_model_catalog.h"
 
 #ifdef __cplusplus
@@ -63,6 +64,7 @@ uint8_t brick6_fm_preview_prepare(const track_tone_fm_base_voice_t *base,
 void brick6_fm_preview_note_on(uint8_t note, uint8_t velocity);
 void brick6_fm_preview_note_off(uint8_t note);
 uint8_t brick6_fm_preview_render(float *out_mono, uint32_t frames);
+uint8_t brick6_fm_preview_apply_param(param_id_t parameter, float value);
 
 #ifdef __cplusplus
 }

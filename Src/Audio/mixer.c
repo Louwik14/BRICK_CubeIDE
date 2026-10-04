@@ -41,6 +41,7 @@
 #include "Audio/fx_modfx_global.h"
 #include "fx_reverb.h"
 #include "Param/spectral_window.h"
+#include "Param/param_filter_audio.h"
 #include "Audio/Engines/fm_engine.h"
 #include "Track/synth_polyphony.h"
 #include "Track/track_types.h"
@@ -188,6 +189,7 @@ static int8_t g_send_fx_slot[MIXER_NUM_SENDS];
 static AUDIO_HOT mixer_track_filter_t g_track_filters[MIXER_MAX_TRACKS];
 static uint32_t g_mixer_filter_config_version;
 AUDIO_HOT static mixer_track_filter_t g_poly_filters_hot[SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET];
+AUDIO_HOT static mixer_track_filter_t g_patch_preview_filter;
 typedef struct
 {
     float effective_hz;
@@ -227,6 +229,8 @@ static uint8_t g_mixer_static_group_active;
 #include "Mixer/mixer_poly_dsp.inc"
 
 #include "Mixer/mixer_global_fx.inc"
+
+#include "Mixer/mixer_preview_voice.inc"
 
 #include "Mixer/mixer_track_io.inc"
 

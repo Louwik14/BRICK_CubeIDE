@@ -935,15 +935,14 @@ void brick6_fm_runtime_set_play(uint8_t instance_id,
     mark_parameters_changed(voice);
 }
 
-void brick6_fm_runtime_set_operator(uint8_t instance_id,
-                                    uint8_t operator_id,
-                                    brick6_fm_operator_param_t param,
-                                    float value)
+static void fm_set_operator_value(fm_voice_t *voice,
+                                  uint8_t operator_id,
+                                  brick6_fm_operator_param_t param,
+                                  float value)
 {
-    if ((valid_instance(instance_id) == 0U) || (operator_id >= kOperatorCount)
+    if ((voice == nullptr) || (operator_id >= kOperatorCount)
             || (param >= BRICK6_FM_OPERATOR_PARAM_COUNT))
         return;
-    fm_voice_t *const voice = &g_fm_voice[instance_id];
     const int op = (int)brick_operator_to_msfa_index(operator_id);
     switch (param)
     {
@@ -1038,6 +1037,16 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
             || (param == BRICK6_FM_OPERATOR_KEY))
         voice->dirty_output_level |= (uint8_t)(1U << op);
     mark_parameters_changed(voice);
+}
+
+void brick6_fm_runtime_set_operator(uint8_t instance_id,
+                                    uint8_t operator_id,
+                                    brick6_fm_operator_param_t param,
+                                    float value)
+{
+    if (valid_instance(instance_id) != 0U)
+        fm_set_operator_value(&g_fm_voice[instance_id], operator_id,
+                              param, value);
 }
 
 static void fm_set_base_voice(fm_voice_t *voice,
@@ -1453,4 +1462,44 @@ ITCM_TEXT uint8_t brick6_fm_preview_render(float *out_mono,
                                            uint32_t frames)
 {
     return fm_render_voice(&g_fm_preview, out_mono, frames);
+}
+
+uint8_t brick6_fm_preview_apply_param(param_id_t parameter, float value)
+{
+    const float macro = clamp_macro(0.5f + 0.5f * value);
+    if ((parameter >= PARAM_FM_OPERATOR_FIRST)
+            && (parameter <= PARAM_FM_OPERATOR_LAST))
+    {
+        const uint16_t offset = (uint16_t)(parameter - PARAM_FM_OPERATOR_FIRST);
+        const uint8_t operator_id = (uint8_t)(offset
+            / PARAM_FM_OPERATOR_PARAM_COUNT);
+        const brick6_fm_operator_param_t operator_param =
+            (brick6_fm_operator_param_t)(offset
+                % PARAM_FM_OPERATOR_PARAM_COUNT);
+        if (operator_param == BRICK6_FM_OPERATOR_VEL) value /= 7.0f;
+        else if (operator_param == BRICK6_FM_OPERATOR_KEY) value /= 99.0f;
+        fm_set_operator_value(&g_fm_preview, operator_id,
+                              operator_param, value);
+        return 1U;
+    }
+    switch (parameter)
+    {
+        case PARAM_FM_RATIO: g_fm_preview.ratio = macro; break;
+        case PARAM_FM_BRIGHT: g_fm_preview.bright = macro; break;
+        case PARAM_FM_BODY: g_fm_preview.body = macro; break;
+        case PARAM_FM_DETAIL: g_fm_preview.detail = macro; break;
+        case PARAM_FM_METAL: g_fm_preview.metal = macro; break;
+        case PARAM_FM_ENV_ATTACK: g_fm_preview.env_attack = macro; break;
+        case PARAM_FM_ENV_DECAY: g_fm_preview.env_decay = macro; break;
+        case PARAM_FM_ENV_SUSTAIN: g_fm_preview.env_sustain = macro; break;
+        case PARAM_FM_ENV_RELEASE: g_fm_preview.env_release = macro; break;
+        default: return 0U;
+    }
+    if ((parameter >= PARAM_FM_ENV_ATTACK)
+            && (parameter <= PARAM_FM_ENV_RELEASE))
+        g_fm_preview.dirty_envelope =
+            (uint8_t)((1U << kOperatorCount) - 1U);
+    else g_fm_preview.dirty_patch = 1U;
+    mark_parameters_changed(&g_fm_preview);
+    return 1U;
 }

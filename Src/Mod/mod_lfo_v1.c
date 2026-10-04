@@ -351,7 +351,7 @@ static float mod_lfo_quantize_sync_rate(float rate)
     return (float)sync;
 }
 
-static uint32_t mod_lfo_phase_inc_from_rate_with_bpm(float rate, uint32_t bpm_milli)
+uint32_t mod_lfo_v1_phase_inc_from_rate(float rate, uint32_t bpm_milli)
 {
     if (rate < -MOD_LFO_RATE_OFF_EPS)
     {
@@ -375,7 +375,7 @@ static uint32_t mod_lfo_phase_inc_from_rate_with_bpm(float rate, uint32_t bpm_mi
 
 static uint32_t mod_lfo_phase_inc_from_rate(float rate)
 {
-    return mod_lfo_phase_inc_from_rate_with_bpm(
+    return mod_lfo_v1_phase_inc_from_rate(
         rate, audio_transport_runtime_get()->tempo_effective_bpm_milli);
 }
 
@@ -606,7 +606,7 @@ static void mod_lfo_prepare_poly_segment(uint32_t frames,
             const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)((uint8_t)
                 (mod_lfo_effective_field(shared, s, MOD_LFO_PARAM_TRIG) + 0.5f));
             const uint32_t phase_inc =
-                mod_lfo_phase_inc_from_rate_with_bpm(rate, bpm_milli);
+                mod_lfo_v1_phase_inc_from_rate(rate, bpm_milli);
             if ((trig < MOD_LFO_TRIG_POLY_TRIG) || (phase_inc == 0U))
             {
                 continue;
@@ -737,11 +737,11 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
                     &g_mod_lfo_poly_segment_config[track][lfo];
                 phase_inc = (prepared->valid != 0U)
                     ? prepared->phase_inc
-                    : mod_lfo_phase_inc_from_rate_with_bpm(rate, bpm_milli);
+                    : mod_lfo_v1_phase_inc_from_rate(rate, bpm_milli);
             }
             else
             {
-                phase_inc = mod_lfo_phase_inc_from_rate_with_bpm(rate, bpm_milli);
+                phase_inc = mod_lfo_v1_phase_inc_from_rate(rate, bpm_milli);
             }
             if ((phase_inc == 0U)
                     || ((required_source_mask

@@ -318,6 +318,7 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/vca_env.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_destination_catalog.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_env3.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_instrument_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_v1.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_matrix.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_ramp.c"

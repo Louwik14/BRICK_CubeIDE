@@ -2,6 +2,7 @@
 #define BRICK6_ACID_ENGINE_H
 #include <stdint.h>
 #define BRICK6_ACID_INSTANCE_COUNT 16U
+#define BRICK6_ACID_PREVIEW_INSTANCE_ID 0xFFU
 void brick6_acid_runtime_init(void);
 void brick6_acid_runtime_reset_instance(uint8_t id);
 void brick6_acid_runtime_restart_voice(uint8_t id);

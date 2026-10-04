@@ -307,12 +307,12 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
                 const uint32_t generation = command->value;
                 const uint32_t slot = generation
                     % PATCH_PREVIEW_PUBLICATION_SLOT_COUNT;
-                const patch_preview_fm_publication_t *const publication =
-                    &g_patch_preview_fm_publication[slot];
+                const patch_preview_publication_t *const publication =
+                    &g_patch_preview_publication[slot];
                 __DMB();
                 if (publication->generation != generation) return 0U;
                 const uint8_t result =
-                    patch_preview_audio_prepare_fm(publication);
+                    patch_preview_audio_prepare(publication);
                 __DMB();
                 g_patch_preview_audio_consumed_generation = generation;
                 return result;
