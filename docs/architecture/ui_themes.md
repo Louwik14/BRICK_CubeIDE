@@ -15,7 +15,7 @@ Hall mode/suffix, focused ensemble, BPM/clock state, pattern and conditional CPU
 load. Theme or CPU visibility changes invalidate the OLED generation
 immediately, including the cached template header/footer.
 
-The five descriptors are:
+The ten descriptors are:
 
 - `CLASSIC`: existing 5x7/4x6 typography, open-corner chrome, cut-corner
   inverted focus and the historical structured header.
@@ -27,6 +27,38 @@ The five descriptors are:
   command-line header and bracket focus.
 - `MODERN`: 5x7/4x6 typography, asymmetric rails, split header and flag-shaped
   focus.
+- `STUDIO`: dense 4x6 instrumentation, ruled cells, meter-like ticks and a
+  strong side focus rail.
+- `BRUTAL`: heavy frames, large high-impact header blocks and double-outline
+  focus.
+- `NINETIES`: doubled hardware-panel frames, compact segmented header and
+  opposing focus chevrons.
+- `CONTRAST`: alternating filled/open information blocks, corner-block frames
+  and a high-contrast focus cap.
+- `AIR`: sparse dotted frames, wide spacing, floating information groups and a
+  light but explicit focus baseline.
+
+## Theme browser
+
+Selecting `THEME` in Settings opens the `FAKE / THEME` preview page. This page
+uses the normal template renderer, cards, widgets, top-information model and
+page-button chrome, so it exercises the same primitives as Track Config rather
+than maintaining a parallel preview renderer. Encoder 1 walks the descriptor
+table with wrap-around and applies the highlighted theme only to volatile UI
+state. `P1 RETURN` restores the theme captured on entry and performs no write;
+`P2 LOAD` atomically persists the currently previewed theme and returns to the
+`THEME` row. P3/P4 have neither label nor action. Leaving the page by any other
+route also restores the captured theme.
+
+Preview uses `ui_theme_preview()`, which only changes the active descriptor and
+invalidates rendering. `ui_theme_commit_preview()` is the sole persistence
+operation in the browser, so rapid scrolling cannot generate SD writes. The
+independent `CPU LOAD` preference is neither changed nor persisted by preview.
+
+To add a theme, append its stable ID to `ui_theme_id_t`, add one descriptor to
+`g_ui_themes`, and implement any genuinely new shared frame/focus/header style
+in `ui_theme.c`. `UI_THEME_COUNT`, the Settings label and the browser iteration
+all derive from that same table/enum contract; no browser-side name list exists.
 
 `CPU LOAD = OFF` omits the CPU string from the shared model. Each header style
 then naturally leaves the BPM/pattern group expanded or uses the freed cell;

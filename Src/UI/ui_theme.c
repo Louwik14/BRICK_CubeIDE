@@ -32,6 +32,11 @@ static const ui_theme_t g_ui_themes[UI_THEME_COUNT] = {
     {"GRID",     UI_THEME_FRAME_GRID,    UI_THEME_FRAME_GRID,     UI_THEME_FOCUS_BLOCK,     UI_THEME_HEADER_GRID,     &FONT_5X7,        &FONT_4X6,        &FONT_4X6, 2U, 1U, 1U},
     {"TERMINAL", UI_THEME_FRAME_BRACKETS,UI_THEME_FRAME_BRACKETS, UI_THEME_FOCUS_BRACKETS,  UI_THEME_HEADER_TERMINAL, &FONT_4X6,        &FONT_4X6,        &FONT_4X6, 1U, 1U, 0U},
     {"MODERN",   UI_THEME_FRAME_RAIL,    UI_THEME_FRAME_RAIL,     UI_THEME_FOCUS_FLAG,      UI_THEME_HEADER_MODERN,   &FONT_5X7,        &FONT_4X6,        &FONT_4X6, 3U, 2U, 1U},
+    {"STUDIO",   UI_THEME_FRAME_TICKS,   UI_THEME_FRAME_GRID,     UI_THEME_FOCUS_SIDEBAR,   UI_THEME_HEADER_STUDIO,   &FONT_4X6,        &FONT_4X6,        &FONT_4X6, 1U, 1U, 1U},
+    {"BRUTAL",   UI_THEME_FRAME_HEAVY,   UI_THEME_FRAME_HEAVY,    UI_THEME_FOCUS_OUTLINE,   UI_THEME_HEADER_BRUTAL,   &FONT_5X7,        &FONT_5X7,        &FONT_4X6, 2U, 1U, 1U},
+    {"NINETIES", UI_THEME_FRAME_DOUBLE,  UI_THEME_FRAME_DOUBLE,   UI_THEME_FOCUS_CHEVRON,   UI_THEME_HEADER_NINETIES, &FONT_4X6,        &FONT_4X6,        &FONT_4X6, 1U, 1U, 1U},
+    {"CONTRAST", UI_THEME_FRAME_BLOCKS,  UI_THEME_FRAME_BLOCKS,   UI_THEME_FOCUS_TOP,       UI_THEME_HEADER_CONTRAST, &FONT_5X7,        &FONT_4X6,        &FONT_4X6, 2U, 1U, 1U},
+    {"AIR",      UI_THEME_FRAME_DOTS,    UI_THEME_FRAME_DOTS,     UI_THEME_FOCUS_SPACED,    UI_THEME_HEADER_AIR,      &FONT_5X7,        &FONT_4X6,        &FONT_4X6, 4U, 3U, 0U},
 };
 
 static ui_theme_id_t g_ui_theme_id = UI_THEME_CLASSIC;
@@ -143,6 +148,19 @@ uint8_t ui_theme_set(ui_theme_id_t id)
     return ui_theme_preferences_save();
 }
 
+void ui_theme_preview(ui_theme_id_t id)
+{
+    if (id >= UI_THEME_COUNT) id = UI_THEME_CLASSIC;
+    if (id == g_ui_theme_id) return;
+    g_ui_theme_id = id;
+    ui_renderer_oled_invalidate();
+}
+
+uint8_t ui_theme_commit_preview(void)
+{
+    return ui_theme_preferences_save();
+}
+
 uint8_t ui_theme_show_cpu_load(void) { return g_ui_show_cpu_load; }
 uint8_t ui_theme_set_show_cpu_load(uint8_t show)
 {
@@ -199,6 +217,35 @@ void ui_theme_draw_frame(int x, int y, int w, int h, ui_theme_frame_style_t styl
             drv_display_draw_line(x + 2, y + h - 1, x + w - 5, y + h - 1);
             drv_display_draw_pixel(x + w - 2, y + h - 1, true);
             break;
+        case UI_THEME_FRAME_TICKS:
+            drv_display_draw_line(x, y, x + w - 1, y);
+            drv_display_draw_line(x, y + h - 1, x + w - 1, y + h - 1);
+            drv_display_draw_line(x, y, x, y + 3);
+            drv_display_draw_line(x + w - 1, y, x + w - 1, y + 3);
+            drv_display_draw_pixel(x + (w / 2), y + h - 2, true);
+            break;
+        case UI_THEME_FRAME_HEAVY:
+            drv_display_fill_rect(x, y, w, 2);
+            drv_display_fill_rect(x, y + h - 2, w, 2);
+            drv_display_draw_line(x, y + 2, x, y + h - 3);
+            drv_display_draw_line(x + w - 1, y + 2, x + w - 1, y + h - 3);
+            break;
+        case UI_THEME_FRAME_DOUBLE:
+            drv_display_draw_rect(x, y, w, h);
+            if ((w > 5) && (h > 5)) drv_display_draw_rect(x + 2, y + 2, w - 4, h - 4);
+            break;
+        case UI_THEME_FRAME_BLOCKS:
+            drv_display_fill_rect(x, y, 5, 2);
+            drv_display_fill_rect(x + w - 5, y, 5, 2);
+            drv_display_fill_rect(x, y + h - 2, 9, 2);
+            drv_display_fill_rect(x + w - 3, y + h - 2, 3, 2);
+            break;
+        case UI_THEME_FRAME_DOTS:
+            for (int px = x + 2; px < x + w - 1; px += 4)
+                drv_display_draw_pixel(px, y, true);
+            drv_display_draw_pixel(x, y + h - 1, true);
+            drv_display_draw_pixel(x + w - 1, y + h - 1, true);
+            break;
         default: break;
     }
 }
@@ -252,6 +299,30 @@ void ui_theme_draw_focus_at(int x, int y, int w, int h, const char *text,
             drv_display_draw_line(x + w - 1, y + (h / 2), x + w - 4, y + h - 1);
             tx = ui_theme_center_x(x, w - 4, text);
             drv_display_draw_text_inverted((uint8_t)tx, text_y, text);
+            break;
+        case UI_THEME_FOCUS_SIDEBAR:
+            drv_display_fill_rect(x, y, 3, h);
+            drv_display_draw_text((uint8_t)((tx < x + 5) ? x + 5 : tx), text_y, text);
+            break;
+        case UI_THEME_FOCUS_OUTLINE:
+            drv_display_draw_rect(x, y, w, h);
+            drv_display_draw_rect(x + 2, y + 2, w - 4, h - 4);
+            drv_display_draw_text((uint8_t)tx, text_y, text);
+            break;
+        case UI_THEME_FOCUS_CHEVRON:
+            drv_display_draw_text((uint8_t)x, text_y, ">");
+            drv_display_draw_text((uint8_t)((tx < x + 7) ? x + 7 : tx), text_y, text);
+            drv_display_draw_text((uint8_t)(x + w - 5), text_y, "<");
+            break;
+        case UI_THEME_FOCUS_TOP:
+            drv_display_fill_rect(x, y, w, 3);
+            drv_display_draw_text((uint8_t)tx, text_y, text);
+            break;
+        case UI_THEME_FOCUS_SPACED:
+            drv_display_draw_pixel(x + 1, y + (h / 2), true);
+            drv_display_draw_pixel(x + w - 2, y + (h / 2), true);
+            drv_display_draw_line(x + 7, y + h - 1, x + w - 8, y + h - 1);
+            drv_display_draw_text((uint8_t)tx, text_y, text);
             break;
     }
 }
@@ -362,6 +433,74 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             drv_display_draw_text(ui_theme_right_x(d->bpm), 1U, d->bpm);
             if ((d->cpu_load != NULL) && d->cpu_load[0] != '\0') drv_display_draw_text(ui_theme_right_x(d->cpu_load), 9U, d->cpu_load);
             drv_display_draw_text(82U, 9U, d->pattern);
+            break;
+        case UI_THEME_HEADER_STUDIO:
+            drv_display_draw_line(0, 0, 127, 0);
+            drv_display_draw_line(0, 15, 127, 15);
+            drv_display_draw_line(19, 0, 19, 15);
+            drv_display_draw_line(82, 0, 82, 15);
+            drv_display_fill_rect(1, 2, 17, 11);
+            drv_display_draw_text_inverted(4U, 4U, d->track);
+            drv_display_draw_text(23U, 1U, d->ensemble);
+            drv_display_draw_text(23U, 8U, d->track_name);
+            drv_display_draw_text(59U, 8U, d->hall_mode);
+            drv_display_draw_text(85U, 1U, d->bpm);
+            if ((d->cpu_load != NULL) && d->cpu_load[0] != '\0')
+                drv_display_draw_text(85U, 8U, d->cpu_load);
+            drv_display_draw_text(ui_theme_right_x(d->pattern), 8U, d->pattern);
+            break;
+        case UI_THEME_HEADER_BRUTAL:
+            drv_display_fill_rect(0, 0, 128, 15);
+            drv_display_set_draw_color(0U);
+            drv_display_draw_text(2U, 2U, d->ensemble);
+            drv_display_draw_text(43U, 2U, d->track_name);
+            drv_display_set_font(&FONT_4X6);
+            drv_display_draw_text(2U, 9U, d->track);
+            drv_display_draw_text(15U, 9U, d->hall_mode);
+            drv_display_draw_text(69U, 9U, d->pattern);
+            drv_display_draw_text(86U, 2U, d->bpm);
+            if ((d->cpu_load != NULL) && d->cpu_load[0] != '\0')
+                drv_display_draw_text(86U, 9U, d->cpu_load);
+            drv_display_set_draw_color(1U);
+            break;
+        case UI_THEME_HEADER_NINETIES:
+            drv_display_draw_rect(0, 0, 128, 15);
+            drv_display_draw_rect(2, 2, 25, 11);
+            drv_display_draw_text(5U, 4U, d->track);
+            drv_display_draw_text(12U, 4U, d->hall_mode);
+            drv_display_draw_text(31U, 1U, d->ensemble);
+            drv_display_draw_text(31U, 8U, d->track_name);
+            drv_display_draw_line(78, 1, 78, 13);
+            drv_display_draw_text(82U, 1U, d->bpm);
+            if ((d->cpu_load != NULL) && d->cpu_load[0] != '\0')
+                drv_display_draw_text(82U, 8U, d->cpu_load);
+            drv_display_draw_text(ui_theme_right_x(d->pattern), 8U, d->pattern);
+            break;
+        case UI_THEME_HEADER_CONTRAST:
+            drv_display_fill_rect(0, 0, 35, 15);
+            drv_display_draw_text_inverted(3U, 1U, d->ensemble);
+            drv_display_draw_text_inverted(3U, 8U, d->track);
+            drv_display_draw_line(38, 0, 38, 14);
+            drv_display_draw_text(43U, 1U, d->track_name);
+            drv_display_draw_text(43U, 8U, d->hall_mode);
+            drv_display_fill_rect(88, 0, 40, 7);
+            drv_display_draw_text_inverted(91U, 1U, d->bpm);
+            if ((d->cpu_load != NULL) && d->cpu_load[0] != '\0')
+                drv_display_draw_text(88U, 9U, d->cpu_load);
+            drv_display_draw_text(ui_theme_right_x(d->pattern), 9U, d->pattern);
+            break;
+        case UI_THEME_HEADER_AIR:
+            drv_display_set_font(&FONT_5X7);
+            drv_display_draw_text(2U, 1U, d->ensemble);
+            drv_display_set_font(&FONT_4X6);
+            drv_display_draw_text(2U, 10U, d->track_name);
+            drv_display_draw_pixel(39, 7, true);
+            drv_display_draw_text(45U, 1U, d->track);
+            drv_display_draw_text(54U, 1U, d->hall_mode);
+            drv_display_draw_text(ui_theme_right_x(d->bpm), 1U, d->bpm);
+            if ((d->cpu_load != NULL) && d->cpu_load[0] != '\0')
+                drv_display_draw_text(ui_theme_right_x(d->cpu_load), 10U, d->cpu_load);
+            drv_display_draw_text(83U, 10U, d->pattern);
             break;
     }
 }

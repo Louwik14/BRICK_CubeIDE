@@ -437,9 +437,7 @@ static void ui_page_settings_apply_action(void)
             }
             else if (level->selected_index == 3U)
             {
-                const ui_theme_id_t next = (ui_theme_id_t)(
-                    ((uint8_t)ui_theme_get_id() + 1U) % (uint8_t)UI_THEME_COUNT);
-                if (ui_theme_set(next) == 0U) ui_page_settings_status("THEME SAVE FAIL");
+                ui_page_theme_browser_open();
             }
             else if (level->selected_index == 4U)
             {

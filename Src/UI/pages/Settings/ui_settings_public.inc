@@ -12,6 +12,14 @@ void ui_page_settings_open_sample_browser(uint8_t return_page_id)
     ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLE);
 }
 
+void ui_page_settings_return_from_theme_browser(void)
+{
+    ui_page_set(UI_PAGE_SETTINGS);
+    ui_settings_menu_level_t *const level = ui_page_settings_current_level();
+    if ((level != NULL) && (level->view == UI_SETTINGS_VIEW_ROOT))
+        level->selected_index = 3U;
+}
+
 uint8_t ui_page_settings_is_open(void)
 {
     return (ui_page_get_id() == UI_PAGE_SETTINGS) ? 1U : 0U;

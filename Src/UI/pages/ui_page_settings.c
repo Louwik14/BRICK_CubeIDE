@@ -43,6 +43,7 @@
 
 #include "pages/ui_page_calibration.h"
 #include "pages/ui_page_name_edit.h"
+#include "pages/ui_page_theme_browser.h"
 
 typedef enum
 {

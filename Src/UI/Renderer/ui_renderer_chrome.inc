@@ -102,12 +102,12 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
 
         if (subpage_selectable == 0U)
         {
-            label = "-";
+            label = (state->blank_unavailable_nav_labels != 0U) ? "" : "-";
         }
 
         if ((label == NULL) || (label[0] == '\0'))
         {
-            label = "-";
+            label = (state->blank_unavailable_nav_labels != 0U) ? "" : "-";
         }
 
 
@@ -232,6 +232,8 @@ static uint32_t ui_renderer_template_footer_signature(const ui_template_page_sta
     signature = ui_renderer_template_signature_u32(signature, (uint32_t)ui_theme_get_id());
     signature = ui_renderer_template_signature_u32(signature,
         (state != NULL) ? state->active_subpage : 0xffU);
+    signature = ui_renderer_template_signature_u32(signature,
+        (state != NULL) ? state->blank_unavailable_nav_labels : 0U);
     if (family == NULL) return signature;
     for (uint8_t i = 0U; i < 4U; ++i)
     {

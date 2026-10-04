@@ -152,6 +152,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_name_edit.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_patch_assign.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_settings.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_theme_browser.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_cfg.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_env.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_keyboard.c"

@@ -14,6 +14,7 @@
 #include "pages/ui_page_patch_assign.h"
 #include "pages/ui_page_name_edit.h"
 #include "pages/ui_page_settings.h"
+#include "pages/ui_page_theme_browser.h"
 #include "ui_page_manager.h"
 #include "ui_renderer_template.h"
 #include "ui_template_page.h"
@@ -60,6 +61,7 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(UI_PAGE_PATCH_ASSIGN, &g_ui_page_patch_assign);
     ui_page_manager_register(UI_PAGE_NAME_EDIT, &g_ui_page_name_edit);
     ui_page_manager_register(UI_PAGE_SETTINGS, &g_ui_page_settings);
+    ui_page_manager_register(UI_PAGE_THEME_BROWSER, &g_ui_page_theme_browser);
 
     ui_page_set(UI_PAGE_CALIBRATION);
 }

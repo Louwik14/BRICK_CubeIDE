@@ -12,6 +12,11 @@ typedef enum
     UI_THEME_GRID,
     UI_THEME_TERMINAL,
     UI_THEME_MODERN,
+    UI_THEME_STUDIO,
+    UI_THEME_BRUTAL,
+    UI_THEME_NINETIES,
+    UI_THEME_CONTRAST,
+    UI_THEME_AIR,
     UI_THEME_COUNT
 } ui_theme_id_t;
 
@@ -22,7 +27,12 @@ typedef enum
     UI_THEME_FRAME_LINE,
     UI_THEME_FRAME_GRID,
     UI_THEME_FRAME_BRACKETS,
-    UI_THEME_FRAME_RAIL
+    UI_THEME_FRAME_RAIL,
+    UI_THEME_FRAME_TICKS,
+    UI_THEME_FRAME_HEAVY,
+    UI_THEME_FRAME_DOUBLE,
+    UI_THEME_FRAME_BLOCKS,
+    UI_THEME_FRAME_DOTS
 } ui_theme_frame_style_t;
 
 typedef enum
@@ -31,7 +41,12 @@ typedef enum
     UI_THEME_FOCUS_UNDERLINE,
     UI_THEME_FOCUS_BLOCK,
     UI_THEME_FOCUS_BRACKETS,
-    UI_THEME_FOCUS_FLAG
+    UI_THEME_FOCUS_FLAG,
+    UI_THEME_FOCUS_SIDEBAR,
+    UI_THEME_FOCUS_OUTLINE,
+    UI_THEME_FOCUS_CHEVRON,
+    UI_THEME_FOCUS_TOP,
+    UI_THEME_FOCUS_SPACED
 } ui_theme_focus_style_t;
 
 typedef enum
@@ -40,7 +55,12 @@ typedef enum
     UI_THEME_HEADER_MINIMAL,
     UI_THEME_HEADER_GRID,
     UI_THEME_HEADER_TERMINAL,
-    UI_THEME_HEADER_MODERN
+    UI_THEME_HEADER_MODERN,
+    UI_THEME_HEADER_STUDIO,
+    UI_THEME_HEADER_BRUTAL,
+    UI_THEME_HEADER_NINETIES,
+    UI_THEME_HEADER_CONTRAST,
+    UI_THEME_HEADER_AIR
 } ui_theme_header_style_t;
 
 typedef struct
@@ -76,6 +96,8 @@ const ui_theme_t *ui_theme_get(void);
 ui_theme_id_t ui_theme_get_id(void);
 const char *ui_theme_name(ui_theme_id_t id);
 uint8_t ui_theme_set(ui_theme_id_t id);
+void ui_theme_preview(ui_theme_id_t id);
+uint8_t ui_theme_commit_preview(void);
 uint8_t ui_theme_show_cpu_load(void);
 uint8_t ui_theme_set_show_cpu_load(uint8_t show);
 
