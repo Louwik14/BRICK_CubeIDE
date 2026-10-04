@@ -13,6 +13,8 @@
 #define INVALID_PROJECT 0xFFU
 
 static uint8_t g_present[BANKS][SLOTS];
+/* Canonical Project root selector: 0..15 is PROJECTS/P##, 0xFF means the
+ * current musical state is unsaved and has no Pattern Store destination. */
 static uint8_t g_active_project=INVALID_PROJECT;
 
 typedef enum { PATTERN_ASYNC_IDLE=0,PATTERN_ASYNC_MOUNT,PATTERN_ASYNC_RECOVER,
@@ -25,6 +27,7 @@ typedef struct {
     persistent_fatfs_file_t file;persist_control_pattern_t *load_out;
     uint8_t *encoded;uint32_t encoded_capacity,encoded_size,offset,media_epoch;
     pattern_async_state_t state;pattern_control_bank_async_operation_t operation;
+    pattern_control_bank_async_error_t error;int32_t filesystem_result;
     uint8_t bank,pattern,file_open,result_ready,success;
     char final_path[80],temporary_path[84],backup_path[84];
 } pattern_async_context_t;
@@ -88,17 +91,27 @@ static uint8_t mem_read(void*c,uint8_t*d,uint32_t n){pattern_memory_io_t*m=c;if(
 static uint8_t mem_reset(void*c){pattern_memory_io_t*m=c;if(m==NULL)return 0U;m->position=0U;return 1U;}
 static uint8_t mem_size(void*c,uint32_t*n){pattern_memory_io_t*m=c;if(m==NULL||n==NULL)return 0U;*n=m->capacity;return 1U;}
 static void async_finish(uint8_t ok){g_pattern_async.file_open=0U;g_pattern_async.success=ok?1U:0U;g_pattern_async.result_ready=1U;g_pattern_async.state=PATTERN_ASYNC_DONE;}
-static void async_fail(void){if(g_pattern_async.file_open)g_pattern_async.state=PATTERN_ASYNC_CLEANUP_CLOSE;else if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)g_pattern_async.state=PATTERN_ASYNC_CLEANUP_TEMP;else async_finish(0U);}
-static uint8_t async_abort(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_BACKGROUND))return 0U;if(g_pattern_async.file_open)(void)persistent_fatfs_close_result(&g_pattern_async.file);g_pattern_async.file_open=0U;if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)(void)f_unlink(g_pattern_async.temporary_path);sd_access_gate_release(SD_ACCESS_CLIENT_BACKGROUND);async_finish(0U);return 1U;}
+static void async_fail(pattern_control_bank_async_error_t error,FRESULT result){if(g_pattern_async.error==PATTERN_CONTROL_BANK_ASYNC_ERROR_NONE){g_pattern_async.error=error;g_pattern_async.filesystem_result=(int32_t)result;}if(g_pattern_async.file_open)g_pattern_async.state=PATTERN_ASYNC_CLEANUP_CLOSE;else if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)g_pattern_async.state=PATTERN_ASYNC_CLEANUP_TEMP;else async_finish(0U);}
+static uint8_t async_abort(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_BACKGROUND))return 0U;g_pattern_async.error=PATTERN_CONTROL_BANK_ASYNC_ERROR_MEDIA;g_pattern_async.filesystem_result=(int32_t)FR_NOT_READY;if(g_pattern_async.file_open)(void)persistent_fatfs_close_result(&g_pattern_async.file);g_pattern_async.file_open=0U;if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)(void)f_unlink(g_pattern_async.temporary_path);sd_access_gate_release(SD_ACCESS_CLIENT_BACKGROUND);async_finish(0U);return 1U;}
 static sd_scheduler_background_admission_t admit(sd_scheduler_background_kind_t kind,uint32_t bytes){const sd_scheduler_background_request_t r={bytes,g_pattern_async.media_epoch,kind};return sd_scheduler_runtime_background_try_begin(&r);}
 
-uint8_t pattern_control_bank_store_async_begin(uint8_t b,uint8_t p,const persist_control_pattern_t*in,uint8_t*encoded,uint32_t capacity)
+pattern_control_bank_store_begin_result_t pattern_control_bank_store_async_begin(
+    uint8_t b,uint8_t p,const persist_control_pattern_t*in,uint8_t*encoded,
+    uint32_t capacity)
 {
-    if(project_replacement_is_active()||g_active_project>=PROJECT_STORAGE_SLOT_COUNT||!valid(b,p)||in==NULL||encoded==NULL||capacity==0U||g_pattern_async.state!=PATTERN_ASYNC_IDLE)return 0U;
+    if(project_replacement_is_active())return PATTERN_CONTROL_BANK_STORE_BEGIN_POLICY;
+    if(g_active_project>=PROJECT_STORAGE_SLOT_COUNT)
+        return PATTERN_CONTROL_BANK_STORE_BEGIN_NO_PROJECT;
+    if(!valid(b,p)||in==NULL||encoded==NULL||capacity==0U)
+        return PATTERN_CONTROL_BANK_STORE_BEGIN_ARGUMENT;
+    if(g_pattern_async.state!=PATTERN_ASYNC_IDLE)
+        return PATTERN_CONTROL_BANK_STORE_BEGIN_BUSY;
     pattern_memory_io_t memory={encoded,capacity,0U};const persist_codec_sink_t sink={mem_write,&memory};uint32_t size=0U;
-    if(persist_codec_encode_pattern(in,&sink,&size)!=PERSIST_CODEC_OK)return 0U;
+    if(persist_codec_encode_pattern(in,&sink,&size)!=PERSIST_CODEC_OK)
+        return PATTERN_CONTROL_BANK_STORE_BEGIN_CODEC;
     memset(&g_pattern_async,0,sizeof(g_pattern_async));g_pattern_async.operation=PATTERN_CONTROL_BANK_ASYNC_SAVE;g_pattern_async.state=PATTERN_ASYNC_MOUNT;g_pattern_async.bank=b;g_pattern_async.pattern=p;g_pattern_async.encoded=encoded;g_pattern_async.encoded_capacity=capacity;g_pattern_async.encoded_size=size;g_pattern_async.media_epoch=sd_access_media_epoch();
-    if(!project_storage_pattern_file(g_pattern_async.final_path,sizeof(g_pattern_async.final_path),g_active_project,b,p)||!side_path(g_pattern_async.temporary_path,sizeof(g_pattern_async.temporary_path),g_pattern_async.final_path,"TMP")||!side_path(g_pattern_async.backup_path,sizeof(g_pattern_async.backup_path),g_pattern_async.final_path,"BAK")){memset(&g_pattern_async,0,sizeof(g_pattern_async));return 0U;}return 1U;
+    if(!project_storage_pattern_file(g_pattern_async.final_path,sizeof(g_pattern_async.final_path),g_active_project,b,p)||!side_path(g_pattern_async.temporary_path,sizeof(g_pattern_async.temporary_path),g_pattern_async.final_path,"TMP")||!side_path(g_pattern_async.backup_path,sizeof(g_pattern_async.backup_path),g_pattern_async.final_path,"BAK")){memset(&g_pattern_async,0,sizeof(g_pattern_async));return PATTERN_CONTROL_BANK_STORE_BEGIN_PATH;}
+    return PATTERN_CONTROL_BANK_STORE_BEGIN_OK;
 }
 
 uint8_t pattern_control_bank_load_async_begin(uint8_t b,uint8_t p,uint8_t*encoded,uint32_t capacity,persist_control_pattern_t*out)
@@ -138,19 +151,19 @@ pattern_control_bank_project_load_result_t pattern_control_bank_load_project(
 void pattern_control_bank_async_service(void)
 {
     if(g_pattern_async.state==PATTERN_ASYNC_IDLE||g_pattern_async.state==PATTERN_ASYNC_DONE)return;
-    if(g_pattern_async.state==PATTERN_ASYNC_DECODE){pattern_memory_io_t m={g_pattern_async.encoded,g_pattern_async.encoded_size,0U};const persist_codec_source_t s={mem_read,mem_reset,mem_size,&m};async_finish(persist_codec_decode_pattern(&s,(persist_codec_pattern_staging_t*)g_pattern_async.load_out)==PERSIST_CODEC_OK);return;}
+    if(g_pattern_async.state==PATTERN_ASYNC_DECODE){pattern_memory_io_t m={g_pattern_async.encoded,g_pattern_async.encoded_size,0U};const persist_codec_source_t s={mem_read,mem_reset,mem_size,&m};const uint8_t ok=(persist_codec_decode_pattern(&s,(persist_codec_pattern_staging_t*)g_pattern_async.load_out)==PERSIST_CODEC_OK);if(!ok)g_pattern_async.error=PATTERN_CONTROL_BANK_ASYNC_ERROR_DECODE;async_finish(ok);return;}
     uint32_t chunk=0U;sd_scheduler_background_kind_t kind=SD_SCHEDULER_BACKGROUND_METADATA;if(g_pattern_async.state==PATTERN_ASYNC_TRANSFER){chunk=g_pattern_async.encoded_size-g_pattern_async.offset;if(chunk>SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES)chunk=SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES;kind=SD_SCHEDULER_BACKGROUND_DATA;}
     sd_scheduler_background_admission_t a=admit(kind,chunk);if(a==SD_SCHEDULER_BACKGROUND_NOT_NOW)return;if(a!=SD_SCHEDULER_BACKGROUND_GO){(void)async_abort();return;}
     FRESULT fr=FR_OK;UINT done=0U;
     switch(g_pattern_async.state){
-    case PATTERN_ASYNC_MOUNT:if(!sd_access_fs_mount_if_needed())async_fail();else g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_RECOVER:PATTERN_ASYNC_OPEN;break;
-    case PATTERN_ASYNC_RECOVER:fr=persistent_fatfs_recover_replace(g_pattern_async.final_path,g_pattern_async.temporary_path,g_pattern_async.backup_path);if(fr==FR_OK)g_pattern_async.state=PATTERN_ASYNC_OPEN;else async_fail();break;
-    case PATTERN_ASYNC_OPEN:if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)fr=persistent_fatfs_open_write_result(&g_pattern_async.file,g_pattern_async.temporary_path);else if(!persistent_fatfs_open_read(&g_pattern_async.file,g_pattern_async.final_path))fr=FR_DISK_ERR;if(fr!=FR_OK){async_fail();break;}g_pattern_async.file_open=1U;if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_LOAD){g_pattern_async.encoded_size=g_pattern_async.file.size;if(g_pattern_async.encoded_size<PERSIST_CODEC_HEADER_BYTES||g_pattern_async.encoded_size>g_pattern_async.encoded_capacity){async_fail();break;}}g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_ALLOCATE:PATTERN_ASYNC_TRANSFER;break;
-    case PATTERN_ASYNC_ALLOCATE:fr=f_lseek(&g_pattern_async.file.file,(FSIZE_t)(g_pattern_async.encoded_size-1U));if(fr==FR_OK)fr=f_write(&g_pattern_async.file.file,&g_pattern_async.encoded[g_pattern_async.encoded_size-1U],1U,&done);if(fr==FR_OK&&done==1U)fr=f_lseek(&g_pattern_async.file.file,0U);if(fr==FR_OK)g_pattern_async.state=PATTERN_ASYNC_TRANSFER;else async_fail();break;
-    case PATTERN_ASYNC_TRANSFER:if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)fr=f_write(&g_pattern_async.file.file,&g_pattern_async.encoded[g_pattern_async.offset],chunk,&done);else fr=f_read(&g_pattern_async.file.file,&g_pattern_async.encoded[g_pattern_async.offset],chunk,&done);if(fr!=FR_OK||done!=chunk){async_fail();break;}g_pattern_async.offset+=chunk;if(g_pattern_async.offset==g_pattern_async.encoded_size)g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_SYNC:PATTERN_ASYNC_CLOSE;break;
-    case PATTERN_ASYNC_SYNC:if(f_sync(&g_pattern_async.file.file)==FR_OK)g_pattern_async.state=PATTERN_ASYNC_CLOSE;else async_fail();break;
-    case PATTERN_ASYNC_CLOSE:fr=persistent_fatfs_close_result(&g_pattern_async.file);g_pattern_async.file_open=0U;if(fr!=FR_OK)async_fail();else g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_COMMIT:PATTERN_ASYNC_DECODE;break;
-    case PATTERN_ASYNC_COMMIT:fr=persistent_fatfs_commit_replace(g_pattern_async.final_path,g_pattern_async.temporary_path,g_pattern_async.backup_path);if(fr==FR_OK){g_present[g_pattern_async.bank][g_pattern_async.pattern]=1U;async_finish(1U);}else async_fail();break;
+    case PATTERN_ASYNC_MOUNT:if(!sd_access_fs_mount_if_needed())async_fail(PATTERN_CONTROL_BANK_ASYNC_ERROR_MOUNT,FR_NOT_READY);else g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_RECOVER:PATTERN_ASYNC_OPEN;break;
+    case PATTERN_ASYNC_RECOVER:fr=persistent_fatfs_recover_replace(g_pattern_async.final_path,g_pattern_async.temporary_path,g_pattern_async.backup_path);if(fr==FR_OK)g_pattern_async.state=PATTERN_ASYNC_OPEN;else async_fail(PATTERN_CONTROL_BANK_ASYNC_ERROR_RECOVER,fr);break;
+    case PATTERN_ASYNC_OPEN:if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)fr=persistent_fatfs_open_write_result(&g_pattern_async.file,g_pattern_async.temporary_path);else if(!persistent_fatfs_open_read(&g_pattern_async.file,g_pattern_async.final_path))fr=FR_DISK_ERR;if(fr!=FR_OK){async_fail(PATTERN_CONTROL_BANK_ASYNC_ERROR_OPEN,fr);break;}g_pattern_async.file_open=1U;if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_LOAD){g_pattern_async.encoded_size=g_pattern_async.file.size;if(g_pattern_async.encoded_size<PERSIST_CODEC_HEADER_BYTES||g_pattern_async.encoded_size>g_pattern_async.encoded_capacity){async_fail(PATTERN_CONTROL_BANK_ASYNC_ERROR_DECODE,FR_INVALID_OBJECT);break;}}g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_ALLOCATE:PATTERN_ASYNC_TRANSFER;break;
+    case PATTERN_ASYNC_ALLOCATE:fr=f_lseek(&g_pattern_async.file.file,(FSIZE_t)(g_pattern_async.encoded_size-1U));if(fr==FR_OK)fr=f_write(&g_pattern_async.file.file,&g_pattern_async.encoded[g_pattern_async.encoded_size-1U],1U,&done);if(fr==FR_OK&&done!=1U)fr=FR_DISK_ERR;if(fr==FR_OK)fr=f_lseek(&g_pattern_async.file.file,0U);if(fr==FR_OK)g_pattern_async.state=PATTERN_ASYNC_TRANSFER;else async_fail(PATTERN_CONTROL_BANK_ASYNC_ERROR_TRANSFER,fr);break;
+    case PATTERN_ASYNC_TRANSFER:if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)fr=f_write(&g_pattern_async.file.file,&g_pattern_async.encoded[g_pattern_async.offset],chunk,&done);else fr=f_read(&g_pattern_async.file.file,&g_pattern_async.encoded[g_pattern_async.offset],chunk,&done);if(fr!=FR_OK||done!=chunk){async_fail(PATTERN_CONTROL_BANK_ASYNC_ERROR_TRANSFER,(fr!=FR_OK)?fr:FR_DISK_ERR);break;}g_pattern_async.offset+=chunk;if(g_pattern_async.offset==g_pattern_async.encoded_size)g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_SYNC:PATTERN_ASYNC_CLOSE;break;
+    case PATTERN_ASYNC_SYNC:fr=f_sync(&g_pattern_async.file.file);if(fr==FR_OK)g_pattern_async.state=PATTERN_ASYNC_CLOSE;else async_fail(PATTERN_CONTROL_BANK_ASYNC_ERROR_SYNC,fr);break;
+    case PATTERN_ASYNC_CLOSE:fr=persistent_fatfs_close_result(&g_pattern_async.file);g_pattern_async.file_open=0U;if(fr!=FR_OK)async_fail(PATTERN_CONTROL_BANK_ASYNC_ERROR_CLOSE,fr);else g_pattern_async.state=(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)?PATTERN_ASYNC_COMMIT:PATTERN_ASYNC_DECODE;break;
+    case PATTERN_ASYNC_COMMIT:fr=persistent_fatfs_commit_replace(g_pattern_async.final_path,g_pattern_async.temporary_path,g_pattern_async.backup_path);if(fr==FR_OK){g_present[g_pattern_async.bank][g_pattern_async.pattern]=1U;async_finish(1U);}else async_fail(PATTERN_CONTROL_BANK_ASYNC_ERROR_REPLACE,fr);break;
     case PATTERN_ASYNC_CLEANUP_CLOSE:(void)persistent_fatfs_close_result(&g_pattern_async.file);g_pattern_async.file_open=0U;if(g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)g_pattern_async.state=PATTERN_ASYNC_CLEANUP_TEMP;else async_finish(0U);break;
     case PATTERN_ASYNC_CLEANUP_TEMP:(void)f_unlink(g_pattern_async.temporary_path);async_finish(0U);break;
     default:async_finish(0U);break;}
@@ -158,4 +171,4 @@ void pattern_control_bank_async_service(void)
 }
 
 uint8_t pattern_control_bank_async_busy(void){return(g_pattern_async.state!=PATTERN_ASYNC_IDLE)?1U:0U;}
-uint8_t pattern_control_bank_async_take_result(pattern_control_bank_async_operation_t*op,uint8_t*b,uint8_t*p,uint8_t*ok){if(g_pattern_async.state!=PATTERN_ASYNC_DONE||!g_pattern_async.result_ready)return 0U;if(op)*op=g_pattern_async.operation;if(b)*b=g_pattern_async.bank;if(p)*p=g_pattern_async.pattern;if(ok)*ok=g_pattern_async.success;memset(&g_pattern_async,0,sizeof(g_pattern_async));return 1U;}
+uint8_t pattern_control_bank_async_take_result(pattern_control_bank_async_operation_t*op,uint8_t*b,uint8_t*p,uint8_t*ok,pattern_control_bank_async_error_t*error,int32_t*filesystem_result,uint32_t*offset){if(g_pattern_async.state!=PATTERN_ASYNC_DONE||!g_pattern_async.result_ready)return 0U;if(op)*op=g_pattern_async.operation;if(b)*b=g_pattern_async.bank;if(p)*p=g_pattern_async.pattern;if(ok)*ok=g_pattern_async.success;if(error)*error=g_pattern_async.error;if(filesystem_result)*filesystem_result=g_pattern_async.filesystem_result;if(offset)*offset=g_pattern_async.offset;memset(&g_pattern_async,0,sizeof(g_pattern_async));return 1U;}

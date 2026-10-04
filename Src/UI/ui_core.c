@@ -740,6 +740,12 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
                 || (g_ui_track_state.track_select_armed != 0U))
             && (ui_get_hall_mode() != UI_HALL_MODE_PATTERN))
     {
+        if(g_ui_track_state.shift_down==0U
+            &&pattern_live_store_available()==0U)
+        {
+            ui_core_set_feedback("NO PROJECT");
+            return 1U;
+        }
         ui_core_transport_enter_pattern(
             (g_ui_track_state.shift_down != 0U)
                 ? UI_PATTERN_MODE_RECALL : UI_PATTERN_MODE_STORE);

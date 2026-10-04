@@ -274,12 +274,19 @@ void pattern_load_service(uint32_t byte_budget)
     uint8_t completed_bank = 0U;
     uint8_t completed_pattern = 0U;
     uint8_t completed_success = 0U;
+    pattern_control_bank_async_error_t completed_error=
+        PATTERN_CONTROL_BANK_ASYNC_ERROR_NONE;
+    int32_t completed_fresult=0;
+    uint32_t completed_offset=0U;
     uint8_t completed_candidate_ready = 0U;
     uint8_t completed_candidate_failed = 0U;
     if (pattern_control_bank_async_take_result(&completed_operation,
                                                &completed_bank,
                                                &completed_pattern,
-                                               &completed_success) != 0U)
+                                               &completed_success,
+                                               &completed_error,
+                                               &completed_fresult,
+                                               &completed_offset) != 0U)
     {
         if ((completed_operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
             && (g_pattern_io_workspace != 0)
@@ -289,8 +296,29 @@ void pattern_load_service(uint32_t byte_budget)
             {
                 persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
             }
-            else persist_debug_error(PERSIST_DBG_STAGE_WRITE,
-                                     PERSIST_DBG_ERROR_FILESYSTEM);
+            else
+            {
+                persist_dbg_stage_t stage=PERSIST_DBG_STAGE_WRITE;
+                persist_dbg_error_t error=PERSIST_DBG_ERROR_FILESYSTEM;
+                if(completed_error==PATTERN_CONTROL_BANK_ASYNC_ERROR_MOUNT)
+                {stage=PERSIST_DBG_STAGE_MOUNT;error=PERSIST_DBG_ERROR_MOUNT;}
+                else if(completed_error==PATTERN_CONTROL_BANK_ASYNC_ERROR_OPEN)
+                    stage=PERSIST_DBG_STAGE_OPEN;
+                else if(completed_error==PATTERN_CONTROL_BANK_ASYNC_ERROR_SYNC)
+                    stage=PERSIST_DBG_STAGE_WRITE;
+                else if(completed_error==PATTERN_CONTROL_BANK_ASYNC_ERROR_CLOSE)
+                    stage=PERSIST_DBG_STAGE_CLOSE;
+                else if(completed_error==PATTERN_CONTROL_BANK_ASYNC_ERROR_RECOVER
+                    ||completed_error==PATTERN_CONTROL_BANK_ASYNC_ERROR_REPLACE)
+                {stage=PERSIST_DBG_STAGE_BANK_COMMIT;error=PERSIST_DBG_ERROR_BANK;}
+                else if(completed_error==PATTERN_CONTROL_BANK_ASYNC_ERROR_MEDIA)
+                {stage=PERSIST_DBG_STAGE_POLICY;error=PERSIST_DBG_ERROR_MEDIA;}
+                g_persist_dbg.detail=(uint32_t)completed_error;
+                persist_debug_details((uint32_t)completed_error,completed_bank,
+                                      completed_pattern,completed_offset);
+                persist_debug_filesystem(completed_fresult,completed_offset);
+                persist_debug_error(stage,error);
+            }
         }
         else if ((completed_operation == PATTERN_CONTROL_BANK_ASYNC_LOAD)
                  && (g_pattern_io_workspace != 0)
@@ -420,28 +448,73 @@ void pattern_live_cancel_recall(void)
     pattern_candidate_release_payload();
 }
 
+enum
+{
+    PATTERN_SAVE_DETAIL_INVALID_SLOT = 1U,
+    PATTERN_SAVE_DETAIL_NO_PROJECT,
+    PATTERN_SAVE_DETAIL_WORKSPACE_BUSY,
+    PATTERN_SAVE_DETAIL_CAPTURE_FAILED,
+    PATTERN_SAVE_DETAIL_RECORDER_ACTIVE,
+    PATTERN_SAVE_DETAIL_STORE_POLICY,
+    PATTERN_SAVE_DETAIL_STORE_ARGUMENT,
+    PATTERN_SAVE_DETAIL_STORE_BUSY,
+    PATTERN_SAVE_DETAIL_STORE_CODEC,
+    PATTERN_SAVE_DETAIL_STORE_PATH
+};
+
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
 {
     persist_debug_begin(PERSIST_DBG_OP_PATTERN_SAVE, bank, pattern);
     if (pattern_live_slot_is_valid(bank, pattern) == 0U)
     {
+        g_persist_dbg.detail=PATTERN_SAVE_DETAIL_INVALID_SLOT;
+        persist_debug_details(PATTERN_SAVE_DETAIL_INVALID_SLOT,bank,pattern,0U);
+        persist_debug_error(PERSIST_DBG_STAGE_VALIDATE,PERSIST_DBG_ERROR_VALIDATE);
+        return 0U;
+    }
+
+    uint8_t active_project=0xFFU;
+    if(pattern_control_bank_active_project(&active_project)==0U)
+    {
+        g_persist_dbg.detail=PATTERN_SAVE_DETAIL_NO_PROJECT;
+        persist_debug_details(PATTERN_SAVE_DETAIL_NO_PROJECT,0xFFU,bank,pattern);
+        persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);
         return 0U;
     }
 
     if ((g_pattern_io_workspace != 0)
         || (pattern_control_bank_async_busy() != 0U))
     {
+        g_persist_dbg.detail=PATTERN_SAVE_DETAIL_WORKSPACE_BUSY;
+        persist_debug_details(PATTERN_SAVE_DETAIL_WORKSPACE_BUSY,active_project,
+                              bank,pattern);
+        persist_debug_error(PERSIST_DBG_STAGE_WORKSPACE,
+                            PERSIST_DBG_ERROR_WORKSPACE);
         return 0U;
     }
 
     g_pattern_io_workspace = persistence_workspace_acquire_pattern_io();
-    if (g_pattern_io_workspace == 0) return 0U;
+    if (g_pattern_io_workspace == 0)
+    {
+        g_persist_dbg.detail=PATTERN_SAVE_DETAIL_WORKSPACE_BUSY;
+        persist_debug_details(PATTERN_SAVE_DETAIL_WORKSPACE_BUSY,active_project,
+                              bank,pattern);
+        persist_debug_error(PERSIST_DBG_STAGE_WORKSPACE,
+                            PERSIST_DBG_ERROR_WORKSPACE);
+        return 0U;
+    }
     persist_control_pattern_t *const captured = &g_pattern_io_workspace->pattern;
 
-    if (persistent_pattern_control_capture(captured) != PERSIST_CODEC_OK)
+    const persist_codec_result_t capture_result=
+        persistent_pattern_control_capture(captured);
+    if (capture_result != PERSIST_CODEC_OK)
     {
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
         g_pattern_io_workspace = 0;
+        g_persist_dbg.detail=PATTERN_SAVE_DETAIL_CAPTURE_FAILED;
+        persist_debug_details(PATTERN_SAVE_DETAIL_CAPTURE_FAILED,active_project,
+                              bank,pattern);
+        persist_debug_error(PERSIST_DBG_STAGE_VALIDATE,(int32_t)capture_result);
         return 0U;
     }
 
@@ -450,23 +523,51 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
         /* TODO pending budgeted pattern save: defer the SD store instead of blocking record drain. */
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
         g_pattern_io_workspace = 0;
+        g_persist_dbg.detail=PATTERN_SAVE_DETAIL_RECORDER_ACTIVE;
+        persist_debug_details(PATTERN_SAVE_DETAIL_RECORDER_ACTIVE,active_project,
+                              bank,pattern);
+        persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);
         return 0U;
     }
 
-    if (pattern_control_bank_store_async_begin(
+    const pattern_control_bank_store_begin_result_t begin_result=
+        pattern_control_bank_store_async_begin(
             bank,
             pattern,
             captured,
             g_pattern_io_workspace->scratch.encoded,
-            sizeof(g_pattern_io_workspace->scratch.encoded)) == 0U)
+            sizeof(g_pattern_io_workspace->scratch.encoded));
+    if (begin_result != PATTERN_CONTROL_BANK_STORE_BEGIN_OK)
     {
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
         g_pattern_io_workspace = 0;
+        persist_dbg_stage_t stage=PERSIST_DBG_STAGE_POLICY;
+        persist_dbg_error_t error=PERSIST_DBG_ERROR_POLICY;
+        uint32_t detail=PATTERN_SAVE_DETAIL_STORE_POLICY;
+        if(begin_result==PATTERN_CONTROL_BANK_STORE_BEGIN_NO_PROJECT)
+            detail=PATTERN_SAVE_DETAIL_NO_PROJECT;
+        else if(begin_result==PATTERN_CONTROL_BANK_STORE_BEGIN_ARGUMENT)
+        {stage=PERSIST_DBG_STAGE_VALIDATE;error=PERSIST_DBG_ERROR_VALIDATE;detail=PATTERN_SAVE_DETAIL_STORE_ARGUMENT;}
+        else if(begin_result==PATTERN_CONTROL_BANK_STORE_BEGIN_BUSY)
+        {stage=PERSIST_DBG_STAGE_WORKSPACE;error=PERSIST_DBG_ERROR_WORKSPACE;detail=PATTERN_SAVE_DETAIL_STORE_BUSY;}
+        else if(begin_result==PATTERN_CONTROL_BANK_STORE_BEGIN_CODEC)
+        {stage=PERSIST_DBG_STAGE_ENCODE;error=PERSIST_DBG_ERROR_CODEC;detail=PATTERN_SAVE_DETAIL_STORE_CODEC;}
+        else if(begin_result==PATTERN_CONTROL_BANK_STORE_BEGIN_PATH)
+        {stage=PERSIST_DBG_STAGE_PATH;error=PERSIST_DBG_ERROR_PATH;detail=PATTERN_SAVE_DETAIL_STORE_PATH;}
+        g_persist_dbg.detail=detail;
+        persist_debug_details(detail,active_project,bank,pattern);
+        persist_debug_error(stage,error);
         return 0U;
     }
     g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_SAVE;
     persist_debug_stage(PERSIST_DBG_STAGE_ASYNC, 0);
     return 1U;
+}
+
+uint8_t pattern_live_store_available(void)
+{
+    uint8_t active_project=0U;
+    return pattern_control_bank_active_project(&active_project);
 }
 
 uint8_t pattern_live_request_slot(uint8_t bank, uint8_t pattern)
