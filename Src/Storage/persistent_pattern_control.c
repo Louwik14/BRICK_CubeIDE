@@ -204,15 +204,16 @@ static uint8_t persistent_pattern_diag_validate_static(
                 (topology_ok != 0U)
                     ? (((uint32_t)topology.active << 8U) | topology.role) : 0U,
                 BRICK_ENTITY_CAPACITY, prepared->group_active);
-        const track_runtime_family_t family = (topology_ok != 0U
-                && topology.active != 0U)
-            ? track_runtime_family_from_ui(
-                (track_family_t)prepared->family[entity])
-            : TRACK_RUNTIME_FAMILY_OFF;
         const track_runtime_type_t type = (topology_ok != 0U
                 && topology.active != 0U)
             ? track_runtime_type_from_ui((track_type_t)prepared->type[entity])
             : TRACK_RUNTIME_TYPE_NONE;
+        const track_runtime_family_t family = (topology_ok != 0U
+                && topology.active != 0U)
+            ? track_runtime_family_from_ui_config(
+                (track_family_t)prepared->family[entity],
+                (track_type_t)prepared->type[entity])
+            : TRACK_RUNTIME_FAMILY_OFF;
         const uint8_t expected_engine = (uint8_t)track_runtime_choose_engine(
             family, type);
         if ((target->program.engine != expected_engine)
@@ -754,7 +755,8 @@ persist_codec_result_t persistent_pattern_control_validate(const persist_control
             if(entity_topology_resolve(active,e,&topology)==0U
                     ||topology.active==0U)continue;
             const track_runtime_family_t target_family=
-                track_runtime_family_from_ui(cfg[e].family);
+                track_runtime_family_from_ui_config(
+                    cfg[e].family,cfg[e].type);
             const track_runtime_type_t target_runtime=
                 track_runtime_type_from_ui(cfg[e].type);
             const track_runtime_engine_t target_engine=
@@ -763,7 +765,8 @@ persist_codec_result_t persistent_pattern_control_validate(const persist_control
                 track_runtime_type_from_ui(track_state_get_type(e));
             const track_runtime_engine_t current_engine=
                 track_runtime_choose_engine(
-                    track_runtime_family_from_ui(track_state_get_family(e)),
+                    track_runtime_family_from_ui_config(
+                        track_state_get_family(e),track_state_get_type(e)),
                     current_runtime);
             if(target_family==TRACK_RUNTIME_FAMILY_SYNTH
                     ||target_engine==TRACK_RUNTIME_ENGINE_DRUM)
@@ -974,10 +977,12 @@ static void persist_debug_entity_failure(persist_dbg_validation_step_t step,
     persist_debug_validation_fail(step,(int32_t)result,entity,
         (uint32_t)target_type,(uint32_t)current_runtime,(uint32_t)target_runtime,
         (uint32_t)track_runtime_choose_engine(
-            track_runtime_family_from_ui(track_state_get_family(entity)),
+            track_runtime_family_from_ui_config(
+                track_state_get_family(entity),track_state_get_type(entity)),
             current_runtime),
         (uint32_t)track_runtime_choose_engine(
-            track_runtime_family_from_ui(target_family),target_runtime),
+            track_runtime_family_from_ui_config(target_family,target_type),
+            target_runtime),
         polyphony_control_get_voice_count(entity),saved->polyphony.voice_count);
 }
 
@@ -1077,8 +1082,9 @@ static uint8_t persistent_pattern_prepare_audio(
         track_runtime_type_t type = TRACK_RUNTIME_TYPE_NONE;
         if (topology.active != 0U)
         {
-            family = track_runtime_family_from_ui(
-                (track_family_t)prepared->family[entity]);
+            family = track_runtime_family_from_ui_config(
+                (track_family_t)prepared->family[entity],
+                (track_type_t)prepared->type[entity]);
             type = track_runtime_type_from_ui(
                 (track_type_t)prepared->type[entity]);
         }
@@ -1399,7 +1405,9 @@ static uint8_t persistent_pattern_prepare_seq(
         entity_topology_descriptor_t topology;
         if(!entity_topology_resolve(prepared->group_active,entity,&topology))goto fail;
         const track_family_t family=(track_family_t)prepared->family[entity];
-        const track_runtime_family_t runtime_family=track_runtime_family_from_ui(family);
+        const track_runtime_family_t runtime_family=
+            track_runtime_family_from_ui_config(
+                family,(track_type_t)prepared->type[entity]);
         const track_runtime_type_t runtime_type=track_runtime_type_from_ui(
             (track_type_t)prepared->type[entity]);
         const uint16_t capabilities=entity_topology_get_capabilities(&topology);

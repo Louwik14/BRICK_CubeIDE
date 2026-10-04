@@ -236,7 +236,9 @@ prouvees, le `seq_pattern_t` inactif est entierement compile et le slot
 `PreparedAudio` type est construit. Les 51 valeurs `AUDIO_GLOBAL` sont validees
 par leur contrat Param complet (finitude, domaine, enum/type et mapping AUDIO)
 avant que le candidat puisse devenir `PREPARED`. La publication CONTROL finale
-installe Pattern et macros, finalise le slot depuis les owners CONTROL installes,
+canonicalise le type UI `SAMPLER/GROUP` en PROGRAM AUDIO `OTHER/GROUP`: le
+master GROUP est un bus de topologie sans renderer Sampler. Elle installe
+Pattern et macros, finalise le slot depuis les owners CONTROL installes,
 puis le publie dans un unique commit AUDIO de type Project;
 l'identite Pattern courante et le hook UI unique ne sont publies qu'apres le
 commit AUDIO reussi. Le chemin interne d'installation Pattern ne cree donc pas

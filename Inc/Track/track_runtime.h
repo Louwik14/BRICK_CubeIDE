@@ -154,6 +154,8 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param);
 track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_is_track_prism_available(uint8_t track);
 track_runtime_family_t track_runtime_family_from_ui(track_family_t family);
+track_runtime_family_t track_runtime_family_from_ui_config(
+    track_family_t family, track_type_t type);
 track_runtime_type_t track_runtime_type_from_ui(track_type_t type);
 track_runtime_engine_t track_runtime_choose_engine(
     track_runtime_family_t family, track_runtime_type_t type);

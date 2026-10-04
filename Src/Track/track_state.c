@@ -28,8 +28,9 @@ static uint8_t track_state_audio_resources_are_valid(
         if ((entity_topology_resolve(group_active, entity_id, &entity) == 0U)
                 || (entity.active == 0U))
             continue;
-        const track_runtime_family_t family = track_runtime_family_from_ui(
-            configs[entity_id].family);
+        const track_runtime_family_t family =
+            track_runtime_family_from_ui_config(
+                configs[entity_id].family, configs[entity_id].type);
         const track_runtime_type_t type = track_runtime_type_from_ui(
             configs[entity_id].type);
         const track_runtime_engine_t engine =
@@ -85,7 +86,7 @@ bool track_structure_validate_entity_bulk_with_polyphony(
                                                         ui_type, configs)))
             return false;
         const track_runtime_family_t runtime_family =
-            track_runtime_family_from_ui(ui_family);
+            track_runtime_family_from_ui_config(ui_family, ui_type);
         const track_runtime_type_t runtime_type = track_runtime_type_from_ui(ui_type);
         const track_runtime_engine_t engine =
             track_runtime_choose_engine(runtime_family, runtime_type);

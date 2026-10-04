@@ -229,6 +229,17 @@ track_runtime_family_t track_runtime_family_from_ui(track_family_t family)
     return TRACK_RUNTIME_FAMILY_OTHER;
 }
 
+track_runtime_family_t track_runtime_family_from_ui_config(
+    track_family_t family, track_type_t type)
+{
+    /* GROUP is selected from the Sampler UI family, but it is a topology/bus
+     * endpoint rather than a sampler renderer.  Keep that UI catalogue detail
+     * out of the CONTROL/AUDIO PROGRAM descriptor. */
+    return (type == TRACK_TYPE_GROUP)
+        ? TRACK_RUNTIME_FAMILY_OTHER
+        : track_runtime_family_from_ui(family);
+}
+
 track_runtime_type_t track_runtime_type_from_ui(track_type_t type)
 {
     switch (type)
@@ -578,7 +589,8 @@ static void track_runtime_prepare_ctx_base(uint8_t track, track_runtime_ctx_t *c
         return;
     }
     const track_type_t ui_type = config.type;
-    track_runtime_family_t family = track_runtime_family_from_ui(config.family);
+    track_runtime_family_t family = track_runtime_family_from_ui_config(
+        config.family, config.type);
     track_runtime_type_t type = track_runtime_type_from_ui(ui_type);
     memset(ctx, 0, sizeof(*ctx));
     ctx->midi_channel_1_16 = track_state_get_midi_channel(track);
