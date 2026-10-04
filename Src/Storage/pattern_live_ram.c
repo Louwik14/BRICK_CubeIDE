@@ -14,10 +14,12 @@
 #include "ControlRT/prepared_audio_state.h"
 #include "ControlRT/pattern_recall_diag.h"
 #include "Storage/pattern_control_bank.h"
+#include "Storage/pattern_working_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/persistence_debug.h"
+#include "Platform/memory_layout.h"
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
@@ -53,6 +55,16 @@ static uint32_t g_pattern_request_generation;
 static uint32_t g_pattern_io_request_generation;
 static persistence_pattern_io_workspace_t *g_pattern_io_workspace;
 static pattern_control_bank_async_operation_t g_pattern_io_operation;
+STORAGE_STATE_SDRAM static persist_control_pattern_t
+    g_pattern_departing_snapshot;
+static uint8_t g_pattern_departing_valid;
+static uint8_t g_pattern_departing_bank;
+static uint8_t g_pattern_departing_pattern;
+static uint8_t g_pattern_working_load_active;
+static uint8_t g_pattern_working_spill_active;
+
+_Static_assert(sizeof(persist_control_pattern_t) == 459436U,
+               "Working Pattern departure snapshot size changed");
 
 static void pattern_debug_state(void)
 {
@@ -119,7 +131,10 @@ static void pattern_candidate_clear(void)
 static void pattern_candidate_release_payload(void)
 {
     if ((g_pattern_io_workspace != NULL)
-        && (g_pattern_io_operation == PATTERN_CONTROL_BANK_ASYNC_NONE))
+        && (g_pattern_io_operation == PATTERN_CONTROL_BANK_ASYNC_NONE)
+        && (g_pattern_departing_valid == 0U)
+        && (g_pattern_working_load_active == 0U)
+        && (pattern_working_bank_async_busy() == 0U))
     {
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
         g_pattern_io_workspace = NULL;
@@ -130,8 +145,20 @@ static uint8_t pattern_candidate_apply(uint8_t resume_transport)
 {
     if ((g_pattern_candidate.phase != PATTERN_CANDIDATE_PREPARED)
         || (g_pattern_io_workspace == NULL)
-        || (g_pattern_io_operation != PATTERN_CONTROL_BANK_ASYNC_NONE))
+        || (g_pattern_io_operation != PATTERN_CONTROL_BANK_ASYNC_NONE)
+        || (g_pattern_departing_valid != 0U)
+        || (pattern_working_bank_async_busy() != 0U))
         return 0U;
+
+    const uint8_t departing_bank = g_active_bank;
+    const uint8_t departing_pattern = g_active_pattern;
+    const persist_codec_result_t capture = persistent_pattern_control_capture(
+        &g_pattern_departing_snapshot);
+    if (capture != PERSIST_CODEC_OK)
+    {
+        persist_debug_error(PERSIST_DBG_STAGE_VALIDATE, (int32_t)capture);
+        return 0U;
+    }
 
     persist_debug_stage(PERSIST_DBG_STAGE_APPLY, 0);
     ++g_persist_dbg.apply_attempted;
@@ -146,8 +173,10 @@ static uint8_t pattern_candidate_apply(uint8_t resume_transport)
     const uint32_t request_generation =
         g_pattern_candidate.request_generation;
     pattern_candidate_clear();
+    g_pattern_departing_bank = departing_bank;
+    g_pattern_departing_pattern = departing_pattern;
+    g_pattern_departing_valid = 1U;
     undo_v2_clear_all();
-    pattern_candidate_release_payload();
     persist_debug_publication(1U, 1U);
     persistent_pattern_control_sync_ui_after_commit();
     (void)param_macro_sync_sources();
@@ -157,6 +186,30 @@ static uint8_t pattern_candidate_apply(uint8_t resume_transport)
     g_persist_dbg.current_generation = request_generation;
     persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS, 0);
     g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_SUCCEEDED;
+    return 1U;
+}
+
+static uint8_t pattern_departing_spill_begin(void)
+{
+    if (g_pattern_departing_valid == 0U
+            || g_pattern_working_spill_active != 0U
+            || g_pattern_io_workspace == NULL
+            || g_pattern_io_operation != PATTERN_CONTROL_BANK_ASYNC_NONE
+            || pattern_working_bank_async_busy() != 0U) return 0U;
+    if (pattern_live_build_default(&g_pattern_io_workspace->pattern,
+            pattern_live_default_groove_seed(g_pattern_departing_bank,
+                                             g_pattern_departing_pattern)) == 0U)
+        return 0U;
+    const uint8_t saved_base_present =
+        (pattern_working_bank_base_kind() == PATTERN_WORKING_BASE_PROJECT)
+        ? pattern_control_bank_present(g_pattern_departing_bank,
+                                       g_pattern_departing_pattern) : 0U;
+    if (pattern_working_bank_reconcile_async_begin(
+            g_pattern_departing_bank, g_pattern_departing_pattern,
+            &g_pattern_departing_snapshot, &g_pattern_io_workspace->pattern,
+            saved_base_present, g_pattern_io_workspace->scratch.encoded,
+            sizeof(g_pattern_io_workspace->scratch.encoded)) == 0U) return 0U;
+    g_pattern_working_spill_active = 1U;
     return 1U;
 }
 
@@ -269,6 +322,55 @@ void pattern_load_service(uint32_t byte_budget)
         return;
     }
 
+    pattern_working_bank_async_service();
+    pattern_working_operation_t working_operation;
+    uint8_t working_bank = 0U;
+    uint8_t working_pattern = 0U;
+    uint8_t working_success = 0U;
+    if (pattern_working_bank_async_take_result(&working_operation,
+            &working_bank, &working_pattern, &working_success) != 0U)
+    {
+        if (working_operation == PATTERN_WORKING_OPERATION_RECONCILE
+                && g_pattern_working_spill_active != 0U)
+        {
+            g_pattern_working_spill_active = 0U;
+            if (working_success != 0U)
+            {
+                g_pattern_departing_valid = 0U;
+                pattern_candidate_release_payload();
+            }
+            else
+                persist_debug_error(PERSIST_DBG_STAGE_WRITE,
+                                    PERSIST_DBG_ERROR_FILESYSTEM);
+        }
+        else if (working_operation == PATTERN_WORKING_OPERATION_LOAD
+                && g_pattern_working_load_active != 0U)
+        {
+            const uint8_t matches = (uint8_t)(
+                g_pattern_candidate.phase == PATTERN_CANDIDATE_LOADING
+                && working_bank == g_pattern_candidate.bank
+                && working_pattern == g_pattern_candidate.pattern);
+            g_pattern_working_load_active = 0U;
+            if (working_success != 0U && matches != 0U)
+                pattern_candidate_decoded();
+            else if (matches != 0U)
+            {
+                g_persist_dbg.cancel_reason = PERSIST_DBG_CANCEL_IO_FAILED;
+                pattern_candidate_clear();
+                pattern_candidate_release_payload();
+                persist_debug_error(PERSIST_DBG_STAGE_READ,
+                                    PERSIST_DBG_ERROR_FILESYSTEM);
+            }
+            else pattern_candidate_release_payload();
+        }
+        return;
+    }
+    if (g_pattern_departing_valid != 0U)
+    {
+        (void)pattern_departing_spill_begin();
+        return;
+    }
+
     pattern_control_bank_async_service();
     pattern_control_bank_async_operation_t completed_operation;
     uint8_t completed_bank = 0U;
@@ -371,7 +473,8 @@ void pattern_load_service(uint32_t byte_budget)
     {pattern_candidate_decoded();return;}
     if (g_pattern_candidate.phase != PATTERN_CANDIDATE_REQUESTED) return;
     if ((g_pattern_io_workspace != 0)
-        || (pattern_control_bank_async_busy() != 0U)) return;
+        || (pattern_control_bank_async_busy() != 0U)
+        || (pattern_working_bank_async_busy() != 0U)) return;
     if (audio_recorder_is_active() != 0U)
     {
         pattern_live_cancel_recall();
@@ -386,6 +489,25 @@ void pattern_load_service(uint32_t byte_budget)
         g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
     }
     else if (g_pattern_io_operation != PATTERN_CONTROL_BANK_ASYNC_NONE) return;
+
+    if (pattern_working_bank_present(g_pattern_candidate.bank,
+                                     g_pattern_candidate.pattern) != 0U)
+    {
+        if (pattern_working_bank_load_async_begin(
+                g_pattern_candidate.bank, g_pattern_candidate.pattern,
+                g_pattern_io_workspace->scratch.encoded,
+                sizeof(g_pattern_io_workspace->scratch.encoded),
+                &g_pattern_io_workspace->pattern) == 0U)
+        {
+            persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
+            g_pattern_io_workspace = 0;
+            return;
+        }
+        g_pattern_working_load_active = 1U;
+        g_pattern_candidate.phase = PATTERN_CANDIDATE_LOADING;
+        pattern_debug_state();
+        return;
+    }
 
     if (pattern_control_bank_present(g_pattern_candidate.bank,
                                      g_pattern_candidate.pattern) == 0U)
@@ -474,7 +596,33 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
     }
 
     uint8_t active_project=0xFFU;
-    if(pattern_control_bank_active_project(&active_project)==0U)
+    const uint8_t project_associated =
+        pattern_control_bank_active_project(&active_project);
+    if (project_associated == 0U
+            && pattern_working_bank_base_kind() == PATTERN_WORKING_BASE_BLANK)
+    {
+        if (g_pattern_io_workspace != 0
+                || g_pattern_departing_valid != 0U
+                || pattern_working_bank_async_busy() != 0U
+                || pattern_control_bank_async_busy() != 0U
+                || audio_recorder_is_active() != 0U) return 0U;
+        g_pattern_io_workspace = persistence_workspace_acquire_pattern_io();
+        if (g_pattern_io_workspace == NULL) return 0U;
+        const persist_codec_result_t capture = persistent_pattern_control_capture(
+            &g_pattern_departing_snapshot);
+        if (capture != PERSIST_CODEC_OK)
+        {
+            persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
+            g_pattern_io_workspace = NULL;
+            persist_debug_error(PERSIST_DBG_STAGE_VALIDATE, (int32_t)capture);
+            return 0U;
+        }
+        g_pattern_departing_bank = bank;
+        g_pattern_departing_pattern = pattern;
+        g_pattern_departing_valid = 1U;
+        return 1U;
+    }
+    if (project_associated == 0U)
     {
         g_persist_dbg.detail=PATTERN_SAVE_DETAIL_NO_PROJECT;
         persist_debug_details(PATTERN_SAVE_DETAIL_NO_PROJECT,0xFFU,bank,pattern);
@@ -567,7 +715,8 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
 uint8_t pattern_live_store_available(void)
 {
     uint8_t active_project=0U;
-    return pattern_control_bank_active_project(&active_project);
+    return (uint8_t)(pattern_control_bank_active_project(&active_project)
+        || pattern_working_bank_base_kind() == PATTERN_WORKING_BASE_BLANK);
 }
 
 uint8_t pattern_live_request_slot(uint8_t bank, uint8_t pattern)
@@ -638,6 +787,11 @@ void pattern_live_init(void)
     g_pattern_io_request_generation = 0U;
     g_pattern_io_workspace = 0;
     g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
+    g_pattern_departing_valid = 0U;
+    g_pattern_departing_bank = 0U;
+    g_pattern_departing_pattern = 0U;
+    g_pattern_working_load_active = 0U;
+    g_pattern_working_spill_active = 0U;
 
     pattern_control_bank_init();
     pattern_debug_state();

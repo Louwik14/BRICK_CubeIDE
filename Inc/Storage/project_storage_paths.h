@@ -24,6 +24,10 @@ uint8_t project_storage_project_transaction_patterns_dir(char *out,
 uint8_t project_storage_project_delete_transaction_dir(char *out,
                                                        uint32_t capacity,
                                                        uint8_t slot);
+uint8_t project_storage_working_root(char *out, uint32_t capacity);
+uint8_t project_storage_working_patterns_dir(char *out, uint32_t capacity);
+uint8_t project_storage_working_pattern_file(char *out, uint32_t capacity,
+                                             uint8_t bank, uint8_t pattern);
 uint8_t project_storage_patches_root(char *out, uint32_t capacity);
 uint8_t project_storage_patch_file(char *out, uint32_t capacity,uint16_t slot);
 

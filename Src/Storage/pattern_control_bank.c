@@ -2,6 +2,7 @@
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/project_storage_paths.h"
+#include "Storage/pattern_working_bank.h"
 #include "Storage/sd_access_gate.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "ff.h"
@@ -68,8 +69,8 @@ static uint8_t scan_project(uint8_t slot)
     (void)f_closedir(&dir);return 1U;
 }
 
-void pattern_control_bank_init(void){memset(g_present,0,sizeof(g_present));memset(&g_pattern_async,0,sizeof(g_pattern_async));g_active_project=INVALID_PROJECT;}
-uint8_t pattern_control_bank_activate_project(uint8_t slot){if(slot>=PROJECT_STORAGE_SLOT_COUNT||g_pattern_async.state!=PATTERN_ASYNC_IDLE||!acquire())return 0U;uint8_t ok=scan_project(slot);if(ok)g_active_project=slot;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
+void pattern_control_bank_init(void){memset(g_present,0,sizeof(g_present));memset(&g_pattern_async,0,sizeof(g_pattern_async));g_active_project=INVALID_PROJECT;pattern_working_bank_init();}
+uint8_t pattern_control_bank_activate_project(uint8_t slot){if(slot>=PROJECT_STORAGE_SLOT_COUNT||g_pattern_async.state!=PATTERN_ASYNC_IDLE||!acquire())return 0U;uint8_t ok=scan_project(slot);if(ok)ok=pattern_working_bank_start_project_mounted(slot);if(ok)g_active_project=slot;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
 uint8_t pattern_control_bank_validate_project(uint8_t slot)
 {
     if(slot>=PROJECT_STORAGE_SLOT_COUNT||!acquire())return 0U;
@@ -79,9 +80,9 @@ uint8_t pattern_control_bank_validate_project(uint8_t slot)
     if(ok)(void)f_closedir(&dir);
     sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;
 }
-void pattern_control_bank_deactivate_project(void){if(g_pattern_async.state==PATTERN_ASYNC_IDLE){g_active_project=INVALID_PROJECT;memset(g_present,0,sizeof(g_present));}}
+void pattern_control_bank_deactivate_project(void){if(g_pattern_async.state==PATTERN_ASYNC_IDLE){g_active_project=INVALID_PROJECT;memset(g_present,0,sizeof(g_present));pattern_working_bank_start_blank();}}
 uint8_t pattern_control_bank_active_project(uint8_t*out){if(out==NULL||g_active_project>=PROJECT_STORAGE_SLOT_COUNT)return 0U;*out=g_active_project;return 1U;}
-void pattern_control_bank_publish_empty_project(uint8_t slot){if(slot<PROJECT_STORAGE_SLOT_COUNT&&g_pattern_async.state==PATTERN_ASYNC_IDLE){g_active_project=slot;memset(g_present,0,sizeof(g_present));}}
+void pattern_control_bank_publish_empty_project(uint8_t slot){if(slot<PROJECT_STORAGE_SLOT_COUNT&&g_pattern_async.state==PATTERN_ASYNC_IDLE){g_active_project=slot;memset(g_present,0,sizeof(g_present));pattern_working_bank_publish_empty_project(slot);}}
 uint8_t pattern_control_bank_present(uint8_t b,uint8_t p){return valid(b,p)?g_present[b][p]:0U;}
 uint16_t pattern_control_bank_count(void){uint16_t n=0U;for(uint8_t b=0;b<BANKS;++b)for(uint8_t p=0;p<SLOTS;++p)n+=g_present[b][p]?1U:0U;return n;}
 uint8_t pattern_control_bank_delete(uint8_t b,uint8_t p){if(g_active_project>=PROJECT_STORAGE_SLOT_COUNT||!valid(b,p)||!acquire())return 0U;char x[80],tmp[84],bak[84];uint8_t ok=project_storage_pattern_file(x,sizeof(x),g_active_project,b,p)&&side_path(tmp,sizeof(tmp),x,"TMP")&&side_path(bak,sizeof(bak),x,"BAK");if(ok){FRESULT r=f_unlink(x);ok=(r==FR_OK||r==FR_NO_FILE);(void)f_unlink(tmp);(void)f_unlink(bak);}if(ok)g_present[b][p]=0U;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}

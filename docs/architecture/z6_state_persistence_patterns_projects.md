@@ -12,6 +12,47 @@ Patch contient une entite, ses parametres logiques, zero a deux references
 d'assets typees et, pour FM, le DTO de l'owner. `PROJECT.B6C` contient metadata,
 manifeste d'assets et 14 macros. Jusqu'a 256 documents Pattern canoniques vivent
 separement sous `PROJECTS/P##/PATTERNS/`.
+
+## Working Patterns
+
+Le dernier etat explicitement sauvegarde reste sous
+`PROJECTS/P##/PATTERNS/`. L'etat de travail quitte vit sous
+`BRICK/WORKING/PATTERNS/` avec exactement le meme codec Pattern. Un bitmap RAM
+de 256 bits est la projection bornee des overrides publies; le fichier et son
+bit sont publies ou retires ensemble par la machine Storage. Un changement de
+Project ou un Blank explicite ouvre une nouvelle session propre et retire les
+overrides de la session precedente.
+
+La resolution d'un Recall est strictement:
+
+```text
+override Working
+-> Pattern du Project associe
+-> default deterministe du slot
+```
+
+Il n'existe pas de banque RAM multi-Patterns. CONTROL possede un unique DTO
+sortant de 459 436 octets en SDRAM. Lorsque le candidat cible est PREPARED et
+que la frontiere de Recall est due, CONTROL capture le Pattern vivant dans ce
+DTO avant toute mutation, puis applique le candidat avec le pipeline existant.
+Apres le commit CONTROL/SEQ/AUDIO, hors frontiere musicale, le service
+cooperatif encode le DTO avec le codec courant. Il compare exactement le
+document encode avec le fichier Project de base, ou avec le default encode en
+Blank. Une egalite retire l'override et son bit; une difference publie le
+fichier par `TMP -> sync -> close -> final/BAK -> TMP/final` puis pose le bit.
+Un Recall suivant peut etre demande mais ne prend pas un second DTO: son I/O
+attend la fin du spill en cours.
+
+Le Pattern actif n'est pas ecrit pendant ses editions. Notes, steps, p-locks,
+encodeurs, modulation et parametres ne declenchent aucune ecriture Working.
+L'Undo reste une histoire runtime separee et continue d'etre vide au commit
+d'un autre Pattern.
+
+Blank utilise la meme banque Working, avec les defaults deterministes comme
+base. Pattern Store y est admis et publie l'etat capture comme override Working;
+aucun slot Project fictif n'est cree. Save Project multi-Patterns, Reload
+saved-only, Save As, shutdown Resume et boot Resume ne font pas partie de ce
+contrat de passe et restent a ajouter par leurs transactions produit.
 Quand `modulation_present` est actif, ENV3 n'existe qu'une fois dans le Patch,
 dans l'enveloppe de modulation; capture, Init, codec et application utilisent
 cette representation unique.

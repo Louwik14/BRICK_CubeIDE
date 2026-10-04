@@ -100,6 +100,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/groove_flash_backend.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/patch_product.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/pattern_control_bank.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/pattern_working_bank.c"
      "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/pattern_live_ram.c"
      "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistence_debug.c"
      "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistence_workspace.c"

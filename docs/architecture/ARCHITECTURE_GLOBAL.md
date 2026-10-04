@@ -21,6 +21,10 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
   Pattern ne remplace que les PROGRAM modifies et conserve les outputs vivants.
 - `STOP(output_handle)` rend l'output musicalement mort dans CONTROL. L'identite semantique NoteFx/SEQ ne traverse pas l'ABI AUDIO. AUDIO peut conserver une tail RELEASE et libere ou reutilise physiquement le slot sans ACK musical.
 - Pattern, Project et Patch utilisent exclusivement le codec CONTROL explicite version 7.
+- Le Pattern vivant reste unique. Lors d'un Recall, CONTROL capture le Pattern
+  sortant dans un unique DTO SDRAM avant le commit cible; STORAGE reconcilie
+  ensuite cet etat avec sa base et conserve les seuls overrides sous
+  `BRICK/WORKING/PATTERNS/`.
 
 ## Flux principaux
 

@@ -85,6 +85,24 @@ uint8_t project_storage_project_delete_transaction_dir(char *out,
                        "0:/BRICK/TRANSACTIONS/DELETE_P%02u", slot, 0U, 0U);
 }
 
+uint8_t project_storage_working_root(char *out, uint32_t capacity)
+{
+    return path_format(out, capacity, "0:/BRICK/WORKING", 0U, 0U, 0U);
+}
+
+uint8_t project_storage_working_patterns_dir(char *out, uint32_t capacity)
+{
+    return path_format(out, capacity, "0:/BRICK/WORKING/PATTERNS", 0U, 0U, 0U);
+}
+
+uint8_t project_storage_working_pattern_file(char *out, uint32_t capacity,
+                                             uint8_t bank, uint8_t pattern)
+{
+    return path_format(out, capacity,
+                       "0:/BRICK/WORKING/PATTERNS/B%02u_P%02u.B6C",
+                       bank, pattern, 0U);
+}
+
 uint8_t project_storage_patches_root(char *out, uint32_t capacity)
 {
     return path_format(out, capacity, "0:/PATCHES", 0U, 0U, 0U);
