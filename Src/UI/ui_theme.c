@@ -298,6 +298,45 @@ static void ui_theme_draw_bpm(uint8_t x, uint8_t y,
     }
 }
 
+static uint8_t ui_theme_ensemble_marker_width(const ui_theme_header_data_t *data)
+{
+    return ((data != NULL) && (data->ensemble_page_count > 1U)) ? 5U : 0U;
+}
+
+static void ui_theme_draw_ensemble_at(uint8_t x, uint8_t y,
+                                      const ui_theme_header_data_t *data)
+{
+    drv_display_draw_text(x, y, data->ensemble);
+    if (ui_theme_ensemble_marker_width(data) == 0U) return;
+
+    const uint8_t text_width = drv_display_text_width(data->ensemble);
+    const uint8_t marker_x = (uint8_t)(x + text_width + 2U);
+    const uint8_t count = data->ensemble_page_count;
+    const uint8_t stack_height = (uint8_t)(count * 3U);
+    const uint8_t marker_y = (stack_height < 15U)
+        ? (uint8_t)((15U - stack_height) / 2U) : 0U;
+    for (uint8_t page = 0U; page < count; ++page)
+    {
+        const uint8_t square_y = (uint8_t)(marker_y + page * 3U);
+        if (page == data->ensemble_page_index)
+            drv_display_fill_rect(marker_x, square_y, 3U, 3U);
+        else
+            drv_display_draw_rect((uint8_t)(marker_x + 1U), square_y, 2U, 2U);
+    }
+}
+
+static void ui_theme_draw_ensemble_centered(uint8_t region_x, uint8_t region_w,
+                                            uint8_t y,
+                                            const ui_theme_header_data_t *data)
+{
+    const uint8_t text_width = drv_display_text_width(data->ensemble);
+    const uint8_t total_width = (uint8_t)(text_width
+        + ui_theme_ensemble_marker_width(data));
+    const uint8_t x = (total_width < region_w)
+        ? (uint8_t)(region_x + (region_w - total_width) / 2U) : region_x;
+    ui_theme_draw_ensemble_at(x, y, data);
+}
+
 void ui_theme_draw_header(const ui_theme_header_data_t *d)
 {
     if (d == NULL) return;
@@ -319,7 +358,7 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             ui_theme_draw_frame(43, 0, 42, 15, UI_THEME_FRAME_CLASSIC);
             drv_display_set_font(&FONT_5X7);
             if (drv_display_text_width(d->ensemble) > 38U) drv_display_set_font(&FONT_4X6);
-            drv_display_draw_text((uint8_t)ui_theme_center_x(43, 42, d->ensemble), 4U, d->ensemble);
+            ui_theme_draw_ensemble_centered(43U, 42U, 4U, d);
             drv_display_set_font(&FONT_4X6);
             if ((d->bpm != NULL) && (d->bpm[0] != '\0'))
             {
@@ -341,7 +380,7 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
         case UI_THEME_HEADER_MINIMALIST:
             drv_display_set_font(&FONT_5X7);
             drv_display_draw_text(0U, 1U, d->track);
-            drv_display_draw_text(10U, 1U, d->ensemble);
+            ui_theme_draw_ensemble_at(10U, 1U, d);
             drv_display_set_font(&FONT_4X6);
             drv_display_draw_text(0U, 9U, d->track_name);
             drv_display_draw_text(50U, 9U, d->hall_mode);
@@ -366,7 +405,9 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             drv_display_draw_text(17U, 1U, track_name);
             drv_display_draw_text(17U, 8U, hall);
             drv_display_set_font(&FONT_5X7);
-            drv_display_draw_text((uint8_t)ui_theme_center_x(48, 38, ensemble), 4U, ensemble);
+            ui_theme_header_data_t ensemble_data = *d;
+            ensemble_data.ensemble = ensemble;
+            ui_theme_draw_ensemble_centered(48U, 38U, 4U, &ensemble_data);
             drv_display_set_font(&FONT_4X6);
             ui_theme_draw_bpm(89U, 1U, d);
             if (cpu[0] != '\0') drv_display_draw_text(89U, 8U, cpu);
@@ -385,7 +426,9 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             drv_display_draw_line(0, 15, 35, 15);
             drv_display_draw_line(92, 15, 127, 15);
             drv_display_set_font(&FONT_5X7);
-            drv_display_draw_text((uint8_t)ui_theme_center_x(0, OLED_WIDTH, ensemble), 1U, ensemble);
+            ui_theme_header_data_t ensemble_data = *d;
+            ensemble_data.ensemble = ensemble;
+            ui_theme_draw_ensemble_centered(0U, OLED_WIDTH, 1U, &ensemble_data);
             drv_display_set_font(&FONT_4X6);
             drv_display_draw_text(0U, 2U, d->track);
             drv_display_draw_text(9U, 2U, track_name);
@@ -405,7 +448,9 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             drv_display_set_font(&FONT_4X6);
             drv_display_draw_text(0U, 1U, d->track);
             drv_display_draw_text(8U, 1U, track_name);
-            drv_display_draw_text(48U, 1U, ensemble);
+            ui_theme_header_data_t ensemble_data = *d;
+            ensemble_data.ensemble = ensemble;
+            ui_theme_draw_ensemble_at(48U, 1U, &ensemble_data);
             ui_theme_draw_bpm(ui_theme_right_x(d->bpm), 1U, d);
             drv_display_draw_line(0, 8, 127, 8);
             drv_display_draw_text(0U, 10U, hall);
@@ -429,7 +474,9 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             ui_theme_fit_copy(cpu, sizeof(cpu), d->cpu_load, 24U, &FONT_4X6);
             drv_display_fill_rect(0, 0, 2, 15);
             drv_display_set_font(&FONT_5X7);
-            drv_display_draw_text(6U, 1U, ensemble);
+            ui_theme_header_data_t ensemble_data = *d;
+            ensemble_data.ensemble = ensemble;
+            ui_theme_draw_ensemble_at(6U, 1U, &ensemble_data);
             drv_display_set_font(&FONT_4X6);
             drv_display_draw_text(6U, 9U, track_name);
             drv_display_draw_line(47, 0, 47, 14);

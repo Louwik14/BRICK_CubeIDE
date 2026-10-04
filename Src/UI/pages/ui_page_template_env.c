@@ -8,7 +8,9 @@
 static uint8_t g_ui_template_env_subset = 0U;
 
 static ui_template_family_t g_ui_template_env_family_audio = {
-    .family_title = "ENV 1/2",
+    .family_title = "ENV",
+    .ensemble_page_index = 0U,
+    .ensemble_page_count = 2U,
     .nav_labels = { "FILTER", "ADSR", "VCA", "ENV 3" },
     .subpages = {
         {
@@ -32,7 +34,9 @@ static ui_template_family_t g_ui_template_env_family_audio = {
 };
 
 static const ui_template_family_t g_ui_template_env_family_retrig = {
-    .family_title = "ENV 2/2",
+    .family_title = "ENV",
+    .ensemble_page_index = 1U,
+    .ensemble_page_count = 2U,
     .nav_labels = { "MODE", "-", "-", "-" },
     .subpages = {
         {

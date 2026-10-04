@@ -68,7 +68,9 @@ static uint8_t ui_template_tone_multi_logical_label(uint16_t logical,
 
 
 static ui_template_family_t g_ui_template_tone_family_master_reverb = {
-    .family_title = "MASTER 1/3",
+    .family_title = "MASTER",
+    .ensemble_page_index = 0U,
+    .ensemble_page_count = 3U,
     .nav_labels = { "REVERB 1", "REVERB 2", "MOD FX 1", "MOD FX 2" },
     .subpages = {
         { .title = "REVERB 1", .param_bank = { .params = { PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_ROOM_SIZE, PARAM_MIX_REVERB_DAMPING, PARAM_MIX_REVERB_WIDTH } } },
@@ -108,7 +110,9 @@ static uint8_t ui_template_tone_sync_modfx_pages(void)
 }
 
 static const ui_template_family_t g_ui_template_tone_family_master_delay_classic = {
-    .family_title = "MASTER 2/3",
+    .family_title = "MASTER",
+    .ensemble_page_index = 1U,
+    .ensemble_page_count = 3U,
     .nav_labels = { "DELAY 1", "DELAY 2", "-", "-" },
     .subpages = {
         { .title = "DELAY 1", .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_PINGPONG, PARAM_MIX_DELAY_VOL } } },
@@ -120,7 +124,9 @@ static const ui_template_family_t g_ui_template_tone_family_master_delay_classic
 };
 
 static const ui_template_family_t g_ui_template_tone_family_master_delay_dual = {
-    .family_title = "MASTER 2/3",
+    .family_title = "MASTER",
+    .ensemble_page_index = 1U,
+    .ensemble_page_count = 3U,
     .nav_labels = { "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4" },
     .subpages = {
         { .title = "DELAY 1", .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_MODE, PARAM_MIX_DELAY_VOL } } },
@@ -132,7 +138,9 @@ static const ui_template_family_t g_ui_template_tone_family_master_delay_dual = 
 };
 
 static const ui_template_family_t g_ui_template_tone_family_master_comp_off = {
-    .family_title = "MASTER 3/3",
+    .family_title = "MASTER",
+    .ensemble_page_index = 2U,
+    .ensemble_page_count = 3U,
     .nav_labels = { "COMP MAIN", "COMP ENV", "-", "-" },
     .subpages = {
         { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
@@ -144,7 +152,9 @@ static const ui_template_family_t g_ui_template_tone_family_master_comp_off = {
 };
 
 static const ui_template_family_t g_ui_template_tone_family_master_comp_deluge = {
-    .family_title = "MASTER 3/3",
+    .family_title = "MASTER",
+    .ensemble_page_index = 2U,
+    .ensemble_page_count = 3U,
     .nav_labels = { "COMP MAIN", "COMP ENV", "COMP CHAR", "-" },
     .subpages = {
         { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
@@ -156,7 +166,9 @@ static const ui_template_family_t g_ui_template_tone_family_master_comp_deluge =
 };
 
 static const ui_template_family_t g_ui_template_tone_family_master_comp_brick = {
-    .family_title = "MASTER 3/3",
+    .family_title = "MASTER",
+    .ensemble_page_index = 2U,
+    .ensemble_page_count = 3U,
     .nav_labels = { "COMP MAIN", "COMP ENV", "COMP CHAR", "-" },
     .subpages = {
         { .title = "COMP MAIN", .param_bank = { .params = { PARAM_COMP_MODEL, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO, PARAM_BUS_COMP_MAKEUP_DB } } },
@@ -204,7 +216,9 @@ static const ui_template_family_t g_ui_template_tone_family_multi = {
 };
 
 static const ui_template_family_t g_ui_template_tone_family_prism = {
-    .family_title = "TONE 2/2",
+    .family_title = "TONE",
+    .ensemble_page_index = 1U,
+    .ensemble_page_count = 2U,
     .nav_labels = { "OSC1", "OSC2", "COMMON", "MOD/PH" },
     .subpages = {
         { .title = "OSC1", .param_bank = { .params = { PARAM_PRISM_OSC1_MODEL, PARAM_PRISM_OSC1_PARAM1, PARAM_PRISM_OSC1_PARAM2, PARAM_PRISM_OSC1_AMOD } } },
@@ -216,7 +230,9 @@ static const ui_template_family_t g_ui_template_tone_family_prism = {
 };
 
 static const ui_template_family_t g_ui_template_tone_family_prism_live = {
-    .family_title = "TONE 1/2",
+    .family_title = "TONE",
+    .ensemble_page_index = 0U,
+    .ensemble_page_count = 2U,
     .nav_labels = { "OSC1", "OSC2", "COMMON", "MOD/PH" },
     .subpages = {
         { .title = "OSC1", .param_bank = { .params = { PARAM_PRISM_OSC1_MODEL, PARAM_PRISM_OSC1_PARAM1, PARAM_PRISM_OSC1_PARAM2, PARAM_PRISM_OSC1_AMOD } } },
@@ -228,7 +244,9 @@ static const ui_template_family_t g_ui_template_tone_family_prism_live = {
 };
 
 static const ui_template_family_t g_ui_template_tone_family_wave = {
-    .family_title = "TONE 1/2",
+    .family_title = "TONE",
+    .ensemble_page_index = 0U,
+    .ensemble_page_count = 2U,
     .nav_labels = { "OSC1", "OSC2", "COMMON", "-" },
     .subpages = {
         { .title = "OSC1", .param_bank = { .params = { UI_PARAM_LOCAL_WAVE_OSC1, PARAM_WAVE_OSC1_POS, PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_LEN } } },
@@ -240,7 +258,9 @@ static const ui_template_family_t g_ui_template_tone_family_wave = {
 };
 
 static const ui_template_family_t g_ui_template_tone_family_wave_classic = {
-    .family_title = "TONE 2/2",
+    .family_title = "TONE",
+    .ensemble_page_index = 1U,
+    .ensemble_page_count = 2U,
     .nav_labels = { "OSC1", "OSC2", "COMMON", "-" },
     .subpages = {
         { .title = "OSC1", .param_bank = { .params = { UI_PARAM_LOCAL_WAVE_OSC1, PARAM_WAVE_OSC1_POS, PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_LEN } } },
@@ -288,7 +308,9 @@ static const ui_template_family_t g_ui_template_tone_family_acid = {
 };
 
 static ui_template_family_t g_ui_template_tone_family_fm = {
-    .family_title = "TONE 1/2",
+    .family_title = "TONE",
+    .ensemble_page_index = 0U,
+    .ensemble_page_count = 2U,
     .nav_labels = { "GLOBAL", "OP QUICK", "PITCH R", "PITCH L" },
     .subpages = {
         { .title = "GLOBAL", .param_bank = { .params = { PARAM_FM_ALGORITHM, PARAM_FM_ENV_ATTACK, PARAM_FM_ENV_DECAY, PARAM_FM_TRANSPOSE } } },
@@ -300,7 +322,9 @@ static ui_template_family_t g_ui_template_tone_family_fm = {
 };
 
 static ui_template_family_t g_ui_template_tone_family_fm_operator = {
-    .family_title = "TONE 2/2",
+    .family_title = "TONE",
+    .ensemble_page_index = 1U,
+    .ensemble_page_count = 2U,
     .nav_labels = { "VOICE", "ENV", "MOD", "-" },
     .subpages = {
         { .title = "VOICE", .param_bank = { .params = { UI_PARAM_LOCAL_FM_OPERATOR, PARAM_FM_OP1_LEVEL, PARAM_FM_OP1_FREQ, PARAM_FM_OP1_DETUNE } } },
