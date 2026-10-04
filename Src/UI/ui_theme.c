@@ -382,10 +382,10 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             ui_theme_fit_copy(cpu, sizeof(cpu), d->cpu_load, 20U, &FONT_4X6);
             drv_display_draw_line(0, 0, 35, 0);
             drv_display_draw_line(92, 0, 127, 0);
-            drv_display_draw_line(0, 14, 35, 14);
-            drv_display_draw_line(92, 14, 127, 14);
+            drv_display_draw_line(0, 15, 35, 15);
+            drv_display_draw_line(92, 15, 127, 15);
             drv_display_set_font(&FONT_5X7);
-            drv_display_draw_text((uint8_t)ui_theme_center_x(36, 56, ensemble), 1U, ensemble);
+            drv_display_draw_text((uint8_t)ui_theme_center_x(0, OLED_WIDTH, ensemble), 1U, ensemble);
             drv_display_set_font(&FONT_4X6);
             drv_display_draw_text(0U, 2U, d->track);
             drv_display_draw_text(9U, 2U, track_name);
