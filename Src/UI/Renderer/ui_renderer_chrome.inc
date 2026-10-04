@@ -86,8 +86,6 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
         .cpu_load = cpu_avg_label,
         .pattern = pattern_label,
         .bpm_external = bpm_inverted,
-        .ensemble_page_index = (family != NULL) ? family->ensemble_page_index : 0U,
-        .ensemble_page_count = (family != NULL) ? family->ensemble_page_count : 0U,
     };
     ui_theme_draw_header(&header);
 }
@@ -575,10 +573,8 @@ static void ui_renderer_template_job_prepare(ui_renderer_template_job_t *job)
     const uint8_t wave_wavetable_subpage =
         ui_renderer_template_is_wave_wavetable_subpage(subpage);
     const uint8_t wave_classic_page = (uint8_t)((wave_wavetable_subpage != 0U)
-        && (family->ensemble_page_count == 2U)
-        && (family->ensemble_page_index == 1U)
         && (family->family_title != NULL)
-        && (strcmp(family->family_title, "TONE") == 0));
+        && (strcmp(family->family_title, "TONE 2/2") == 0));
     if (ui_renderer_template_is_sampler_ram_tone(state, family) != 0U)
     {
         job->body = UI_TEMPLATE_BODY_SAMPLER_RAM;

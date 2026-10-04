@@ -125,7 +125,7 @@ const char *ui_get_hall_mode_short_label(void)
         {
             return "ROUT";
         }
-        return "FX";
+        return (ui_page_get_id() == UI_PAGE_AUDIO_FX) ? "FX 2/2" : "FX 1/2";
     }
 
     const ui_hall_mode_effective_view_t view =

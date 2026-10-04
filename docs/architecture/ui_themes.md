@@ -27,11 +27,6 @@ Hall mode/suffix, ensemble, BPM/clock state, pattern and conditional CPU load.
 Each non-reference layout measures and truncates long fields within its own
 regions before drawing.
 
-Multi-page ensembles expose their page index separately from their name. Every
-header layout draws a vertical stack of one square per ensemble page directly
-to the right of the name; the current page uses a larger filled square. This
-replaces textual `Y/X` suffixes without changing ensemble navigation.
-
 `CPU LOAD = OFF` removes the CPU string from that model. Layouts do not draw a
 placeholder: tempo, pattern and whitespace retain a balanced composition.
 No dynamic allocation, additional framebuffer or periodic redraw is used.

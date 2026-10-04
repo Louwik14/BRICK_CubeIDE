@@ -76,8 +76,6 @@ typedef struct
     const char *cpu_load;
     const char *pattern;
     uint8_t bpm_external;
-    uint8_t ensemble_page_index;
-    uint8_t ensemble_page_count;
 } ui_theme_header_data_t;
 
 void ui_theme_init(void);

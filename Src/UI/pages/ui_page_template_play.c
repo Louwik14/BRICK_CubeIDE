@@ -14,9 +14,7 @@ static uint8_t g_ui_template_play_subset;
 static ui_template_page_state_t g_ui_template_play_state;
 
 static const ui_template_family_t g_ui_template_play_families[2] = {{
-    .family_title = "PLAY",
-    .ensemble_page_index = 0U,
-    .ensemble_page_count = 2U,
+    .family_title = "PLAY 1/2",
     .nav_labels = { "V1", "V2", "V3", "V4" },
     .subpages = {
         { .title = "Voice 1", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
@@ -26,9 +24,7 @@ static const ui_template_family_t g_ui_template_play_families[2] = {{
     },
     .default_subpage = 0U,
 }, {
-    .family_title = "PLAY",
-    .ensemble_page_index = 1U,
-    .ensemble_page_count = 2U,
+    .family_title = "PLAY 2/2",
     .nav_labels = { "V5", "V6", "V7", "V8" },
     .subpages = {
         { .title = "Voice 5", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },

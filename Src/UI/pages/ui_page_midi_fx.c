@@ -20,8 +20,6 @@
 
 static const ui_template_family_t g_ui_template_midi_fx_family = {
     .family_title = "MIDI FX",
-    .ensemble_page_index = 0U,
-    .ensemble_page_count = 2U,
     .nav_labels = { "GENERATOR", "VOICER", "SCALER", "TRIG" },
     .subpages = {
         {
@@ -45,9 +43,7 @@ static const ui_template_family_t g_ui_template_midi_fx_family = {
 };
 
 static const ui_template_family_t g_ui_template_audio_fx_family = {
-    .family_title = "FX",
-    .ensemble_page_index = 1U,
-    .ensemble_page_count = 2U,
+    .family_title = "FX 2/2",
     .nav_labels = { "FX A", "FX B", "ROUTING", "-" },
     .subpages = {
         { .title = "FX A", .param_bank = { .params = { PARAM_AUDIO_FX_P1, PARAM_AUDIO_FX_P2, PARAM_AUDIO_FX_P3, PARAM_AUDIO_FX_MODEL } } },
@@ -59,9 +55,7 @@ static const ui_template_family_t g_ui_template_audio_fx_family = {
 };
 
 static const ui_template_family_t g_ui_template_audio_fx_group_master_family = {
-    .family_title = "FX",
-    .ensemble_page_index = 1U,
-    .ensemble_page_count = 2U,
+    .family_title = "FX 2/2",
     .nav_labels = { "FX A", "FX B", "SPATIAL", "-" },
     .subpages = {
         { .title = "FX A", .param_bank = { .params = { PARAM_AUDIO_FX_P1, PARAM_AUDIO_FX_P2, PARAM_AUDIO_FX_P3, PARAM_AUDIO_FX_MODEL } } },
@@ -73,9 +67,7 @@ static const ui_template_family_t g_ui_template_audio_fx_group_master_family = {
 };
 
 static const ui_template_family_t g_ui_template_audio_fx_group_child_family = {
-    .family_title = "FX",
-    .ensemble_page_index = 1U,
-    .ensemble_page_count = 2U,
+    .family_title = "FX 2/2",
     .nav_labels = { "LOCAL SENDS", "-", "-", "-" },
     .subpages = {
         { .title = "GROUP FX", .param_bank = { .params = { PARAM_GROUP_FX_A_LEVEL, PARAM_GROUP_FX_B_LEVEL, PARAM_COUNT, PARAM_COUNT } } },

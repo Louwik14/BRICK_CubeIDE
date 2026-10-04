@@ -119,9 +119,7 @@ uint8_t ui_page_template_mod_project_destination(uint8_t track,uint16_t index,
 }
 
 static const ui_template_family_t g_ui_template_mod_family_main = {
-    .family_title = "MOD",
-    .ensemble_page_index = 0U,
-    .ensemble_page_count = 2U,
+    .family_title = "MOD 1/2",
     .nav_labels = { "MATRIX", "LFO 1", "LFO 2", "LFO 3" },
     .subpages = {
         {
@@ -145,9 +143,7 @@ static const ui_template_family_t g_ui_template_mod_family_main = {
 };
 
 static const ui_template_family_t g_ui_template_mod_family_ops = {
-    .family_title = "MOD",
-    .ensemble_page_index = 1U,
-    .ensemble_page_count = 2U,
+    .family_title = "MOD 2/2",
     .nav_labels = { "MULTI", "SLEW", "-", "-" },
     .subpages = {
         {
