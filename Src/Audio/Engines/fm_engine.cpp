@@ -48,7 +48,7 @@ struct fm_voice_t
     uint8_t operator_velocity[kOperatorCount];
     uint8_t pitch_rates[4];
     uint8_t pitch_levels[4];
-    uint8_t transpose;
+    float transpose;
     float ratio;
     uint8_t algorithm;
     uint8_t feedback_amount;
@@ -583,7 +583,7 @@ static void reset_voice(fm_voice_t *voice)
     memset(voice->operator_rate_scaling, 0, sizeof(voice->operator_rate_scaling));
     memset(voice->pitch_rates, 0, sizeof(voice->pitch_rates));
     memset(voice->pitch_levels, 49, sizeof(voice->pitch_levels));
-    voice->transpose = 24U;
+    voice->transpose = 24.0f;
     voice->ratio = 0.5f;
     voice->algorithm = (uint8_t)kDefaultAlgorithm;
     voice->feedback_amount = kDefaultFeedback;
@@ -688,10 +688,7 @@ static void prepare_note(fm_voice_t *voice, uint8_t note, uint8_t velocity,
                          bool held)
 {
     voice->key_note = note;
-    int transposed_note = (int)note + (int)voice->transpose - 24;
-    if (transposed_note < 0) transposed_note = 0;
-    if (transposed_note > 127) transposed_note = 127;
-    voice->note = (uint8_t)transposed_note;
+    voice->note = note;
     voice->velocity = velocity;
     voice->active = 1U;
     if ((held == false) && (voice->sync != 0U))
@@ -1050,14 +1047,16 @@ static void fm_set_base_voice(fm_voice_t *voice,
         return;
     const uint8_t all_operators = (uint8_t)((1U << kOperatorCount) - 1U);
     const uint8_t patch_changed = (uint8_t)((voice->algorithm != clamp_algorithm(base->algorithm))
-        || (voice->transpose != ((base->transpose > 48U) ? 48U : base->transpose)));
+        || (voice->transpose != (float)((base->transpose_cents > 4800U)
+            ? 4800U : base->transpose_cents) * 0.01f));
     const uint8_t pitch_changed = (uint8_t)(
         (memcmp(voice->pitch_rates, base->pitch_rates, sizeof(voice->pitch_rates)) != 0)
         || (memcmp(voice->pitch_levels, base->pitch_levels, sizeof(voice->pitch_levels)) != 0));
     voice->algorithm = clamp_algorithm(base->algorithm);
     voice->feedback_amount = (base->feedback > 7U) ? 7U : base->feedback;
     voice->sync = (base->key_sync != 0U) ? 1U : 0U;
-    voice->transpose = (base->transpose > 48U) ? 48U : base->transpose;
+    voice->transpose = (float)((base->transpose_cents > 4800U)
+        ? 4800U : base->transpose_cents) * 0.01f;
     memcpy(voice->pitch_rates, base->pitch_rates, sizeof(voice->pitch_rates));
     memcpy(voice->pitch_levels, base->pitch_levels, sizeof(voice->pitch_levels));
     for (uint8_t brick_op = 0U; brick_op < kOperatorCount; ++brick_op)
@@ -1175,7 +1174,7 @@ uint8_t brick6_fm_runtime_get_base_voice(uint8_t instance_id,
     }
     memcpy(out_base->pitch_rates, voice->pitch_rates, sizeof(out_base->pitch_rates));
     memcpy(out_base->pitch_levels, voice->pitch_levels, sizeof(out_base->pitch_levels));
-    out_base->transpose = voice->transpose;
+    out_base->transpose_cents = (uint16_t)(voice->transpose * 100.0f + 0.5f);
     out_base->algorithm = voice->algorithm;
     out_base->feedback = voice->feedback_amount;
     out_base->key_sync = voice->sync;
@@ -1343,7 +1342,8 @@ static ITCM_TEXT uint8_t fm_render_voice(fm_voice_t *voice,
         return 0U;
     }
 
-    const int32_t pitch_log_frequency = voice->pitch_env.getsample(frames);
+    const int32_t pitch_log_frequency = voice->pitch_env.getsample(frames)
+        + (int32_t)(((voice->transpose - 24.0f) / 12.0f) * (float)kQ24);
     for (int op = 0; op < kOperatorCount; ++op)
     {
         voice->operators[op].level_in = voice->env[op].getsample(frames);

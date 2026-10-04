@@ -48,7 +48,7 @@ void fm_control_state_make_default(fm_control_state_t *state)
     };
 
     memset(state, 0, sizeof(*state));
-    state->base.transpose = 24U;
+    state->base.transpose_cents = 2400U;
     state->base.key_sync = 1U;
     for (uint8_t op = 0U; op < TRACK_TONE_FM_OPERATOR_COUNT; ++op)
     {
@@ -182,7 +182,7 @@ uint8_t fm_control_state_validate(const fm_control_state_t *state)
     for (uint8_t i = 0U; i < 4U; ++i)
         if ((state->base.pitch_rates[i] > 99U)
                 || (state->base.pitch_levels[i] > 99U)) return 0U;
-    if ((state->base.transpose > 48U) || (state->base.algorithm > 31U)
+    if ((state->base.transpose_cents > 4800U) || (state->base.algorithm > 31U)
             || (state->base.feedback > 7U) || (state->base.key_sync > 1U))
         return 0U;
     const float *const macro = &state->macros.ratio;
@@ -237,7 +237,10 @@ uint8_t fm_control_state_set_public_param(uint8_t entity,
         case PARAM_FM_ALGORITHM: state->base.algorithm = (uint8_t)(value + 0.5f); break;
         case PARAM_FM_FEEDBACK: state->base.feedback = (uint8_t)(value + 0.5f); break;
         case PARAM_FM_SYNC: state->base.key_sync = (value >= 0.5f) ? 1U : 0U; break;
-        case PARAM_FM_TRANSPOSE: state->base.transpose = (uint8_t)(value + 24.5f); break;
+        case PARAM_FM_TRANSPOSE:
+            state->base.transpose_cents = (uint16_t)(fm_clampf(
+                value + 24.0f, 0.0f, 48.0f) * 100.0f + 0.5f);
+            break;
         case PARAM_FM_PITCH_R1: case PARAM_FM_PITCH_R2:
         case PARAM_FM_PITCH_R3: case PARAM_FM_PITCH_R4:
             state->base.pitch_rates[id - PARAM_FM_PITCH_R1] = (uint8_t)(value + 0.5f); break;
@@ -297,7 +300,9 @@ uint8_t fm_control_state_get_public_param_from(
         case PARAM_FM_ALGORITHM: *out_value = (float)state->base.algorithm; break;
         case PARAM_FM_FEEDBACK: *out_value = (float)state->base.feedback; break;
         case PARAM_FM_SYNC: *out_value = (float)state->base.key_sync; break;
-        case PARAM_FM_TRANSPOSE: *out_value = (float)state->base.transpose - 24.0f; break;
+        case PARAM_FM_TRANSPOSE:
+            *out_value = (float)state->base.transpose_cents * 0.01f - 24.0f;
+            break;
         case PARAM_FM_PITCH_R1: case PARAM_FM_PITCH_R2:
         case PARAM_FM_PITCH_R3: case PARAM_FM_PITCH_R4:
             *out_value = (float)state->base.pitch_rates[id - PARAM_FM_PITCH_R1]; break;

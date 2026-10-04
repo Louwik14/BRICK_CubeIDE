@@ -1342,6 +1342,7 @@ static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
         case PARAM_WAVE_BALANCE:
         case PARAM_WAVE_TUNE:
         case PARAM_WAVE_DETUNE:
+        case PARAM_FM_TRANSPOSE:
         case PARAM_FM_ENV_ATTACK:
         case PARAM_FM_ENV_DECAY:
         case PARAM_FM_ENV_SUSTAIN:

@@ -50,6 +50,51 @@ d'interaction et lit l'autorite a la demande.
 
 `param_desc_t::value_policy` possede conversions canonique/affichee, pas normal/SHIFT et politique d'automation. Les p-locks continus utilisent toute la plage `uint16_t`; les discrets utilisent leur pas. La persistance stocke la valeur CONTROL typee, notamment FLOAT32, jamais une representation UI.
 
+### Matrice SHIFT des pages moteur
+
+Le handler encodeur est commun a toutes les pages TONE: le pas est applique
+dans l'unite affichee, puis reconverti dans l'unite canonique avant le clamp.
+`1 % / 0,01 %` signifie donc respectivement `0,01 / 0,0001` dans un champ
+normalise. Les valeurs continues restent FLOAT32 en CONTROL, dans Patch/Pattern
+et sur la commande AUDIO; un p-lock lineaire utilise les 65536 codes de sa
+plage. Les groupes ci-dessous couvrent tous les Param exposes par les pages
+moteur; les selecteurs d'asset locaux ne sont pas des Param.
+
+| Moteur | Parametres exposes | Type reel | Normal | SHIFT | Resolution terminale | Verdict |
+|---|---|---|---:|---:|---|---|
+| Sampler RAM | Gain, Start, Len, Loop Start | float normalise | 1 % | 0,01 % | FLOAT32, puis index d'echantillon pour les bornes | continu OK |
+| Sampler RAM | Tune | float, demi-tons | 1 st | 0,01 st | FLOAT32 jusqu'au ratio de lecture | continu OK |
+| Sampler RAM | Mode, Slice Count, Multi Loop | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
+| Streamer | Gain | float normalise | 1 % | 0,01 % | FLOAT32 | continu OK |
+| Streamer | Source BPM | float, BPM | 1 BPM | 0,01 BPM | FLOAT32 jusqu'au ratio de lecture | continu OK |
+| Streamer | Pitch | float, demi-tons | 1 st | 0,01 st | FLOAT32 jusqu'au pitch shifter | continu OK |
+| Streamer | DISP | float normalise | 1 % | 0,01 % | FLOAT32 | continu OK |
+| Streamer | Source, PlayMode, Loop, Stretch, Sync Len, Grain, Heads, Window | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
+| Prism/Braids | Param1/2 | float normalise ou domaine du modele | 1 % ou 1 cran | 0,01 % ou 1 cran | Q15; quantification explicite pour les modeles a domaine discret | continu/discret selon modele, OK |
+| Prism/Braids | AMOD, Volume, Balance, Pitch Mod 1/2, Drift | float normalise/bipolaire | 1 % | 0,01 % | FLOAT32, projection DSP native | continu OK |
+| Prism/Braids | Tune, Detune | float, demi-tons | 1 st | 0,01 st | FLOAT32 puis pitch Q7, soit 1/128 st | continu OK |
+| Prism/Braids | Model 1/2, Phase Reset | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
+| Wave | Pos, Start, Len, Volume, Balance | float normalise/bipolaire | 1 % | 0,01 % | FLOAT32 jusqu'au calcul de phase | continu OK |
+| Wave | Tune, Detune | float, demi-tons | 1 st | 0,01 st | FLOAT32 jusqu'au calcul d'increment | continu OK |
+| Wave | Wave 1/2 | reference asset locale | 1 valeur | 1 valeur | slot resolu | discret volontaire |
+| Stack | Tune OSC1/2/3 | float, demi-tons | 1 st | 0,01 st | centiemes de demi-ton (`int16_t`) | continu OK |
+| Stack | Timbre/Color OSC3, niveaux OSC1/2/3/Noise, OSC Detune | float normalise | 1 % | 0,01 % | Q15 | continu OK |
+| Stack | Model OSC1/2/3, Phase Reset | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
+| TB303/Acid | Tune | float, demi-tons | 1 st | 0,01 st | FLOAT32 jusqu'a la frequence | continu OK |
+| TB303/Acid | Cut, Res, Env Mod, Decay, Accent | float normalise | 1 % | 0,01 % | FLOAT32 | continu OK |
+| TB303/Acid | Wave, Slide, VCF Rate | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
+| FM | Transpose | centiemes de demi-ton (`uint16_t` biaise) | 1 st | 0,01 st | 0,01 st; log-pitch Q24 au rendu | bug corrige |
+| FM | Freq operateur | float ratio/frequence | 1,00 | 0,01 | centieme dans le DTO, log-pitch Q24 | continu OK |
+| FM | macros Attack/Decay globales | float bipolaire | 1 % | 0,01 % | FLOAT32 | continu OK |
+| FM | Algorithm, Level/Detune/EG/Vel/Key operateur, Pitch EG R/L | enum ou entier DX | 1 unite | 1 unite | valeur entiere DX | discret volontaire |
+| FM | OP On, OP Mode, selecteur OP local | bool/enum/contexte UI | 1 valeur | 1 valeur | valeur entiere ou non sonore | discret volontaire |
+
+Les controles continus exposes ne subissent pas d'autre arrondi CONTROL ou
+Persistence. Les seules resolutions terminales plus etroites sont celles
+documentees dans la table (frame Sampler, Q15, Q7, centiemes FM/Stack); elles
+sont au moins aussi fines que le cran SHIFT, sauf le Q7 Prism dont le quantum
+de `0,0078125 st` est plus fin que `0,01 st`.
+
 Un p-lock AUDIO est resolu par CONTROL en valeur finale puis transporte comme PARAM `TEMP` date. La restauration relit toujours la base canonique CONTROL courante, puis emet `BASE` pour Tone/Filter/FX, ou `CLEAR_TEMP` pour LFO/ENV3 afin de retirer leur override explicite; une edition de base intervenue pendant le lock n'est donc jamais remplacee par une ancienne capture Seq. Le timestamp reste independant de cette semantique. La FIFO unique est dimensionnee pour les 1024 ecritures d'une boundary maximale plus l'horizon NOTE et les commandes de controle. Les p-locks MIDI FX restent integralement CONTROL: leur override canonique est applique au runtime Note FX avant la NOTE de la meme boundary. AUDIO ne connait ni la provenance, ni la notion de p-lock. NOTE, VELOCITY, LENGTH et MICROTIMING sont des champs PLAY structurels et non des p-locks generiques.
 
 LFO et ENV3 conservent leur validite temporaire par champ. Une commande `BASE`
@@ -130,8 +175,13 @@ OP6 ont un opcode Matrix FM terminal explicite; profondeur nulle ou retrait de
 route restaure exactement la base effective sans ecrire l'owner CONTROL.
 Algorithm, OP ON et OP MODE sont Edit + p-lock uniquement: leurs changements
 sont musicaux par step mais structurels et ne sont pas admis a frequence LFO.
-Transpose suit la meme regle afin de rester un selecteur de demi-tons; il ne
-constitue pas une destination de pitch FM continu. Feedback et oscillator sync,
+Transpose est un pitch global continu au centieme de demi-ton: Edit utilise `1,00/0,01 st`,
+le p-lock lineaire conserve la plage complete et la Matrix peut le moduler sans
+quantification au demi-ton. Le setter terminal arrondit au centieme, puis le DSP
+convertit une seule fois la valeur finale en
+log-pitch Q24 et l'ajoute aux six operateurs, modes ratio et fixed compris. Il
+est donc la destination du futur LFO pitch FM; aucun `FM_GLOBAL_PITCH` parallele
+n'est requis. Feedback et oscillator sync,
 non presentes sur les pages TONE FM actuelles, restent egalement hors Matrix.
 La selection locale d'operateur n'est ni un Param sonore ni un p-lock.
 

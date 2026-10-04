@@ -60,7 +60,6 @@ uint8_t param_registry_is_modulatable(param_id_t id)
         case PARAM_FM_ALGORITHM:
         case PARAM_FM_FEEDBACK:
         case PARAM_FM_SYNC:
-        case PARAM_FM_TRANSPOSE:
             return 0U;
         default:
             return 1U;

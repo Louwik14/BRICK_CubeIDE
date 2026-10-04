@@ -533,7 +533,8 @@ static project_product_scan_status_t project_product_scan_file(
         ||prefix[24]!=0x01U||prefix[25]!=0x20U
         ||prefix[26]!=3U||prefix[27]!=0U)
     {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_HEADER_INVALID;}
-    if(prefix[4]!=PERSIST_CODEC_VERSION)
+    if((prefix[4]!=PERSIST_CODEC_VERSION)
+        &&(prefix[4]!=PERSIST_CODEC_PREVIOUS_VERSION))
     {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_VERSION_INVALID;}
     if(project_le32(&prefix[20])!=
         ~persist_codec_crc32_update(0xFFFFFFFFUL,prefix,20U))
@@ -1025,7 +1026,8 @@ static void project_product_rename_service(void)
                 |((uint16_t)prefix[33]<<8U);
             g_project_rename.old_expected=project_le32(&prefix[16]);
             if(memcmp(prefix,"B6PC",4U)!=0
-                ||prefix[4]!=PERSIST_CODEC_VERSION
+                ||(prefix[4]!=PERSIST_CODEC_VERSION
+                    &&prefix[4]!=PERSIST_CODEC_PREVIOUS_VERSION)
                 ||prefix[6]!=PERSIST_CODEC_DOCUMENT_PROJECT
                 ||prefix[8]!=3U ||prefix[24]!=1U ||prefix[25]!=0x20U
                 ||prefix[26]!=3U ||prefix[27]!=0U

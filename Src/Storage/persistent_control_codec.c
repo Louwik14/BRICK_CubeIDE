@@ -48,6 +48,7 @@ typedef struct
     uint32_t limit;
     uint32_t crc;
     uint8_t crc_enabled;
+    uint8_t document_version;
     persist_codec_result_t result;
 } codec_io_t;
 
@@ -307,7 +308,18 @@ static void codec_fm_state(codec_io_t *io, fm_control_state_t *state)
     }
     for (uint8_t i = 0U; i < 4U; ++i) codec_u8(io, &state->base.pitch_rates[i]);
     for (uint8_t i = 0U; i < 4U; ++i) codec_u8(io, &state->base.pitch_levels[i]);
-    codec_u8(io, &state->base.transpose); codec_u8(io, &state->base.algorithm);
+    if ((io->mode == CODEC_READ)
+            && (io->document_version == PERSIST_CODEC_PREVIOUS_VERSION))
+    {
+        uint8_t legacy_transpose = 24U;
+        codec_u8(io, &legacy_transpose);
+        state->base.transpose_cents = (uint16_t)legacy_transpose * 100U;
+    }
+    else
+    {
+        codec_u16(io, &state->base.transpose_cents);
+    }
+    codec_u8(io, &state->base.algorithm);
     codec_u8(io, &state->base.feedback); codec_u8(io, &state->base.key_sync);
     codec_f32(io, &state->macros.ratio); codec_f32(io, &state->macros.bright);
     codec_f32(io, &state->macros.body); codec_f32(io, &state->macros.detail);
@@ -729,7 +741,7 @@ uint8_t persist_codec_build_project_document_header(
 }
 
 static persist_codec_result_t codec_decode_begin(const persist_codec_source_t *s,uint8_t kind,uint16_t sections,codec_io_t *io,uint32_t *expected_crc)
-{uint8_t h[PERSIST_CODEC_HEADER_BYTES];if((s==NULL)||(s->read==NULL)||(s->size==NULL)||(s->read(s->context,h,sizeof(h))==0U))return PERSIST_CODEC_IO_ERROR;if((h[0]!=CODEC_MAGIC_0)||(h[1]!=CODEC_MAGIC_1)||(h[2]!=CODEC_MAGIC_2)||(h[3]!=CODEC_MAGIC_3))return PERSIST_CODEC_BAD_MAGIC;if((h[4]!=PERSIST_CODEC_VERSION)||(h[5]!=0U))return PERSIST_CODEC_BAD_VERSION;if((h[6]!=kind)||(h[7]!=0U))return PERSIST_CODEC_BAD_DOCUMENT_KIND;if((((uint16_t)h[8]|((uint16_t)h[9]<<8U))!=sections)||(h[10]!=0U)||(h[11]!=0U))return PERSIST_CODEC_BAD_SECTION;uint32_t total=(uint32_t)h[12]|((uint32_t)h[13]<<8U)|((uint32_t)h[14]<<16U)|((uint32_t)h[15]<<24U),actual=0U;if((total<PERSIST_CODEC_HEADER_BYTES)||(total>codec_document_max_bytes(kind))||(s->size(s->context,&actual)==0U))return PERSIST_CODEC_BAD_LENGTH;if(actual!=total)return PERSIST_CODEC_BAD_LENGTH;uint32_t hc=(uint32_t)h[20]|((uint32_t)h[21]<<8U)|((uint32_t)h[22]<<16U)|((uint32_t)h[23]<<24U);if(hc!=~codec_crc32_update(0xFFFFFFFFUL,h,20U))return PERSIST_CODEC_BAD_CRC;*expected_crc=(uint32_t)h[16]|((uint32_t)h[17]<<8U)|((uint32_t)h[18]<<16U)|((uint32_t)h[19]<<24U);*io=(codec_io_t){.mode=CODEC_READ,.source=s,.limit=total-PERSIST_CODEC_HEADER_BYTES,.crc=0xFFFFFFFFUL,.crc_enabled=1U,.result=PERSIST_CODEC_OK};return PERSIST_CODEC_OK;}
+{uint8_t h[PERSIST_CODEC_HEADER_BYTES];if((s==NULL)||(s->read==NULL)||(s->size==NULL)||(s->read(s->context,h,sizeof(h))==0U))return PERSIST_CODEC_IO_ERROR;if((h[0]!=CODEC_MAGIC_0)||(h[1]!=CODEC_MAGIC_1)||(h[2]!=CODEC_MAGIC_2)||(h[3]!=CODEC_MAGIC_3))return PERSIST_CODEC_BAD_MAGIC;if(((h[4]!=PERSIST_CODEC_VERSION)&&(h[4]!=PERSIST_CODEC_PREVIOUS_VERSION))||(h[5]!=0U))return PERSIST_CODEC_BAD_VERSION;if((h[6]!=kind)||(h[7]!=0U))return PERSIST_CODEC_BAD_DOCUMENT_KIND;if((((uint16_t)h[8]|((uint16_t)h[9]<<8U))!=sections)||(h[10]!=0U)||(h[11]!=0U))return PERSIST_CODEC_BAD_SECTION;uint32_t total=(uint32_t)h[12]|((uint32_t)h[13]<<8U)|((uint32_t)h[14]<<16U)|((uint32_t)h[15]<<24U),actual=0U;if((total<PERSIST_CODEC_HEADER_BYTES)||(total>codec_document_max_bytes(kind))||(s->size(s->context,&actual)==0U))return PERSIST_CODEC_BAD_LENGTH;if(actual!=total)return PERSIST_CODEC_BAD_LENGTH;uint32_t hc=(uint32_t)h[20]|((uint32_t)h[21]<<8U)|((uint32_t)h[22]<<16U)|((uint32_t)h[23]<<24U);if(hc!=~codec_crc32_update(0xFFFFFFFFUL,h,20U))return PERSIST_CODEC_BAD_CRC;*expected_crc=(uint32_t)h[16]|((uint32_t)h[17]<<8U)|((uint32_t)h[18]<<16U)|((uint32_t)h[19]<<24U);*io=(codec_io_t){.mode=CODEC_READ,.source=s,.limit=total-PERSIST_CODEC_HEADER_BYTES,.crc=0xFFFFFFFFUL,.crc_enabled=1U,.document_version=h[4],.result=PERSIST_CODEC_OK};return PERSIST_CODEC_OK;}
 static persist_codec_result_t codec_decode_end(codec_io_t *io,uint32_t expected){if(io->result!=PERSIST_CODEC_OK)return io->result;if(io->count!=io->limit)return PERSIST_CODEC_BAD_LENGTH;return(~io->crc==expected)?PERSIST_CODEC_OK:PERSIST_CODEC_BAD_CRC;}
 
 persist_codec_result_t persist_codec_decode_pattern(const persist_codec_source_t *s,persist_codec_pattern_staging_t *st){if(st==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;memset(st,0,sizeof(*st));codec_io_t io;uint32_t crc;persist_codec_result_t r=codec_decode_begin(s,PERSIST_CODEC_DOCUMENT_PATTERN,1U,&io,&crc);if(r!=PERSIST_CODEC_OK)return r;codec_expect_section(&io,SECTION_PATTERN_BODY,codec_pattern_adapter,&st->pattern);r=codec_decode_end(&io,crc);return(r==PERSIST_CODEC_OK)?persist_codec_validate_pattern(&st->pattern):r;}

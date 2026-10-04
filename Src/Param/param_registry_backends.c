@@ -82,7 +82,7 @@ static uint8_t param_backend_fm_store_ui(track_tone_fm_base_voice_t *base,
 
     switch (id)
     {
-        case PARAM_FM_TRANSPOSE: base->transpose = (uint8_t)(param_backend_clamp_value(value + 24.0f, 0.0f, 48.0f) + 0.5f); return 1U;
+        case PARAM_FM_TRANSPOSE: base->transpose_cents = (uint16_t)(param_backend_clamp_value(value + 24.0f, 0.0f, 48.0f) * 100.0f + 0.5f); return 1U;
         case PARAM_FM_PITCH_R1: base->pitch_rates[0] = (uint8_t)(param_backend_clamp_value(value, 0.0f, 99.0f) + 0.5f); return 1U;
         case PARAM_FM_PITCH_R2: base->pitch_rates[1] = (uint8_t)(param_backend_clamp_value(value, 0.0f, 99.0f) + 0.5f); return 1U;
         case PARAM_FM_PITCH_R3: base->pitch_rates[2] = (uint8_t)(param_backend_clamp_value(value, 0.0f, 99.0f) + 0.5f); return 1U;
