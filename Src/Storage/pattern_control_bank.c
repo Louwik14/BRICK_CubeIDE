@@ -71,6 +71,8 @@ static uint8_t scan_project(uint8_t slot)
 
 void pattern_control_bank_init(void){memset(g_present,0,sizeof(g_present));memset(&g_pattern_async,0,sizeof(g_pattern_async));g_active_project=INVALID_PROJECT;pattern_working_bank_init();}
 uint8_t pattern_control_bank_activate_project(uint8_t slot){if(slot>=PROJECT_STORAGE_SLOT_COUNT||g_pattern_async.state!=PATTERN_ASYNC_IDLE||!acquire())return 0U;uint8_t ok=scan_project(slot);if(ok)ok=pattern_working_bank_start_project_mounted(slot);if(ok)g_active_project=slot;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
+uint8_t pattern_control_bank_activate_resume_project(uint8_t slot,const uint32_t dirty_words[8]){if(slot>=PROJECT_STORAGE_SLOT_COUNT||dirty_words==NULL||g_pattern_async.state!=PATTERN_ASYNC_IDLE||!acquire())return 0U;uint8_t ok=scan_project(slot);if(ok)ok=pattern_working_bank_restore_mounted(PATTERN_WORKING_BASE_PROJECT,slot,dirty_words);if(ok)g_active_project=slot;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
+uint8_t pattern_control_bank_activate_resume_blank(const uint32_t dirty_words[8]){if(dirty_words==NULL||g_pattern_async.state!=PATTERN_ASYNC_IDLE)return 0U;g_active_project=INVALID_PROJECT;memset(g_present,0,sizeof(g_present));return pattern_working_bank_restore_mounted(PATTERN_WORKING_BASE_BLANK,INVALID_PROJECT,dirty_words);}
 uint8_t pattern_control_bank_validate_project(uint8_t slot)
 {
     if(slot>=PROJECT_STORAGE_SLOT_COUNT||!acquire())return 0U;

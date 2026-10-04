@@ -7,6 +7,7 @@
 #include "App/control_domain.h"
 #include "App/brick6_boot_fx_policy.h"
 #include "App/engine_tasklet.h"
+#include "App/power_shutdown.h"
 #include "Audio/audio_domain.h"
 #include "midi.h"
 #include "midi_host.h"
@@ -196,6 +197,10 @@ void brick6_app_process(void)
     }
     brick6_stream_service_task_poll();
     ui_boot_loading_service();
+    if (power_shutdown_mutations_frozen() != 0U)
+    {
+        return;
+    }
     if (ui_boot_loading_is_active() != 0U)
     {
         hall_loop_process();

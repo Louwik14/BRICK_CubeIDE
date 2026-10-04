@@ -44,6 +44,10 @@ typedef enum
 
 void pattern_control_bank_init(void);
 uint8_t pattern_control_bank_activate_project(uint8_t slot);
+uint8_t pattern_control_bank_activate_resume_project(
+    uint8_t slot, const uint32_t dirty_words[8]);
+uint8_t pattern_control_bank_activate_resume_blank(
+    const uint32_t dirty_words[8]);
 uint8_t pattern_control_bank_validate_project(uint8_t slot);
 void pattern_control_bank_deactivate_project(void);
 uint8_t pattern_control_bank_active_project(uint8_t *out_slot);

@@ -26,6 +26,9 @@ void pattern_working_bank_start_blank(void);
 pattern_working_base_kind_t pattern_working_bank_base_kind(void);
 uint8_t pattern_working_bank_present(uint8_t bank, uint8_t pattern);
 void pattern_working_bank_copy_dirty(uint32_t out_words[8]);
+uint8_t pattern_working_bank_restore_mounted(
+    pattern_working_base_kind_t base_kind, uint8_t project_slot,
+    const uint32_t dirty_words[8]);
 
 uint8_t pattern_working_bank_load_async_begin(
     uint8_t bank, uint8_t pattern, uint8_t *encoded,

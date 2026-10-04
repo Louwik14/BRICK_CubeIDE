@@ -31,6 +31,9 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 - Save As construit un dossier candidat autonome avec `Working -> Saved ->
   Default absent`, puis change la base sans reload musical apres son renommage
   atomique. New engage au contraire un Blank neuf par le pipeline Project Load.
+- L'extinction volontaire fige l'ingress, reconcilie le Pattern actif et publie
+  un Resume double-slot sous `BRICK/RESUME/`; ce snapshot reference les
+  overrides de `BRICK/WORKING/` sans les dupliquer ni modifier le Project saved.
 
 ## Flux principaux
 

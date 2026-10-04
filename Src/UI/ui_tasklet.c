@@ -20,6 +20,7 @@
  */
 
 #include "ui_tasklet.h"
+#include "App/power_shutdown.h"
 #include "Platform/brick_media_clock.h"
 #include "Track/track_runtime.h"
 
@@ -648,6 +649,12 @@ void ui_tasklet_poll(void)
     }
 
     if (ui_boot_loading_is_active() != 0U)
+    {
+        ui_boot_loading_discard_inputs();
+        return;
+    }
+
+    if (power_shutdown_mutations_frozen() != 0U)
     {
         ui_boot_loading_discard_inputs();
         return;

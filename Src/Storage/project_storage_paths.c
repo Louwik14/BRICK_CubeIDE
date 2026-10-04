@@ -143,6 +143,34 @@ uint8_t project_storage_working_pattern_file(char *out, uint32_t capacity,
                        bank, pattern, 0U);
 }
 
+uint8_t project_storage_resume_root(char *out, uint32_t capacity)
+{
+    return path_format(out, capacity, "0:/BRICK/RESUME", 0U, 0U, 0U);
+}
+
+uint8_t project_storage_resume_slot_dir(char *out, uint32_t capacity,
+                                        uint8_t slot)
+{
+    if (slot > 1U) return 0U;
+    return path_format(out, capacity, "0:/BRICK/RESUME/S%u", slot, 0U, 0U);
+}
+
+uint8_t project_storage_resume_project_file(char *out, uint32_t capacity,
+                                            uint8_t slot)
+{
+    if (slot > 1U) return 0U;
+    return path_format(out, capacity,
+                       "0:/BRICK/RESUME/S%u/PROJECT.B6C", slot, 0U, 0U);
+}
+
+uint8_t project_storage_resume_manifest(char *out, uint32_t capacity,
+                                        uint8_t slot)
+{
+    if (slot > 1U) return 0U;
+    return path_format(out, capacity,
+                       "0:/BRICK/RESUME/S%u/RESUME.B6R", slot, 0U, 0U);
+}
+
 uint8_t project_storage_patches_root(char *out, uint32_t capacity)
 {
     return path_format(out, capacity, "0:/PATCHES", 0U, 0U, 0U);

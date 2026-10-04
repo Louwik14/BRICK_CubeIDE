@@ -82,4 +82,6 @@ uint8_t project_product_delete(uint8_t slot);
 uint8_t project_product_new_blank(void);
 project_product_boot_restore_result_t project_product_restore_boot(void);
 uint8_t project_product_get_progress(project_product_progress_t*out);
+uint8_t project_product_resume_save_begin(void);
+uint8_t project_product_resume_save_take_result(uint8_t *success);
 #endif

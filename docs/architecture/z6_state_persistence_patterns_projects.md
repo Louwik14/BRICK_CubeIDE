@@ -2,7 +2,7 @@
 
 ## Modele et format
 
-Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 13. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. La section Macro Project version 2 contient 14 macros natives, chacune avec ses valeurs cibles `(track, parametre, valeur)`. Aucun dump de structure n'est lu. AUDIO_GLOBAL contient exactement 51 floats, FILTER douze floats, et aucun type Drum Analog historique n'est accepte. Les enveloppes courantes sont 115 300 octets pour un Pattern et 174 116 octets pour un Project.
+Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 14. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. La version 14 encode FM Transpose en FLOAT32; le decodeur accepte la version 13 et promeut son octet entier sans perte. La section Macro Project version 2 contient 14 macros natives, chacune avec ses valeurs cibles `(track, parametre, valeur)`. Aucun dump de structure n'est lu. AUDIO_GLOBAL contient exactement 51 floats, FILTER douze floats, et aucun type Drum Analog historique n'est accepte. Les enveloppes courantes sont 115 348 octets pour un Pattern et 174 116 octets pour un Project.
 
 Les cles persistantes de famille, type, parametre, MIDI, clock, modulation et asset sont explicites et independantes des ordinaux C. Les FLOAT32 conservent leurs bits. Les indices runtime, contextes AUDIO installes, pointeurs, caches, voix, phases, playheads et UI sont exclus. Note FX persiste directement son unique bloc brut de seize octets `GENERATOR/VOICER/SCALER/TRIG`; il n'existe plus de cle de modele, count, slot ou ORDER, ni de migration depuis les anciennes chaines.
 
@@ -51,8 +51,8 @@ d'un autre Pattern.
 Blank utilise la meme banque Working, avec les defaults deterministes comme
 base. Pattern Store y est admis et publie l'etat capture comme override Working;
 aucun slot Project fictif n'est cree. Save Project multi-Patterns, Reload
-saved-only et leur transaction globale sont decrits ci-dessous. Save As,
-shutdown Resume et boot Resume restent a ajouter par leurs transactions produit.
+saved-only et leur transaction globale sont decrits ci-dessous. Save As et
+Resume reutilisent les memes codecs et sont decrits ci-dessous.
 
 ## Commit explicite du Working
 
@@ -80,7 +80,32 @@ Project Load/Reload decode explicitement `PROJECTS/P##/PROJECT.B6C`, puis le
 Pattern actif depuis `PROJECTS/P##/PATTERNS/` ou son default. Working reste
 intact pendant PREPARE; `pattern_control_bank_activate_project()` ne l'abandonne
 qu'apres la frontiere forward-only, dans le pipeline quiesce/CONTROL/SEQ/AUDIO
-existant. RESUME reste hors de ce contrat.
+existant. Reload reste donc saved-only, y compris apres un boot Resume.
+
+## Resume d'extinction volontaire
+
+La demande OFF ferme l'ingress de mutation, stoppe le transport puis attend les
+operations Storage incompatibles. La machine Project Save existante reconcilie
+le Pattern actif dans Working, capture le core Project courant avec le codec
+`PROJECT.B6C`, puis publie Resume. AUDIO, ecran, USB et alimentation ne sont
+arretes qu'apres succes; une erreur rouvre l'ingress et refuse la coupure.
+
+`BRICK/RESUME/S0` et `S1` sont deux generations alternantes. Chacune contient
+un `PROJECT.B6C` et un `RESUME.B6R` de 64 octets: magic/version, generation,
+base `PROJECT(P##)` ou `BLANK`, Pattern actif, bitmap dirty, taille et CRC
+payload du document Project, puis CRC du manifest. Le manifest synchronise est
+publie en dernier. Le slot precedent reste donc lisible si la nouvelle ecriture
+est interrompue. Aucun document Pattern n'est copie dans Resume.
+
+Au boot, le manifest de plus haute generation coherente est choisi. Le document
+Project est decode par le pipeline Project normal; chaque bit dirty impose la
+recovery puis le decode valide du fichier Pattern correspondant dans
+`BRICK/WORKING/PATTERNS/`. Les fichiers Working non declares sont ignores. Le
+Pattern actif est resolu `Working -> Saved -> Default`, puis la publication
+CONTROL/SEQ/AUDIO commune reinstalle la base et le bitmap. Une base Blank reste
+Blank; une base Project conserve son slot saved, de sorte qu'un Reload abandonne
+Working a la frontiere forward-only et restaure le Project explicitement sauve.
+Sans Resume valide, le boot contextuel historique reste le fallback.
 
 ## Blank, Save As et New
 

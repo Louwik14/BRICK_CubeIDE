@@ -256,6 +256,22 @@ void pattern_working_bank_copy_dirty(uint32_t out_words[8])
         memcpy(out_words, g_working_dirty, sizeof(g_working_dirty));
 }
 
+uint8_t pattern_working_bank_restore_mounted(
+    pattern_working_base_kind_t base_kind, uint8_t project_slot,
+    const uint32_t dirty_words[8])
+{
+    if (dirty_words == NULL || g_working_async.state != WORKING_ASYNC_IDLE
+            || (base_kind != PATTERN_WORKING_BASE_BLANK
+                && base_kind != PATTERN_WORKING_BASE_PROJECT)
+            || (base_kind == PATTERN_WORKING_BASE_PROJECT
+                && project_slot >= PROJECT_STORAGE_SLOT_COUNT)) return 0U;
+    g_working_base_kind = base_kind;
+    g_working_project_slot = (base_kind == PATTERN_WORKING_BASE_PROJECT)
+        ? project_slot : PATTERN_WORKING_INVALID_PROJECT;
+    memcpy(g_working_dirty, dirty_words, sizeof(g_working_dirty));
+    return 1U;
+}
+
 static uint8_t working_prepare_paths(uint8_t bank, uint8_t pattern)
 {
     return (uint8_t)(project_storage_working_pattern_file(
