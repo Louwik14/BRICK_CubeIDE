@@ -85,6 +85,15 @@ AUDIO_WARM static fx_audio_vibe_history_t
     g_audio_fx_vibe_history[AUDIO_FX_OWNER_COUNT];
 AUDIO_HISTORY_SDRAM static fx_audio_drift_history_t
     g_audio_fx_drift_history[AUDIO_FX_OWNER_COUNT][2];
+/* Dedicated Preview owner: never aliases a musical owner or its histories. */
+AUDIO_HOT static audio_fx_runtime_slot_t
+    g_audio_fx_preview_runtime[AUDIO_FX_SLOT_COUNT];
+AUDIO_HOT static audio_fx_runtime_plan_t g_audio_fx_preview_plan;
+AUDIO_HISTORY_SDRAM static fx_audio_vibe_history_t
+    g_audio_fx_preview_vibe_history;
+AUDIO_HISTORY_SDRAM static fx_audio_drift_history_t
+    g_audio_fx_preview_drift_history[2];
+static uint8_t g_audio_fx_preview_contextual_bypass;
 _Static_assert(sizeof(g_audio_fx_vibe_history) == 65536U,
                "VIBE D1 pool size changed");
 _Static_assert(sizeof(g_audio_fx_drift_history) == 65536U,
@@ -408,6 +417,46 @@ static void rebuild_plan(uint8_t owner)
     __DMB();
 }
 
+static void rebuild_preview_plan(void)
+{
+    audio_fx_runtime_plan_t *const plan = &g_audio_fx_preview_plan;
+    plan->active_mask = 0U;
+    plan->before_filter_count = 0U;
+    plan->after_filter_count = 0U;
+    for (uint8_t slot = 0U; slot < AUDIO_FX_SLOT_COUNT; ++slot)
+    {
+        audio_fx_runtime_slot_t *const runtime =
+            &g_audio_fx_preview_runtime[slot];
+        audio_fx_runtime_plan_slot_t *const item = &plan->slot[slot];
+        item->state = runtime;
+        item->history = (runtime->config.model == AUDIO_FX_MODEL_VIBE)
+            ? (void *)&g_audio_fx_preview_vibe_history
+            : (runtime->config.model == AUDIO_FX_MODEL_DRIFT)
+                ? (void *)&g_audio_fx_preview_drift_history[0] : NULL;
+        item->mono_sample = mono_sample_kernel(runtime->config.model);
+        runtime->prepared_mono = item->mono_sample;
+        item->stereo_sample = spatial_sample_kernel(runtime->config.model,
+                                                     plan->mode[slot]);
+        item->stereo_block = spatial_block_kernel(runtime->config.model,
+                                                   plan->mode[slot]);
+        if (runtime->config.model != AUDIO_FX_MODEL_OFF)
+            plan->active_mask |= (uint8_t)(1U << slot);
+    }
+    const uint8_t first = (plan->order == AUDIO_FX_ORDER_B_A) ? 1U : 0U;
+    const uint8_t ordered[2U] = {first, (uint8_t)(first ^ 1U)};
+    for (uint8_t index = 0U; index < 2U; ++index)
+    {
+        audio_fx_runtime_plan_slot_t *const item =
+            &plan->slot[ordered[index]];
+        if (item->stereo_block != NULL)
+            plan->after_filter[plan->after_filter_count++] = item;
+    }
+    plan->after_filter_sample = (plan->after_filter_count == 2U)
+        ? sample_chain_two : (plan->after_filter_count == 1U)
+            ? sample_chain_one : sample_chain_none;
+    __DMB();
+}
+
 void audio_fx_runtime_init(void)
 {
     fx_audio_xfade_init(&g_audio_fx_runtime[0][0].dsp.xfade);
@@ -418,6 +467,7 @@ void audio_fx_runtime_init(void)
     memset(g_audio_fx_plan,0,sizeof(g_audio_fx_plan));
     memset(g_audio_fx_vibe_history,0,sizeof(g_audio_fx_vibe_history));
     memset(g_audio_fx_drift_history,0,sizeof(g_audio_fx_drift_history));
+    audio_fx_runtime_preview_reset();
     for(uint8_t owner=0U;owner<AUDIO_FX_OWNER_COUNT;++owner){g_audio_fx_plan[owner].mode[0]=AUDIO_FX_SPATIAL_STEREO;g_audio_fx_plan[owner].mode[1]=AUDIO_FX_SPATIAL_STEREO;rebuild_plan(owner);}
     mixer_rebuild_static_plan();
 }
@@ -508,3 +558,75 @@ void audio_fx_runtime_process_stereo_sample(brick_entity_id_t e,float*l,float*r)
 float audio_fx_runtime_process_mono_sample(brick_entity_id_t e,float x){uint8_t owner;if(!audio_fx_owner(e,&owner))return x;audio_fx_runtime_plan_t*const p=&g_audio_fx_plan[owner];for(uint8_t si=0U;si<AUDIO_FX_SLOT_COUNT;++si){audio_fx_runtime_plan_slot_t*s=&p->slot[si];if(((p->active_mask&(uint8_t)(1U<<si))!=0U)&&(s->mono_sample!=NULL))x=s->mono_sample(s->state,s->history,x);}return x;}
 void audio_fx_runtime_process(brick_entity_id_t e,float*l,float*r,uint32_t n){audio_fx_runtime_process_stereo(e,l,r,n);}
 uint8_t audio_fx_runtime_process_xfade(brick_entity_id_t e,float*l,float*r,const float*tl,const float*tr,uint32_t n){uint8_t owner;if(!audio_fx_owner(e,&owner)||!l||!r||!n)return 0U;for(uint8_t si=0U;si<AUDIO_FX_SLOT_COUNT;++si){audio_fx_runtime_slot_t*s=&g_audio_fx_runtime[owner][si];if(s->config.model==AUDIO_FX_MODEL_XFADE){fx_audio_xfade_process_block(&s->dsp.xfade,l,r,tl,tr,n);return 1U;}}return 0U;}
+
+void audio_fx_runtime_preview_reset(void)
+{
+    memset(g_audio_fx_preview_runtime, 0, sizeof(g_audio_fx_preview_runtime));
+    memset(&g_audio_fx_preview_plan, 0, sizeof(g_audio_fx_preview_plan));
+    memset(&g_audio_fx_preview_vibe_history, 0,
+           sizeof(g_audio_fx_preview_vibe_history));
+    memset(g_audio_fx_preview_drift_history, 0,
+           sizeof(g_audio_fx_preview_drift_history));
+    g_audio_fx_preview_plan.mode[0] = AUDIO_FX_SPATIAL_STEREO;
+    g_audio_fx_preview_plan.mode[1] = AUDIO_FX_SPATIAL_STEREO;
+    g_audio_fx_preview_contextual_bypass = 0U;
+    rebuild_preview_plan();
+}
+
+uint8_t audio_fx_runtime_preview_prepare(const patch_preview_fx_t *config)
+{
+    if ((config == NULL) || (config->order >= AUDIO_FX_ORDER_COUNT)) return 0U;
+    audio_fx_runtime_preview_reset();
+    g_audio_fx_preview_plan.order = config->order;
+    for (uint8_t slot = 0U; slot < AUDIO_FX_SLOT_COUNT; ++slot)
+    {
+        if (config->spatial_mode[slot] >= AUDIO_FX_SPATIAL_COUNT
+                || !audio_fx_runtime_model_is_valid(config->model[slot]))
+            return 0U;
+        uint8_t model = config->model[slot];
+        if (model == AUDIO_FX_MODEL_XFADE)
+        {
+            model = AUDIO_FX_MODEL_OFF;
+            g_audio_fx_preview_contextual_bypass = 1U;
+        }
+        audio_fx_runtime_slot_t *const runtime =
+            &g_audio_fx_preview_runtime[slot];
+        runtime->config = (audio_fx_audio_config_t){
+            model, config->p1[slot], config->p2[slot], config->p3[slot]};
+        g_audio_fx_preview_plan.mode[slot] = config->spatial_mode[slot];
+        reset_light_state(runtime);
+        prepare(runtime);
+    }
+    rebuild_preview_plan();
+    return 1U;
+}
+
+uint8_t audio_fx_runtime_preview_apply_param(param_id_t id, float value)
+{
+    audio_fx_slot_t slot;
+    if (!audio_fx_runtime_param_slot(id, &slot)) return 0U;
+    audio_fx_runtime_slot_t *const runtime =
+        &g_audio_fx_preview_runtime[slot];
+    const uint8_t kind = param_kind(id);
+    if (kind == 1U) runtime->config.p1 = value;
+    else if (kind == 2U) runtime->config.p2 = value;
+    else if (kind == 3U) runtime->config.p3 = value;
+    else return 0U;
+    prepare(runtime);
+    return 1U;
+}
+
+void audio_fx_runtime_preview_process(float *left, float *right,
+                                      uint32_t frames)
+{
+    if ((left == NULL) || (right == NULL) || (frames == 0U)
+            || (g_audio_fx_preview_plan.active_mask == 0U)) return;
+    process_chain(g_audio_fx_preview_plan.after_filter,
+                  g_audio_fx_preview_plan.after_filter_count,
+                  left, right, frames);
+}
+
+uint8_t audio_fx_runtime_preview_has_contextual_bypass(void)
+{
+    return g_audio_fx_preview_contextual_bypass;
+}

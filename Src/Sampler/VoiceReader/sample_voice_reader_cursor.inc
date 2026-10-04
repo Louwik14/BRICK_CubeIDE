@@ -421,9 +421,9 @@ void sample_voice_reader_bind(sample_voice_reader_t *reader,
     reader->active = 1U;
 }
 
-uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
-                                           const sample_play_plan_t *plan,
-                                           uint8_t reader_id)
+static uint8_t sample_voice_reader_bind_play_plan_slot(
+    sample_voice_reader_t *reader, const sample_play_plan_t *plan,
+    uint8_t lease_slot)
 {
     if ((reader == 0) || (plan == 0)
         || ((plan->kernel_type != SAMPLE_KERNEL_FWD_1X)
@@ -432,7 +432,6 @@ uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
         return 0U;
     }
 
-    const uint8_t lease_slot = sample_voice_reader_lease_slot(plan->key, reader_id);
     if (lease_slot == UINT8_MAX || lease_slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT)
         return 0U;
 
@@ -465,6 +464,22 @@ uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
     }
 
     return 1U;
+}
+
+uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
+                                           const sample_play_plan_t *plan,
+                                           uint8_t reader_id)
+{
+    const uint8_t lease_slot = (plan != NULL)
+        ? sample_voice_reader_lease_slot(plan->key, reader_id) : UINT8_MAX;
+    return sample_voice_reader_bind_play_plan_slot(reader, plan, lease_slot);
+}
+
+uint8_t sample_voice_reader_bind_preview_play_plan(
+    sample_voice_reader_t *reader, const sample_play_plan_t *plan)
+{
+    return sample_voice_reader_bind_play_plan_slot(
+        reader, plan, SAMPLE_PAGE_LEASE_PREVIEW_SLOT);
 }
 
 uint8_t sample_voice_reader_bind_musical_play_plan(sample_voice_reader_t *reader,

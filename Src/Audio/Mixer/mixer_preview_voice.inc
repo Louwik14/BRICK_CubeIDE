@@ -215,3 +215,29 @@ ITCM_TEXT uint8_t preview_voice_dsp_process(float *mono, uint32_t frames)
     }
     return (vca_env_stage(&filter->synth_vca_env) != VCA_ENV_IDLE) ? 1U : 0U;
 }
+
+ITCM_TEXT uint8_t preview_voice_dsp_process_stereo(float *left, float *right,
+                                                   uint32_t frames)
+{
+    mixer_track_filter_t *const filter = &g_patch_preview_filter;
+    if ((left == NULL) || (right == NULL) || (frames == 0U)
+            || (frames > AUDIO_BLOCK_SIZE)) return 0U;
+    mixer_track_filter_process_block(filter, left, right, frames);
+    float gain[AUDIO_BLOCK_SIZE];
+    const uint32_t produced = vca_env_process_block(&filter->synth_vca_env,
+                                                    gain, frames);
+    uint32_t frame = 0U;
+    for (; frame < produced; ++frame)
+    {
+        filter->vca_env_value = gain[frame];
+        left[frame] *= gain[frame];
+        right[frame] *= gain[frame];
+    }
+    if (frame < frames)
+    {
+        memset(&left[frame], 0, (frames - frame) * sizeof(*left));
+        memset(&right[frame], 0, (frames - frame) * sizeof(*right));
+        filter->vca_env_value = 0.0f;
+    }
+    return (vca_env_stage(&filter->synth_vca_env) != VCA_ENV_IDLE) ? 1U : 0U;
+}

@@ -23,7 +23,11 @@ typedef enum
     PATCH_PREVIEW_ENGINE_PRISM,
     PATCH_PREVIEW_ENGINE_STACK,
     PATCH_PREVIEW_ENGINE_TB303,
-    PATCH_PREVIEW_ENGINE_ACID
+    PATCH_PREVIEW_ENGINE_ACID,
+    PATCH_PREVIEW_ENGINE_WAVE,
+    PATCH_PREVIEW_ENGINE_RAM,
+    PATCH_PREVIEW_ENGINE_STREAM,
+    PATCH_PREVIEW_ENGINE_MULTI
 } patch_preview_engine_t;
 
 typedef struct
@@ -80,6 +84,24 @@ typedef struct
 
 typedef struct
 {
+    uint16_t runtime_id;
+    uint16_t wavetable_slot[2U];
+    uint32_t wavetable_generation[2U];
+    uint8_t present;
+} patch_preview_asset_t;
+
+typedef struct
+{
+    uint8_t model[2U];
+    uint8_t spatial_mode[2U];
+    uint8_t order;
+    float p1[2U];
+    float p2[2U];
+    float p3[2U];
+} patch_preview_fx_t;
+
+typedef struct
+{
     patch_preview_engine_t engine;
     track_tone_fm_base_voice_t fm_base;
     track_tone_fm_macros_t fm_macros;
@@ -87,6 +109,8 @@ typedef struct
     uint8_t engine_param_count;
     patch_preview_filter_t filter;
     patch_preview_vca_t vca;
+    patch_preview_asset_t asset;
+    patch_preview_fx_t fx;
     patch_preview_modulation_t modulation;
     uint8_t modulation_present;
     uint32_t generation;

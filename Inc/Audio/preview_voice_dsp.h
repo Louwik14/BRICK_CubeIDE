@@ -19,6 +19,8 @@ void preview_voice_dsp_prepare_mod_sources(uint32_t frames,
                                             float *vca_envelope);
 uint8_t preview_voice_dsp_apply_param(param_id_t parameter, float value);
 uint8_t preview_voice_dsp_process(float *mono, uint32_t frames);
+uint8_t preview_voice_dsp_process_stereo(float *left, float *right,
+                                         uint32_t frames);
 
 #ifdef __cplusplus
 }

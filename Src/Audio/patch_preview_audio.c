@@ -7,6 +7,9 @@
 #include "Audio/Engines/prism_engine.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/tb303_engine.h"
+#include "Audio/Engines/wavetable_engine.h"
+#include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
+#include "Audio/audio_fx_runtime.h"
 #include "Audio/mixer.h"
 #include "Audio/preview_voice_dsp.h"
 #include "Mod/mod_instrument_runtime.h"
@@ -31,6 +34,7 @@ typedef struct
 
 static patch_preview_audio_runtime_t g_patch_preview_audio;
 static AUDIO_HOT float g_patch_preview_render[BRICK6_FM_RENDER_BLOCK];
+static AUDIO_WARM float g_patch_preview_render_right[BRICK6_FM_RENDER_BLOCK];
 
 static void patch_preview_engine_reset(patch_preview_engine_t engine)
 {
@@ -45,8 +49,43 @@ static void patch_preview_engine_reset(patch_preview_engine_t engine)
             brick6_tb303_runtime_reset_instance(BRICK6_TB303_PREVIEW_INSTANCE_ID); break;
         case PATCH_PREVIEW_ENGINE_ACID:
             brick6_acid_runtime_reset_instance(BRICK6_ACID_PREVIEW_INSTANCE_ID); break;
+        case PATCH_PREVIEW_ENGINE_WAVE:
+            brick6_wave_runtime_reset_instance(BRICK6_WAVE_PREVIEW_INSTANCE_ID); break;
+        case PATCH_PREVIEW_ENGINE_RAM:
+        case PATCH_PREVIEW_ENGINE_STREAM:
+        case PATCH_PREVIEW_ENGINE_MULTI:
+            brick6_sampler_preview_reset(); break;
         default: break;
     }
+}
+
+static uint8_t patch_preview_wave_apply(param_id_t id, float value)
+{
+    const uint8_t instance = BRICK6_WAVE_PREVIEW_INSTANCE_ID;
+    if (id == PARAM_WAVE_VOLUME)
+        brick6_wave_runtime_set_volume(instance, value);
+    else if (id == PARAM_WAVE_BALANCE)
+        brick6_wave_runtime_set_balance(instance, value);
+    else if (id == PARAM_WAVE_TUNE)
+        brick6_wave_runtime_set_tune(instance, value);
+    else if (id == PARAM_WAVE_DETUNE)
+        brick6_wave_runtime_set_detune(instance, value);
+    else
+    {
+        uint8_t osc;
+        if ((id >= PARAM_WAVE_OSC1_POS) && (id <= PARAM_WAVE_OSC1_LEN))
+            osc = 0U;
+        else if ((id >= PARAM_WAVE_OSC2_POS) && (id <= PARAM_WAVE_OSC2_LEN))
+            osc = 1U;
+        else return 0U;
+        const uint8_t relative = (uint8_t)(id
+            - ((osc == 0U) ? PARAM_WAVE_OSC1_POS : PARAM_WAVE_OSC2_POS));
+        if (relative == 0U) brick6_wave_runtime_set_osc_pos(instance, osc, value);
+        else if (relative == 1U) brick6_wave_runtime_set_osc_start(instance, osc, value);
+        else if (relative == 2U) brick6_wave_runtime_set_osc_len(instance, osc, value);
+        else return 0U;
+    }
+    return 1U;
 }
 
 static uint8_t patch_preview_prism_apply(param_id_t id, float value)
@@ -150,6 +189,12 @@ static uint8_t patch_preview_engine_apply(patch_preview_engine_t engine,
         case PATCH_PREVIEW_ENGINE_STACK: return patch_preview_stack_apply(id, value);
         case PATCH_PREVIEW_ENGINE_TB303: case PATCH_PREVIEW_ENGINE_ACID:
             return patch_preview_303_apply(engine, id, value);
+        case PATCH_PREVIEW_ENGINE_WAVE:
+            return patch_preview_wave_apply(id, value);
+        case PATCH_PREVIEW_ENGINE_RAM:
+        case PATCH_PREVIEW_ENGINE_STREAM:
+        case PATCH_PREVIEW_ENGINE_MULTI:
+            return brick6_sampler_preview_apply_param(id, value);
         default: return 0U;
     }
 }
@@ -158,6 +203,7 @@ static uint8_t patch_preview_mod_apply(void *context, param_id_t id, float value
 {
     (void)context;
     if (preview_voice_dsp_apply_param(id, value) != 0U) return 1U;
+    if (audio_fx_runtime_preview_apply_param(id, value) != 0U) return 1U;
     return patch_preview_engine_apply(g_patch_preview_audio.engine, id, value);
 }
 
@@ -167,6 +213,27 @@ static uint8_t patch_preview_engine_prepare(const patch_preview_publication_t *p
     if (publication->engine == PATCH_PREVIEW_ENGINE_FM)
         return brick6_fm_preview_prepare(&publication->fm_base,
                                          &publication->fm_macros);
+    if (publication->engine == PATCH_PREVIEW_ENGINE_WAVE)
+    {
+        if (publication->asset.present == 0U) return 0U;
+        for (uint8_t osc = 0U; osc < 2U; ++osc)
+            brick6_wave_runtime_set_osc_table_wavetable_generation(
+                BRICK6_WAVE_PREVIEW_INSTANCE_ID, osc,
+                publication->asset.wavetable_slot[osc],
+                publication->asset.wavetable_generation[osc]);
+    }
+    else if (publication->engine >= PATCH_PREVIEW_ENGINE_RAM)
+    {
+        if (publication->asset.present == 0U) return 0U;
+        const brick6_sampler_preview_kind_t kind =
+            (publication->engine == PATCH_PREVIEW_ENGINE_RAM)
+                ? BRICK6_SAMPLER_PREVIEW_RAM
+                : (publication->engine == PATCH_PREVIEW_ENGINE_STREAM)
+                    ? BRICK6_SAMPLER_PREVIEW_STREAM
+                    : BRICK6_SAMPLER_PREVIEW_MULTI;
+        if (!brick6_sampler_preview_prepare(kind,
+                publication->asset.runtime_id)) return 0U;
+    }
     const uint8_t count = publication->engine_param_count;
     if (count == 0U) return 0U;
     for (uint8_t slot = 0U; slot < count; ++slot)
@@ -189,17 +256,19 @@ void patch_preview_audio_init(void)
     brick6_fm_preview_reset();
     preview_voice_dsp_reset();
     mod_instrument_runtime_reset(&g_patch_preview_audio.modulation);
+    audio_fx_runtime_preview_reset();
 }
 
 uint8_t patch_preview_audio_prepare(const patch_preview_publication_t *publication)
 {
     if ((publication == NULL) || (publication->engine <= PATCH_PREVIEW_ENGINE_NONE)
-            || (publication->engine > PATCH_PREVIEW_ENGINE_ACID)) return 0U;
+            || (publication->engine > PATCH_PREVIEW_ENGINE_MULTI)) return 0U;
     (void)patch_preview_audio_stop();
     g_patch_preview_audio.engine = publication->engine;
     if ((patch_preview_engine_prepare(publication) == 0U)
             || (preview_voice_dsp_prepare(&publication->filter,
-                                          &publication->vca) == 0U))
+                                          &publication->vca) == 0U)
+            || (audio_fx_runtime_preview_prepare(&publication->fx) == 0U))
     {
         (void)patch_preview_audio_stop();
         return 0U;
@@ -232,6 +301,13 @@ uint8_t patch_preview_audio_note_on(uint8_t note, uint8_t velocity)
             BRICK6_TB303_PREVIEW_INSTANCE_ID, note, velocity); break;
         case PATCH_PREVIEW_ENGINE_ACID: brick6_acid_runtime_note_on(
             BRICK6_ACID_PREVIEW_INSTANCE_ID, note, velocity); break;
+        case PATCH_PREVIEW_ENGINE_WAVE: brick6_wave_runtime_note_on(
+            BRICK6_WAVE_PREVIEW_INSTANCE_ID, note, velocity); break;
+        case PATCH_PREVIEW_ENGINE_RAM:
+        case PATCH_PREVIEW_ENGINE_STREAM:
+        case PATCH_PREVIEW_ENGINE_MULTI:
+            if (!brick6_sampler_preview_note_on(note, velocity)) return 0U;
+            break;
         default: return 0U;
     }
     preview_voice_dsp_note_on(note, velocity);
@@ -256,6 +332,12 @@ uint8_t patch_preview_audio_note_off(uint8_t note)
             BRICK6_TB303_PREVIEW_INSTANCE_ID, note); break;
         case PATCH_PREVIEW_ENGINE_ACID: brick6_acid_runtime_note_off(
             BRICK6_ACID_PREVIEW_INSTANCE_ID, note); break;
+        case PATCH_PREVIEW_ENGINE_WAVE: brick6_wave_runtime_note_off(
+            BRICK6_WAVE_PREVIEW_INSTANCE_ID, note); break;
+        case PATCH_PREVIEW_ENGINE_RAM:
+        case PATCH_PREVIEW_ENGINE_STREAM:
+        case PATCH_PREVIEW_ENGINE_MULTI:
+            brick6_sampler_preview_note_off(note); break;
         default: break;
     }
     preview_voice_dsp_note_off(note);
@@ -269,6 +351,7 @@ uint8_t patch_preview_audio_stop(void)
     patch_preview_engine_reset(g_patch_preview_audio.engine);
     preview_voice_dsp_reset();
     mod_instrument_runtime_reset(&g_patch_preview_audio.modulation);
+    audio_fx_runtime_preview_reset();
     g_patch_preview_audio.state = PATCH_PREVIEW_AUDIO_EMPTY;
     g_patch_preview_audio.engine = PATCH_PREVIEW_ENGINE_NONE;
     g_patch_preview_audio.note = 0U;
@@ -289,6 +372,8 @@ static uint8_t patch_preview_engine_render(float *mono, uint32_t frames)
             BRICK6_TB303_PREVIEW_INSTANCE_ID, mono, frames);
         case PATCH_PREVIEW_ENGINE_ACID: return brick6_acid_runtime_render_instance(
             BRICK6_ACID_PREVIEW_INSTANCE_ID, mono, frames);
+        case PATCH_PREVIEW_ENGINE_WAVE: return brick6_wave_runtime_render_instance(
+            BRICK6_WAVE_PREVIEW_INSTANCE_ID, mono, frames);
         default: return 0U;
     }
 }
@@ -310,13 +395,27 @@ uint8_t patch_preview_audio_render_main(float *out_main_l, float *out_main_r,
             patch_preview_mod_apply, NULL);
     }
     memset(g_patch_preview_render, 0, frames * sizeof(*g_patch_preview_render));
-    (void)patch_preview_engine_render(g_patch_preview_render, frames);
-    const uint8_t running = preview_voice_dsp_process(g_patch_preview_render, frames);
+    memset(g_patch_preview_render_right, 0,
+           frames * sizeof(*g_patch_preview_render_right));
+    if (g_patch_preview_audio.engine >= PATCH_PREVIEW_ENGINE_RAM)
+        (void)brick6_sampler_preview_render(g_patch_preview_render,
+            g_patch_preview_render_right, frames);
+    else
+    {
+        (void)patch_preview_engine_render(g_patch_preview_render, frames);
+        memcpy(g_patch_preview_render_right, g_patch_preview_render,
+               frames * sizeof(*g_patch_preview_render));
+    }
+    const uint8_t running = preview_voice_dsp_process_stereo(
+        g_patch_preview_render, g_patch_preview_render_right, frames);
+    audio_fx_runtime_preview_process(g_patch_preview_render,
+                                     g_patch_preview_render_right, frames);
     for (uint32_t frame = 0U; frame < frames; ++frame)
     {
-        const float sample = g_patch_preview_render[frame] * MIXER_TRACK_NOMINAL_TRIM;
-        out_main_l[frame] += sample;
-        out_main_r[frame] += sample;
+        out_main_l[frame] += g_patch_preview_render[frame]
+            * MIXER_TRACK_NOMINAL_TRIM;
+        out_main_r[frame] += g_patch_preview_render_right[frame]
+            * MIXER_TRACK_NOMINAL_TRIM;
     }
     if (running == 0U)
     {

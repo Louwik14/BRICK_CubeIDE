@@ -47,6 +47,7 @@ void brick6_sampler_runtime_init(void)
         sample_voice_reader_reset(&g_sampler_voice[i].reader);
         brick6_sampler_runtime_clip_reset(i);
     }
+    brick6_sampler_preview_reset();
 }
 
 static void brick6_sampler_runtime_reset_track_internal(uint8_t track_id,

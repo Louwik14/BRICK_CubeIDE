@@ -12,6 +12,7 @@
 #include <stdint.h>
 
 #include "Audio/audio_note_engine_adapter.h"
+#include "Param/param_ids.h"
 #include "Sampler/brick6_sampler_multi_contract.h"
 
 #ifdef __cplusplus
@@ -57,6 +58,13 @@ typedef enum
     BRICK6_SAMPLER_NOTE_RENDERED,
     BRICK6_SAMPLER_NOTE_SILENT
 } brick6_sampler_note_result_t;
+
+typedef enum
+{
+    BRICK6_SAMPLER_PREVIEW_RAM = 0U,
+    BRICK6_SAMPLER_PREVIEW_STREAM,
+    BRICK6_SAMPLER_PREVIEW_MULTI
+} brick6_sampler_preview_kind_t;
 
 void brick6_sampler_runtime_init(void);
 void brick6_sampler_runtime_reset_track(uint8_t track_id);
@@ -167,6 +175,14 @@ void brick6_sampler_runtime_render_ram_track_mono(const track_audio_runtime_ctx_
 void brick6_sampler_runtime_diag_reset(void);
 uint8_t brick6_sampler_runtime_ram_slice_mode_active(uint8_t track_id);
 uint8_t brick6_sampler_runtime_audio_slice_count(uint8_t track_id);
+void brick6_sampler_preview_reset(void);
+uint8_t brick6_sampler_preview_prepare(brick6_sampler_preview_kind_t kind,
+                                       uint16_t runtime_id);
+uint8_t brick6_sampler_preview_apply_param(param_id_t parameter, float value);
+uint8_t brick6_sampler_preview_note_on(uint8_t note, uint8_t velocity);
+void brick6_sampler_preview_note_off(uint8_t note);
+uint8_t brick6_sampler_preview_render(float *left, float *right,
+                                      uint32_t frames);
 #ifdef __cplusplus
 }
 #endif

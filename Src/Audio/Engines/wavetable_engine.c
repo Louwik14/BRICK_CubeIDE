@@ -77,6 +77,7 @@ struct wave_osc_block_ctx_t
 AUDIO_HOT static brick6_wave_runtime_instance_t g_wave_runtime[BRICK6_WAVE_MAX_INSTANCES];
 AUDIO_HOT static brick6_wave_runtime_instance_t
     g_wave_poly_runtime[BRICK6_WAVE_VOICE_INSTANCE_COUNT - BRICK6_WAVE_MAX_INSTANCES];
+AUDIO_WARM static brick6_wave_runtime_instance_t g_wave_preview;
 static uint32_t g_wave_continuous_version;
 
 static float wave_clampf(float value, float min_value, float max_value)
@@ -118,6 +119,7 @@ uint32_t wave_remap_read_phase(const wave_osc_block_ctx_t *ctx,
 
 static brick6_wave_runtime_instance_t *wave_get_instance_mut(uint8_t instance_id)
 {
+    if (instance_id == BRICK6_WAVE_PREVIEW_INSTANCE_ID) return &g_wave_preview;
     if (instance_id >= BRICK6_WAVE_VOICE_INSTANCE_COUNT)
     {
         return NULL;
@@ -129,6 +131,7 @@ static brick6_wave_runtime_instance_t *wave_get_instance_mut(uint8_t instance_id
 
 static const brick6_wave_runtime_instance_t *wave_get_instance(uint8_t instance_id)
 {
+    if (instance_id == BRICK6_WAVE_PREVIEW_INSTANCE_ID) return &g_wave_preview;
     if (instance_id >= BRICK6_WAVE_VOICE_INSTANCE_COUNT)
     {
         return NULL;
@@ -148,6 +151,14 @@ static void wave_touch_continuous(brick6_wave_runtime_instance_t *instance,
                                   uint8_t param)
 {
     if ((instance == NULL) || (param >= WAVE_CONT_COUNT)) return;
+    if (instance == &g_wave_preview)
+    {
+        uint32_t version = instance->continuous_epoch + 1U;
+        if (version == 0U) version = 1U;
+        instance->continuous_version[param] = version;
+        instance->continuous_epoch = version;
+        return;
+    }
     g_wave_continuous_version++;
     if (g_wave_continuous_version == 0U) g_wave_continuous_version = 1U;
     instance->continuous_version[param] = g_wave_continuous_version;
@@ -602,6 +613,7 @@ void brick6_wave_runtime_init(void)
     {
         wave_reset_instance(wave_get_instance_mut(instance));
     }
+    wave_reset_instance(&g_wave_preview);
 }
 
 void brick6_wave_runtime_reset_instance(uint8_t instance_id)
@@ -802,9 +814,11 @@ void brick6_wave_runtime_all_notes_off(uint8_t instance_id)
 void brick6_wave_runtime_stop_wavetable_slot(uint16_t wavetable_slot,
                                             uint32_t generation)
 {
-    for (uint8_t instance_id = 0U;
-         instance_id < BRICK6_WAVE_VOICE_INSTANCE_COUNT; ++instance_id)
+    for (uint8_t ordinal = 0U;
+         ordinal <= BRICK6_WAVE_VOICE_INSTANCE_COUNT; ++ordinal)
     {
+        const uint8_t instance_id = (ordinal == BRICK6_WAVE_VOICE_INSTANCE_COUNT)
+            ? BRICK6_WAVE_PREVIEW_INSTANCE_ID : ordinal;
         brick6_wave_runtime_instance_t *const instance =
             wave_get_instance_mut(instance_id);
         for (uint8_t osc_id = 0U; osc_id < BRICK6_WAVE_OSC_COUNT; ++osc_id)
@@ -1052,7 +1066,8 @@ ITCM_TEXT uint8_t brick6_wave_runtime_render_instance(uint8_t instance_id,
                                                        float *out_mono,
                                                        uint32_t frames)
 {
-    const uint8_t capture_mask = synth_waveform_audio_instance_mask(instance_id);
+    const uint8_t capture_mask = (instance_id == BRICK6_WAVE_PREVIEW_INSTANCE_ID)
+        ? 0U : synth_waveform_audio_instance_mask(instance_id);
     if (capture_mask == 0U)
     {
         return wave_render_instance_block(instance_id, out_mono, frames, 0U);

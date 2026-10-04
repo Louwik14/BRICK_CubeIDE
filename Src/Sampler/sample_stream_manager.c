@@ -46,8 +46,8 @@ void __attribute__((used, externally_visible)) brick_perf_diag_snapshot(void)
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CLASSIC_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
                "stream manager hot scan range must fit in page-cache ids");
-_Static_assert(SAMPLE_STREAM_IO_MAX_READERS == 9U,
-               "active readers are eight musical plus Recorder overdub");
+_Static_assert(SAMPLE_STREAM_IO_MAX_READERS == 10U,
+               "eight musical readers plus Recorder and Preview");
 #endif
 static uint8_t g_sample_stream_manager_initialized;
 static uint8_t sample_stream_manager_candidate_for_slot(

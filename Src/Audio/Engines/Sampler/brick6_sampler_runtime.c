@@ -476,3 +476,5 @@ void brick6_sampler_runtime_diag_reset(void);
 #include "sampler_ram_voice.inc"
 
 #include "sampler_audio_render.inc"
+
+#include "sampler_preview_voice.inc"

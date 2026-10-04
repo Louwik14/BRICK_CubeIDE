@@ -7,6 +7,7 @@
 #include "Param/param_ids.h"
 #include "Param/engine_model_catalog.h"
 #include "Track/audio_fx_xfade_contract.h"
+#include "ControlRT/patch_preview_contract.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,6 +83,13 @@ uint8_t audio_fx_runtime_process_xfade(brick_entity_id_t entity_id,
                                        const float *target_left,
                                        const float *target_right,
                                        uint32_t frames);
+
+void audio_fx_runtime_preview_reset(void);
+uint8_t audio_fx_runtime_preview_prepare(const patch_preview_fx_t *config);
+uint8_t audio_fx_runtime_preview_apply_param(param_id_t id, float value);
+void audio_fx_runtime_preview_process(float *left, float *right,
+                                      uint32_t frames);
+uint8_t audio_fx_runtime_preview_has_contextual_bypass(void);
 
 #ifdef __cplusplus
 }

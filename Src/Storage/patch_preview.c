@@ -10,6 +10,9 @@
 #include "Platform/memory_layout.h"
 #include "Storage/persistent_control_codec.h"
 #include "Storage/persistent_key_catalog.h"
+#include "Storage/project_control.h"
+#include "Sampler/sample_global_pool.h"
+#include "Sampler/wavetable_pool.h"
 #include "Track/audio_fx_control_state.h"
 #include "Track/fm_control_state.h"
 #include "Track/polyphony_control.h"
@@ -43,14 +46,31 @@ static uint8_t patch_preview_validate(const persist_control_patch_t *patch)
     if ((persist_key_family_from_disk(patch->family, &family) == 0U)
             || (persist_key_type_from_disk(patch->type, &type) == 0U))
         return 0U;
-    const uint8_t supported = (uint8_t)((type == TRACK_TYPE_FM)
+    const uint8_t synth = (uint8_t)((type == TRACK_TYPE_FM)
         || (type == TRACK_TYPE_PRISM) || (type == TRACK_TYPE_STACK)
-        || (type == TRACK_TYPE_TB303) || (type == TRACK_TYPE_ACID));
+        || (type == TRACK_TYPE_TB303) || (type == TRACK_TYPE_ACID)
+        || (type == TRACK_TYPE_WAVE));
+    const uint8_t sampler = (uint8_t)((type == TRACK_TYPE_RAM)
+        || (type == TRACK_TYPE_STREAM) || (type == TRACK_TYPE_MULTI));
+    const uint8_t supported = (uint8_t)(synth || sampler);
     const uint8_t expect_fm = (uint8_t)(type == TRACK_TYPE_FM);
+    uint8_t assets_valid = 0U;
+    if ((type == TRACK_TYPE_WAVE) && (patch->asset_count == 2U))
+        assets_valid = (uint8_t)((patch->assets[0].kind == PERSIST_ASSET_WAVETABLE)
+            && (patch->assets[1].kind == PERSIST_ASSET_WAVETABLE));
+    else if ((type == TRACK_TYPE_RAM) && (patch->asset_count == 1U))
+        assets_valid = (uint8_t)(patch->assets[0].kind == PERSIST_ASSET_SAMPLE_RAM);
+    else if ((type == TRACK_TYPE_STREAM) && (patch->asset_count == 1U))
+        assets_valid = (uint8_t)(patch->assets[0].kind == PERSIST_ASSET_SAMPLE_STREAM);
+    else if ((type == TRACK_TYPE_MULTI) && (patch->asset_count == 1U))
+        assets_valid = (uint8_t)(patch->assets[0].kind == PERSIST_ASSET_MULTI);
+    else if ((type != TRACK_TYPE_WAVE) && (sampler == 0U)
+            && (patch->asset_count == 0U)) assets_valid = 1U;
     return (uint8_t)(
-        (family == TRACK_FAMILY_SYNTH)
+        (((family == TRACK_FAMILY_SYNTH) && synth)
+            || ((family == TRACK_FAMILY_SAMPLER) && sampler))
         && (supported != 0U)
-        && (patch->asset_count == 0U)
+        && (assets_valid != 0U)
         && (patch->fm_present == expect_fm)
         && (patch->tone_present == (uint8_t)(expect_fm == 0U))
         && (expect_fm
@@ -72,8 +92,69 @@ static patch_preview_engine_t patch_preview_engine_from_type(track_type_t type)
         case TRACK_TYPE_STACK: return PATCH_PREVIEW_ENGINE_STACK;
         case TRACK_TYPE_TB303: return PATCH_PREVIEW_ENGINE_TB303;
         case TRACK_TYPE_ACID: return PATCH_PREVIEW_ENGINE_ACID;
+        case TRACK_TYPE_WAVE: return PATCH_PREVIEW_ENGINE_WAVE;
+        case TRACK_TYPE_RAM: return PATCH_PREVIEW_ENGINE_RAM;
+        case TRACK_TYPE_STREAM: return PATCH_PREVIEW_ENGINE_STREAM;
+        case TRACK_TYPE_MULTI: return PATCH_PREVIEW_ENGINE_MULTI;
         default: return PATCH_PREVIEW_ENGINE_NONE;
     }
+}
+
+static uint8_t patch_preview_asset_path(
+    const persist_control_asset_ref_t *asset,
+    char out_path[PERSIST_CONTROL_ASSET_PATH_BYTES + 1U])
+{
+    if ((asset == NULL) || (out_path == NULL)
+            || (asset->path_length == 0U)
+            || (asset->path_length > PERSIST_CONTROL_ASSET_PATH_BYTES)) return 0U;
+    memcpy(out_path, asset->canonical_path, asset->path_length);
+    out_path[asset->path_length] = '\0';
+    return 1U;
+}
+
+static uint8_t patch_preview_resolve_assets(
+    const persist_control_patch_t *patch, track_type_t type,
+    patch_preview_asset_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    if (patch->asset_count == 0U) return 1U;
+    if (type == TRACK_TYPE_WAVE)
+    {
+        for (uint8_t osc = 0U; osc < 2U; ++osc)
+        {
+            char path[PERSIST_CONTROL_ASSET_PATH_BYTES + 1U];
+            uint16_t logical, global, backend;
+            if (!patch_preview_asset_path(&patch->assets[osc], path)
+                    || !project_control_find_asset(PERSIST_ASSET_WAVETABLE,
+                        path, &logical)
+                    || !project_control_resolve_wavetable_runtime(logical,
+                        &global)
+                    || !sample_global_pool_resolve_backend(global,
+                        SAMPLE_GLOBAL_KIND_WAVETABLE, &backend)) return 0U;
+            const wavetable_slot_t *const slot = wavetable_pool_get_slot(backend);
+            if ((slot == NULL) || (slot->state != WAVETABLE_SLOT_READY)
+                    || (slot->data == NULL) || (slot->frame_count == 0U)) return 0U;
+            out->wavetable_slot[osc] = backend;
+            out->wavetable_generation[osc] = slot->generation;
+        }
+    }
+    else
+    {
+        char path[PERSIST_CONTROL_ASSET_PATH_BYTES + 1U];
+        uint16_t logical;
+        const uint32_t kind = patch->assets[0].kind;
+        if (!patch_preview_asset_path(&patch->assets[0], path)
+                || !project_control_find_asset(kind, path, &logical)) return 0U;
+        if (type == TRACK_TYPE_MULTI)
+        {
+            if (!project_control_resolve_multi_runtime(logical,
+                    &out->runtime_id)) return 0U;
+        }
+        else if (!project_control_resolve_sample_runtime_kind(kind, logical,
+                    &out->runtime_id)) return 0U;
+    }
+    out->present = 1U;
+    return 1U;
 }
 
 static uint8_t patch_preview_patch_param_get(
@@ -96,6 +177,12 @@ static uint8_t patch_preview_patch_param_get(
         case PARAM_VCA_DECAY: *out_value = patch->vca.decay; return 1U;
         case PARAM_VCA_SUSTAIN: *out_value = patch->vca.sustain; return 1U;
         case PARAM_VCA_RELEASE: *out_value = patch->vca.release; return 1U;
+        case PARAM_AUDIO_FX_P1: *out_value = patch->audio_fx.p1[0]; return 1U;
+        case PARAM_AUDIO_FX_P2: *out_value = patch->audio_fx.p2[0]; return 1U;
+        case PARAM_AUDIO_FX_P3: *out_value = patch->audio_fx.p3[0]; return 1U;
+        case PARAM_AUDIO_FX_B_P1: *out_value = patch->audio_fx.p1[1]; return 1U;
+        case PARAM_AUDIO_FX_B_P2: *out_value = patch->audio_fx.p2[1]; return 1U;
+        case PARAM_AUDIO_FX_B_P3: *out_value = patch->audio_fx.p3[1]; return 1U;
         default: break;
     }
     return (patch->fm_present != 0U)
@@ -265,6 +352,17 @@ uint8_t patch_preview_prepare(const persist_control_patch_t *patch)
     publication->vca = (patch_preview_vca_t){
         patch->vca.attack, patch->vca.decay, patch->vca.sustain,
         patch->vca.release, patch->vca.filter_mode, patch->vca.retrigger
+    };
+    if (!patch_preview_resolve_assets(patch, type, &publication->asset))
+        return 0U;
+    publication->fx = (patch_preview_fx_t){
+        .model = {patch->audio_fx.model[0], patch->audio_fx.model[1]},
+        .spatial_mode = {patch->audio_fx.config.spatial_mode[0],
+                         patch->audio_fx.config.spatial_mode[1]},
+        .order = (uint8_t)patch->audio_fx.config.order,
+        .p1 = {patch->audio_fx.p1[0], patch->audio_fx.p1[1]},
+        .p2 = {patch->audio_fx.p2[0], patch->audio_fx.p2[1]},
+        .p3 = {patch->audio_fx.p3[0], patch->audio_fx.p3[1]}
     };
     publication->modulation_present = patch->modulation_present;
     if (patch_preview_project_modulation(patch,
