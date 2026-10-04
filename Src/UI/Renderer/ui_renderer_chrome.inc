@@ -63,7 +63,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
 
     char title_fit[16];
     ui_renderer_template_copy_text(title_fit, sizeof(title_fit), family_title);
-    drv_display_set_font(ui_theme_get()->title_font);
+    drv_display_set_font(ui_theme_get_base()->title_font);
     if (drv_display_text_width(title_fit) > 38U)
     {
         drv_display_set_font(&FONT_4X6);
@@ -73,12 +73,15 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     ui_renderer_template_fit_text(cpu_avg_label, 30U);
     char pattern_label[6];
     ui_renderer_template_format_active_pattern_label(pattern_label, sizeof(pattern_label));
+    const ui_theme_header_style_t header_style = ui_theme_get()->header;
+    const uint8_t reference_header = (uint8_t)((header_style == UI_THEME_HEADER_CLASSIC)
+        || (header_style == UI_THEME_HEADER_MINIMALIST));
     const ui_theme_header_data_t header = {
         .track = track_label,
-        .track_name = runtime_fit,
-        .hall_mode = hall_fit,
-        .hall_suffix = suffix_fit,
-        .ensemble = title_fit,
+        .track_name = (reference_header != 0U) ? runtime_fit : runtime_label,
+        .hall_mode = (reference_header != 0U) ? hall_fit : hall_mode_label,
+        .hall_suffix = (reference_header != 0U) ? suffix_fit : hall_mode_suffix,
+        .ensemble = (reference_header != 0U) ? title_fit : family_title,
         .bpm = (draw_bpm != 0U) ? bpm_label : "",
         .cpu_load = cpu_avg_label,
         .pattern = pattern_label,
@@ -119,7 +122,7 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
 
         if (i == state->active_subpage)
         {
-            if (ui_theme_get_id() == UI_THEME_MINIMAL)
+            if (ui_theme_get()->base_style == UI_THEME_BASE_MINIMALIST)
             {
                 ui_theme_draw_frame(bx, UI_TEMPLATE_FOOTER_Y, bw,
                                     UI_TEMPLATE_FOOTER_H, UI_THEME_FRAME_LINE);
@@ -129,7 +132,7 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
         else
         {
             ui_theme_draw_frame(bx, UI_TEMPLATE_FOOTER_Y, bw, UI_TEMPLATE_FOOTER_H,
-                                ui_theme_get()->page_frame);
+                                ui_theme_get_base()->page_frame);
             drv_display_draw_text((uint8_t)x_label, UI_TEMPLATE_FOOTER_TEXT_Y, label_fit);
         }
     }

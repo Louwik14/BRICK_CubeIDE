@@ -1122,7 +1122,7 @@ static void ui_page_settings_render(void)
         return;
     }
     ui_theme_draw_page_title(ui_page_settings_view_title(level->view), NULL, 9U);
-    drv_display_set_font(ui_theme_get()->label_font);
+    drv_display_set_font(ui_theme_get_base()->label_font);
 
     const uint8_t count = ui_page_settings_view_item_count(level->view);
     const uint8_t selected = (count > 0U) ? (uint8_t)(level->selected_index % count) : 0U;
@@ -1151,7 +1151,7 @@ static void ui_page_settings_render(void)
         }
         else
         {
-            drv_display_draw_text((uint8_t)(2U + ui_theme_get()->content_x_pad), y, label);
+            drv_display_draw_text((uint8_t)(2U + ui_theme_get_base()->content_x_pad), y, label);
         }
     }
 

@@ -1,74 +1,62 @@
 # UI themes and display preferences
 
-`ui_theme` owns the active UI theme and the `CPU LOAD` visibility preference.
-Both values are loaded by `ui_bootstrap_init()` and stored atomically in
-`0:/BRICK/UI_PREFS.BIN` (`.TMP`/`.BAK`, versioned header and CRC32). A missing,
-old, corrupt or out-of-range file selects `CLASSIC` and enables CPU load, so
-existing installations retain the historical rendering.
+`ui_theme` owns the active theme and the independent `CPU LOAD` visibility
+preference. Both are loaded by `ui_bootstrap_init()` and stored atomically in
+`0:/BRICK/UI_PREFS.BIN` (`.TMP`/`.BAK`, versioned header and CRC32).
 
-The renderer reads one static `ui_theme_t` descriptor. It contains frame,
-focus, header, typography, separator and small geometry choices; there is no
-allocation or theme-specific page copy. Shared primitives render card/page
-frames, focused elements, page titles and the template top-information model.
-The top model keeps the existing product sources for active track number/name,
-Hall mode/suffix, focused ensemble, BPM/clock state, pattern and conditional CPU
-load. Theme or CPU visibility changes invalidate the OLED generation
-immediately, including the cached template header/footer.
+## Theme model
 
-The ten descriptors are:
+The renderer has two immutable body styles and six selectable themes. A theme
+descriptor contains only a name, a `base_style` and a `header_layout`:
 
-- `CLASSIC`: existing 5x7/4x6 typography, open-corner chrome, cut-corner
-  inverted focus and the historical structured header.
-- `MINIMAL`: 5x7/4x6 typography, top-line cards, sparse header and underlined
-  focus markers.
-- `GRID`: 5x7/4x6 typography, closed cells with label separators, tabular
-  header and solid rectangular focus.
-- `TERMINAL`: compact existing font for title/header, bracket-only frames,
-  command-line header and bracket focus.
-- `MODERN`: 5x7/4x6 typography, asymmetric rails, split header and flag-shaped
-  focus.
-- `STUDIO`: dense 4x6 instrumentation, ruled cells, meter-like ticks and a
-  strong side focus rail.
-- `BRUTAL`: heavy frames, large high-impact header blocks and double-outline
-  focus.
-- `NINETIES`: doubled hardware-panel frames, compact segmented header and
-  opposing focus chevrons.
-- `CONTRAST`: alternating filled/open information blocks, corner-block frames
-  and a high-contrast focus cap.
-- `AIR`: sparse dotted frames, wide spacing, floating information groups and a
-  light but explicit focus baseline.
+| Theme | Body base | Global-information composition |
+|---|---|---|
+| `CLASSIC` | `CLASSIC` | Historical open-corner track badge, centered ensemble block and right-side BPM/CPU. |
+| `DECK` | `CLASSIC` | Four instrument-like cells: track badge, track/Hall, dominant ensemble, BPM/CPU/pattern. |
+| `HALO` | `CLASSIC` | Ensemble centered between split rules, with track metadata left and tempo/load right. |
+| `MINIMALIST` | `MINIMALIST` | Historical sparse two-line header with the existing top-line cards and underline focus. |
+| `STRIP` | `MINIMALIST` | Compact aligned strips separated by one horizontal rule; no decorative box. |
+| `AXIS` | `MINIMALIST` | Asymmetric split composition: ensemble/track block left, metadata axis right. |
+
+The two `ui_theme_base_t` records are the only owners of page/card frames,
+focus, page-title typography, label typography, separators and body spacing.
+Consequently `DECK` and `HALO` render every non-header element exactly like
+`CLASSIC`; `STRIP` and `AXIS` render them exactly like `MINIMALIST`. Header
+layouts receive one shared product model containing active track number/name,
+Hall mode/suffix, ensemble, BPM/clock state, pattern and conditional CPU load.
+Each non-reference layout measures and truncates long fields within its own
+regions before drawing.
+
+`CPU LOAD = OFF` removes the CPU string from that model. Layouts do not draw a
+placeholder: tempo, pattern and whitespace retain a balanced composition.
+No dynamic allocation, additional framebuffer or periodic redraw is used.
 
 ## Theme browser
 
-Selecting `THEME` in Settings opens the `FAKE / THEME` preview page. This page
-uses the normal template renderer, cards, widgets, top-information model and
-page-button chrome, so it exercises the same primitives as Track Config rather
-than maintaining a parallel preview renderer. Encoder 1 walks the descriptor
-table with wrap-around and applies the highlighted theme only to volatile UI
-state. `P1 RETURN` restores the theme captured on entry and performs no write;
-`P2 LOAD` atomically persists the currently previewed theme and returns to the
-`THEME` row. P3/P4 have neither label nor action. Leaving the page by any other
-route also restores the captured theme.
+Selecting `THEME` in Settings opens the existing `FAKE / THEME` preview page.
+It uses the normal template renderer, cards, widgets, global header model and
+page-button chrome. Encoder 1 walks `UI_THEME_COUNT` with wrap-around and calls
+`ui_theme_preview()`, which changes only volatile UI state and invalidates the
+frame. No persistence write occurs while scrolling.
 
-Preview uses `ui_theme_preview()`, which only changes the active descriptor and
-invalidates rendering. `ui_theme_commit_preview()` is the sole persistence
-operation in the browser, so rapid scrolling cannot generate SD writes. The
-independent `CPU LOAD` preference is neither changed nor persisted by preview.
+`P1 RETURN` restores the theme captured on entry and returns to the `THEME` row.
+`P2 LOAD` calls `ui_theme_commit_preview()` once, then returns to Settings. P3
+and P4 have no label or action. Leaving through any other route also restores
+the captured theme. The FAKE page exposes the same live track, track name, Hall,
+ensemble, BPM and optional CPU information as ordinary template pages, plus
+representative cards, selected value/focus and page labels.
 
-To add a theme, append its stable ID to `ui_theme_id_t`, add one descriptor to
-`g_ui_themes`, and implement any genuinely new shared frame/focus/header style
-in `ui_theme.c`. `UI_THEME_COUNT`, the Settings label and the browser iteration
-all derive from that same table/enum contract; no browser-side name list exists.
+## Persistence migration
 
-`CPU LOAD = OFF` omits the CPU string from the shared model. Each header style
-then naturally leaves the BPM/pattern group expanded or uses the freed cell;
-no placeholder is rendered. Settings, Project lists, Patch Browser, sample
-browsers, template/synth/sequence pages and their focused ensemble/footer use
-the shared theme primitives. Browser action mappings and the SHIFT footer icon
-remain unchanged.
+Preference format version 2 stores the six-theme ID space. Version-1 files keep
+ID 0 as `CLASSIC` and ID 1 as `MINIMALIST`; every removed legacy ID maps to
+`CLASSIC`. Missing, corrupt, unsupported or out-of-range data also defaults to
+`CLASSIC`, with CPU load enabled. The migrated value is written only on the next
+explicit preference change or `LOAD`.
 
-The persistent runtime state costs two bytes plus normal alignment; descriptors
-and drawing code live in Flash. No framebuffer, heap object, extra periodic
-redraw or dirty region is added. `GRID` draws the most primitives (closed cells
-and separators), but its work remains bounded to the existing invalidated
-frame.
+## Adding a theme
+
+Add a stable ID and one `{name, base_style, header_layout}` entry. Reuse one of
+the two body bases and add only a bounded header-layout case when a new
+composition is needed. The Settings label and FAKE browser both derive names
+and iteration from the same descriptor table; there is no parallel theme list.
