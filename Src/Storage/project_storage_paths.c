@@ -77,6 +77,46 @@ uint8_t project_storage_project_transaction_patterns_dir(char *out,
                        slot, 0U, 0U);
 }
 
+uint8_t project_storage_project_transaction_manifest(char *out,
+                                                      uint32_t capacity,
+                                                      uint8_t slot)
+{
+    return path_format(out, capacity,
+                       "0:/BRICK/TRANSACTIONS/PROJECT/P%02u/TXN.B6T",
+                       slot, 0U, 0U);
+}
+
+uint8_t project_storage_project_transaction_backup_file(char *out,
+                                                        uint32_t capacity,
+                                                        uint8_t slot)
+{
+    return path_format(out, capacity,
+                       "0:/BRICK/TRANSACTIONS/PROJECT/P%02u/PROJECT.OLD",
+                       slot, 0U, 0U);
+}
+
+uint8_t project_storage_project_transaction_pattern_file(char *out,
+                                                         uint32_t capacity,
+                                                         uint8_t slot,
+                                                         uint8_t bank,
+                                                         uint8_t pattern)
+{
+    return path_format(out, capacity,
+                       "0:/BRICK/TRANSACTIONS/PROJECT/P%02u/PATTERNS/B%02u_P%02u.B6C",
+                       slot, bank, pattern);
+}
+
+uint8_t project_storage_project_transaction_pattern_backup(char *out,
+                                                           uint32_t capacity,
+                                                           uint8_t slot,
+                                                           uint8_t bank,
+                                                           uint8_t pattern)
+{
+    return path_format(out, capacity,
+                       "0:/BRICK/TRANSACTIONS/PROJECT/P%02u/PATTERNS/B%02u_P%02u.OLD",
+                       slot, bank, pattern);
+}
+
 uint8_t project_storage_project_delete_transaction_dir(char *out,
                                                        uint32_t capacity,
                                                        uint8_t slot)

@@ -7,6 +7,7 @@
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/pattern_control_bank.h"
+#include "Storage/pattern_working_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/sd_access_gate.h"
 #include "Platform/memory_layout.h"
@@ -86,6 +87,8 @@ static uint32_t project_le32(const uint8_t *bytes)
 typedef enum
 {
     PROJECT_SAVE_IDLE = 0,
+    PROJECT_SAVE_RECONCILE_BEGIN,
+    PROJECT_SAVE_RECONCILE_WAIT,
     PROJECT_SAVE_MOUNT,
     PROJECT_SAVE_MKDIR_BRICK,
     PROJECT_SAVE_MKDIR_PROJECT,
@@ -106,6 +109,19 @@ typedef enum
     PROJECT_SAVE_SYNC,
     PROJECT_SAVE_CLOSE,
     PROJECT_SAVE_COMMIT,
+    PROJECT_SAVE_PATTERN_NEXT,
+    PROJECT_SAVE_PATTERN_OPEN_SOURCE,
+    PROJECT_SAVE_PATTERN_OPEN_TARGET,
+    PROJECT_SAVE_PATTERN_COPY,
+    PROJECT_SAVE_PATTERN_SYNC,
+    PROJECT_SAVE_PATTERN_CLOSE,
+    PROJECT_SAVE_PATTERN_STAGE_COMMIT,
+    PROJECT_SAVE_MANIFEST_PREPARED,
+    PROJECT_SAVE_PUBLISH_NEXT,
+    PROJECT_SAVE_MANIFEST_COMMITTED,
+    PROJECT_SAVE_CLEAN_NEXT,
+    PROJECT_SAVE_CLEAN_DIRECTORY,
+    PROJECT_SAVE_ROLLBACK_NEXT,
     PROJECT_SAVE_CLEAN_PROJECT_CLOSE,
     PROJECT_SAVE_CLEAN_TEMP,
     PROJECT_SAVE_DONE
@@ -118,6 +134,8 @@ typedef struct
     persistence_project_save_workspace_t *workspace;
     uint8_t *encode_scratch;
     persistent_fatfs_file_t project_file;
+    persistent_fatfs_file_t pattern_source;
+    persistent_fatfs_file_t pattern_target;
     persist_codec_project_metadata_t metadata;
     const uint8_t *encoded_data;
     uint32_t encoded_size;
@@ -133,12 +151,28 @@ typedef struct
     uint8_t result_ready;
     uint8_t success;
     uint8_t new_project;
+    uint8_t transaction_prepared;
+    uint8_t transaction_committed;
+    uint8_t pattern_source_open;
+    uint8_t pattern_target_open;
+    uint16_t transaction_index;
+    uint8_t transaction_bank;
+    uint8_t transaction_pattern;
+    uint32_t dirty[8];
+    uint32_t existed[8];
     uint8_t header[32];
+    uint8_t copy_buffer[SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES];
+    char requested_name[PROJECT_PRODUCT_NAME_BYTES + 1U];
     char final_path[80];
     char temporary_path[84];
     char backup_path[84];
     char project_directory[64];
     char transaction_directory[72];
+    char manifest_path[84];
+    char source_path[96];
+    char target_path[96];
+    char target_temporary_path[100];
+    char target_backup_path[100];
 } project_save_runtime_t;
 
 typedef struct
@@ -186,6 +220,52 @@ STORAGE_STATE_SDRAM static project_load_runtime_t g_project_load;
 
 static uint8_t path(char*out,uint32_t size,uint8_t slot){return project_storage_project_file(out,size,slot);}
 static uint8_t side_path(char*out,uint32_t size,uint8_t slot,const char*extension){char base[80];if(!path(base,sizeof(base),slot))return 0U;int n=snprintf(out,size,"%s.%s",base,extension);return(n>0&&(uint32_t)n<size)?1U:0U;}
+static uint8_t project_side_path_base(char*out,uint32_t size,const char*base,
+                                      const char*extension)
+{int n=snprintf(out,size,"%s.%s",base,extension);return(n>0&&(uint32_t)n<size)?1U:0U;}
+
+#define PROJECT_TX_MANIFEST_BYTES 72U
+#define PROJECT_TX_PHASE_PREPARED 1U
+#define PROJECT_TX_PHASE_COMMITTED 2U
+
+static uint8_t project_tx_bit(const uint32_t words[8],uint16_t index)
+{return(words[index>>5U]&(UINT32_C(1)<<(index&31U)))?1U:0U;}
+static void project_tx_set(uint32_t words[8],uint16_t index,uint8_t value)
+{const uint32_t mask=UINT32_C(1)<<(index&31U);if(value!=0U)words[index>>5U]|=mask;else words[index>>5U]&=~mask;}
+static void project_tx_le32_write(uint8_t *out,uint32_t value)
+{out[0]=(uint8_t)value;out[1]=(uint8_t)(value>>8U);out[2]=(uint8_t)(value>>16U);out[3]=(uint8_t)(value>>24U);}
+static uint8_t project_tx_build_manifest(uint8_t slot,uint8_t phase,
+                                        const uint32_t dirty[8],
+                                        const uint32_t existed[8],
+                                        uint8_t out[PROJECT_TX_MANIFEST_BYTES])
+{
+    if(slot>=PROJECT_PRODUCT_SLOT_COUNT||dirty==NULL||existed==NULL||out==NULL)return 0U;
+    memset(out,0,PROJECT_TX_MANIFEST_BYTES);memcpy(out,"B6PT",4U);
+    out[4]=1U;out[5]=phase;out[6]=slot;
+    for(uint8_t i=0U;i<8U;++i){project_tx_le32_write(&out[8U+4U*i],dirty[i]);project_tx_le32_write(&out[40U+4U*i],existed[i]);}
+    project_tx_le32_write(&out[68],~persist_codec_crc32_update(0xFFFFFFFFUL,out,68U));
+    return 1U;
+}
+
+static uint8_t project_tx_write_manifest(const char *path_value,uint8_t slot,
+                                         uint8_t phase,const uint32_t dirty[8],
+                                         const uint32_t existed[8])
+{
+    uint8_t bytes[PROJECT_TX_MANIFEST_BYTES];char temporary[100],backup[100];
+    persistent_fatfs_file_t file;UINT written=0U;
+    if(!project_tx_build_manifest(slot,phase,dirty,existed,bytes)
+        ||!project_side_path_base(temporary,sizeof(temporary),path_value,"TMP")
+        ||!project_side_path_base(backup,sizeof(backup),path_value,"BAK"))return 0U;
+    (void)persistent_fatfs_recover_replace(path_value,temporary,backup);
+    if(persistent_fatfs_open_write_result(&file,temporary)!=FR_OK)return 0U;
+    FRESULT result=f_write(&file.file,bytes,sizeof(bytes),&written);
+    if(result==FR_OK&&written==sizeof(bytes))result=f_sync(&file.file);
+    const FRESULT close_result=persistent_fatfs_close_result(&file);
+    if(result==FR_OK)result=close_result;
+    if(result==FR_OK)result=persistent_fatfs_commit_replace(path_value,temporary,backup);
+    if(result!=FR_OK)(void)f_unlink(temporary);
+    return(result==FR_OK)?1U:0U;
+}
 static uint8_t acquire(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT))return 0U;if(!sd_access_fs_mount_if_needed()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return 0U;}return 1U;}
 static project_product_result_t project_prepare_acquire(void)
 {
@@ -245,6 +325,77 @@ static void project_delete_recover_all(void)
         if(project_storage_project_delete_transaction_dir(directory,
                 sizeof(directory),slot)!=0U&&f_stat(directory,&info)==FR_OK)
             (void)project_remove_tree(directory);
+    }
+}
+
+static uint8_t project_tx_read_manifest(uint8_t slot,uint8_t *phase,
+                                        uint32_t dirty[8],uint32_t existed[8])
+{
+    char manifest[84];uint8_t bytes[PROJECT_TX_MANIFEST_BYTES];FIL file;
+    UINT read=0U;
+    if(!project_storage_project_transaction_manifest(manifest,sizeof(manifest),slot)
+        )return 0U;
+    char temporary[100],backup[100];
+    if(!project_side_path_base(temporary,sizeof(temporary),manifest,"TMP")
+        ||!project_side_path_base(backup,sizeof(backup),manifest,"BAK")
+        ||persistent_fatfs_recover_replace(manifest,temporary,backup)!=FR_OK
+        ||f_open(&file,manifest,FA_READ)!=FR_OK)return 0U;
+    const FRESULT result=f_read(&file,bytes,sizeof(bytes),&read);
+    (void)f_close(&file);
+    if(result!=FR_OK||read!=sizeof(bytes)||memcmp(bytes,"B6PT",4U)!=0
+        ||bytes[4]!=1U||bytes[6]!=slot
+        ||(bytes[5]!=PROJECT_TX_PHASE_PREPARED
+            &&bytes[5]!=PROJECT_TX_PHASE_COMMITTED)
+        ||project_le32(&bytes[68])!=
+            ~persist_codec_crc32_update(0xFFFFFFFFUL,bytes,68U))return 0U;
+    *phase=bytes[5];
+    for(uint8_t i=0U;i<8U;++i){dirty[i]=project_le32(&bytes[8U+4U*i]);existed[i]=project_le32(&bytes[40U+4U*i]);}
+    return 1U;
+}
+
+static void project_update_recover_all(void)
+{
+    for(uint8_t slot=0U;slot<PROJECT_PRODUCT_SLOT_COUNT;++slot)
+    {
+        uint8_t phase=0U;uint32_t dirty[8]={0},existed[8]={0};
+        char transaction[72];
+        if(!project_storage_project_transaction_dir(transaction,sizeof(transaction),slot)
+            ||project_tx_read_manifest(slot,&phase,dirty,existed)==0U)continue;
+        persist_debug_begin(PERSIST_DBG_OP_PROJECT_SAVE,0U,slot);
+        persist_debug_project(PERSIST_DBG_PROJECT_PHASE_SAVE_CLEANUP,0U,phase);
+        persist_debug_details(phase,slot,0U,0U);
+        for(uint16_t item=0U;item<=256U;++item)
+        {
+            if(item!=0U&&project_tx_bit(dirty,(uint16_t)(item-1U))==0U)continue;
+            char final_path[96],backup_path[96],staged_path[96];FILINFO info;
+            uint8_t built=0U;
+            if(item==0U)
+                built=(uint8_t)(path(final_path,sizeof(final_path),slot)
+                    &&project_storage_project_transaction_backup_file(backup_path,sizeof(backup_path),slot)
+                    &&project_storage_project_transaction_file(staged_path,sizeof(staged_path),slot));
+            else
+            {const uint16_t index=(uint16_t)(item-1U);const uint8_t bank=(uint8_t)(index>>4U),pattern=(uint8_t)(index&15U);
+                built=(uint8_t)(project_storage_pattern_file(final_path,sizeof(final_path),slot,bank,pattern)
+                    &&project_storage_project_transaction_pattern_backup(backup_path,sizeof(backup_path),slot,bank,pattern)
+                    &&project_storage_project_transaction_pattern_file(staged_path,sizeof(staged_path),slot,bank,pattern));}
+            if(built==0U)continue;
+            if(phase==PROJECT_TX_PHASE_PREPARED)
+            {
+                if(f_stat(backup_path,&info)==FR_OK)
+                {(void)f_unlink(final_path);(void)f_rename(backup_path,final_path);}
+                else if(item!=0U&&project_tx_bit(existed,(uint16_t)(item-1U))==0U)
+                    (void)f_unlink(final_path);
+            }
+            else if(phase==PROJECT_TX_PHASE_COMMITTED)
+            {
+                (void)f_unlink(backup_path);
+                if(item!=0U)
+                {char working[96],temporary[100],working_backup[100];if(project_storage_working_pattern_file(working,sizeof(working),(uint8_t)((item-1U)>>4U),(uint8_t)((item-1U)&15U)))
+                    {(void)f_unlink(working);if(project_side_path_base(temporary,sizeof(temporary),working,"TMP"))(void)f_unlink(temporary);if(project_side_path_base(working_backup,sizeof(working_backup),working,"BAK"))(void)f_unlink(working_backup);}}
+            }
+            (void)staged_path;
+        }
+        (void)project_remove_tree(transaction);
     }
 }
 
@@ -317,7 +468,7 @@ static project_product_scan_status_t project_product_scan_file(
     return PROJECT_PRODUCT_SCAN_ACCEPTED;
 }
 
-void project_product_refresh_slots(void){if((project_replacement_is_active()!=0U&&g_project_load.state!=PROJECT_LOAD_FAILED_FORWARD_MEDIA)||project_product_save_busy()!=0U||project_product_load_busy()!=0U||project_product_rename_busy()!=0U)return;memset(g_present,0,sizeof(g_present));memset(g_project_metadata,0,sizeof(g_project_metadata));memset(g_project_scan_status,0,sizeof(g_project_scan_status));if(!acquire())return;if(!ensure_directory()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return;}(void)project_mkdir_path(project_storage_internal_root);(void)project_mkdir_path(project_storage_transactions_root);(void)project_mkdir_path(project_storage_project_transaction_root);project_delete_recover_all();project_creation_recover_all();for(uint8_t s=0U;s<PROJECT_PRODUCT_SLOT_COUNT;++s){char d[48],x[48],p[64],tmp[48],bak[48];FILINFO i;if(!project_storage_project_dir(d,sizeof(d),s)||!path(x,sizeof(x),s)||!project_storage_patterns_dir(p,sizeof(p),s)||!side_path(tmp,sizeof(tmp),s,"TMP")||!side_path(bak,sizeof(bak),s,"BAK"))continue;if(f_stat(d,&i)!=FR_OK||(i.fattrib&AM_DIR)==0U){g_project_scan_status[s]=PROJECT_PRODUCT_SCAN_DIRECTORY_ABSENT;continue;}(void)persistent_fatfs_recover_replace(x,tmp,bak);if(f_stat(x,&i)!=FR_OK||(i.fattrib&AM_DIR)!=0U){g_project_scan_status[s]=PROJECT_PRODUCT_SCAN_FILE_ABSENT;continue;}if(f_stat(p,&i)!=FR_OK||(i.fattrib&AM_DIR)==0U){g_project_scan_status[s]=PROJECT_PRODUCT_SCAN_PATTERNS_ABSENT;continue;}g_project_scan_status[s]=project_product_scan_file(s,x);if(g_project_scan_status[s]==PROJECT_PRODUCT_SCAN_ACCEPTED)g_present[s]=1U;}sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);}
+void project_product_refresh_slots(void){if((project_replacement_is_active()!=0U&&g_project_load.state!=PROJECT_LOAD_FAILED_FORWARD_MEDIA)||project_product_save_busy()!=0U||project_product_load_busy()!=0U||project_product_rename_busy()!=0U)return;memset(g_present,0,sizeof(g_present));memset(g_project_metadata,0,sizeof(g_project_metadata));memset(g_project_scan_status,0,sizeof(g_project_scan_status));if(!acquire())return;if(!ensure_directory()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return;}(void)project_mkdir_path(project_storage_internal_root);(void)project_mkdir_path(project_storage_transactions_root);(void)project_mkdir_path(project_storage_project_transaction_root);project_delete_recover_all();project_update_recover_all();project_creation_recover_all();for(uint8_t s=0U;s<PROJECT_PRODUCT_SLOT_COUNT;++s){char d[48],x[48],p[64],tmp[48],bak[48];FILINFO i;if(!project_storage_project_dir(d,sizeof(d),s)||!path(x,sizeof(x),s)||!project_storage_patterns_dir(p,sizeof(p),s)||!side_path(tmp,sizeof(tmp),s,"TMP")||!side_path(bak,sizeof(bak),s,"BAK"))continue;if(f_stat(d,&i)!=FR_OK||(i.fattrib&AM_DIR)==0U){g_project_scan_status[s]=PROJECT_PRODUCT_SCAN_DIRECTORY_ABSENT;continue;}(void)persistent_fatfs_recover_replace(x,tmp,bak);if(f_stat(x,&i)!=FR_OK||(i.fattrib&AM_DIR)!=0U){g_project_scan_status[s]=PROJECT_PRODUCT_SCAN_FILE_ABSENT;continue;}if(f_stat(p,&i)!=FR_OK||(i.fattrib&AM_DIR)==0U){g_project_scan_status[s]=PROJECT_PRODUCT_SCAN_PATTERNS_ABSENT;continue;}g_project_scan_status[s]=project_product_scan_file(s,x);if(g_project_scan_status[s]==PROJECT_PRODUCT_SCAN_ACCEPTED)g_present[s]=1U;}sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);}
 void project_product_init(void){memset(&g_progress,0,sizeof(g_progress));memset(&g_project_save,0,sizeof(g_project_save));memset(&g_project_load,0,sizeof(g_project_load));memset(&g_project_rename,0,sizeof(g_project_rename));memset(g_project_metadata,0,sizeof(g_project_metadata));memset(&g_current_metadata,0,sizeof(g_current_metadata));g_active_valid=0U;g_active=0U;project_product_refresh_slots();}
 uint8_t project_product_list_slots(uint8_t*out,uint8_t cap){uint8_t n=0U;if(out==NULL)return 0U;for(uint8_t s=0;s<PROJECT_PRODUCT_SLOT_COUNT&&n<cap;++s)if(g_present[s]&&g_project_metadata[s].name[0]!='\0')out[n++]=s;return n;}
 uint8_t project_product_metadata(uint8_t s,project_product_metadata_t*out){if(out==NULL||s>=PROJECT_PRODUCT_SLOT_COUNT||!g_present[s])return 0U;*out=g_project_metadata[s];return 1U;}
@@ -354,13 +505,64 @@ static void project_save_finish(uint8_t success)
     if(success!=0U){g_present[g_project_save.slot]=1U;memset(&g_current_metadata,0,sizeof(g_current_metadata));memcpy(g_current_metadata.name,g_project_save.metadata.name,g_project_save.metadata.name_length);g_project_metadata[g_project_save.slot]=g_current_metadata;g_active=g_project_save.slot;g_active_valid=1U;if(g_project_save.new_project!=0U)pattern_control_bank_publish_empty_project(g_project_save.slot);(void)boot_context_sd_commit(g_project_save.slot);}
 }
 
+static uint8_t project_save_pattern_paths(uint8_t bank,uint8_t pattern)
+{
+    return(uint8_t)(project_storage_working_pattern_file(
+            g_project_save.source_path,sizeof(g_project_save.source_path),bank,pattern)
+        &&project_storage_project_transaction_pattern_file(
+            g_project_save.target_path,sizeof(g_project_save.target_path),
+            g_project_save.slot,bank,pattern)
+        &&project_side_path_base(g_project_save.target_temporary_path,
+            sizeof(g_project_save.target_temporary_path),
+            g_project_save.target_path,"TMP")
+        &&project_side_path_base(g_project_save.target_backup_path,
+            sizeof(g_project_save.target_backup_path),
+            g_project_save.target_path,"BAK"));
+}
+
+static uint8_t project_save_publish_paths(uint16_t item,char *final_path,
+                                          uint32_t final_capacity,
+                                          char *staged_path,
+                                          uint32_t staged_capacity,
+                                          char *backup_path,
+                                          uint32_t backup_capacity)
+{
+    if(item==0U)
+        return(uint8_t)(path(final_path,final_capacity,g_project_save.slot)
+            &&project_storage_project_transaction_file(staged_path,
+                staged_capacity,g_project_save.slot)
+            &&project_storage_project_transaction_backup_file(backup_path,
+                backup_capacity,g_project_save.slot));
+    const uint16_t index=(uint16_t)(item-1U);
+    const uint8_t bank=(uint8_t)(index>>4U),pattern=(uint8_t)(index&15U);
+    return(uint8_t)(project_storage_pattern_file(final_path,final_capacity,
+                g_project_save.slot,bank,pattern)
+        &&project_storage_project_transaction_pattern_file(staged_path,
+                staged_capacity,g_project_save.slot,bank,pattern)
+        &&project_storage_project_transaction_pattern_backup(backup_path,
+                backup_capacity,g_project_save.slot,bank,pattern));
+}
+
+static uint8_t project_unlink_optional(const char *path_value)
+{
+    const FRESULT result=f_unlink(path_value);
+    return(result==FR_OK||result==FR_NO_FILE||result==FR_NO_PATH)?1U:0U;
+}
+
 static void project_save_fail(project_product_save_error_t error,int32_t detail)
 {
     if(g_save_error==PROJECT_PRODUCT_SAVE_ERROR_NONE){g_save_error=error;g_save_detail=detail;}
     persist_debug_details((uint32_t)error,(uint32_t)detail,g_project_save.file_offset,g_project_save.encoded_size);
     persist_debug_error(g_project_save.project_open?PERSIST_DBG_STAGE_WRITE:PERSIST_DBG_STAGE_OPEN,(int32_t)error);
     g_persist_dbg.project_phase=PERSIST_DBG_PROJECT_PHASE_SAVE_CLEANUP;
-    if(g_project_save.project_open!=0U)g_project_save.state=PROJECT_SAVE_CLEAN_PROJECT_CLOSE;
+    if(g_project_save.pattern_source_open!=0U)
+    {(void)persistent_fatfs_close_result(&g_project_save.pattern_source);g_project_save.pattern_source_open=0U;}
+    if(g_project_save.pattern_target_open!=0U)
+    {(void)persistent_fatfs_close_result(&g_project_save.pattern_target);g_project_save.pattern_target_open=0U;}
+    if(g_project_save.transaction_prepared!=0U
+            &&g_project_save.transaction_committed==0U)
+    {g_project_save.transaction_index=0U;g_project_save.state=PROJECT_SAVE_ROLLBACK_NEXT;}
+    else if(g_project_save.project_open!=0U)g_project_save.state=PROJECT_SAVE_CLEAN_PROJECT_CLOSE;
     else g_project_save.state=PROJECT_SAVE_CLEAN_TEMP;
 }
 
@@ -380,7 +582,17 @@ static uint8_t project_save_abort_now(project_product_save_error_t error,
         (void)persistent_fatfs_close_result(&g_project_save.project_file);
     }
     g_project_save.project_open=0U;
-    (void)f_unlink(g_project_save.temporary_path);
+    if(g_project_save.pattern_source_open!=0U)
+        (void)persistent_fatfs_close_result(&g_project_save.pattern_source);
+    if(g_project_save.pattern_target_open!=0U)
+        (void)persistent_fatfs_close_result(&g_project_save.pattern_target);
+    g_project_save.pattern_source_open=0U;
+    g_project_save.pattern_target_open=0U;
+    if(g_project_save.transaction_prepared==0U)
+    {
+        (void)f_unlink(g_project_save.temporary_path);
+        (void)project_remove_tree(g_project_save.transaction_directory);
+    }
     sd_access_gate_release(SD_ACCESS_CLIENT_BACKGROUND);
     project_save_finish(0U);
     return 1U;
@@ -440,6 +652,33 @@ static uint8_t project_save_encode_macros(void)
     g_project_save.encoded_size=bytes;return 1U;
 }
 
+static uint8_t project_save_capture_current(void)
+{
+    persistence_project_save_workspace_t *const workspace=
+        persistence_workspace_acquire_project_save();
+    if(workspace==NULL){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY;g_save_detail=0;return 0U;}
+    g_project_save.workspace=workspace;
+    g_project_save.encode_scratch=workspace->encode_scratch;
+    project_capture_metadata(&g_project_save.metadata);
+    g_project_save.metadata.name_length=(uint16_t)strlen(g_project_save.requested_name);
+    memcpy(g_project_save.metadata.name,g_project_save.requested_name,
+           g_project_save.metadata.name_length);
+    g_project_save.metadata.asset_count=project_control_asset_count();
+    if(g_project_save.metadata.asset_count>PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY
+            ||!project_control_capture_macros(&workspace->macros))
+    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;g_save_detail=0;goto capture_fail;}
+    for(uint16_t i=0U;i<g_project_save.metadata.asset_count;++i)
+        if(!project_control_get_asset_ordinal(i,&workspace->assets[i]))
+        {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;g_save_detail=(int32_t)i;goto capture_fail;}
+    if(g_project_save.new_project==0U)
+        pattern_working_bank_copy_dirty(g_project_save.dirty);
+    return 1U;
+capture_fail:
+    persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);
+    g_project_save.workspace=NULL;g_project_save.encode_scratch=NULL;
+    return 0U;
+}
+
 uint8_t project_product_save_named(uint8_t slot,const char *name)
 {
     persist_debug_begin(PERSIST_DBG_OP_PROJECT_SAVE,0U,slot);
@@ -452,47 +691,33 @@ uint8_t project_product_save_named(uint8_t slot,const char *name)
     if(seq_runtime_is_running()!=0U||seq_runtime_is_start_pending()!=0U){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_TRANSPORT_ACTIVE;persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);return 0U;}
     char normalized[NAME_CONTRACT_BUFFER_BYTES];if(!project_name_normalize(name,normalized)){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_INVALID_NAME;persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);return 0U;}
     if(project_product_rename_busy()!=0U || project_replacement_is_active()!=0U
-        || project_product_save_busy()!=0U||project_product_load_busy()!=0U)
+        || project_product_save_busy()!=0U||project_product_load_busy()!=0U
+        || pattern_load_is_pending()!=0U)
     {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SD_BUSY;persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);return 0U;}
-    persistence_project_save_workspace_t *const workspace = persistence_workspace_acquire_project_save();
-    if(workspace==NULL){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY;persist_debug_error(PERSIST_DBG_STAGE_WORKSPACE,PERSIST_DBG_ERROR_WORKSPACE);return 0U;}
-    memset(&g_project_save,0,sizeof(g_project_save));g_project_save.workspace=workspace;g_project_save.encode_scratch=workspace->encode_scratch;g_project_save.slot=slot;
+    memset(&g_project_save,0,sizeof(g_project_save));g_project_save.slot=slot;
     g_project_save.new_project=(g_present[slot]==0U)?1U:0U;
-    project_capture_metadata(&g_project_save.metadata);
-    g_project_save.metadata.name_length=(uint16_t)strlen(normalized);memcpy(g_project_save.metadata.name,normalized,g_project_save.metadata.name_length);
-    g_project_save.metadata.asset_count=project_control_asset_count();
-    if(g_project_save.metadata.asset_count>PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY
-            || !project_control_capture_macros(&workspace->macros))
-    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
-    for(uint16_t i=0U;i<g_project_save.metadata.asset_count;++i)
-        if(!project_control_get_asset_ordinal(i,&workspace->assets[i]))
-        {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+    memcpy(g_project_save.requested_name,normalized,strlen(normalized)+1U);
     if(!project_storage_project_dir(g_project_save.project_directory,
             sizeof(g_project_save.project_directory),slot)
-        ||(g_project_save.new_project!=0U
-            &&(!project_storage_project_transaction_dir(
+        ||!project_storage_project_transaction_dir(
                     g_project_save.transaction_directory,
                     sizeof(g_project_save.transaction_directory),slot)
-                ||!project_storage_project_transaction_file(
-                    g_project_save.final_path,sizeof(g_project_save.final_path),slot)))
-        ||(g_project_save.new_project==0U
-            &&!path(g_project_save.final_path,sizeof(g_project_save.final_path),slot))
-        ||!side_path(g_project_save.temporary_path,
-            sizeof(g_project_save.temporary_path),slot,"TMP")
-        ||!side_path(g_project_save.backup_path,
-            sizeof(g_project_save.backup_path),slot,"BAK"))
-    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+        ||!project_storage_project_transaction_file(
+                    g_project_save.final_path,sizeof(g_project_save.final_path),slot)
+        ||!project_storage_project_transaction_manifest(
+                    g_project_save.manifest_path,sizeof(g_project_save.manifest_path),slot)
+        ||!project_side_path_base(g_project_save.temporary_path,
+                    sizeof(g_project_save.temporary_path),g_project_save.final_path,"TMP")
+        ||!project_side_path_base(g_project_save.backup_path,
+                    sizeof(g_project_save.backup_path),g_project_save.final_path,"BAK"))
+    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT;memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+    g_project_save.media_epoch=sd_access_media_epoch();
     if(g_project_save.new_project!=0U)
     {
-        int n=snprintf(g_project_save.temporary_path,
-            sizeof(g_project_save.temporary_path),"%s.TMP",g_project_save.final_path);
-        int m=snprintf(g_project_save.backup_path,
-            sizeof(g_project_save.backup_path),"%s.BAK",g_project_save.final_path);
-        if(n<=0||(uint32_t)n>=sizeof(g_project_save.temporary_path)
-            ||m<=0||(uint32_t)m>=sizeof(g_project_save.backup_path))
-        {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+        if(project_save_capture_current()==0U)return 0U;
+        g_project_save.state=PROJECT_SAVE_MOUNT;
     }
-    g_project_save.media_epoch=sd_access_media_epoch();g_project_save.state=PROJECT_SAVE_MOUNT;
+    else g_project_save.state=PROJECT_SAVE_RECONCILE_BEGIN;
     persist_debug_details(0U,g_project_save.metadata.asset_count,
         g_project_save.media_epoch,0U);
     g_progress=(project_product_progress_t){.active=1U,.total=1U,
@@ -525,9 +750,13 @@ uint8_t project_product_save_busy(void){return(g_project_save.state!=PROJECT_SAV
 uint8_t project_product_save_take_result(uint8_t *slot,uint8_t *success)
 {
     if(g_project_save.state!=PROJECT_SAVE_DONE||g_project_save.result_ready==0U)return 0U;
+    const uint8_t recovery_required=(uint8_t)(g_project_save.success==0U
+        &&g_project_save.transaction_prepared!=0U);
     if(slot!=NULL)*slot=g_project_save.slot;
     if(success!=NULL)*success=g_project_save.success;
-    memset(&g_project_save,0,sizeof(g_project_save));return 1U;
+    memset(&g_project_save,0,sizeof(g_project_save));
+    if(recovery_required!=0U)project_product_refresh_slots();
+    return 1U;
 }
 
 uint8_t project_product_rename_busy(void)
@@ -731,6 +960,25 @@ void project_product_save_service(void)
     g_persist_dbg.project_progress=g_progress.done;
     g_persist_dbg.detail=(uint32_t)g_project_save.state;
 
+    if(g_project_save.state==PROJECT_SAVE_RECONCILE_BEGIN)
+    {
+        g_persist_dbg.project_phase=PERSIST_DBG_PROJECT_PHASE_SAVE_SNAPSHOT;
+        persist_debug_stage(PERSIST_DBG_STAGE_CANDIDATE,0);
+        if(pattern_live_reconcile_active_begin()!=0U)
+            g_project_save.state=PROJECT_SAVE_RECONCILE_WAIT;
+        return;
+    }
+    if(g_project_save.state==PROJECT_SAVE_RECONCILE_WAIT)
+    {
+        uint8_t success=0U;
+        if(pattern_live_reconcile_active_take_result(&success)==0U)return;
+        if(success==0U)
+        {project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_PATTERN,0);return;}
+        if(project_save_capture_current()!=0U)g_project_save.state=PROJECT_SAVE_MOUNT;
+        else project_save_fail(g_save_error,g_save_detail);
+        return;
+    }
+
     switch(g_project_save.state)
     {
         case PROJECT_SAVE_QUEUE_DOCUMENT_PLACEHOLDER:
@@ -764,6 +1012,8 @@ void project_product_save_service(void)
     {chunk=g_project_save.write_size-g_project_save.write_offset;if(chunk>SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES)chunk=SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES;kind=SD_SCHEDULER_BACKGROUND_DATA;}
     else if(g_project_save.state==PROJECT_SAVE_CRC_READ)
     {chunk=g_project_save.crc_remaining;if(chunk>SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES)chunk=SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES;kind=SD_SCHEDULER_BACKGROUND_DATA;}
+    else if(g_project_save.state==PROJECT_SAVE_PATTERN_COPY)
+    {chunk=g_project_save.pattern_source.size-g_project_save.file_offset;if(chunk>SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES)chunk=SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES;kind=SD_SCHEDULER_BACKGROUND_DATA;}
     const sd_scheduler_background_admission_t admission=project_save_admit(kind,chunk);
     if(admission==SD_SCHEDULER_BACKGROUND_NOT_NOW)return;
     if(admission!=SD_SCHEDULER_BACKGROUND_GO)
@@ -779,25 +1029,19 @@ void project_product_save_service(void)
             else g_project_save.state=PROJECT_SAVE_MKDIR_BRICK;
             break;
         case PROJECT_SAVE_MKDIR_BRICK:
-            if(g_project_save.new_project==0U)
-            {if(!project_mkdir_path(project_storage_projects_root))project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_DIRECTORY,(int32_t)FR_DISK_ERR);else g_project_save.state=PROJECT_SAVE_MKDIR_PROJECT;}
-            else
-            {
-                const uint8_t made=project_mkdir_path(project_storage_internal_root)
-                    &&project_mkdir_path(project_storage_transactions_root)
-                    &&project_mkdir_path(project_storage_project_transaction_root);
-                if(!made)project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_DIRECTORY,(int32_t)FR_DISK_ERR);
-                else{(void)project_remove_tree(g_project_save.transaction_directory);g_project_save.state=PROJECT_SAVE_MKDIR_PROJECT;}
-            }
+        {
+            const uint8_t made=project_mkdir_path(project_storage_internal_root)
+                &&project_mkdir_path(project_storage_transactions_root)
+                &&project_mkdir_path(project_storage_project_transaction_root);
+            if(!made)project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_DIRECTORY,(int32_t)FR_DISK_ERR);
+            else{(void)project_remove_tree(g_project_save.transaction_directory);g_project_save.state=PROJECT_SAVE_MKDIR_PROJECT;}
             break;
+        }
         case PROJECT_SAVE_MKDIR_PROJECT:
         {
             char directory[64];
-            if(g_project_save.new_project!=0U)
-                memcpy(directory,g_project_save.transaction_directory,
-                       strlen(g_project_save.transaction_directory)+1U);
-            else if(!project_storage_project_dir(directory,sizeof(directory),g_project_save.slot))
-                directory[0]='\0';
+            memcpy(directory,g_project_save.transaction_directory,
+                   strlen(g_project_save.transaction_directory)+1U);
             if(directory[0]=='\0')
                 project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_DIRECTORY,(int32_t)FR_INVALID_NAME);
             else{fr=f_mkdir(directory);if(fr!=FR_OK&&fr!=FR_EXIST)project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_DIRECTORY,(int32_t)fr);else g_project_save.state=PROJECT_SAVE_MKDIR_PATTERNS;}
@@ -806,11 +1050,8 @@ void project_product_save_service(void)
         case PROJECT_SAVE_MKDIR_PATTERNS:
         {
             char directory[64];
-            uint8_t built=(g_project_save.new_project!=0U)
-                ?project_storage_project_transaction_patterns_dir(directory,
-                    sizeof(directory),g_project_save.slot)
-                :project_storage_patterns_dir(directory,sizeof(directory),
-                    g_project_save.slot);
+            uint8_t built=project_storage_project_transaction_patterns_dir(
+                directory,sizeof(directory),g_project_save.slot);
             if(!built)
                 project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_DIRECTORY,(int32_t)FR_INVALID_NAME);
             else{fr=f_mkdir(directory);if(fr!=FR_OK&&fr!=FR_EXIST)project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_DIRECTORY,(int32_t)fr);else g_project_save.state=PROJECT_SAVE_RECOVER;}
@@ -876,14 +1117,194 @@ void project_product_save_service(void)
                     fr=f_rename(g_project_save.transaction_directory,
                                 g_project_save.project_directory);
                 if(fr!=FR_OK)project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_REPLACE,(int32_t)fr);
-                else{g_persist_dbg.commit_done=1U;g_progress.total=g_project_save.file_offset;g_progress.done=g_project_save.file_offset;project_save_finish(1U);}
+                else if(g_project_save.new_project!=0U)
+                {g_persist_dbg.commit_done=1U;g_progress.total=g_project_save.file_offset;g_progress.done=g_project_save.file_offset;project_save_finish(1U);}
+                else
+                {g_project_save.transaction_index=0U;g_project_save.state=PROJECT_SAVE_PATTERN_NEXT;}
             }
             break;
+        case PROJECT_SAVE_PATTERN_NEXT:
+        {
+            while(g_project_save.transaction_index<256U
+                &&project_tx_bit(g_project_save.dirty,
+                    g_project_save.transaction_index)==0U)
+                ++g_project_save.transaction_index;
+            if(g_project_save.transaction_index>=256U)
+            {g_project_save.state=PROJECT_SAVE_MANIFEST_PREPARED;break;}
+            const uint16_t index=g_project_save.transaction_index;
+            g_project_save.transaction_bank=(uint8_t)(index>>4U);
+            g_project_save.transaction_pattern=(uint8_t)(index&15U);
+            if(project_save_pattern_paths(g_project_save.transaction_bank,
+                    g_project_save.transaction_pattern)==0U)
+            {project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT,(int32_t)index);break;}
+            FILINFO info;
+            char saved[96];
+            if(!project_storage_pattern_file(saved,sizeof(saved),g_project_save.slot,
+                    g_project_save.transaction_bank,g_project_save.transaction_pattern))
+            {project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT,(int32_t)index);break;}
+            fr=f_stat(saved,&info);
+            if(fr!=FR_OK&&fr!=FR_NO_FILE&&fr!=FR_NO_PATH)
+            {project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_PATTERN,(int32_t)fr);break;}
+            project_tx_set(g_project_save.existed,index,(fr==FR_OK)?1U:0U);
+            g_project_save.state=PROJECT_SAVE_PATTERN_OPEN_SOURCE;
+            break;
+        }
+        case PROJECT_SAVE_PATTERN_OPEN_SOURCE:
+            if(!persistent_fatfs_open_read(&g_project_save.pattern_source,
+                    g_project_save.source_path))
+                project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_PATTERN,
+                                  (int32_t)g_project_save.transaction_index);
+            else{g_project_save.pattern_source_open=1U;g_project_save.state=PROJECT_SAVE_PATTERN_OPEN_TARGET;}
+            break;
+        case PROJECT_SAVE_PATTERN_OPEN_TARGET:
+            fr=persistent_fatfs_open_write_result(&g_project_save.pattern_target,
+                    g_project_save.target_temporary_path);
+            if(fr!=FR_OK)project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_OPEN,(int32_t)fr);
+            else{g_project_save.pattern_target_open=1U;g_project_save.file_offset=0U;g_project_save.state=PROJECT_SAVE_PATTERN_COPY;}
+            break;
+        case PROJECT_SAVE_PATTERN_COPY:
+        {
+            UINT read=0U,written=0U;
+            fr=f_read(&g_project_save.pattern_source.file,
+                      g_project_save.copy_buffer,chunk,&read);
+            if(fr==FR_OK&&read==chunk)
+                fr=f_write(&g_project_save.pattern_target.file,
+                           g_project_save.copy_buffer,chunk,&written);
+            if(fr!=FR_OK||read!=chunk||written!=chunk)
+                project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_PATTERN,(int32_t)fr);
+            else
+            {g_project_save.file_offset+=chunk;if(g_project_save.file_offset==g_project_save.pattern_source.size)g_project_save.state=PROJECT_SAVE_PATTERN_SYNC;}
+            break;
+        }
+        case PROJECT_SAVE_PATTERN_SYNC:
+            fr=f_sync(&g_project_save.pattern_target.file);
+            if(fr!=FR_OK)project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_SYNC,(int32_t)fr);
+            else g_project_save.state=PROJECT_SAVE_PATTERN_CLOSE;
+            break;
+        case PROJECT_SAVE_PATTERN_CLOSE:
+            fr=persistent_fatfs_close_result(&g_project_save.pattern_target);
+            g_project_save.pattern_target_open=0U;
+            if(fr==FR_OK)fr=persistent_fatfs_close_result(&g_project_save.pattern_source);
+            g_project_save.pattern_source_open=0U;
+            if(fr!=FR_OK)project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_CLOSE,(int32_t)fr);
+            else g_project_save.state=PROJECT_SAVE_PATTERN_STAGE_COMMIT;
+            break;
+        case PROJECT_SAVE_PATTERN_STAGE_COMMIT:
+            fr=persistent_fatfs_commit_replace(g_project_save.target_path,
+                    g_project_save.target_temporary_path,
+                    g_project_save.target_backup_path);
+            if(fr!=FR_OK)project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_REPLACE,(int32_t)fr);
+            else{++g_project_save.transaction_index;g_project_save.state=PROJECT_SAVE_PATTERN_NEXT;}
+            break;
+        case PROJECT_SAVE_MANIFEST_PREPARED:
+            persist_debug_stage(PERSIST_DBG_STAGE_BANK_STAGE,0);
+            if(project_tx_write_manifest(g_project_save.manifest_path,
+                    g_project_save.slot,PROJECT_TX_PHASE_PREPARED,
+                    g_project_save.dirty,g_project_save.existed)==0U)
+                project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_SYNC,(int32_t)FR_DISK_ERR);
+            else
+            {g_project_save.transaction_prepared=1U;g_project_save.transaction_index=0U;g_project_save.state=PROJECT_SAVE_PUBLISH_NEXT;}
+            break;
+        case PROJECT_SAVE_PUBLISH_NEXT:
+        {
+            while(g_project_save.transaction_index>0U
+                &&g_project_save.transaction_index<=256U
+                &&project_tx_bit(g_project_save.dirty,
+                    (uint16_t)(g_project_save.transaction_index-1U))==0U)
+                ++g_project_save.transaction_index;
+            if(g_project_save.transaction_index>256U)
+            {g_project_save.state=PROJECT_SAVE_MANIFEST_COMMITTED;break;}
+            char final_value[96],staged[96],backup[96];FILINFO info;
+            if(!project_save_publish_paths(g_project_save.transaction_index,
+                    final_value,sizeof(final_value),staged,sizeof(staged),
+                    backup,sizeof(backup)))
+            {project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT,0);break;}
+            (void)project_unlink_optional(backup);
+            const uint8_t existed=(g_project_save.transaction_index==0U)
+                ?1U:project_tx_bit(g_project_save.existed,
+                    (uint16_t)(g_project_save.transaction_index-1U));
+            if(existed!=0U&&f_stat(final_value,&info)==FR_OK)
+                fr=f_rename(final_value,backup);
+            else fr=FR_OK;
+            if(fr==FR_OK)fr=f_rename(staged,final_value);
+            if(fr!=FR_OK)
+            {if(existed!=0U)(void)f_rename(backup,final_value);project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_REPLACE,(int32_t)fr);}
+            else ++g_project_save.transaction_index;
+            break;
+        }
+        case PROJECT_SAVE_MANIFEST_COMMITTED:
+            persist_debug_stage(PERSIST_DBG_STAGE_BANK_COMMIT,0);
+            if(project_tx_write_manifest(g_project_save.manifest_path,
+                    g_project_save.slot,PROJECT_TX_PHASE_COMMITTED,
+                    g_project_save.dirty,g_project_save.existed)==0U)
+                project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_SYNC,(int32_t)FR_DISK_ERR);
+            else
+            {g_project_save.transaction_committed=1U;g_persist_dbg.commit_done=1U;g_project_save.transaction_index=0U;g_project_save.state=PROJECT_SAVE_CLEAN_NEXT;}
+            break;
+        case PROJECT_SAVE_CLEAN_NEXT:
+        {
+            while(g_project_save.transaction_index>0U
+                &&g_project_save.transaction_index<=256U
+                &&project_tx_bit(g_project_save.dirty,
+                    (uint16_t)(g_project_save.transaction_index-1U))==0U)
+                ++g_project_save.transaction_index;
+            if(g_project_save.transaction_index>256U)
+            {g_project_save.state=PROJECT_SAVE_CLEAN_DIRECTORY;break;}
+            char final_value[96],staged[96],backup[96];
+            if(project_save_publish_paths(g_project_save.transaction_index,
+                    final_value,sizeof(final_value),staged,sizeof(staged),
+                    backup,sizeof(backup))) (void)project_unlink_optional(backup);
+            if(g_project_save.transaction_index!=0U)
+            {
+                const uint16_t index=(uint16_t)(g_project_save.transaction_index-1U);
+                char working[96],temporary[100],working_backup[100];
+                if(project_storage_working_pattern_file(working,sizeof(working),
+                        (uint8_t)(index>>4U),(uint8_t)(index&15U)))
+                {if(project_side_path_base(temporary,sizeof(temporary),working,"TMP"))(void)project_unlink_optional(temporary);
+                 if(project_side_path_base(working_backup,sizeof(working_backup),working,"BAK"))(void)project_unlink_optional(working_backup);
+                 (void)project_unlink_optional(working);}
+                pattern_working_bank_mark_clean((uint8_t)(index>>4U),(uint8_t)(index&15U));
+                pattern_control_bank_mark_present((uint8_t)(index>>4U),(uint8_t)(index&15U));
+            }
+            ++g_project_save.transaction_index;
+            break;
+        }
+        case PROJECT_SAVE_CLEAN_DIRECTORY:
+            (void)project_remove_tree(g_project_save.transaction_directory);
+            g_progress.total=g_progress.done=g_project_save.file_offset;
+            project_save_finish(1U);
+            break;
+        case PROJECT_SAVE_ROLLBACK_NEXT:
+        {
+            while(g_project_save.transaction_index>0U
+                &&g_project_save.transaction_index<=256U
+                &&project_tx_bit(g_project_save.dirty,
+                    (uint16_t)(g_project_save.transaction_index-1U))==0U)
+                ++g_project_save.transaction_index;
+            if(g_project_save.transaction_index>256U)
+            {(void)project_remove_tree(g_project_save.transaction_directory);project_save_finish(0U);break;}
+            char final_value[96],staged[96],backup[96];FILINFO info;
+            if(project_save_publish_paths(g_project_save.transaction_index,
+                    final_value,sizeof(final_value),staged,sizeof(staged),
+                    backup,sizeof(backup)))
+            {
+                if(f_stat(backup,&info)==FR_OK)
+                {(void)project_unlink_optional(final_value);(void)f_rename(backup,final_value);}
+                else if(g_project_save.transaction_index!=0U
+                    &&project_tx_bit(g_project_save.existed,
+                        (uint16_t)(g_project_save.transaction_index-1U))==0U)
+                    (void)project_unlink_optional(final_value);
+            }
+            ++g_project_save.transaction_index;
+            break;
+        }
         case PROJECT_SAVE_CLEAN_PROJECT_CLOSE:
             (void)persistent_fatfs_close_result(&g_project_save.project_file);g_project_save.project_open=0U;g_project_save.state=PROJECT_SAVE_CLEAN_TEMP;
             break;
         case PROJECT_SAVE_CLEAN_TEMP:
-            (void)f_unlink(g_project_save.temporary_path);project_save_finish(0U);
+            (void)f_unlink(g_project_save.temporary_path);
+            (void)project_remove_tree(g_project_save.transaction_directory);
+            project_save_finish(0U);
             break;
         default:
             project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_CODEC,0);

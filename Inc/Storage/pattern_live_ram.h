@@ -13,6 +13,8 @@ void pattern_live_cancel_recall(void);
 void pattern_live_on_transport_stopped(void);
 void pattern_live_service(void);
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern);
+uint8_t pattern_live_reconcile_active_begin(void);
+uint8_t pattern_live_reconcile_active_take_result(uint8_t *success);
 uint8_t pattern_live_store_available(void);
 uint8_t pattern_live_request_slot(uint8_t bank, uint8_t pattern);
 uint8_t pattern_live_get_active(uint8_t *out_bank, uint8_t *out_pattern);

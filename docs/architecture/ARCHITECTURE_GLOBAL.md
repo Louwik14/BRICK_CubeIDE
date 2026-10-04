@@ -25,6 +25,9 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
   sortant dans un unique DTO SDRAM avant le commit cible; STORAGE reconcilie
   ensuite cet etat avec sa base et conserve les seuls overrides sous
   `BRICK/WORKING/PATTERNS/`.
+- Save Project publie `PROJECT.B6C` et les seuls Patterns dirty comme une
+  transaction globale journalisee sous `BRICK/TRANSACTIONS/PROJECT/`; Working
+  n'est nettoye qu'apres le marqueur global COMMITTED.
 
 ## Flux principaux
 

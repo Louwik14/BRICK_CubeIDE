@@ -15,7 +15,8 @@ typedef enum
 {
     PATTERN_WORKING_OPERATION_NONE = 0,
     PATTERN_WORKING_OPERATION_LOAD,
-    PATTERN_WORKING_OPERATION_RECONCILE
+    PATTERN_WORKING_OPERATION_RECONCILE,
+    PATTERN_WORKING_OPERATION_DISCARD
 } pattern_working_operation_t;
 
 void pattern_working_bank_init(void);
@@ -35,6 +36,9 @@ uint8_t pattern_working_bank_reconcile_async_begin(
     const persist_control_pattern_t *base_default,
     uint8_t saved_base_present,
     uint8_t *encoded, uint32_t encoded_capacity);
+uint8_t pattern_working_bank_discard_async_begin(uint8_t bank,
+                                                 uint8_t pattern);
+void pattern_working_bank_mark_clean(uint8_t bank, uint8_t pattern);
 void pattern_working_bank_async_service(void);
 uint8_t pattern_working_bank_async_busy(void);
 uint8_t pattern_working_bank_async_take_result(

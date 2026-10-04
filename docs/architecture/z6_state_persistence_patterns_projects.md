@@ -51,8 +51,36 @@ d'un autre Pattern.
 Blank utilise la meme banque Working, avec les defaults deterministes comme
 base. Pattern Store y est admis et publie l'etat capture comme override Working;
 aucun slot Project fictif n'est cree. Save Project multi-Patterns, Reload
-saved-only, Save As, shutdown Resume et boot Resume ne font pas partie de ce
-contrat de passe et restent a ajouter par leurs transactions produit.
+saved-only et leur transaction globale sont decrits ci-dessous. Save As,
+shutdown Resume et boot Resume restent a ajouter par leurs transactions produit.
+
+## Commit explicite du Working
+
+`Save Pattern` capture toujours les owners runtime au moment de la commande,
+y compris pour un Store vers un autre slot. Pour un Project associe, le fichier
+Pattern cible est remplace avec la transaction unitaire FatFs existante, puis
+et seulement apres ce succes l'override Working de cette cible est retire et
+son bit dirty est efface. Les autres overrides ne sont pas touches. En Blank,
+la meme commande reconcilie le snapshot avec les defaults et le conserve dans
+Working: aucun faux slot Project n'est cree.
+
+`Save Project` commence par reconcilier le Pattern actif. Il capture ensuite
+le core Project courant et fige le bitmap dirty. Le cout disque est
+`PROJECT.B6C + N Patterns dirty`. Ces fichiers sont d'abord stages sous
+`BRICK/TRANSACTIONS/PROJECT/P##/`; un journal interne `TXN.B6T`, contenant les
+bitmaps dirty et "existait avant", est synchronise en phase PREPARED avant la
+premiere publication. Les anciens fichiers publies restent dans la transaction
+en `.OLD`. Le journal ne passe a COMMITTED qu'apres publication de tous les
+nouveaux fichiers. PREPARED impose un rollback au mount; COMMITTED impose la
+finalisation et le nettoyage. Un Pattern auparavant absent est supprime au
+rollback au lieu d'etre restaure. Les bits dirty et les overrides ne sont
+retires qu'apres COMMITTED.
+
+Project Load/Reload decode explicitement `PROJECTS/P##/PROJECT.B6C`, puis le
+Pattern actif depuis `PROJECTS/P##/PATTERNS/` ou son default. Working reste
+intact pendant PREPARE; `pattern_control_bank_activate_project()` ne l'abandonne
+qu'apres la frontiere forward-only, dans le pipeline quiesce/CONTROL/SEQ/AUDIO
+existant. Save As, New Blank et RESUME restent hors de ce contrat.
 Quand `modulation_present` est actif, ENV3 n'existe qu'une fois dans le Patch,
 dans l'enveloppe de modulation; capture, Init, codec et application utilisent
 cette representation unique.

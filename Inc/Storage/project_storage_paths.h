@@ -21,6 +21,22 @@ uint8_t project_storage_project_transaction_file(char *out, uint32_t capacity,
 uint8_t project_storage_project_transaction_patterns_dir(char *out,
                                                          uint32_t capacity,
                                                          uint8_t slot);
+uint8_t project_storage_project_transaction_manifest(char *out,
+                                                      uint32_t capacity,
+                                                      uint8_t slot);
+uint8_t project_storage_project_transaction_backup_file(char *out,
+                                                        uint32_t capacity,
+                                                        uint8_t slot);
+uint8_t project_storage_project_transaction_pattern_file(char *out,
+                                                         uint32_t capacity,
+                                                         uint8_t slot,
+                                                         uint8_t bank,
+                                                         uint8_t pattern);
+uint8_t project_storage_project_transaction_pattern_backup(char *out,
+                                                           uint32_t capacity,
+                                                           uint8_t slot,
+                                                           uint8_t bank,
+                                                           uint8_t pattern);
 uint8_t project_storage_project_delete_transaction_dir(char *out,
                                                        uint32_t capacity,
                                                        uint8_t slot);

@@ -361,6 +361,31 @@ uint8_t pattern_working_bank_reconcile_async_begin(
     return 1U;
 }
 
+uint8_t pattern_working_bank_discard_async_begin(uint8_t bank,
+                                                 uint8_t pattern)
+{
+    if (!working_slot_valid(bank, pattern)
+            || g_working_async.state != WORKING_ASYNC_IDLE) return 0U;
+    memset(&g_working_async, 0, sizeof(g_working_async));
+    g_working_async.operation = PATTERN_WORKING_OPERATION_DISCARD;
+    g_working_async.state = WORKING_ASYNC_MOUNT;
+    g_working_async.bank = bank;
+    g_working_async.pattern = pattern;
+    g_working_async.media_epoch = sd_access_media_epoch();
+    if (!working_prepare_paths(bank, pattern))
+    {
+        memset(&g_working_async, 0, sizeof(g_working_async));
+        return 0U;
+    }
+    return 1U;
+}
+
+void pattern_working_bank_mark_clean(uint8_t bank, uint8_t pattern)
+{
+    if (working_slot_valid(bank, pattern) != 0U)
+        working_dirty_set(bank, pattern, 0U);
+}
+
 static void working_finish(uint8_t success)
 {
     g_working_async.file_open = 0U;
@@ -429,6 +454,8 @@ void pattern_working_bank_async_service(void)
             if (!sd_access_fs_mount_if_needed()) working_fail();
             else if (g_working_async.operation == PATTERN_WORKING_OPERATION_LOAD)
                 g_working_async.state = WORKING_ASYNC_RECOVER;
+            else if (g_working_async.operation == PATTERN_WORKING_OPERATION_DISCARD)
+                g_working_async.state = WORKING_ASYNC_DELETE;
             else if (g_working_async.base_path[0] != '\0')
                 g_working_async.state = WORKING_ASYNC_OPEN_BASE;
             else g_working_async.state = WORKING_ASYNC_DECIDE;

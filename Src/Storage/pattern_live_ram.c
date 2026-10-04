@@ -18,6 +18,7 @@
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/project_product.h"
 #include "Storage/persistence_debug.h"
 #include "Platform/memory_layout.h"
 
@@ -62,6 +63,11 @@ static uint8_t g_pattern_departing_bank;
 static uint8_t g_pattern_departing_pattern;
 static uint8_t g_pattern_working_load_active;
 static uint8_t g_pattern_working_spill_active;
+static uint8_t g_pattern_save_discard_pending;
+static uint8_t g_pattern_save_discard_active;
+static uint8_t g_pattern_save_bank;
+static uint8_t g_pattern_save_pattern;
+static uint8_t g_pattern_active_reconcile_state;
 
 _Static_assert(sizeof(persist_control_pattern_t) == 459436U,
                "Working Pattern departure snapshot size changed");
@@ -134,6 +140,8 @@ static void pattern_candidate_release_payload(void)
         && (g_pattern_io_operation == PATTERN_CONTROL_BANK_ASYNC_NONE)
         && (g_pattern_departing_valid == 0U)
         && (g_pattern_working_load_active == 0U)
+        && (g_pattern_save_discard_pending == 0U)
+        && (g_pattern_save_discard_active == 0U)
         && (pattern_working_bank_async_busy() == 0U))
     {
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
@@ -293,6 +301,7 @@ static uint8_t pattern_candidate_request(uint8_t bank, uint8_t pattern)
     persist_debug_begin(PERSIST_DBG_OP_PATTERN_LOAD, bank, pattern);
     persist_debug_stage(PERSIST_DBG_STAGE_POLICY, 0);
     if ((project_replacement_is_active() != 0U)
+        || (project_product_save_busy() != 0U)
         || (pattern_live_slot_is_valid(bank, pattern) == 0U)
         || (audio_recorder_is_active() != 0U))
     {
@@ -337,11 +346,21 @@ void pattern_load_service(uint32_t byte_budget)
             if (working_success != 0U)
             {
                 g_pattern_departing_valid = 0U;
+                if (g_pattern_active_reconcile_state == 1U)
+                    g_pattern_active_reconcile_state = 2U;
                 pattern_candidate_release_payload();
             }
             else
+            {
+                if (g_pattern_active_reconcile_state == 1U)
+                {
+                    g_pattern_active_reconcile_state = 3U;
+                    g_pattern_departing_valid = 0U;
+                    pattern_candidate_release_payload();
+                }
                 persist_debug_error(PERSIST_DBG_STAGE_WRITE,
                                     PERSIST_DBG_ERROR_FILESYSTEM);
+            }
         }
         else if (working_operation == PATTERN_WORKING_OPERATION_LOAD
                 && g_pattern_working_load_active != 0U)
@@ -363,11 +382,32 @@ void pattern_load_service(uint32_t byte_budget)
             }
             else pattern_candidate_release_payload();
         }
+        else if (working_operation == PATTERN_WORKING_OPERATION_DISCARD
+                && g_pattern_save_discard_active != 0U)
+        {
+            g_pattern_save_discard_active = 0U;
+            if (working_success != 0U)
+            {
+                g_pattern_save_discard_pending = 0U;
+                persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS, 0);
+                pattern_candidate_release_payload();
+            }
+            else
+                persist_debug_error(PERSIST_DBG_STAGE_BANK_COMMIT,
+                                    PERSIST_DBG_ERROR_FILESYSTEM);
+        }
         return;
     }
     if (g_pattern_departing_valid != 0U)
     {
         (void)pattern_departing_spill_begin();
+        return;
+    }
+    if (g_pattern_save_discard_pending != 0U)
+    {
+        if (pattern_working_bank_discard_async_begin(
+                g_pattern_save_bank, g_pattern_save_pattern) != 0U)
+            g_pattern_save_discard_active = 1U;
         return;
     }
 
@@ -396,7 +436,10 @@ void pattern_load_service(uint32_t byte_budget)
         {
             if (completed_success != 0U)
             {
-                persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
+                g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
+                g_pattern_save_bank = completed_bank;
+                g_pattern_save_pattern = completed_pattern;
+                g_pattern_save_discard_pending = 1U;
             }
             else
             {
@@ -443,8 +486,11 @@ void pattern_load_service(uint32_t byte_budget)
         }
         if (g_pattern_io_workspace != 0)
         {
-            g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
-            if (completed_candidate_ready == 0U)
+            if (completed_success == 0U
+                    || completed_operation != PATTERN_CONTROL_BANK_ASYNC_SAVE)
+                g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
+            if (completed_candidate_ready == 0U
+                    && g_pattern_save_discard_pending == 0U)
             {
                 persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
                 g_pattern_io_workspace = 0;
@@ -594,6 +640,11 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
         persist_debug_error(PERSIST_DBG_STAGE_VALIDATE,PERSIST_DBG_ERROR_VALIDATE);
         return 0U;
     }
+    if (project_product_save_busy() != 0U)
+    {
+        persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);
+        return 0U;
+    }
 
     uint8_t active_project=0xFFU;
     const uint8_t project_associated =
@@ -608,6 +659,7 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
                 || audio_recorder_is_active() != 0U) return 0U;
         g_pattern_io_workspace = persistence_workspace_acquire_pattern_io();
         if (g_pattern_io_workspace == NULL) return 0U;
+        persist_debug_stage(PERSIST_DBG_STAGE_CANDIDATE, 0);
         const persist_codec_result_t capture = persistent_pattern_control_capture(
             &g_pattern_departing_snapshot);
         if (capture != PERSIST_CODEC_OK)
@@ -653,6 +705,7 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
     }
     persist_control_pattern_t *const captured = &g_pattern_io_workspace->pattern;
 
+    persist_debug_stage(PERSIST_DBG_STAGE_CANDIDATE, 0);
     const persist_codec_result_t capture_result=
         persistent_pattern_control_capture(captured);
     if (capture_result != PERSIST_CODEC_OK)
@@ -717,6 +770,43 @@ uint8_t pattern_live_store_available(void)
     uint8_t active_project=0U;
     return (uint8_t)(pattern_control_bank_active_project(&active_project)
         || pattern_working_bank_base_kind() == PATTERN_WORKING_BASE_BLANK);
+}
+
+uint8_t pattern_live_reconcile_active_begin(void)
+{
+    uint8_t project = 0U;
+    if (pattern_control_bank_active_project(&project) == 0U
+            || g_pattern_active_reconcile_state != 0U
+            || g_pattern_io_workspace != NULL
+            || g_pattern_departing_valid != 0U
+            || pattern_working_bank_async_busy() != 0U
+            || pattern_control_bank_async_busy() != 0U
+            || audio_recorder_is_active() != 0U) return 0U;
+    g_pattern_io_workspace = persistence_workspace_acquire_pattern_io();
+    if (g_pattern_io_workspace == NULL) return 0U;
+    const persist_codec_result_t capture = persistent_pattern_control_capture(
+        &g_pattern_departing_snapshot);
+    if (capture != PERSIST_CODEC_OK)
+    {
+        persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
+        g_pattern_io_workspace = NULL;
+        persist_debug_error(PERSIST_DBG_STAGE_VALIDATE, (int32_t)capture);
+        return 0U;
+    }
+    g_pattern_departing_bank = g_active_bank;
+    g_pattern_departing_pattern = g_active_pattern;
+    g_pattern_departing_valid = 1U;
+    g_pattern_active_reconcile_state = 1U;
+    return 1U;
+}
+
+uint8_t pattern_live_reconcile_active_take_result(uint8_t *success)
+{
+    if (g_pattern_active_reconcile_state < 2U) return 0U;
+    if (success != NULL)
+        *success = (g_pattern_active_reconcile_state == 2U) ? 1U : 0U;
+    g_pattern_active_reconcile_state = 0U;
+    return 1U;
 }
 
 uint8_t pattern_live_request_slot(uint8_t bank, uint8_t pattern)
@@ -792,6 +882,11 @@ void pattern_live_init(void)
     g_pattern_departing_pattern = 0U;
     g_pattern_working_load_active = 0U;
     g_pattern_working_spill_active = 0U;
+    g_pattern_save_discard_pending = 0U;
+    g_pattern_save_discard_active = 0U;
+    g_pattern_save_bank = 0U;
+    g_pattern_save_pattern = 0U;
+    g_pattern_active_reconcile_state = 0U;
 
     pattern_control_bank_init();
     pattern_debug_state();
