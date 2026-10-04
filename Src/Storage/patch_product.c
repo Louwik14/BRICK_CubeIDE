@@ -4,6 +4,8 @@
 #include <string.h>
 
 #include "App/name_contract.h"
+#include "Import/dx7_import.h"
+#include "Import/dx7_sysex.h"
 #include "Platform/memory_layout.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Sampler/sampler_ram_pool.h"
@@ -28,6 +30,21 @@ static uint8_t g_invalid[PATCH_PRODUCT_SLOT_COUNT];
 STORAGE_STATE_SDRAM static patch_product_metadata_t g_meta[PATCH_PRODUCT_SLOT_COUNT];
 static uint16_t g_current = PATCH_PRODUCT_INVALID_SLOT;
 #define PATCH_PRODUCT_IO_BUFFER_BYTES (16U * 1024U)
+#define PATCH_DX7_FILE_BUFFER_BYTES (32U * 1024U)
+#define PATCH_DX7_FILE_COUNT_MAX PATCH_PRODUCT_SLOT_COUNT
+#define PATCH_DX7_FILENAME_BYTES 256U
+
+typedef struct
+{
+    char filenames[PATCH_DX7_FILE_COUNT_MAX][PATCH_DX7_FILENAME_BYTES];
+    uint8_t file_bytes[PATCH_DX7_FILE_BUFFER_BYTES];
+    dx7_voice_t voices[PATCH_PRODUCT_SLOT_COUNT];
+    uint16_t slots[PATCH_PRODUCT_SLOT_COUNT];
+    persist_control_patch_t patch;
+    persist_codec_patch_staging_t decoded;
+} patch_dx7_boot_workspace_t;
+
+STORAGE_STATE_SDRAM static patch_dx7_boot_workspace_t g_patch_dx7_boot;
 
 typedef enum
 {
@@ -170,6 +187,179 @@ static uint8_t scan_meta(uint16_t slot)
     g_present[slot] = 1U;
     g_invalid[slot] = (valid != 0U) ? 0U : 1U;
     return valid;
+}
+
+static uint8_t patch_dx7_has_extension(const char *name)
+{
+    if (name == NULL) return 0U;
+    const size_t length = strlen(name);
+    if (length < 4U) return 0U;
+    const char *const extension = name + length - 4U;
+    return (uint8_t)(extension[0] == '.'
+        && (extension[1] == 's' || extension[1] == 'S')
+        && (extension[2] == 'y' || extension[2] == 'Y')
+        && (extension[3] == 'x' || extension[3] == 'X'));
+}
+
+static uint16_t patch_dx7_collect_sources(void)
+{
+    char root[32];
+    DIR directory;
+    FILINFO info;
+    uint16_t count = 0U;
+    if (!project_storage_patches_root(root, sizeof(root))
+            || f_opendir(&directory, root) != FR_OK) return 0U;
+    for (;;)
+    {
+        memset(&info, 0, sizeof(info));
+        const FRESULT result = f_readdir(&directory, &info);
+        if (result != FR_OK || info.fname[0] == '\0') break;
+        if ((info.fattrib & AM_DIR) != 0U || !patch_dx7_has_extension(info.fname)) continue;
+        const size_t length = strlen(info.fname);
+        if (length >= PATCH_DX7_FILENAME_BYTES || count >= PATCH_DX7_FILE_COUNT_MAX) continue;
+        memcpy(g_patch_dx7_boot.filenames[count], info.fname, length + 1U);
+        ++count;
+    }
+    (void)f_closedir(&directory);
+    return count;
+}
+
+static uint8_t patch_dx7_source_path(char *out, size_t capacity, const char *filename)
+{
+    const int length = snprintf(out, capacity, "0:/PATCHES/%s", filename);
+    return (uint8_t)(length > 0 && (size_t)length < capacity);
+}
+
+static uint8_t patch_dx7_read_source(const char *source_path, uint32_t *out_size)
+{
+    persistent_fatfs_file_t source;
+    if (out_size == NULL || !persistent_fatfs_open_read(&source, source_path)) return 0U;
+    uint8_t valid = (uint8_t)(source.size > 0U
+        && source.size <= PATCH_DX7_FILE_BUFFER_BYTES);
+    if (valid)
+    {
+        UINT read = 0U;
+        valid = (uint8_t)(f_read(&source.file, g_patch_dx7_boot.file_bytes,
+            (UINT)source.size, &read) == FR_OK && read == (UINT)source.size);
+    }
+    const uint32_t size = source.size;
+    if (persistent_fatfs_close_result(&source) != FR_OK) valid = 0U;
+    if (valid) *out_size = size;
+    return valid;
+}
+
+static uint8_t patch_dx7_name_used(const char *name)
+{
+    for (uint16_t slot = 0U; slot < PATCH_PRODUCT_SLOT_COUNT; ++slot)
+        if (g_present[slot] != 0U && g_invalid[slot] == 0U
+                && strcmp(g_meta[slot].name, name) == 0) return 1U;
+    return 0U;
+}
+
+static uint8_t patch_dx7_make_unique_name(persist_control_patch_t *patch)
+{
+    char base[NAME_CONTRACT_BUFFER_BYTES] = {0};
+    char candidate[NAME_CONTRACT_BUFFER_BYTES] = {0};
+    if (patch == NULL || patch->name_length == 0U
+            || patch->name_length > NAME_CONTRACT_MAX_CHARS) return 0U;
+    memcpy(base, patch->name, patch->name_length);
+    memcpy(candidate, base, patch->name_length + 1U);
+    for (uint16_t ordinal = 1U; ordinal < 1000U; ++ordinal)
+    {
+        if (!patch_dx7_name_used(candidate))
+        {
+            memset(patch->name, 0, sizeof(patch->name));
+            patch->name_length = (uint16_t)strlen(candidate);
+            memcpy(patch->name, candidate, patch->name_length);
+            return 1U;
+        }
+        const uint16_t suffix_number = (uint16_t)(ordinal + 1U);
+        char suffix[8];
+        const int suffix_length = snprintf(suffix, sizeof(suffix), "_%u",
+                                           (unsigned)suffix_number);
+        if (suffix_length <= 0 || (size_t)suffix_length >= sizeof(suffix)) return 0U;
+        size_t base_length = strlen(base);
+        if (base_length + (size_t)suffix_length > NAME_CONTRACT_MAX_CHARS)
+            base_length = NAME_CONTRACT_MAX_CHARS - (size_t)suffix_length;
+        memcpy(candidate, base, base_length);
+        memcpy(candidate + base_length, suffix, (size_t)suffix_length + 1U);
+    }
+    return 0U;
+}
+
+static uint8_t patch_dx7_allocate_slots(size_t voice_count)
+{
+    size_t found = 0U;
+    for (uint16_t slot = 0U; slot < PATCH_PRODUCT_SLOT_COUNT && found < voice_count; ++slot)
+        if (g_present[slot] == 0U) g_patch_dx7_boot.slots[found++] = slot;
+    return (uint8_t)(found == voice_count);
+}
+
+static uint8_t patch_dx7_write_one(uint16_t slot,
+                                   const persist_control_patch_t *patch)
+{
+    char final_path[48];
+    char temporary_path[56];
+    persistent_fatfs_file_t file;
+    if (!path(final_path, sizeof(final_path), slot)
+            || !side_path(temporary_path, sizeof(temporary_path), final_path, "TMP")) return 0U;
+    (void)f_unlink(temporary_path);
+    if (!persistent_fatfs_open_write(&file, temporary_path)) return 0U;
+    const persist_codec_sink_t sink = persistent_fatfs_sink(&file);
+    uint8_t valid = (uint8_t)(persist_codec_encode_patch(patch, &sink, NULL)
+        == PERSIST_CODEC_OK && f_sync(&file.file) == FR_OK);
+    if (persistent_fatfs_close_result(&file) != FR_OK) valid = 0U;
+    if (valid && persistent_fatfs_open_read(&file, temporary_path))
+    {
+        const persist_codec_source_t source = persistent_fatfs_source(&file);
+        valid = (uint8_t)(persist_codec_decode_patch(&source,
+            &g_patch_dx7_boot.decoded) == PERSIST_CODEC_OK
+            && f_tell(&file.file) == f_size(&file.file));
+        if (persistent_fatfs_close_result(&file) != FR_OK) valid = 0U;
+    }
+    else valid = 0U;
+    FILINFO info;
+    if (valid && f_stat(final_path, &info) == FR_NO_FILE
+            && f_rename(temporary_path, final_path) == FR_OK
+            && scan_meta(slot)) return 1U;
+    (void)f_unlink(temporary_path);
+    return 0U;
+}
+
+static void patch_dx7_import_source(const char *filename)
+{
+    char source_path[PATCH_DX7_FILENAME_BYTES + 16U];
+    uint32_t file_size = 0U;
+    size_t voice_count = 0U;
+    if (!patch_dx7_source_path(source_path, sizeof(source_path), filename)
+            || !patch_dx7_read_source(source_path, &file_size)
+            || dx7_sysex_parse(g_patch_dx7_boot.file_bytes, file_size,
+                g_patch_dx7_boot.voices, PATCH_PRODUCT_SLOT_COUNT, &voice_count)
+                != DX7_SYSEX_OK
+            || voice_count == 0U
+            || !patch_dx7_allocate_slots(voice_count)) return;
+
+    for (size_t i = 0U; i < voice_count; ++i)
+        if (dx7_import_voice(&g_patch_dx7_boot.voices[i], 0U,
+                &g_patch_dx7_boot.patch) != DX7_IMPORT_OK) return;
+
+    size_t published = 0U;
+    for (; published < voice_count; ++published)
+    {
+        const uint16_t slot = g_patch_dx7_boot.slots[published];
+        if (dx7_import_voice(&g_patch_dx7_boot.voices[published], 0U,
+                &g_patch_dx7_boot.patch) != DX7_IMPORT_OK
+                || !patch_dx7_make_unique_name(&g_patch_dx7_boot.patch)
+                || !patch_dx7_write_one(slot, &g_patch_dx7_boot.patch)) break;
+    }
+    if (published == voice_count) (void)f_unlink(source_path);
+}
+
+static void patch_dx7_import_sources(void)
+{
+    const uint16_t count = patch_dx7_collect_sources();
+    for (uint16_t i = 0U; i < count; ++i)
+        patch_dx7_import_source(g_patch_dx7_boot.filenames[i]);
 }
 
 static uint8_t patch_name_normalize(const char *name,
@@ -1001,6 +1191,7 @@ void patch_product_init(void)
             (void)scan_meta(slot);
         }
     }
+    patch_dx7_import_sources();
     sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);
 }
 

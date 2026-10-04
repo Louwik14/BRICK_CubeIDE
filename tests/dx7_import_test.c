@@ -116,6 +116,13 @@ int main(void)
     assert(dx7_sysex_parse(damaged, sizeof(damaged), voices, 32U, &count)
         == DX7_SYSEX_BAD_DATA);
 
+    uint8_t concatenated[326];
+    memcpy(concatenated, single, sizeof(single));
+    memcpy(concatenated + sizeof(single), single, sizeof(single));
+    assert(dx7_sysex_parse(concatenated, sizeof(concatenated), voices, 32U, &count)
+        == DX7_SYSEX_OK);
+    assert(count == 2U);
+
     uint8_t bank[4104]; make_bank(single, bank);
     assert(dx7_sysex_parse(bank, sizeof(bank), voices, 32U, &count) == DX7_SYSEX_OK);
     assert(count == 32U && voices[31].operators[0].fine == 50U);
