@@ -20,7 +20,6 @@
  */
 
 #include "ui_page_manager.h"
-#include "ui_core.h"
 #include "ui_core_mute.h"
 #include "ui_navigation.h"
 #include "ui_param.h"
@@ -105,7 +104,6 @@ void ui_page_set(uint8_t page_id)
     if (page_id != g_ui_current_page_id)
     {
         ui_restore_hall_mode_before_macro();
-        ui_track_overlay_on_context_changed();
     }
 
     ui_navigation_remember_current_template_subpage();

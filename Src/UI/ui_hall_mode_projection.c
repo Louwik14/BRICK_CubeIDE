@@ -118,16 +118,6 @@ const char *ui_get_hall_mode_short_label(void)
         return "PATCH";
     }
 
-    if ((ui_page_get_id() == UI_PAGE_MIDI_FX)
-            || (ui_page_get_id() == UI_PAGE_AUDIO_FX))
-    {
-        if (ui_hall_mode_resolve_rout_context(active_track, raw_mode) != UI_HALL_ROUT_CONTEXT_NONE)
-        {
-            return "ROUT";
-        }
-        return "FX";
-    }
-
     const ui_hall_mode_effective_view_t view =
         ui_hall_mode_resolve_effective_view(active_track, raw_mode);
     if (view == UI_HALL_MODE_VIEW_ROUT)

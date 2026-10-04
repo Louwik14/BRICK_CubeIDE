@@ -143,7 +143,6 @@ typedef struct
     uint8_t active_lane;
     uint8_t shift_down;
     uint8_t track_select_armed;
-    uint8_t track_overlay_wait_release;
     uint32_t mode_tap_ms[UI_HALL_MODE_COUNT];
     uint32_t cfg_tap_ms[TRACK_COUNT];
     uint8_t hall_prev_pressed[HALL_UI_LANE_COUNT];
@@ -155,7 +154,6 @@ static ui_track_state_t g_ui_track_state = {
     .active_lane = 0U,
     .shift_down = 0U,
     .track_select_armed = 0U,
-    .track_overlay_wait_release = 0U,
     .mode_tap_ms = { 0U },
     .cfg_tap_ms = { 0U },
     .hall_prev_pressed = { 0U },
@@ -474,12 +472,7 @@ static void ui_core_update_shift_state(uint8_t shift_down)
 
 static void ui_core_update_track_modifier_state(uint8_t track_modifier_down)
 {
-    if (track_modifier_down == 0U)
-    {
-        g_ui_track_state.track_overlay_wait_release = 0U;
-    }
-    const uint8_t normalized = ((track_modifier_down != 0U)
-        && (g_ui_track_state.track_overlay_wait_release == 0U)) ? 1U : 0U;
+    const uint8_t normalized = (track_modifier_down != 0U) ? 1U : 0U;
     if (g_ui_track_state.track_select_armed != normalized)
     {
         g_ui_track_state.track_select_armed = normalized;
@@ -525,8 +518,7 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)UI_TRACK_MOD_BUTTON))
     {
-        g_ui_track_state.track_select_armed =
-            (g_ui_track_state.track_overlay_wait_release == 0U) ? 1U : 0U;
+        g_ui_track_state.track_select_armed = 1U;
         ui_param_publish_encoder_binding(ui_get_active_lane(),
                                          g_ui_track_state.shift_down);
         return;
@@ -535,7 +527,6 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
     if ((ev->type == UI_EVENT_BUTTON_RELEASE) && (ev->id == (uint8_t)UI_TRACK_MOD_BUTTON))
     {
         g_ui_track_state.track_select_armed = 0U;
-        g_ui_track_state.track_overlay_wait_release = 0U;
         ui_param_publish_encoder_binding(ui_get_active_lane(),
                                          g_ui_track_state.shift_down);
         ui_hall_mode_flow_release_audio_rec_chord();
@@ -796,7 +787,6 @@ void ui_core_init(void)
     g_ui_track_state.active_lane = 0U;
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
-    g_ui_track_state.track_overlay_wait_release = 0U;
     ui_core_mute_init();
     ui_core_set_feedback(0);
     for (uint8_t mode = 0U; mode < (uint8_t)UI_HALL_MODE_COUNT; ++mode)
@@ -1306,12 +1296,6 @@ uint8_t ui_get_mute_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
 uint8_t ui_is_track_modifier_held(void)
 {
     return g_ui_track_state.track_select_armed;
-}
-
-void ui_track_overlay_on_context_changed(void)
-{
-    g_ui_track_state.track_overlay_wait_release = button_down(UI_TRACK_MOD_BUTTON);
-    g_ui_track_state.track_select_armed = 0U;
 }
 
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)

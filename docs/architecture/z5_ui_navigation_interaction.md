@@ -24,8 +24,10 @@ entre statut et footer.
 Le contexte temporaire TRACK est resolu par `ui_hall_mode_track_overlay_active`,
 utilise par le dispatch Hall et la projection LED. Il prime sur la page active
 pour la selection des tracks, puis disparait au relachement de TRACK; la page
-reprend alors sa projection propre. MUTE et SHIFT restent prioritaires selon
-leur contrat. MACRO est un overlay temporaire des modes Hall KBD et SEQ : son
+reprend alors sa projection propre. Sa duree de vie suit exclusivement l'etat
+physique de TRACK: un changement de page, d'ensemble, de sous-page, de mode Hall
+ou de track ne l'annule pas. MUTE et SHIFT restent prioritaires selon leur
+contrat. MACRO est un overlay temporaire des modes Hall KBD et SEQ : son
 entree memorise le mode Hall courant et toute sortie restaure exactement ce
 mode. SHIFT + STEP 8 y entre. En LIVE, un tap alterne PRESSURE/TOGGLE apres la
 fenetre de double tap et deux taps ouvrent ASSIGN sans appliquer la bascule du
@@ -81,6 +83,13 @@ SCALER et TRIG. Chaque sous-page adresse quatre parametres connus; P4 porte le
 bypass et le mode principal. GENERATOR adapte les labels P1/P2/P3 au mode ARP,
 HOLD ou EUCLID sans effacer leurs valeurs. Son P4 n'est pas p-lockable. Il
 n'existe plus de selection de type par slot ni de page ORDER.
+
+MIDI FX et FX audio forment les deux pages du meme ensemble FX. Une nouvelle
+activation de la commande FX alterne entre elles lorsque les deux sont
+disponibles; chaque page conserve independamment sa sous-page locale. Le Hall
+mode reste orthogonal a la page d'ensemble: le header derive toujours `SEQ`,
+`KBD`, etc. du mode Hall effectif et n'affiche jamais `FX` du seul fait que la
+page FX est ouverte.
 
 Les clipboards transportent uniquement des etats logiques. Le bloc MIDI FX
 copie les seize octets de la chaine fixe sans tri MODEL ni conversion de mode;

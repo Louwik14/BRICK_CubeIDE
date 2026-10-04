@@ -70,7 +70,6 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
         ui_macro_interaction_leave();
         ui_param_clear_value_flash();
     }
-    ui_track_overlay_on_context_changed();
     seq_edit_note_capture_reset();
     if ((g_ui_hall_mode == UI_HALL_MODE_KEYBOARD)
             && (mode != UI_HALL_MODE_KEYBOARD))
