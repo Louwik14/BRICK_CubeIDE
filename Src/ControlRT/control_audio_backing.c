@@ -2,6 +2,7 @@
 #include "ControlRT/audio_state_transaction.h"
 #include "ControlRT/prepared_audio_state.h"
 #include "ControlRT/pattern_recall_diag.h"
+#include "ControlRT/patch_preview_contract.h"
 #include "Platform/memory_layout.h"
 #include <string.h>
 
@@ -11,6 +12,9 @@ CONTROL_STATE_SDRAM control_audio_command_t
 CONTROL_STATE_SDRAM audio_state_transaction_t g_audio_state_transaction;
 CONTROL_STATE_SDRAM prepared_audio_slot_t
     g_prepared_audio_slots[PREPARED_AUDIO_SLOT_COUNT];
+CONTROL_STATE_SDRAM patch_preview_fm_publication_t
+    g_patch_preview_fm_publication[PATCH_PREVIEW_PUBLICATION_SLOT_COUNT];
+CONTROL_STATE_SDRAM volatile uint32_t g_patch_preview_audio_consumed_generation;
 
 #if BRICK_PATTERN_RECALL_DIAG
 IRQ_SHARED_D2 pattern_recall_diag_t g_pattern_recall_diag;

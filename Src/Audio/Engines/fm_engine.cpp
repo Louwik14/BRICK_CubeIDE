@@ -81,6 +81,7 @@ struct fm_voice_t
 };
 
 AUDIO_HOT static fm_voice_t g_fm_voice[BRICK6_FM_VOICE_COUNT];
+AUDIO_HOT static fm_voice_t g_fm_preview;
 AUDIO_HOT static FmCore g_fm_modern;
 
 static const uint8_t kOperatorRatios[kOperatorCount] = { 1U, 2U, 3U, 4U, 5U, 6U };
@@ -735,6 +736,7 @@ void brick6_fm_runtime_init(void)
     PitchEnv::init((double)kSampleRate);
     for (uint8_t instance = 0U; instance < BRICK6_FM_VOICE_COUNT; ++instance)
         reset_voice(&g_fm_voice[instance]);
+    reset_voice(&g_fm_preview);
 }
 
 void brick6_fm_runtime_reset_instance(uint8_t instance_id)
@@ -1041,12 +1043,11 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
     mark_parameters_changed(voice);
 }
 
-void brick6_fm_runtime_set_base_voice(uint8_t instance_id,
-                                      const track_tone_fm_base_voice_t *base)
+static void fm_set_base_voice(fm_voice_t *voice,
+                              const track_tone_fm_base_voice_t *base)
 {
-    if ((valid_instance(instance_id) == 0U) || (base == nullptr))
+    if ((voice == nullptr) || (base == nullptr))
         return;
-    fm_voice_t *const voice = &g_fm_voice[instance_id];
     const uint8_t all_operators = (uint8_t)((1U << kOperatorCount) - 1U);
     const uint8_t patch_changed = (uint8_t)((voice->algorithm != clamp_algorithm(base->algorithm))
         || (voice->transpose != ((base->transpose > 48U) ? 48U : base->transpose)));
@@ -1127,6 +1128,13 @@ void brick6_fm_runtime_set_base_voice(uint8_t instance_id,
     }
     if (pitch_changed != 0U) voice->dirty_pitch_envelope = 1U;
     mark_parameters_changed(voice);
+}
+
+void brick6_fm_runtime_set_base_voice(uint8_t instance_id,
+                                      const track_tone_fm_base_voice_t *base)
+{
+    if (valid_instance(instance_id) != 0U)
+        fm_set_base_voice(&g_fm_voice[instance_id], base);
 }
 
 uint8_t brick6_fm_runtime_get_base_voice(uint8_t instance_id,
@@ -1321,15 +1329,13 @@ void brick6_fm_runtime_sync_voice_if_needed(uint8_t source_instance_id,
         brick6_fm_runtime_sync_voice(source_instance_id, destination_instance_id);
 }
 
-ITCM_TEXT uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
-                                          float *out_mono,
-                                          uint32_t frames)
+static ITCM_TEXT uint8_t fm_render_voice(fm_voice_t *voice,
+                                         float *out_mono,
+                                         uint32_t frames)
 {
-    if ((valid_instance(instance_id) == 0U) || (out_mono == nullptr)
-            || (frames == 0U) || (frames > BRICK6_FM_RENDER_BLOCK))
+    if ((voice == nullptr) || (out_mono == nullptr) || (frames == 0U)
+            || (frames > BRICK6_FM_RENDER_BLOCK))
         return 0U;
-
-    fm_voice_t *const voice = &g_fm_voice[instance_id];
     finalize_voice(voice);
     if (voice->active == 0U)
     {
@@ -1380,4 +1386,71 @@ ITCM_TEXT uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
         return 0U;
     }
     return 1U;
+}
+
+ITCM_TEXT uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
+                                          float *out_mono,
+                                          uint32_t frames)
+{
+    return (valid_instance(instance_id) != 0U)
+        ? fm_render_voice(&g_fm_voice[instance_id], out_mono, frames) : 0U;
+}
+
+void brick6_fm_preview_reset(void)
+{
+    reset_voice(&g_fm_preview);
+}
+
+uint8_t brick6_fm_preview_prepare(const track_tone_fm_base_voice_t *base,
+                                  const track_tone_fm_macros_t *macros)
+{
+    if ((base == nullptr) || (macros == nullptr)) return 0U;
+    reset_voice(&g_fm_preview);
+    fm_set_base_voice(&g_fm_preview, base);
+    g_fm_preview.ratio = clamp_macro(0.5f + (0.5f * macros->ratio));
+    g_fm_preview.bright = clamp_macro(0.5f + (0.5f * macros->bright));
+    g_fm_preview.body = clamp_macro(0.5f + (0.5f * macros->body));
+    g_fm_preview.detail = clamp_macro(0.5f + (0.5f * macros->detail));
+    g_fm_preview.metal = clamp_macro(0.5f + (0.5f * macros->metal));
+    g_fm_preview.env_attack = clamp_macro(
+        0.5f + (0.5f * macros->env_attack));
+    g_fm_preview.env_decay = clamp_macro(
+        0.5f + (0.5f * macros->env_decay));
+    g_fm_preview.env_sustain = clamp_macro(
+        0.5f + (0.5f * macros->env_sustain));
+    g_fm_preview.env_release = clamp_macro(
+        0.5f + (0.5f * macros->env_release));
+    g_fm_preview.play_velocity = clamp_macro(macros->play_vel);
+    g_fm_preview.play_key = clamp_macro(macros->play_key);
+    g_fm_preview.pitch_env_amount = (macros->pitch_env < -1.0f) ? -1.0f
+        : ((macros->pitch_env > 1.0f) ? 1.0f : macros->pitch_env);
+    g_fm_preview.pitch_env_time = clamp_macro(macros->pitch_time);
+    g_fm_preview.dirty_patch = 1U;
+    g_fm_preview.dirty_envelope = (uint8_t)((1U << kOperatorCount) - 1U);
+    g_fm_preview.dirty_output_level =
+        (uint8_t)((1U << kOperatorCount) - 1U);
+    g_fm_preview.dirty_pitch_envelope = 1U;
+    mark_parameters_changed(&g_fm_preview);
+    finalize_voice(&g_fm_preview);
+    return 1U;
+}
+
+void brick6_fm_preview_note_on(uint8_t note, uint8_t velocity)
+{
+    finalize_voice(&g_fm_preview);
+    prepare_note(&g_fm_preview, note, velocity, false);
+}
+
+void brick6_fm_preview_note_off(uint8_t note)
+{
+    if (g_fm_preview.key_note != note) return;
+    for (int op = 0; op < kOperatorCount; ++op)
+        g_fm_preview.env[op].keydown(false);
+    g_fm_preview.pitch_env.keydown(false);
+}
+
+ITCM_TEXT uint8_t brick6_fm_preview_render(float *out_mono,
+                                           uint32_t frames)
+{
+    return fm_render_voice(&g_fm_preview, out_mono, frames);
 }

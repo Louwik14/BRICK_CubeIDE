@@ -12,6 +12,7 @@
 #include "Audio/Engines/acid_engine.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
+#include "Audio/patch_preview_audio.h"
 
 static uint8_t brick6_audio_boot_intent_valid(const brick6_audio_boot_intent_t *intent)
 {
@@ -73,6 +74,7 @@ uint8_t brick6_audio_boot_apply_engines(const brick6_audio_boot_intent_t *intent
     brick6_fm_runtime_init();
     brick6_tb303_runtime_init();
     brick6_acid_runtime_init();
+    patch_preview_audio_init();
     brick6_audio_runtime_init();
     return 1U;
 }

@@ -55,6 +55,15 @@ uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
                                           float *out_mono,
                                           uint32_t frames);
 
+/* Dedicated Patch Preview voice. It is not indexed by, registered with, or
+ * visible to synth_polyphony. */
+void brick6_fm_preview_reset(void);
+uint8_t brick6_fm_preview_prepare(const track_tone_fm_base_voice_t *base,
+                                  const track_tone_fm_macros_t *macros);
+void brick6_fm_preview_note_on(uint8_t note, uint8_t velocity);
+void brick6_fm_preview_note_off(uint8_t note);
+uint8_t brick6_fm_preview_render(float *out_mono, uint32_t frames);
+
 #ifdef __cplusplus
 }
 #endif

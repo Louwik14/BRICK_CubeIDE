@@ -152,6 +152,7 @@ _Static_assert(sizeof(control_audio_command_t) == 16U,
 #define CONTROL_AUDIO_PARAM_PREVIEW_GAIN       0xFFC0U
 #define CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE     0xFFC1U
 #define CONTROL_AUDIO_PARAM_REC_BUS            0xFFC2U
+#define CONTROL_AUDIO_PARAM_PATCH_PREVIEW      0xFFC3U
 #define CONTROL_AUDIO_PARAM_INPUT_OWNER        0xFFC4U
 #define CONTROL_AUDIO_PARAM_WAVETABLE_GEN      0xFFC9U
 #define CONTROL_AUDIO_PARAM_WAVETABLE_SET      0xFFCAU
@@ -201,6 +202,8 @@ control_audio_command_state_class(const control_audio_command_t *command)
     if ((command->id == CONTROL_AUDIO_PARAM_AUDIO_WAVEFORM_REQUEST)
             || (command->id == CONTROL_AUDIO_PARAM_SYNTH_WAVEFORM_REQUEST))
         return CONTROL_AUDIO_COMMAND_REQUEST;
+    if (command->id == CONTROL_AUDIO_PARAM_PATCH_PREVIEW)
+        return CONTROL_AUDIO_COMMAND_TRANSIENT_ACTION;
     if ((command->id >= CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP)
             && (command->id <= CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP))
         return CONTROL_AUDIO_COMMAND_RESOURCE_LIFECYCLE;

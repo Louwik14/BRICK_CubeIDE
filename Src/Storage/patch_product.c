@@ -12,6 +12,7 @@
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/persistent_key_catalog.h"
 #include "Storage/persistent_patch_control.h"
+#include "Storage/patch_preview.h"
 #include "Storage/project_control.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/project_product.h"
@@ -255,9 +256,12 @@ static void patch_io_finish(patch_product_result_t result)
     {
         return;
     }
-    g_present[g_patch_io.slot] = 1U;
-    g_invalid[g_patch_io.slot] = 0U;
-    meta_from_patch(g_patch_io.slot, &g_patch_io.patch);
+    if (g_patch_io.operation != PATCH_PRODUCT_OPERATION_PREVIEW)
+    {
+        g_present[g_patch_io.slot] = 1U;
+        g_invalid[g_patch_io.slot] = 0U;
+        meta_from_patch(g_patch_io.slot, &g_patch_io.patch);
+    }
     if (g_patch_io.operation == PATCH_PRODUCT_OPERATION_SAVE
         || g_patch_io.operation == PATCH_PRODUCT_OPERATION_OVERWRITE)
     {
@@ -366,6 +370,23 @@ static void patch_io_decode(void)
         return;
     }
     g_patch_io.patch = g_patch_io.decoded.patch;
+    if (g_patch_io.operation == PATCH_PRODUCT_OPERATION_PREVIEW)
+    {
+        if (patch_preview_prepare(&g_patch_io.patch) == 0U)
+        {
+            patch_io_finish(PATCH_PRODUCT_INVALID);
+            return;
+        }
+        if (patch_preview_note_on(PATCH_PREVIEW_DEFAULT_NOTE,
+                                  PATCH_PREVIEW_DEFAULT_VELOCITY) == 0U)
+        {
+            (void)patch_preview_stop();
+            patch_io_finish(PATCH_PRODUCT_IO_BUSY);
+            return;
+        }
+        patch_io_finish(PATCH_PRODUCT_OK);
+        return;
+    }
     if (g_patch_io.operation == PATCH_PRODUCT_OPERATION_LOAD)
     {
         if (persistent_patch_control_validate_mask(&g_patch_io.patch,
@@ -613,6 +634,20 @@ patch_product_result_t patch_product_apply(uint16_t slot, uint8_t entity)
     return patch_product_load_begin(slot, (uint16_t)(1UL << entity));
 }
 
+patch_product_result_t patch_product_preview_begin(uint16_t slot)
+{
+    if (slot >= PATCH_PRODUCT_SLOT_COUNT)
+        return PATCH_PRODUCT_RESULT_INVALID_SLOT;
+    if (g_present[slot] == 0U) return PATCH_PRODUCT_EMPTY;
+    if (g_invalid[slot] != 0U) return PATCH_PRODUCT_INVALID;
+    if (patch_io_common_available() == 0U) return PATCH_PRODUCT_IO_BUSY;
+    if (!path(g_patch_io.final_path, sizeof(g_patch_io.final_path), slot))
+        return PATCH_PRODUCT_INVALID;
+    if (patch_preview_stop() == 0U) return PATCH_PRODUCT_IO_BUSY;
+    patch_io_start(PATCH_PRODUCT_OPERATION_PREVIEW, slot);
+    return PATCH_PRODUCT_PENDING;
+}
+
 static project_control_asset_result_t patch_product_prepare_assets(void)
 {
     for (uint8_t asset_index = 0U;
@@ -736,7 +771,8 @@ void patch_product_service(void)
             }
             else
             {
-                g_patch_io.state = (g_patch_io.operation == PATCH_PRODUCT_OPERATION_LOAD)
+                g_patch_io.state = ((g_patch_io.operation == PATCH_PRODUCT_OPERATION_LOAD)
+                        || (g_patch_io.operation == PATCH_PRODUCT_OPERATION_PREVIEW))
                     ? PATCH_IO_OPEN_READ : PATCH_IO_MKDIR_PATCH;
             }
             break;
@@ -932,6 +968,7 @@ uint8_t patch_product_take_result(patch_product_operation_t *operation,
 
 void patch_product_init(void)
 {
+    patch_preview_init();
     memset(g_present, 0, sizeof(g_present));
     memset(g_invalid, 0, sizeof(g_invalid));
     memset(g_meta, 0, sizeof(g_meta));

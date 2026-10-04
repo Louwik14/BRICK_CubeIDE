@@ -1194,6 +1194,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     }
 
     (void)sd_preview_render_main(bus_main_l, bus_main_r, frames);
+    (void)patch_preview_audio_render_main(bus_main_l, bus_main_r, frames);
 
     if(xfade_master_active != 0U)
     {

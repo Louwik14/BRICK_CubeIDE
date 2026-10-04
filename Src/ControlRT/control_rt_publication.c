@@ -15,6 +15,7 @@
 #include "ControlRT/audio_state_snapshot_control.h"
 #include "ControlRT/prepared_audio_state.h"
 #include "ControlRT/fm_dsp_projection.h"
+#include "ControlRT/patch_preview_contract.h"
 #include "Mod/mod_matrix.h"
 #include "Param/engine_model_catalog.h"
 #include "Sampler/multi_sample_config.h"
@@ -68,6 +69,22 @@ static uint8_t control_rt_param_is_structural(
         return (uint8_t)(scope == 0U);
     if (command->id == CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE)
         return (uint8_t)((scope == 0U) && (command->entity <= 1U));
+    if (command->id == CONTROL_AUDIO_PARAM_PATCH_PREVIEW)
+    {
+        if ((scope != 0U)
+                || (command->entity > (uint8_t)PATCH_PREVIEW_COMMAND_STOP))
+            return 0U;
+        if (command->entity == (uint8_t)PATCH_PREVIEW_COMMAND_PREPARE)
+            return (uint8_t)(command->value != 0U);
+        if (command->entity == (uint8_t)PATCH_PREVIEW_COMMAND_NOTE_ON)
+            return (uint8_t)(((command->value & 0xFFFF0000UL) == 0U)
+                && ((command->value & 0xFFU) <= 127U)
+                && (((command->value >> 8U) & 0xFFU) >= 1U)
+                && (((command->value >> 8U) & 0xFFU) <= 127U));
+        if (command->entity == (uint8_t)PATCH_PREVIEW_COMMAND_NOTE_OFF)
+            return (uint8_t)(command->value <= 127U);
+        return (uint8_t)(command->value == 0U);
+    }
     if (command->id == CONTROL_AUDIO_PARAM_REC_BUS)
     {
         const uint32_t allowed = 0xFFFFU | (3UL << 16)

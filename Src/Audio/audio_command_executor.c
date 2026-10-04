@@ -44,6 +44,8 @@
 #include "Param/param_spec.h"
 #include "Track/tone_param_codec.h"
 #include "Audio/sd_preview_audio.h"
+#include "Audio/patch_preview_audio.h"
+#include "ControlRT/patch_preview_contract.h"
 #include "Platform/brick_fatal.h"
 #include "Platform/memory_layout.h"
 #include "main.h"
@@ -296,6 +298,36 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         return sd_preview_audio_apply_gain(command->value);
     if (command->id == CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE)
         return sd_preview_audio_apply_active(command->entity);
+    if (command->id == CONTROL_AUDIO_PARAM_PATCH_PREVIEW)
+    {
+        switch ((patch_preview_command_t)command->entity)
+        {
+            case PATCH_PREVIEW_COMMAND_PREPARE:
+            {
+                const uint32_t generation = command->value;
+                const uint32_t slot = generation
+                    % PATCH_PREVIEW_PUBLICATION_SLOT_COUNT;
+                const patch_preview_fm_publication_t *const publication =
+                    &g_patch_preview_fm_publication[slot];
+                __DMB();
+                if (publication->generation != generation) return 0U;
+                const uint8_t result =
+                    patch_preview_audio_prepare_fm(publication);
+                __DMB();
+                g_patch_preview_audio_consumed_generation = generation;
+                return result;
+            }
+            case PATCH_PREVIEW_COMMAND_NOTE_ON:
+                return patch_preview_audio_note_on((uint8_t)command->value,
+                    (uint8_t)(command->value >> 8U));
+            case PATCH_PREVIEW_COMMAND_NOTE_OFF:
+                return patch_preview_audio_note_off((uint8_t)command->value);
+            case PATCH_PREVIEW_COMMAND_STOP:
+                return patch_preview_audio_stop();
+            default:
+                return 0U;
+        }
+    }
     if (command->id == CONTROL_AUDIO_PARAM_REC_BUS)
         return audio_rec_bus_runtime_apply(command->value);
     if (command->id == CONTROL_AUDIO_PARAM_INPUT_OWNER)

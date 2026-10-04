@@ -206,6 +206,7 @@ set(DOMAIN_CONTRACT_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/Publications/audio_boot_diagnostic_layout.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/Publications/audio_waveform_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/ControlRT/fm_dsp_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/ControlRT/patch_preview_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/audio_wave_table_projection.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/audio_wavetable_registry_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/ControlRT/control_audio_command.h"
