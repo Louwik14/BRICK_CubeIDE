@@ -47,7 +47,8 @@ uint8_t pattern_control_bank_activate_project(uint8_t slot);
 uint8_t pattern_control_bank_validate_project(uint8_t slot);
 void pattern_control_bank_deactivate_project(void);
 uint8_t pattern_control_bank_active_project(uint8_t *out_slot);
-void pattern_control_bank_publish_empty_project(uint8_t slot);
+void pattern_control_bank_publish_project(uint8_t slot,
+                                          const uint32_t present_words[8]);
 uint8_t pattern_control_bank_delete(uint8_t bank,uint8_t pattern);
 uint8_t pattern_control_bank_present(uint8_t bank,uint8_t pattern);
 void pattern_control_bank_mark_present(uint8_t bank,uint8_t pattern);

@@ -28,6 +28,9 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 - Save Project publie `PROJECT.B6C` et les seuls Patterns dirty comme une
   transaction globale journalisee sous `BRICK/TRANSACTIONS/PROJECT/`; Working
   n'est nettoye qu'apres le marqueur global COMMITTED.
+- Save As construit un dossier candidat autonome avec `Working -> Saved ->
+  Default absent`, puis change la base sans reload musical apres son renommage
+  atomique. New engage au contraire un Blank neuf par le pipeline Project Load.
 
 ## Flux principaux
 

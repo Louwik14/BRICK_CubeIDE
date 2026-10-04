@@ -74,10 +74,10 @@ static inline const char *ui_browser_action_label(ui_browser_action_t action,
                                                    uint8_t project)
 {
     switch (action) {
-        case UI_BROWSER_ACTION_NEW: return "NEW";
+        case UI_BROWSER_ACTION_NEW: return project ? "SAVE AS" : "NEW";
         case UI_BROWSER_ACTION_SAVE: return "SAVE";
         case UI_BROWSER_ACTION_LOAD: return "LOAD";
-        case UI_BROWSER_ACTION_BLANK: return "BLANK";
+        case UI_BROWSER_ACTION_BLANK: return project ? "NEW" : "BLANK";
         case UI_BROWSER_ACTION_RENAME: return "RENAME";
         case UI_BROWSER_ACTION_CLEAR: return project ? "ERASE" : "CLEAR";
         case UI_BROWSER_ACTION_INIT: return "INIT";

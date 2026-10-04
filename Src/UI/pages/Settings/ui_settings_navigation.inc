@@ -258,7 +258,7 @@ static void ui_page_settings_project_save_done(ui_page_name_edit_result_t result
         ui_page_settings_status(started!=0U?"RENAMING":"RENAME FAIL");
         return;
     }
-    if(project_product_new_named(name,&g_ui_project_save_slot)!=0U)
+    if(project_product_save_as_named(name,&g_ui_project_save_slot)!=0U)
     {
         g_ui_project_save_phase=UI_PROJECT_SAVE_WRITING;
         ui_page_settings_status("SAVING");
@@ -289,7 +289,7 @@ static void ui_page_settings_project_name_begin(uint8_t mode,uint8_t slot)
     g_ui_project_save_slot=slot;g_ui_project_name_mode=mode;
     g_ui_project_save_phase=UI_PROJECT_SAVE_EDIT;
     if(ui_page_name_edit_open(UI_PAGE_SETTINGS,"PROJECT",
-            mode==2U?"RENAME":"NEW",initial,
+            mode==2U?"RENAME":"SAVE AS",initial,
             sizeof(initial),ui_page_settings_project_save_done,NULL)==0U)
     {
         g_ui_project_save_phase=UI_PROJECT_SAVE_IDLE;
@@ -320,11 +320,11 @@ static void ui_page_settings_project_action(ui_browser_action_t action)
         if(g_ui_settings.project_confirm_action!=2U)
         {
             g_ui_settings.project_confirm_action=2U;
-            ui_page_settings_status("BLANK?");
+            ui_page_settings_status("NEW?");
             return;
         }
         g_ui_settings.project_confirm_action=0U;
-        if(project_product_blank()!=0U)
+        if(project_product_new_blank()!=0U)
         {
             g_ui_settings.return_page_id=UI_PAGE_TEMPLATE_CFG;
             ui_page_set(UI_PAGE_TEMPLATE_CFG);

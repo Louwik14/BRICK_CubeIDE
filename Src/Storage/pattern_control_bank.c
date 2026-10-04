@@ -82,7 +82,16 @@ uint8_t pattern_control_bank_validate_project(uint8_t slot)
 }
 void pattern_control_bank_deactivate_project(void){if(g_pattern_async.state==PATTERN_ASYNC_IDLE){g_active_project=INVALID_PROJECT;memset(g_present,0,sizeof(g_present));pattern_working_bank_start_blank();}}
 uint8_t pattern_control_bank_active_project(uint8_t*out){if(out==NULL||g_active_project>=PROJECT_STORAGE_SLOT_COUNT)return 0U;*out=g_active_project;return 1U;}
-void pattern_control_bank_publish_empty_project(uint8_t slot){if(slot<PROJECT_STORAGE_SLOT_COUNT&&g_pattern_async.state==PATTERN_ASYNC_IDLE){g_active_project=slot;memset(g_present,0,sizeof(g_present));pattern_working_bank_publish_empty_project(slot);}}
+void pattern_control_bank_publish_project(uint8_t slot,const uint32_t present_words[8])
+{
+    if(slot>=PROJECT_STORAGE_SLOT_COUNT||present_words==NULL
+        ||g_pattern_async.state!=PATTERN_ASYNC_IDLE)return;
+    g_active_project=slot;memset(g_present,0,sizeof(g_present));
+    for(uint16_t index=0U;index<256U;++index)
+        if((present_words[index>>5U]&(UINT32_C(1)<<(index&31U)))!=0U)
+            g_present[index>>4U][index&15U]=1U;
+    pattern_working_bank_rebase_project(slot);
+}
 uint8_t pattern_control_bank_present(uint8_t b,uint8_t p){return valid(b,p)?g_present[b][p]:0U;}
 void pattern_control_bank_mark_present(uint8_t b,uint8_t p){if(valid(b,p))g_present[b][p]=1U;}
 uint16_t pattern_control_bank_count(void){uint16_t n=0U;for(uint8_t b=0;b<BANKS;++b)for(uint8_t p=0;p<SLOTS;++p)n+=g_present[b][p]?1U:0U;return n;}

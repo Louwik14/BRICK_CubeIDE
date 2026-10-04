@@ -21,7 +21,7 @@ typedef enum
 
 void pattern_working_bank_init(void);
 uint8_t pattern_working_bank_start_project_mounted(uint8_t project_slot);
-void pattern_working_bank_publish_empty_project(uint8_t project_slot);
+void pattern_working_bank_rebase_project(uint8_t project_slot);
 void pattern_working_bank_start_blank(void);
 pattern_working_base_kind_t pattern_working_bank_base_kind(void);
 uint8_t pattern_working_bank_present(uint8_t bank, uint8_t pattern);

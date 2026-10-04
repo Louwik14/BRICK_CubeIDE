@@ -5,8 +5,8 @@
 #include "Storage/persistent_control_codec.h"
 
 void pattern_live_init(void);
-uint8_t pattern_live_build_default(persist_control_pattern_t *out,
-                                   uint32_t groove_seed);
+uint8_t pattern_live_build_slot_default(persist_control_pattern_t *out,
+                                        uint8_t bank,uint8_t pattern);
 void pattern_load_service(uint32_t byte_budget);
 uint8_t pattern_load_is_pending(void);
 void pattern_live_cancel_recall(void);

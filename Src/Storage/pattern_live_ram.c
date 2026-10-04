@@ -108,14 +108,22 @@ static uint32_t pattern_live_default_groove_seed(uint8_t bank, uint8_t pattern)
     return (value != 0U) ? value : UINT32_C(1);
 }
 
-uint8_t pattern_live_build_default(persist_control_pattern_t *out,
-                                   uint32_t groove_seed)
+static uint8_t pattern_live_build_default(persist_control_pattern_t *out,
+                                          uint32_t groove_seed)
 {
     if ((out == NULL) || (g_pattern_default_context_valid == 0U)) return 0U;
     persistent_pattern_default_context_t context = g_pattern_default_context;
     context.groove_seed = groove_seed;
     return (persistent_pattern_control_build_defaults(out, &context)
             == PERSIST_CODEC_OK) ? 1U : 0U;
+}
+
+uint8_t pattern_live_build_slot_default(persist_control_pattern_t *out,
+                                        uint8_t bank,uint8_t pattern)
+{
+    if(pattern_live_slot_is_valid(bank,pattern)==0U)return 0U;
+    return pattern_live_build_default(out,
+        pattern_live_default_groove_seed(bank,pattern));
 }
 
 static uint32_t pattern_candidate_next_generation(void)
@@ -204,9 +212,8 @@ static uint8_t pattern_departing_spill_begin(void)
             || g_pattern_io_workspace == NULL
             || g_pattern_io_operation != PATTERN_CONTROL_BANK_ASYNC_NONE
             || pattern_working_bank_async_busy() != 0U) return 0U;
-    if (pattern_live_build_default(&g_pattern_io_workspace->pattern,
-            pattern_live_default_groove_seed(g_pattern_departing_bank,
-                                             g_pattern_departing_pattern)) == 0U)
+    if (pattern_live_build_slot_default(&g_pattern_io_workspace->pattern,
+            g_pattern_departing_bank,g_pattern_departing_pattern) == 0U)
         return 0U;
     const uint8_t saved_base_present =
         (pattern_working_bank_base_kind() == PATTERN_WORKING_BASE_PROJECT)
@@ -558,9 +565,8 @@ void pattern_load_service(uint32_t byte_budget)
     if (pattern_control_bank_present(g_pattern_candidate.bank,
                                      g_pattern_candidate.pattern) == 0U)
     {
-        if (pattern_live_build_default(&g_pattern_io_workspace->pattern,
-                pattern_live_default_groove_seed(g_pattern_candidate.bank,
-                                                 g_pattern_candidate.pattern)) == 0U)
+        if (pattern_live_build_slot_default(&g_pattern_io_workspace->pattern,
+                g_pattern_candidate.bank,g_pattern_candidate.pattern) == 0U)
         {
             pattern_live_cancel_recall();
             return;
@@ -775,7 +781,9 @@ uint8_t pattern_live_store_available(void)
 uint8_t pattern_live_reconcile_active_begin(void)
 {
     uint8_t project = 0U;
-    if (pattern_control_bank_active_project(&project) == 0U
+    const uint8_t project_valid=pattern_control_bank_active_project(&project);
+    if ((project_valid==0U
+            &&pattern_working_bank_base_kind()!=PATTERN_WORKING_BASE_BLANK)
             || g_pattern_active_reconcile_state != 0U
             || g_pattern_io_workspace != NULL
             || g_pattern_departing_valid != 0U

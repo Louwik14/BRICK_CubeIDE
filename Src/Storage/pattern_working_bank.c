@@ -218,13 +218,12 @@ uint8_t pattern_working_bank_start_project_mounted(uint8_t project_slot)
     return 1U;
 }
 
-void pattern_working_bank_publish_empty_project(uint8_t project_slot)
+void pattern_working_bank_rebase_project(uint8_t project_slot)
 {
     if (project_slot >= PROJECT_STORAGE_SLOT_COUNT
             || g_working_async.state != WORKING_ASYNC_IDLE) return;
     g_working_base_kind = PATTERN_WORKING_BASE_PROJECT;
     g_working_project_slot = project_slot;
-    memset(g_working_dirty, 0, sizeof(g_working_dirty));
 }
 
 void pattern_working_bank_start_blank(void)

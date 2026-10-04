@@ -80,7 +80,37 @@ Project Load/Reload decode explicitement `PROJECTS/P##/PROJECT.B6C`, puis le
 Pattern actif depuis `PROJECTS/P##/PATTERNS/` ou son default. Working reste
 intact pendant PREPARE; `pattern_control_bank_activate_project()` ne l'abandonne
 qu'apres la frontiere forward-only, dans le pipeline quiesce/CONTROL/SEQ/AUDIO
-existant. Save As, New Blank et RESUME restent hors de ce contrat.
+existant. RESUME reste hors de ce contrat.
+
+## Blank, Save As et New
+
+L'identite de base du Working est exclusivement `PROJECT(P00..P15)` ou
+`BLANK`; aucun `P255` ni banque Blank parallele n'existe. Tous les defaults,
+y compris le Pattern actif d'un Project sans fichier Pattern, utilisent le
+seed deterministe de l'identite `(bank, pattern)`.
+
+Save As capture le core courant apres reconciliation du Pattern actif. Le
+candidat est construit sous `BRICK/TRANSACTIONS/PROJECT/P##/`: chaque override
+Working est copie tel quel, chaque Pattern propre d'une base Project est copie
+depuis le Project source, et un slot Default absent ne produit aucun fichier.
+Les codecs ne sont donc pas rejoues pour les Patterns deja valides. Un marqueur
+interne `TXN.B6T` CANDIDATE synchronise atteste que le dossier est complet;
+seul ce candidat peut etre publie par renommage atomique du dossier. La
+destination est obligatoirement un slot dont le dossier est absent: Save As ne
+remplace ni un Project valide ni un dossier invalide sans une politique UI
+explicite.
+
+Apres le renommage seulement, la base devient le nouveau Project, le catalogue
+Pattern en RAM est repointe sans reload CONTROL/SEQ/AUDIO, puis les overrides
+dirty sont retires. Le nouveau Project est autonome: aucun fichier n'est relu
+depuis l'ancienne base apres publication. Le Project source et son nom restent
+inchanges.
+
+Dans le browser Project, `SAVE AS` materialise ainsi le Working courant dans le
+premier slot reellement absent. `NEW` conserve la confirmation existante et
+engage le pipeline Blank forward-only: avant la frontiere, l'ancien Working
+reste intact; a l'installation, il est abandonne et remplace par un Blank neuf,
+sans creer de dossier utilisateur.
 Quand `modulation_present` est actif, ENV3 n'existe qu'une fois dans le Patch,
 dans l'enveloppe de modulation; capture, Init, codec et application utilisent
 cette representation unique.
