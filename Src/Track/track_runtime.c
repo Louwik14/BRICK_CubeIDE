@@ -307,6 +307,42 @@ track_runtime_engine_t track_runtime_choose_engine(
     return TRACK_RUNTIME_ENGINE_NONE;
 }
 
+uint8_t track_runtime_program_is_canonical(track_runtime_engine_t engine,
+                                           track_runtime_family_t family,
+                                           track_runtime_type_t type,
+                                           uint8_t flags)
+{
+    if (((uint8_t)engine >= (uint8_t)TRACK_RUNTIME_ENGINE_COUNT)
+            || ((uint8_t)family > (uint8_t)TRACK_RUNTIME_FAMILY_OTHER)
+            || ((uint8_t)type >= (uint8_t)TRACK_RUNTIME_TYPE_COUNT))
+        return 0U;
+
+    const uint8_t group_master = (uint8_t)(
+        (flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) != 0U);
+    const uint8_t group_child = (uint8_t)(
+        (flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U);
+    if ((group_master != 0U) && (group_child != 0U)) return 0U;
+    if (group_master != 0U)
+        return (uint8_t)((family == TRACK_RUNTIME_FAMILY_OTHER)
+            && (type == TRACK_RUNTIME_TYPE_GROUP)
+            && (engine == TRACK_RUNTIME_ENGINE_NONE));
+    if (group_child != 0U)
+        return (uint8_t)((family == TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (type == TRACK_RUNTIME_TYPE_RAM)
+            && (engine == TRACK_RUNTIME_ENGINE_SAMPLER));
+
+    if ((family == TRACK_RUNTIME_FAMILY_OTHER)
+            || (type == TRACK_RUNTIME_TYPE_GROUP)) return 0U;
+    if (family == TRACK_RUNTIME_FAMILY_OFF)
+        return (uint8_t)((type == TRACK_RUNTIME_TYPE_NONE)
+            && (engine == TRACK_RUNTIME_ENGINE_NONE));
+    if (family == TRACK_RUNTIME_FAMILY_MIDI)
+        return (uint8_t)((type == TRACK_RUNTIME_TYPE_MIDI)
+            && (engine == TRACK_RUNTIME_ENGINE_NONE));
+    return (uint8_t)(engine == track_runtime_choose_engine(family, type)
+        && engine != TRACK_RUNTIME_ENGINE_NONE);
+}
+
 uint8_t track_runtime_has_configurable_polyphony(
     track_runtime_family_t family, track_runtime_type_t type)
 {

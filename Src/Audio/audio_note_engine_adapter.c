@@ -737,10 +737,8 @@ uint8_t audio_note_engine_adapter_install_prepared(
     const track_runtime_type_t type = (track_runtime_type_t)spec->type;
     const track_runtime_engine_t requested_engine =
         (track_runtime_engine_t)spec->engine;
-    if (((spec->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U)
-            && ((family != TRACK_RUNTIME_FAMILY_SAMPLER)
-                || (type != TRACK_RUNTIME_TYPE_RAM)
-                || (requested_engine != TRACK_RUNTIME_ENGINE_SAMPLER)))
+    if (track_runtime_program_is_canonical(requested_engine, family, type,
+            spec->flags) == 0U)
         return 0U;
     track_audio_runtime_ctx_t *const ctx = &g_audio_track_ctx[entity_id];
     const uint8_t requested_voices = track_runtime_effective_voice_count(

@@ -159,6 +159,13 @@ track_runtime_family_t track_runtime_family_from_ui_config(
 track_runtime_type_t track_runtime_type_from_ui(track_type_t type);
 track_runtime_engine_t track_runtime_choose_engine(
     track_runtime_family_t family, track_runtime_type_t type);
+/* Shared CONTROL/AUDIO PROGRAM grammar.  This is stricter than the packed
+ * command layout: it proves that family, type, renderer and GROUP role encode
+ * one supported logical endpoint. */
+uint8_t track_runtime_program_is_canonical(track_runtime_engine_t engine,
+                                           track_runtime_family_t family,
+                                           track_runtime_type_t type,
+                                           uint8_t flags);
 uint8_t track_runtime_has_configurable_polyphony(
     track_runtime_family_t family, track_runtime_type_t type);
 uint8_t track_runtime_effective_voice_count(track_runtime_family_t family,

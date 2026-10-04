@@ -33,11 +33,10 @@ static uint8_t control_rt_program_is_structural(uint8_t entity, uint32_t value)
         (uint8_t)TRACK_RUNTIME_FAMILY_OTHER,
         (uint8_t)TRACK_RUNTIME_TYPE_COUNT) == 0U)
         return 0U;
-    if ((d.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U)
-        return (uint8_t)((d.family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-            && (d.type == (uint8_t)TRACK_RUNTIME_TYPE_RAM)
-            && (d.engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER));
-    return 1U;
+    return track_runtime_program_is_canonical(
+        (track_runtime_engine_t)d.engine,
+        (track_runtime_family_t)d.family,
+        (track_runtime_type_t)d.type, d.flags);
 }
 
 static uint8_t control_rt_param_is_structural(
@@ -305,8 +304,35 @@ uint8_t prepared_audio_control_preflight(uint8_t slot_id, uint32_t generation)
             || (audio_state_snapshot_control_active() != 0U)
             || (control_rt_publication_free() < 1U)) return 0U;
     const prepared_audio_slot_t *const slot = &g_prepared_audio_slots[slot_id];
-    return (uint8_t)((slot->reserved != 0U) && (slot->ready == 0U)
-        && (slot->generation == generation));
+    if ((slot->reserved == 0U) || (slot->ready != 0U)
+            || (slot->generation != generation)) return 0U;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        const prepared_audio_entity_state_t *const target =
+            &slot->state.entity[entity];
+        const control_audio_program_descriptor_t *const program =
+            &target->program;
+        const uint8_t master = (uint8_t)(
+            (program->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) != 0U);
+        const uint8_t child = (uint8_t)(
+            (program->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U);
+        if ((target->active > 1U)
+                || (target->topology_role > ENTITY_ROLE_GROUP_CHILD)
+                || (track_runtime_program_is_canonical(
+                    (track_runtime_engine_t)program->engine,
+                    (track_runtime_family_t)program->family,
+                    (track_runtime_type_t)program->type,
+                    program->flags) == 0U)
+                || ((target->active == 0U)
+                    && ((program->family != TRACK_RUNTIME_FAMILY_OFF)
+                        || (target->topology_role != ENTITY_ROLE_MAIN)))
+                || ((target->topology_role == ENTITY_ROLE_GROUP_MASTER)
+                    != (master != 0U))
+                || ((target->topology_role == ENTITY_ROLE_GROUP_CHILD)
+                    != (child != 0U)))
+            return 0U;
+    }
+    return 1U;
 }
 
 uint8_t prepared_audio_control_begin_install(uint8_t slot_id,

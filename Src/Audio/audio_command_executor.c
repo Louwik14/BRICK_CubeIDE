@@ -30,6 +30,7 @@
 #include "Audio/synth_waveform_audio.h"
 #include "Sampler/sampler_ram_audio_projection.h"
 #include "Track/synth_polyphony.h"
+#include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
 #include "Sampler/multi_sample_config.h"
 #include "Sampler/wavetable_config.h"
@@ -948,50 +949,15 @@ static uint8_t audio_pattern_diag_expected_engine(
     const control_audio_program_descriptor_t *program,
     uint8_t *out_engine)
 {
-    uint8_t engine = TRACK_RUNTIME_ENGINE_NONE;
-    if (program->family == TRACK_RUNTIME_FAMILY_OFF)
-    {
-        if (program->type != TRACK_RUNTIME_TYPE_NONE) return 0U;
-    }
-    else if (program->family == TRACK_RUNTIME_FAMILY_MIDI)
-    {
-        if (program->type != TRACK_RUNTIME_TYPE_MIDI) return 0U;
-    }
-    else if (program->family == TRACK_RUNTIME_FAMILY_EXTERNAL)
-    {
-        if (program->type != TRACK_RUNTIME_TYPE_EXTERNAL) return 0U;
-        engine = TRACK_RUNTIME_ENGINE_AUDIO_TRACK;
-    }
-    else if (program->family == TRACK_RUNTIME_FAMILY_DRUM)
-    {
-        if (program->type != TRACK_RUNTIME_TYPE_DRUM_MD) return 0U;
-        engine = TRACK_RUNTIME_ENGINE_DRUM;
-    }
-    else if (program->family == TRACK_RUNTIME_FAMILY_SAMPLER)
-    {
-        if ((program->type != TRACK_RUNTIME_TYPE_RAM)
-                && (program->type != TRACK_RUNTIME_TYPE_STREAM)
-                && (program->type != TRACK_RUNTIME_TYPE_MULTI)) return 0U;
-        engine = TRACK_RUNTIME_ENGINE_SAMPLER;
-    }
-    else if (program->family == TRACK_RUNTIME_FAMILY_SYNTH)
-    {
-        switch ((track_runtime_type_t)program->type)
-        {
-            case TRACK_RUNTIME_TYPE_PRISM: engine = TRACK_RUNTIME_ENGINE_PRISM; break;
-            case TRACK_RUNTIME_TYPE_STACK: engine = TRACK_RUNTIME_ENGINE_STACK; break;
-            case TRACK_RUNTIME_TYPE_WAVE: engine = TRACK_RUNTIME_ENGINE_WAVE; break;
-            case TRACK_RUNTIME_TYPE_FM: engine = TRACK_RUNTIME_ENGINE_FM; break;
-            case TRACK_RUNTIME_TYPE_TB303: engine = TRACK_RUNTIME_ENGINE_TB303; break;
-            case TRACK_RUNTIME_TYPE_ACID: engine = TRACK_RUNTIME_ENGINE_ACID; break;
-            default: return 0U;
-        }
-    }
-    else if (!((program->family == TRACK_RUNTIME_FAMILY_OTHER)
-            && (program->type == TRACK_RUNTIME_TYPE_GROUP)
-            && ((program->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER)
-                != 0U))) return 0U;
-    *out_engine = engine;
+    if ((program == NULL) || (out_engine == NULL)
+            || (track_runtime_program_is_canonical(
+                (track_runtime_engine_t)program->engine,
+                (track_runtime_family_t)program->family,
+                (track_runtime_type_t)program->type,
+                program->flags) == 0U)) return 0U;
+    *out_engine = (uint8_t)track_runtime_choose_engine(
+        (track_runtime_family_t)program->family,
+        (track_runtime_type_t)program->type);
     return 1U;
 }
 
