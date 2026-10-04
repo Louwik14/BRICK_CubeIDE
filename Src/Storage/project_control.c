@@ -686,6 +686,10 @@ uint8_t project_control_track_asset_select_logical(uint8_t entity,
 uint8_t project_control_republish_track_asset(uint8_t entity)
 {
     if (entity >= BRICK_ENTITY_CAPACITY) return 0U;
+    /* Inactive GROUP children have no runtime descriptor and therefore no
+     * engine-owned selector to publish.  Their persisted configuration is
+     * deliberately retained for a later GROUP activation. */
+    if (entity_topology_is_active(entity) == 0U) return 1U;
     track_runtime_descriptor_t descriptor;
     if (track_runtime_get_descriptor(entity, &descriptor) == 0U) return 0U;
     const uint8_t sampler = (uint8_t)(descriptor.type == TRACK_RUNTIME_TYPE_STREAM

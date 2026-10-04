@@ -12,6 +12,7 @@
 #include "ControlRT/control_rt_publication.h"
 #include "Track/control_music_output.h"
 #include "Platform/brick_build_config.h"
+#include "Platform/brick_fatal.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_catalog.h"
 #include "Track/track_state.h"
@@ -28,6 +29,8 @@
 #define TRACK_RUNTIME_FLAG_CAN_SYNTH   (1U << 1)
 #define TRACK_RUNTIME_FLAG_CAN_PLAY    (1U << 2)
 #define TRACK_RUNTIME_GROUP_BUS_TRACK BRICK_ENTITY_CAPACITY
+#define TRACK_RUNTIME_REBUILD_ALL_ASSET_STAGE 1U
+#define TRACK_RUNTIME_REBUILD_TRACK_ASSET_STAGE 2U
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_LANE_CAPACITY];
 static uint32_t g_track_runtime_revision = 0U;
 static uint32_t g_track_runtime_track_revision[SEQ_LANE_CAPACITY];
@@ -636,8 +639,14 @@ void track_runtime_rebuild_all(void)
                 if (track_runtime_publish_program(entity,
                         &g_track_runtime_ctx[entity]) == 0U)
                     Error_Handler();
-                if (project_control_republish_track_asset(entity) == 0U)
-                    Error_Handler();
+                const uint8_t asset_result =
+                    project_control_republish_track_asset(entity);
+                if (asset_result == 0U)
+                    BRICK_FATAL_CONTEXT(
+                        "TRACK_RUNTIME_ASSET_REPUBLISH_FAILED",
+                        BRICK_FATAL_AUDIO_REBIND, entity,
+                        prepared[entity].type,
+                        TRACK_RUNTIME_REBUILD_ALL_ASSET_STAGE, asset_result);
             }
             if (pass != 1U) continue;
             const uint8_t midi_changed = (uint8_t)(
@@ -743,8 +752,12 @@ void track_runtime_rebuild_track(uint8_t track)
         {
             Error_Handler();
         }
-        if (project_control_republish_track_asset(track) == 0U)
-            Error_Handler();
+        const uint8_t asset_result =
+            project_control_republish_track_asset(track);
+        if (asset_result == 0U)
+            BRICK_FATAL_CONTEXT("TRACK_RUNTIME_ASSET_REPUBLISH_FAILED",
+                BRICK_FATAL_AUDIO_REBIND, track, next_ctx.type,
+                TRACK_RUNTIME_REBUILD_TRACK_ASSET_STAGE, asset_result);
     }
     else if (midi_changed != 0U)
         g_track_runtime_ctx[track] = next_ctx;
