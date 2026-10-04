@@ -5,17 +5,21 @@ labels for these browsers. Blank positions display `-`.
 
 | Browser | PAGE 1 | PAGE 2 | PAGE 3 | PAGE 4 |
 | --- | --- | --- | --- | --- |
-| Patch | NEW / SAVE | LOAD / INIT | CLEAR / RENAME | RETURN / - |
-| Project | NEW / SAVE | LOAD / BLANK | ERASE / RENAME | RETURN / - |
-| Asset SD | PREVIEW / - | LOAD / REFRESH | RENAME / DELETE | RETURN / - |
-| Asset pool | PREVIEW / - | UNLOAD / REFRESH | RENAME / - | RETURN / - |
+| Patch | RETURN / - | LOAD / INIT | CLEAR / RENAME | NEW / SAVE |
+| Project | RETURN / - | LOAD / BLANK | ERASE / RENAME | NEW / SAVE |
+| Asset SD | RETURN / - | LOAD / REFRESH | RENAME / DELETE | PREVIEW / - |
+| Asset pool | RETURN / - | UNLOAD / REFRESH | RENAME / - | PREVIEW / - |
 
 Each cell lists the action without SHIFT, then with SHIFT. Unavailable actions
 are dimmed. Wavetable PREVIEW is unavailable because its browser has no
-preview path. PAGE 1 starts RAM, Stream or Multi preview while held; release,
+preview path. PAGE 4 starts RAM, Stream or Multi preview while held; release,
 focus changes and leaving the browser stop it. Multi resolves C4 with velocity
 100 and applies its root note pitch. The keyboard continues to play the active
 track while the browser is open.
+
+RETURN leaves a browser at its root. In hierarchical asset browsers it first
+moves from the current directory to its direct parent, one level per press;
+only RETURN at the asset root leaves the browser.
 
 Project has one compact browser of existing, named Projects. Its selection
 index maps to a private storage slot. NEW allocates a free slot in Storage;

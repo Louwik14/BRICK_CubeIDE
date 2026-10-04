@@ -314,7 +314,7 @@ uint8_t ui_page_settings_handle_event(const ui_event_t *ev)
         return 0U;
     }
 
-    if (ev->type == UI_EVENT_BUTTON_RELEASE && ev->id == (uint8_t)BTN_PAGE_1)
+    if (ev->type == UI_EVENT_BUTTON_RELEASE && ev->id == (uint8_t)BTN_PAGE_4)
     {
         ui_page_settings_handle_event_internal(ev);
         return 1U;

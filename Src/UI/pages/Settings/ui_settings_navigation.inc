@@ -811,7 +811,12 @@ static void ui_page_settings_asset_action(ui_settings_view_t view,
             ui_page_settings_asset_delete_request();
             break;
         case UI_BROWSER_ACTION_RETURN:
-            ui_page_settings_back();
+            if (view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+                ui_page_settings_multi_browser_parent_or_exit();
+            else if (view == UI_SETTINGS_VIEW_WAVETABLE)
+                ui_page_settings_wavetable_browser_parent_or_exit();
+            else
+                ui_page_settings_sample_browser_parent_or_exit();
             break;
         default: break;
     }
@@ -820,7 +825,7 @@ static void ui_page_settings_asset_action(ui_settings_view_t view,
 static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
 {
     if (ev != 0 && ev->type == UI_EVENT_BUTTON_RELEASE
-        && ev->id == (uint8_t)BTN_PAGE_1)
+        && ev->id == (uint8_t)BTN_PAGE_4)
     {
         ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
         return;

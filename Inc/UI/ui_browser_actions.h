@@ -39,26 +39,26 @@ static inline ui_browser_action_t ui_browser_action_resolve_context(
             return UI_BROWSER_ACTION_NONE;
         }
         switch (button) {
-            case BTN_PAGE_1: return UI_BROWSER_ACTION_PREVIEW;
+            case BTN_PAGE_1: return UI_BROWSER_ACTION_RETURN;
             case BTN_PAGE_2: return context == UI_BROWSER_ASSET_SD
                 ? UI_BROWSER_ACTION_LOAD : UI_BROWSER_ACTION_UNLOAD;
             case BTN_PAGE_3: return UI_BROWSER_ACTION_RENAME;
-            case BTN_PAGE_4: return UI_BROWSER_ACTION_RETURN;
+            case BTN_PAGE_4: return UI_BROWSER_ACTION_PREVIEW;
             default: return UI_BROWSER_ACTION_NONE;
         }
     }
     if (shift != 0U) {
-        if (button == BTN_PAGE_1) return UI_BROWSER_ACTION_SAVE;
+        if (button == BTN_PAGE_4) return UI_BROWSER_ACTION_SAVE;
         if (button == BTN_PAGE_2) return context == UI_BROWSER_PROJECT
             ? UI_BROWSER_ACTION_BLANK : UI_BROWSER_ACTION_INIT;
         if (button == BTN_PAGE_3) return UI_BROWSER_ACTION_RENAME;
         return UI_BROWSER_ACTION_NONE;
     }
     switch (button) {
-        case BTN_PAGE_1: return UI_BROWSER_ACTION_NEW;
+        case BTN_PAGE_1: return UI_BROWSER_ACTION_RETURN;
         case BTN_PAGE_2: return UI_BROWSER_ACTION_LOAD;
         case BTN_PAGE_3: return UI_BROWSER_ACTION_CLEAR;
-        case BTN_PAGE_4: return UI_BROWSER_ACTION_RETURN;
+        case BTN_PAGE_4: return UI_BROWSER_ACTION_NEW;
         default: return UI_BROWSER_ACTION_NONE;
     }
 }
