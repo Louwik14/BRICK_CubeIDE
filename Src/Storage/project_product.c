@@ -45,6 +45,7 @@ _Static_assert(PROJECT_PRODUCT_NAME_BYTES == PERSIST_CODEC_PROJECT_NAME_BYTES,
 
 static uint8_t g_present[PROJECT_PRODUCT_SLOT_COUNT],g_active_valid,g_active;
 static project_product_metadata_t g_project_metadata[PROJECT_PRODUCT_SLOT_COUNT];
+static project_product_scan_status_t g_project_scan_status[PROJECT_PRODUCT_SLOT_COUNT];
 static project_product_metadata_t g_current_metadata;
 typedef struct {
     uint8_t state,slot,source_open,target_open,success;
@@ -269,34 +270,58 @@ static void project_creation_recover_all(void)
     }
 }
 
-static void project_product_scan_name(uint8_t slot,const char *file_path)
+static project_product_scan_status_t project_product_scan_file(
+    uint8_t slot,const char *file_path)
 {
     g_project_metadata[slot].name[0]='\0';
     FIL file;UINT read=0U;uint8_t prefix[PERSIST_CODEC_HEADER_BYTES+10U+PERSIST_CODEC_PROJECT_NAME_BYTES];
-    if(f_open(&file,file_path,FA_READ)!=FR_OK)return;
-    const uint8_t ok=(uint8_t)((f_read(&file,prefix,sizeof(prefix),&read)==FR_OK)
-        &&(read>=PERSIST_CODEC_HEADER_BYTES+10U)&&(prefix[0]=='B')&&(prefix[1]=='6')
-        &&(prefix[2]=='P')&&(prefix[3]=='C')&&(prefix[4]==PERSIST_CODEC_VERSION)
-        &&(prefix[5]==0U)&&(prefix[6]==PERSIST_CODEC_DOCUMENT_PROJECT)
-        &&(prefix[7]==0U)&&(prefix[8]==3U)&&(prefix[9]==0U)
-        &&(project_le32(&prefix[20])==~persist_codec_crc32_update(0xFFFFFFFFUL,prefix,20U))
-        &&(prefix[24]==0x01U)
-        &&(prefix[25]==0x20U)&&(prefix[26]==3U)&&(prefix[27]==0U));
-    (void)f_close(&file);if(!ok)return;
+    if(f_open(&file,file_path,FA_READ)!=FR_OK)return PROJECT_PRODUCT_SCAN_OPEN_FAILED;
+    if(f_read(&file,prefix,sizeof(prefix),&read)!=FR_OK
+        ||read<PERSIST_CODEC_HEADER_BYTES+10U)
+    {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_HEADER_INVALID;}
+    if(prefix[0]!='B'||prefix[1]!='6'||prefix[2]!='C'||prefix[3]!='P'
+        ||prefix[5]!=0U||prefix[6]!=PERSIST_CODEC_DOCUMENT_PROJECT
+        ||prefix[7]!=0U||prefix[8]!=3U||prefix[9]!=0U
+        ||prefix[10]!=0U||prefix[11]!=0U||project_le32(&prefix[12])!=f_size(&file)
+        ||prefix[24]!=0x01U||prefix[25]!=0x20U
+        ||prefix[26]!=3U||prefix[27]!=0U)
+    {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_HEADER_INVALID;}
+    if(prefix[4]!=PERSIST_CODEC_VERSION)
+    {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_VERSION_INVALID;}
+    if(project_le32(&prefix[20])!=
+        ~persist_codec_crc32_update(0xFFFFFFFFUL,prefix,20U))
+    {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_CRC_INVALID;}
     const uint16_t length=(uint16_t)((uint16_t)prefix[32]|((uint16_t)prefix[33]<<8U));
     if((length==0U)||(length>PERSIST_CODEC_PROJECT_NAME_BYTES)
-            ||(read<(UINT)(PERSIST_CODEC_HEADER_BYTES+10U+length)))return;
+            ||(read<(UINT)(PERSIST_CODEC_HEADER_BYTES+10U+length)))
+    {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_METADATA_INVALID;}
     char candidate[NAME_CONTRACT_BUFFER_BYTES]={0};char normalized[NAME_CONTRACT_BUFFER_BYTES];
     memcpy(candidate,&prefix[34],length);
     if(!project_name_normalize(candidate,normalized)||(strlen(normalized)!=length)
-            ||memcmp(candidate,normalized,length)!=0)return;
+            ||memcmp(candidate,normalized,length)!=0)
+    {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_METADATA_INVALID;}
+    uint8_t buffer[256];uint32_t crc=0xFFFFFFFFUL;
+    if(f_lseek(&file,PERSIST_CODEC_HEADER_BYTES)!=FR_OK)
+    {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_OPEN_FAILED;}
+    uint32_t remaining=(uint32_t)f_size(&file)-PERSIST_CODEC_HEADER_BYTES;
+    while(remaining!=0U)
+    {
+        const UINT chunk=(remaining>sizeof(buffer))?(UINT)sizeof(buffer):(UINT)remaining;
+        if(f_read(&file,buffer,chunk,&read)!=FR_OK||read!=chunk)
+        {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_OPEN_FAILED;}
+        crc=persist_codec_crc32_update(crc,buffer,chunk);remaining-=chunk;
+    }
+    (void)f_close(&file);
+    if(project_le32(&prefix[16])!=~crc)return PROJECT_PRODUCT_SCAN_CRC_INVALID;
     memcpy(g_project_metadata[slot].name,normalized,sizeof(g_project_metadata[slot].name));
+    return PROJECT_PRODUCT_SCAN_ACCEPTED;
 }
 
-void project_product_refresh_slots(void){if((project_replacement_is_active()!=0U&&g_project_load.state!=PROJECT_LOAD_FAILED_FORWARD_MEDIA)||project_product_save_busy()!=0U||project_product_load_busy()!=0U||project_product_rename_busy()!=0U)return;memset(g_present,0,sizeof(g_present));memset(g_project_metadata,0,sizeof(g_project_metadata));if(!acquire())return;if(!ensure_directory()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return;}(void)project_mkdir_path(project_storage_internal_root);(void)project_mkdir_path(project_storage_transactions_root);(void)project_mkdir_path(project_storage_project_transaction_root);project_delete_recover_all();project_creation_recover_all();for(uint8_t s=0U;s<PROJECT_PRODUCT_SLOT_COUNT;++s){char x[48],tmp[48],bak[48];FILINFO i;if(path(x,sizeof(x),s)&&side_path(tmp,sizeof(tmp),s,"TMP")&&side_path(bak,sizeof(bak),s,"BAK")){(void)persistent_fatfs_recover_replace(x,tmp,bak);if(f_stat(x,&i)==FR_OK){g_present[s]=1U;project_product_scan_name(s,x);}}}sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);}
+void project_product_refresh_slots(void){if((project_replacement_is_active()!=0U&&g_project_load.state!=PROJECT_LOAD_FAILED_FORWARD_MEDIA)||project_product_save_busy()!=0U||project_product_load_busy()!=0U||project_product_rename_busy()!=0U)return;memset(g_present,0,sizeof(g_present));memset(g_project_metadata,0,sizeof(g_project_metadata));memset(g_project_scan_status,0,sizeof(g_project_scan_status));if(!acquire())return;if(!ensure_directory()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return;}(void)project_mkdir_path(project_storage_internal_root);(void)project_mkdir_path(project_storage_transactions_root);(void)project_mkdir_path(project_storage_project_transaction_root);project_delete_recover_all();project_creation_recover_all();for(uint8_t s=0U;s<PROJECT_PRODUCT_SLOT_COUNT;++s){char d[48],x[48],p[64],tmp[48],bak[48];FILINFO i;if(!project_storage_project_dir(d,sizeof(d),s)||!path(x,sizeof(x),s)||!project_storage_patterns_dir(p,sizeof(p),s)||!side_path(tmp,sizeof(tmp),s,"TMP")||!side_path(bak,sizeof(bak),s,"BAK"))continue;if(f_stat(d,&i)!=FR_OK||(i.fattrib&AM_DIR)==0U){g_project_scan_status[s]=PROJECT_PRODUCT_SCAN_DIRECTORY_ABSENT;continue;}(void)persistent_fatfs_recover_replace(x,tmp,bak);if(f_stat(x,&i)!=FR_OK||(i.fattrib&AM_DIR)!=0U){g_project_scan_status[s]=PROJECT_PRODUCT_SCAN_FILE_ABSENT;continue;}if(f_stat(p,&i)!=FR_OK||(i.fattrib&AM_DIR)==0U){g_project_scan_status[s]=PROJECT_PRODUCT_SCAN_PATTERNS_ABSENT;continue;}g_project_scan_status[s]=project_product_scan_file(s,x);if(g_project_scan_status[s]==PROJECT_PRODUCT_SCAN_ACCEPTED)g_present[s]=1U;}sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);}
 void project_product_init(void){memset(&g_progress,0,sizeof(g_progress));memset(&g_project_save,0,sizeof(g_project_save));memset(&g_project_load,0,sizeof(g_project_load));memset(&g_project_rename,0,sizeof(g_project_rename));memset(g_project_metadata,0,sizeof(g_project_metadata));memset(&g_current_metadata,0,sizeof(g_current_metadata));g_active_valid=0U;g_active=0U;project_product_refresh_slots();}
 uint8_t project_product_list_slots(uint8_t*out,uint8_t cap){uint8_t n=0U;if(out==NULL)return 0U;for(uint8_t s=0;s<PROJECT_PRODUCT_SLOT_COUNT&&n<cap;++s)if(g_present[s]&&g_project_metadata[s].name[0]!='\0')out[n++]=s;return n;}
 uint8_t project_product_metadata(uint8_t s,project_product_metadata_t*out){if(out==NULL||s>=PROJECT_PRODUCT_SLOT_COUNT||!g_present[s])return 0U;*out=g_project_metadata[s];return 1U;}
+project_product_scan_status_t project_product_scan_status(uint8_t s){return(s<PROJECT_PRODUCT_SLOT_COUNT)?g_project_scan_status[s]:PROJECT_PRODUCT_SCAN_SLOT_ABSENT;}
 uint8_t project_product_current_metadata(project_product_metadata_t*out){if(out==NULL||g_active_valid==0U)return 0U;*out=g_current_metadata;return 1U;}
 
 static uint8_t project_memory_write(void *context,const uint8_t *data,uint32_t length)

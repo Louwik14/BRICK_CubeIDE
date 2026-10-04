@@ -25,7 +25,10 @@ Project has one compact browser of existing, named Projects. Its selection
 index maps to a private storage slot. NEW allocates a free slot in Storage;
 SAVE replaces the focused Project without changing its name; RENAME changes
 only the document name by transactional copy; BLANK creates an unsaved working
-state. Invalid or unnamed files are excluded from the list.
+state. Discovery validates the canonical `PROJECT.B6C` envelope (current magic,
+version, header and payload CRC), its normalized non-empty name and the sibling
+`PATTERNS/` directory. Invalid or unnamed files are excluded from the list and
+the per-slot scan status records the rejection reason.
 
 Each slot is a visible directory, from `0:/PROJECTS/P00/` through `P15/`,
 containing `PROJECT.B6C` and `PATTERNS/`. The slot is the identity used by

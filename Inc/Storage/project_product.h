@@ -40,6 +40,19 @@ typedef enum {
     PROJECT_PRODUCT_SAVE_ERROR_INVALID_NAME
 } project_product_save_error_t;
 typedef struct { char name[PROJECT_PRODUCT_NAME_BYTES + 1U]; } project_product_metadata_t;
+typedef enum
+{
+    PROJECT_PRODUCT_SCAN_SLOT_ABSENT = 0,
+    PROJECT_PRODUCT_SCAN_DIRECTORY_ABSENT,
+    PROJECT_PRODUCT_SCAN_FILE_ABSENT,
+    PROJECT_PRODUCT_SCAN_OPEN_FAILED,
+    PROJECT_PRODUCT_SCAN_HEADER_INVALID,
+    PROJECT_PRODUCT_SCAN_VERSION_INVALID,
+    PROJECT_PRODUCT_SCAN_CRC_INVALID,
+    PROJECT_PRODUCT_SCAN_METADATA_INVALID,
+    PROJECT_PRODUCT_SCAN_PATTERNS_ABSENT,
+    PROJECT_PRODUCT_SCAN_ACCEPTED
+} project_product_scan_status_t;
 typedef enum {
     PROJECT_PRODUCT_BOOT_RESTORE_FAILED = 0,
     PROJECT_PRODUCT_BOOT_RESTORE_DEFAULTS_READY,
@@ -55,6 +68,7 @@ uint8_t project_product_rename(uint8_t slot,const char *name);
 uint8_t project_product_rename_busy(void);
 uint8_t project_product_rename_take_result(uint8_t *slot,uint8_t *success);
 uint8_t project_product_metadata(uint8_t slot,project_product_metadata_t *out);
+project_product_scan_status_t project_product_scan_status(uint8_t slot);
 uint8_t project_product_current_metadata(project_product_metadata_t *out);
 void project_product_save_service(void);
 uint8_t project_product_save_busy(void);
