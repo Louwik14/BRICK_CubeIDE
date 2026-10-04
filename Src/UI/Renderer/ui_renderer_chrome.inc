@@ -47,7 +47,8 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     const char *hall_mode_suffix = ui_get_hall_mode_suffix_label();
 
     ui_renderer_template_draw_brick_frame(0, 0, 15, 15);
-    ui_renderer_template_draw_brick_frame(UI_TEMPLATE_HEADER_TITLE_X, 0, UI_TEMPLATE_HEADER_TITLE_W, 15);
+    ui_renderer_template_draw_open_corner_frame(UI_TEMPLATE_HEADER_TITLE_X, 0,
+                                                 UI_TEMPLATE_HEADER_TITLE_W, 15);
 
     ui_renderer_template_draw_track_badge(2U, 2U, track_label);
 
@@ -176,7 +177,8 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
         }
         else
         {
-            ui_renderer_template_draw_brick_frame(bx, UI_TEMPLATE_FOOTER_Y, bw, UI_TEMPLATE_FOOTER_H);
+            ui_renderer_template_draw_open_corner_frame(bx, UI_TEMPLATE_FOOTER_Y,
+                                                        bw, UI_TEMPLATE_FOOTER_H);
             drv_display_draw_text((uint8_t)x_label, UI_TEMPLATE_FOOTER_TEXT_Y, label_fit);
         }
     }
