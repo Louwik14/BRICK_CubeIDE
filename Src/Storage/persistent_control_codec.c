@@ -746,9 +746,9 @@ static persist_codec_result_t codec_decode_end(codec_io_t *io,uint32_t expected)
 
 persist_codec_result_t persist_codec_decode_pattern(const persist_codec_source_t *s,persist_codec_pattern_staging_t *st){if(st==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;memset(st,0,sizeof(*st));codec_io_t io;uint32_t crc;persist_codec_result_t r=codec_decode_begin(s,PERSIST_CODEC_DOCUMENT_PATTERN,1U,&io,&crc);if(r!=PERSIST_CODEC_OK)return r;codec_expect_section(&io,SECTION_PATTERN_BODY,codec_pattern_adapter,&st->pattern);r=codec_decode_end(&io,crc);return(r==PERSIST_CODEC_OK)?persist_codec_validate_pattern(&st->pattern):r;}
 persist_codec_result_t persist_codec_decode_patch(const persist_codec_source_t *s,persist_codec_patch_staging_t *st){if(st==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;memset(st,0,sizeof(*st));codec_io_t io;uint32_t crc;persist_codec_result_t r=codec_decode_begin(s,PERSIST_CODEC_DOCUMENT_PATCH,2U,&io,&crc);if(r!=PERSIST_CODEC_OK)return r;codec_expect_section(&io,SECTION_PATCH_BODY,codec_patch_body,&st->patch);r=codec_decode_end(&io,crc);return(r==PERSIST_CODEC_OK)?persist_codec_validate_patch(&st->patch):r;}
-typedef struct{persist_codec_project_workspace_t*w;const persist_codec_project_consumer_t*project;persist_codec_project_metadata_t metadata;uint8_t mutate;} project_decode_ctx_t;
+typedef struct{persist_codec_project_workspace_t*w;const persist_codec_project_consumer_t*project;persist_codec_project_metadata_t metadata;} project_decode_ctx_t;
 static void codec_project_assets_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;codec_u16(io,&c->metadata.asset_count);if(c->metadata.asset_count>PERSIST_CONTROL_ASSET_COUNT||c->metadata.asset_count>c->project->asset_capacity){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}for(uint16_t i=0U;i<c->metadata.asset_count;++i){persist_control_asset_ref_t*asset=c->project->asset_target(c->project->context,i);if(asset==NULL){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}memset(asset,0,sizeof(*asset));codec_asset(io,asset);if(io->result!=PERSIST_CODEC_OK)return;persist_codec_result_t r=codec_validate_asset_ref(asset);if(r!=PERSIST_CODEC_OK){io->result=r;return;}for(uint16_t j=0U;j<i;++j){const persist_control_asset_ref_t*previous=c->project->asset_target(c->project->context,j);if(previous==NULL){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}if(previous->kind==asset->kind&&previous->path_length==asset->path_length&&memcmp(previous->canonical_path,asset->canonical_path,asset->path_length)==0){io->result=PERSIST_CODEC_DUPLICATE;return;}}if(c->project->validate_asset(c->project->context,asset)==0U){io->result=PERSIST_CODEC_INVALID_ASSET;return;}}}
-static void codec_project_macros_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;memset(&c->w->macros,0,sizeof(c->w->macros));codec_macros(io,&c->w->macros);if(io->result!=PERSIST_CODEC_OK)return;if(c->mutate&&c->project->apply_macros(c->project->context,&c->w->macros)==0U)io->result=PERSIST_CODEC_IO_ERROR;}
+static void codec_project_macros_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;memset(&c->w->macros,0,sizeof(c->w->macros));codec_macros(io,&c->w->macros);}
 static void codec_expect_project_macros(codec_io_t *io,project_decode_ctx_t *c)
 {
     uint16_t type=0U,version=0U;
@@ -794,7 +794,7 @@ static void codec_expect_project_current_core(codec_io_t *io,
     io->limit=old_limit;
 }
 
-static persist_codec_result_t codec_project_current_decode_pass(
+static persist_codec_result_t codec_project_current_decode(
     const persist_codec_source_t *source,project_decode_ctx_t *context)
 {
     if(source->reset(source->context)==0U)return PERSIST_CODEC_IO_ERROR;
@@ -805,12 +805,15 @@ static persist_codec_result_t codec_project_current_decode_pass(
     if(result!=PERSIST_CODEC_OK)return result;
     codec_expect_project_current_core(&io,context);
     codec_expect_section(&io,SECTION_PROJECT_ASSETS,codec_project_assets_decode,context);
-    if(io.result==PERSIST_CODEC_OK&&context->mutate
-        &&context->project->apply_metadata(context->project->context,
-                                           &context->metadata)==0U)
-        io.result=PERSIST_CODEC_IO_ERROR;
     codec_expect_project_macros(&io,context);
-    return codec_decode_end(&io,crc);
+    result=codec_decode_end(&io,crc);
+    if(result!=PERSIST_CODEC_OK)return result;
+    if(context->project->apply_metadata(context->project->context,
+            &context->metadata)==0U
+        ||context->project->apply_macros(context->project->context,
+            &context->w->macros)==0U)
+        return PERSIST_CODEC_IO_ERROR;
+    return PERSIST_CODEC_OK;
 }
 
 persist_codec_result_t persist_codec_decode_project_current(
@@ -823,9 +826,6 @@ persist_codec_result_t persist_codec_decode_project_current(
         ||project->apply_macros==NULL||project->asset_capacity==0U)
         return PERSIST_CODEC_INVALID_ARGUMENT;
     if(project->begin_assets(project->context)==0U)return PERSIST_CODEC_IO_ERROR;
-    project_decode_ctx_t context={.w=workspace,.project=project,.mutate=0U};
-    persist_codec_result_t result=codec_project_current_decode_pass(source,&context);
-    if(result!=PERSIST_CODEC_OK)return result;
-    context.mutate=1U;
-    return codec_project_current_decode_pass(source,&context);
+    project_decode_ctx_t context={.w=workspace,.project=project};
+    return codec_project_current_decode(source,&context);
 }

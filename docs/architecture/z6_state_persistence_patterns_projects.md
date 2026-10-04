@@ -153,8 +153,11 @@ table persistante.
 
 ## Codec et application
 
-Le decode commence par les controles de format, bornes et CRC, puis construit un
-candidat borne dans l'espace inactif. Les capacites topologiques sont derivees
+Le decode commence par les controles de format et de bornes, construit un
+candidat borne dans l'espace inactif, puis valide longueur et CRC avant tout
+appel d'application. `PROJECT.B6C` est lu et decode une seule fois: metadata,
+catalogue assets et macros restent dans le workspace de restauration jusqu'au
+CRC final, puis sont appliques une seule fois au candidat. Les capacites topologiques sont derivees
 par `persistent_entity_topology`; la validation metier des owners reste dans la
 phase d'installation. Les providers/consumers Project reutilisent un workspace
 borne sans allocation dynamique.
@@ -193,7 +196,9 @@ Pattern actif directement depuis le dossier du Project avant la frontiere
 forward-only: magic/version, taille exacte, sections, bornes, CRC, semantique
 du Pattern actif, coherence de ses references avec le manifeste et capacites fixes.
 La canonicalisation WAV
-crash-safe appartient aussi a PREPARE. Un refus `MEDIA_ERROR` ou
+crash-safe appartient aussi a PREPARE. Elle traite au plus une reference asset
+par appel de service; une conversion active conserve son budget existant de
+64 KiB par appel. Un refus `MEDIA_ERROR` ou
 `INVALID_DOCUMENT` abandonne uniquement ce candidat jamais publie: ingress,
 CONTROL, SEQ, AUDIO, assets et racine Pattern actifs restent intacts.
 
@@ -207,6 +212,14 @@ configuration Track, publie une source silencieuse et marque l'asset
 `UNAVAILABLE`; elle n'annule pas le Project. Slot, pool, registration,
 descriptor, resolution runtime, publication CONTROL/SEQ/AUDIO ou etat machine
 impossibles apres leur preuve sont des invariants fatals.
+
+La progression de Project Load utilise une echelle fixe `0..1000` par phases:
+decode/Pattern prepare `0..200`, canonicalisation `200..350`, quiesce et
+activation `350..400`, chargement assets `400..950`, puis publication/finalisation
+`950..1000`. La canonicalisation combine ordinal d'asset et octets de conversion
+WAV; le chargement combine assets terminaux, pages MULTI et un sous-etat STREAM.
+RAM et Wavetable restent mesures a leur resultat terminal. Le succes est publie
+exactement a `1000`.
 
 Une perte de media ou un changement de `media_epoch` post-forward produit
 `FAILED_FORWARD_MEDIA`: transport arrete, ingress ferme, aucun contexte de boot
