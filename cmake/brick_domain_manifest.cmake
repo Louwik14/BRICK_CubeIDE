@@ -40,6 +40,8 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_params.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/ui_keyboard_app.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Import/dx7_sysex.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Import/dx7_import.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/midi.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/midi_clock_timer.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/midi_host.c"

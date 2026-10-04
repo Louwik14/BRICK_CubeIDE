@@ -325,8 +325,7 @@ static int32_t operator_log_frequency(const fm_voice_t *voice, uint8_t note, int
         log_frequency = exact
             ? (int32_t)(log2f(440.0f * frequency) * (float)kQ24)
             : (4458616 * ((coarse & 3) * 100 + fine)) >> 3;
-        if (detune > 7)
-            log_frequency += 13457 * (detune - 7);
+        log_frequency += 13457 * (detune - 7);
     }
     return log_frequency
         + (int32_t)((operator_metal_semitones(voice, op) / 12.0f) * (float)kQ24);
