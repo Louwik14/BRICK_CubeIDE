@@ -1,6 +1,7 @@
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/project_product.h"
 #include "Storage/project_storage_paths.h"
 #include "Storage/sd_access_gate.h"
 #include "SD/sd_scheduler_runtime.h"
@@ -10,12 +11,8 @@
 
 #define BANKS 16U
 #define SLOTS 16U
-#define INVALID_PROJECT 0xFFU
 
 static uint8_t g_present[BANKS][SLOTS];
-/* Canonical Project root selector: 0..15 is PROJECTS/P##, 0xFF means the
- * current musical state is unsaved and has no Pattern Store destination. */
-static uint8_t g_active_project=INVALID_PROJECT;
 
 typedef enum { PATTERN_ASYNC_IDLE=0,PATTERN_ASYNC_MOUNT,PATTERN_ASYNC_RECOVER,
     PATTERN_ASYNC_OPEN,PATTERN_ASYNC_ALLOCATE,PATTERN_ASYNC_TRANSFER,
@@ -51,25 +48,25 @@ static uint8_t pattern_name_slot(const char*n,uint8_t*b,uint8_t*p)
     *b=bank;*p=pattern;return 1U;
 }
 
-static uint8_t scan_project(uint8_t slot)
+static uint8_t scan_project(uint8_t identity)
 {
     char directory[64];DIR dir;FILINFO info;memset(g_present,0,sizeof(g_present));
-    if(!project_storage_patterns_dir(directory,sizeof(directory),slot)
+    if(!project_storage_current_patterns_dir(directory,sizeof(directory),identity)
        ||f_opendir(&dir,directory)!=FR_OK)return 0U;
     for(;;){if(f_readdir(&dir,&info)!=FR_OK){(void)f_closedir(&dir);return 0U;}
         if(info.fname[0]=='\0')break;
         uint8_t b=0U,p=0U;
         if(!pattern_name_slot(info.fname,&b,&p))continue;
         char x[80],tmp[84],bak[84];FILINFO final_info;
-        if(!project_storage_pattern_file(x,sizeof(x),slot,b,p)
+        if(!project_storage_current_pattern_file(x,sizeof(x),identity,b,p)
            ||!side_path(tmp,sizeof(tmp),x,"TMP")||!side_path(bak,sizeof(bak),x,"BAK"))continue;
         (void)persistent_fatfs_recover_replace(x,tmp,bak);
         if(f_stat(x,&final_info)==FR_OK)g_present[b][p]=1U;}
     (void)f_closedir(&dir);return 1U;
 }
 
-void pattern_control_bank_init(void){memset(g_present,0,sizeof(g_present));memset(&g_pattern_async,0,sizeof(g_pattern_async));g_active_project=INVALID_PROJECT;}
-uint8_t pattern_control_bank_activate_project(uint8_t slot){if(slot>=PROJECT_STORAGE_SLOT_COUNT||g_pattern_async.state!=PATTERN_ASYNC_IDLE||!acquire())return 0U;uint8_t ok=scan_project(slot);if(ok)g_active_project=slot;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
+void pattern_control_bank_init(void){memset(g_present,0,sizeof(g_present));memset(&g_pattern_async,0,sizeof(g_pattern_async));}
+uint8_t pattern_control_bank_activate_project(uint8_t slot){if(slot>=PROJECT_STORAGE_SLOT_COUNT||g_pattern_async.state!=PATTERN_ASYNC_IDLE||!acquire())return 0U;uint8_t ok=scan_project(slot);sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
 uint8_t pattern_control_bank_validate_project(uint8_t slot)
 {
     if(slot>=PROJECT_STORAGE_SLOT_COUNT||!acquire())return 0U;
@@ -79,12 +76,11 @@ uint8_t pattern_control_bank_validate_project(uint8_t slot)
     if(ok)(void)f_closedir(&dir);
     sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;
 }
-void pattern_control_bank_deactivate_project(void){if(g_pattern_async.state==PATTERN_ASYNC_IDLE){g_active_project=INVALID_PROJECT;memset(g_present,0,sizeof(g_present));}}
-uint8_t pattern_control_bank_active_project(uint8_t*out){if(out==NULL||g_active_project>=PROJECT_STORAGE_SLOT_COUNT)return 0U;*out=g_active_project;return 1U;}
-void pattern_control_bank_publish_empty_project(uint8_t slot){if(slot<PROJECT_STORAGE_SLOT_COUNT&&g_pattern_async.state==PATTERN_ASYNC_IDLE){g_active_project=slot;memset(g_present,0,sizeof(g_present));}}
+void pattern_control_bank_deactivate_project(void){if(g_pattern_async.state==PATTERN_ASYNC_IDLE)memset(g_present,0,sizeof(g_present));}
+void pattern_control_bank_publish_empty_project(void){if(g_pattern_async.state==PATTERN_ASYNC_IDLE)memset(g_present,0,sizeof(g_present));}
 uint8_t pattern_control_bank_present(uint8_t b,uint8_t p){return valid(b,p)?g_present[b][p]:0U;}
 uint16_t pattern_control_bank_count(void){uint16_t n=0U;for(uint8_t b=0;b<BANKS;++b)for(uint8_t p=0;p<SLOTS;++p)n+=g_present[b][p]?1U:0U;return n;}
-uint8_t pattern_control_bank_delete(uint8_t b,uint8_t p){if(g_active_project>=PROJECT_STORAGE_SLOT_COUNT||!valid(b,p)||!acquire())return 0U;char x[80],tmp[84],bak[84];uint8_t ok=project_storage_pattern_file(x,sizeof(x),g_active_project,b,p)&&side_path(tmp,sizeof(tmp),x,"TMP")&&side_path(bak,sizeof(bak),x,"BAK");if(ok){FRESULT r=f_unlink(x);ok=(r==FR_OK||r==FR_NO_FILE);(void)f_unlink(tmp);(void)f_unlink(bak);}if(ok)g_present[b][p]=0U;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
+uint8_t pattern_control_bank_delete(uint8_t b,uint8_t p){if(!valid(b,p)||!acquire())return 0U;char x[80],tmp[84],bak[84];const uint8_t identity=project_product_current_identity();uint8_t ok=project_storage_current_pattern_file(x,sizeof(x),identity,b,p)&&side_path(tmp,sizeof(tmp),x,"TMP")&&side_path(bak,sizeof(bak),x,"BAK");if(ok){FRESULT r=f_unlink(x);ok=(r==FR_OK||r==FR_NO_FILE);(void)f_unlink(tmp);(void)f_unlink(bak);}if(ok)g_present[b][p]=0U;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
 
 static uint8_t mem_write(void*c,const uint8_t*d,uint32_t n){pattern_memory_io_t*m=c;if(m==NULL||d==NULL||m->position>m->capacity||n>m->capacity-m->position)return 0U;memcpy(&m->data[m->position],d,n);m->position+=n;return 1U;}
 static uint8_t mem_read(void*c,uint8_t*d,uint32_t n){pattern_memory_io_t*m=c;if(m==NULL||d==NULL||m->position>m->capacity||n>m->capacity-m->position)return 0U;memcpy(d,&m->data[m->position],n);m->position+=n;return 1U;}
@@ -100,8 +96,6 @@ pattern_control_bank_store_begin_result_t pattern_control_bank_store_async_begin
     uint32_t capacity)
 {
     if(project_replacement_is_active())return PATTERN_CONTROL_BANK_STORE_BEGIN_POLICY;
-    if(g_active_project>=PROJECT_STORAGE_SLOT_COUNT)
-        return PATTERN_CONTROL_BANK_STORE_BEGIN_NO_PROJECT;
     if(!valid(b,p)||in==NULL||encoded==NULL||capacity==0U)
         return PATTERN_CONTROL_BANK_STORE_BEGIN_ARGUMENT;
     if(g_pattern_async.state!=PATTERN_ASYNC_IDLE)
@@ -110,15 +104,16 @@ pattern_control_bank_store_begin_result_t pattern_control_bank_store_async_begin
     if(persist_codec_encode_pattern(in,&sink,&size)!=PERSIST_CODEC_OK)
         return PATTERN_CONTROL_BANK_STORE_BEGIN_CODEC;
     memset(&g_pattern_async,0,sizeof(g_pattern_async));g_pattern_async.operation=PATTERN_CONTROL_BANK_ASYNC_SAVE;g_pattern_async.state=PATTERN_ASYNC_MOUNT;g_pattern_async.bank=b;g_pattern_async.pattern=p;g_pattern_async.encoded=encoded;g_pattern_async.encoded_capacity=capacity;g_pattern_async.encoded_size=size;g_pattern_async.media_epoch=sd_access_media_epoch();
-    if(!project_storage_pattern_file(g_pattern_async.final_path,sizeof(g_pattern_async.final_path),g_active_project,b,p)||!side_path(g_pattern_async.temporary_path,sizeof(g_pattern_async.temporary_path),g_pattern_async.final_path,"TMP")||!side_path(g_pattern_async.backup_path,sizeof(g_pattern_async.backup_path),g_pattern_async.final_path,"BAK")){memset(&g_pattern_async,0,sizeof(g_pattern_async));return PATTERN_CONTROL_BANK_STORE_BEGIN_PATH;}
+    const uint8_t identity=project_product_current_identity();
+    if(!project_storage_current_pattern_file(g_pattern_async.final_path,sizeof(g_pattern_async.final_path),identity,b,p)||!side_path(g_pattern_async.temporary_path,sizeof(g_pattern_async.temporary_path),g_pattern_async.final_path,"TMP")||!side_path(g_pattern_async.backup_path,sizeof(g_pattern_async.backup_path),g_pattern_async.final_path,"BAK")){memset(&g_pattern_async,0,sizeof(g_pattern_async));return PATTERN_CONTROL_BANK_STORE_BEGIN_PATH;}
     return PATTERN_CONTROL_BANK_STORE_BEGIN_OK;
 }
 
 uint8_t pattern_control_bank_load_async_begin(uint8_t b,uint8_t p,uint8_t*encoded,uint32_t capacity,persist_control_pattern_t*out)
 {
-    if(project_replacement_is_active()||g_active_project>=PROJECT_STORAGE_SLOT_COUNT||!valid(b,p)||encoded==NULL||capacity==0U||out==NULL||!g_present[b][p]||g_pattern_async.state!=PATTERN_ASYNC_IDLE)return 0U;
+    if(project_replacement_is_active()||!valid(b,p)||encoded==NULL||capacity==0U||out==NULL||!g_present[b][p]||g_pattern_async.state!=PATTERN_ASYNC_IDLE)return 0U;
     memset(&g_pattern_async,0,sizeof(g_pattern_async));g_pattern_async.operation=PATTERN_CONTROL_BANK_ASYNC_LOAD;g_pattern_async.state=PATTERN_ASYNC_MOUNT;g_pattern_async.bank=b;g_pattern_async.pattern=p;g_pattern_async.encoded=encoded;g_pattern_async.encoded_capacity=capacity;g_pattern_async.load_out=out;g_pattern_async.media_epoch=sd_access_media_epoch();
-    if(!project_storage_pattern_file(g_pattern_async.final_path,sizeof(g_pattern_async.final_path),g_active_project,b,p)){memset(&g_pattern_async,0,sizeof(g_pattern_async));return 0U;}return 1U;
+    if(!project_storage_current_pattern_file(g_pattern_async.final_path,sizeof(g_pattern_async.final_path),project_product_current_identity(),b,p)){memset(&g_pattern_async,0,sizeof(g_pattern_async));return 0U;}return 1U;
 }
 
 pattern_control_bank_project_load_result_t pattern_control_bank_load_project(
