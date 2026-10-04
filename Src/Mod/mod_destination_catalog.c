@@ -219,6 +219,8 @@ static uint8_t mod_destination_is_direct_wave(param_id_t dest)
 
 static uint8_t mod_destination_is_direct_fm(param_id_t dest)
 {
+    if ((dest >= PARAM_FM_OPERATOR_FIRST) && (dest <= PARAM_FM_OPERATOR_LAST))
+        return 1U;
     switch (dest)
     {
         case PARAM_FM_RATIO:
@@ -721,6 +723,18 @@ static uint8_t mod_destination_prepared_opcode(param_id_t dest,
 {
     uint8_t opcode = MOD_DEST_APPLY_GENERIC;
     uint8_t subindex = 0U;
+    if ((dest >= PARAM_FM_OPERATOR_FIRST) && (dest <= PARAM_FM_OPERATOR_LAST))
+    {
+        const uint16_t offset = (uint16_t)(dest - PARAM_FM_OPERATOR_FIRST);
+        const uint8_t field = (uint8_t)(offset % PARAM_FM_OPERATOR_PARAM_COUNT);
+        if ((field != BRICK6_FM_OPERATOR_ON)
+                && (field != BRICK6_FM_OPERATOR_MODE))
+        {
+            *out_opcode = MOD_DEST_APPLY_FM_OPERATOR;
+            *out_subindex = (uint8_t)(offset / PARAM_FM_OPERATOR_PARAM_COUNT);
+            return 1U;
+        }
+    }
     switch (dest)
     {
         case PARAM_LFO1_RATE: case PARAM_LFO2_RATE: case PARAM_LFO3_RATE:
@@ -859,6 +873,9 @@ uint8_t mod_destination_catalog_prepare(uint8_t target,
         prepared.subindex = ctx->program_route.instance_id;
     if (prepared.opcode == MOD_DEST_APPLY_SAMPLER_GAIN)
         prepared.aux = ctx->type;
+    else if (prepared.opcode == MOD_DEST_APPLY_FM_OPERATOR)
+        prepared.aux = (uint8_t)((dest - PARAM_FM_OPERATOR_FIRST)
+            % PARAM_FM_OPERATOR_PARAM_COUNT);
     else if (prepared.opcode == MOD_DEST_APPLY_DRUM_PARAM)
     {
         prepared.aux = 0U;
@@ -935,6 +952,15 @@ uint8_t mod_destination_catalog_apply_prepared(
             if (p->subindex == 0U) a=value; else if (p->subindex == 1U) d=value;
             else if (p->subindex == 2U) s=value; else r=value;
             brick6_fm_runtime_set_env(p->endpoint, mod_destination_fm_macro_unit(a), mod_destination_fm_macro_unit(d), mod_destination_fm_macro_unit(s), mod_destination_fm_macro_unit(r));
+            return 1U;
+        }
+        case MOD_DEST_APPLY_FM_OPERATOR:
+        {
+            float operator_value = value;
+            if (p->aux == BRICK6_FM_OPERATOR_VEL) operator_value *= (1.0f / 7.0f);
+            else if (p->aux == BRICK6_FM_OPERATOR_KEY) operator_value *= (1.0f / 99.0f);
+            brick6_fm_runtime_set_operator(p->endpoint, p->subindex,
+                (brick6_fm_operator_param_t)p->aux, operator_value);
             return 1U;
         }
         case MOD_DEST_APPLY_STACK_LEVEL: brick6_stack_runtime_set_slot_level(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
@@ -1276,6 +1302,13 @@ uint8_t mod_destination_catalog_poly_voice_supported(param_id_t dest,
 
 static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
 {
+    if ((dest >= PARAM_FM_OPERATOR_FIRST) && (dest <= PARAM_FM_OPERATOR_LAST))
+    {
+        const uint8_t field = (uint8_t)((dest - PARAM_FM_OPERATOR_FIRST)
+            % PARAM_FM_OPERATOR_PARAM_COUNT);
+        return (uint8_t)((field != BRICK6_FM_OPERATOR_ON)
+            && (field != BRICK6_FM_OPERATOR_MODE));
+    }
     switch (dest)
     {
         case PARAM_MIX_LEVEL:
@@ -1309,6 +1342,18 @@ static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
         case PARAM_WAVE_BALANCE:
         case PARAM_WAVE_TUNE:
         case PARAM_WAVE_DETUNE:
+        case PARAM_FM_ENV_ATTACK:
+        case PARAM_FM_ENV_DECAY:
+        case PARAM_FM_ENV_SUSTAIN:
+        case PARAM_FM_ENV_RELEASE:
+        case PARAM_FM_PITCH_R1:
+        case PARAM_FM_PITCH_R2:
+        case PARAM_FM_PITCH_R3:
+        case PARAM_FM_PITCH_R4:
+        case PARAM_FM_PITCH_L1:
+        case PARAM_FM_PITCH_L2:
+        case PARAM_FM_PITCH_L3:
+        case PARAM_FM_PITCH_L4:
             return 1U;
         default:
             return 0U;

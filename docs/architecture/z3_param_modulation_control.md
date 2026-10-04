@@ -21,8 +21,10 @@ Autorites d'ecriture:
 - override AUDIO temporaire: chemin RT/audio dedie.
 
 Les classifications CONTROL ont chacune une autorite: `track_runtime_get_param_rule`
-porte domaine/ressource et `param_registry_is_plockable` porte la decision produit
-p-lock et destination Matrix: tout Param p-lockable est modulable.
+porte domaine/ressource, `param_registry_is_plockable` porte la decision produit
+p-lock et `param_registry_is_modulatable` porte separement l'admission comme
+destination Matrix. Un selecteur structurel peut ainsi etre verrouille par step
+sans devenir une destination control-rate.
 `param_registry_resolve_track_param` compose ensuite l'applicabilite par piste,
 moteur, modele et topologie avec le label produit resolu. Le catalogue MOD DEST
 ne maintient aucune policy moteur ou modele et consomme uniquement cette
@@ -111,6 +113,27 @@ FM est un contexte local de l'editeur. L'etat interne FM est possede par
 AUDIO; aucun pack FM interne ne traverse Param.
 
 La resolution commune est `clamp(base_courante + somme(source * profondeur_normalisee * plage), min, max)`. Retirer le dernier slot restaure `base_courante`.
+
+## Contrat FM Edit / p-lock / Matrix
+
+Les deux pages TONE FM ecrivent l'owner `fm_control_state`; le PARAM `BASE`
+projette cette valeur vers AUDIO. Un p-lock publie le meme PARAM en `TEMP`, puis
+la restauration republie la base CONTROL courante. La Matrix prend ce TEMP
+comme base effective, ajoute ses routes, borne dans l'unite canonique du PARAM
+et applique le resultat au setter FM terminal. La composition est donc:
+
+`base patch -> TEMP p-lock eventuel -> somme Matrix -> clamp -> setter DSP`.
+
+Les niveaux, frequences, detunes, enveloppes, sensibilites velocity/key, macros
+d'enveloppe globale et Pitch EG sont Edit + p-lock + Matrix. Les niveaux OP1 a
+OP6 ont un opcode Matrix FM terminal explicite; profondeur nulle ou retrait de
+route restaure exactement la base effective sans ecrire l'owner CONTROL.
+Algorithm, OP ON et OP MODE sont Edit + p-lock uniquement: leurs changements
+sont musicaux par step mais structurels et ne sont pas admis a frequence LFO.
+Transpose suit la meme regle afin de rester un selecteur de demi-tons; il ne
+constitue pas une destination de pitch FM continu. Feedback et oscillator sync,
+non presentes sur les pages TONE FM actuelles, restent egalement hors Matrix.
+La selection locale d'operateur n'est ni un Param sonore ni un p-lock.
 
 Le restore compare l'autorite CONTROL et ne transporte que les champs Matrix et
 operateurs effectivement modifies. Les changements reels d'un owner peuvent

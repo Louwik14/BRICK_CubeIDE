@@ -107,6 +107,10 @@ uint8_t param_registry_track_value_is_audio_command(param_id_t id,uint8_t track)
 /* Canonical, track-independent product decision. Contextual engine/FX
  * applicability is evaluated separately by track_runtime/slot mapping. */
 uint8_t param_registry_is_plockable(param_id_t id);
+/* Matrix eligibility is deliberately distinct from step-lock eligibility:
+ * structural/discrete parameters may be musically useful per step without
+ * being safe control-rate destinations. */
+uint8_t param_registry_is_modulatable(param_id_t id);
 /* Canonical CONTROL projection of a Param in a concrete track/model context.
  * The returned label is owned by the static/model catalogues. */
 uint8_t param_registry_resolve_track_param(

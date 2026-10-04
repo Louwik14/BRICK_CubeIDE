@@ -16,7 +16,8 @@ static uint8_t mod_destination_control_supported(uint8_t track, param_id_t id)
     param_registry_resolved_track_param_t resolved;
     return (uint8_t)((param_registry_resolve_track_param(
             track, id, &resolved) != 0U)
-        && (resolved.applicable != 0U) && (resolved.plockable != 0U));
+        && (resolved.applicable != 0U)
+        && (param_registry_is_modulatable(id) != 0U));
 }
 
 #define MOD_DESTINATION_LOCAL_CAPACITY \

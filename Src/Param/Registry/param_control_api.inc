@@ -27,15 +27,6 @@ uint8_t param_registry_is_plockable(param_id_t id)
         case PARAM_SAMPLER_SLICE_COUNT:
         case PARAM_AUDIO_FX_MODEL:
         case PARAM_AUDIO_FX_B_MODEL:
-        case PARAM_FM_TRANSPOSE:
-        case PARAM_FM_PITCH_R1:
-        case PARAM_FM_PITCH_R2:
-        case PARAM_FM_PITCH_R3:
-        case PARAM_FM_PITCH_R4:
-        case PARAM_FM_PITCH_L1:
-        case PARAM_FM_PITCH_L2:
-        case PARAM_FM_PITCH_L3:
-        case PARAM_FM_PITCH_L4:
             return 0U;
         default:
             break;
@@ -51,6 +42,29 @@ uint8_t param_registry_is_plockable(param_id_t id)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX));
+}
+
+uint8_t param_registry_is_modulatable(param_id_t id)
+{
+    if (param_registry_is_plockable(id) == 0U) return 0U;
+    if ((id >= PARAM_FM_OPERATOR_FIRST) && (id <= PARAM_FM_OPERATOR_LAST))
+    {
+        const uint8_t field = (uint8_t)((id - PARAM_FM_OPERATOR_FIRST)
+            % PARAM_FM_OPERATOR_PARAM_COUNT);
+        return (uint8_t)((field != BRICK6_FM_OPERATOR_ON)
+            && (field != BRICK6_FM_OPERATOR_MODE));
+    }
+
+    switch (id)
+    {
+        case PARAM_FM_ALGORITHM:
+        case PARAM_FM_FEEDBACK:
+        case PARAM_FM_SYNC:
+        case PARAM_FM_TRANSPOSE:
+            return 0U;
+        default:
+            return 1U;
+    }
 }
 
 uint8_t param_registry_resolve_track_param(
