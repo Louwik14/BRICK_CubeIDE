@@ -119,6 +119,11 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
 
         if (i == state->active_subpage)
         {
+            if (ui_theme_get_id() == UI_THEME_MINIMAL)
+            {
+                ui_theme_draw_frame(bx, UI_TEMPLATE_FOOTER_Y, bw,
+                                    UI_TEMPLATE_FOOTER_H, UI_THEME_FRAME_LINE);
+            }
             ui_theme_draw_focus(bx, UI_TEMPLATE_FOOTER_Y, bw, UI_TEMPLATE_FOOTER_H, label_fit);
         }
         else
