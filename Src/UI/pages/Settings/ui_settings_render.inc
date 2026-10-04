@@ -1164,14 +1164,7 @@ static void ui_page_settings_render(void)
     }
     if (level->view == UI_SETTINGS_VIEW_PROJECT)
     {
-        if(g_ui_settings.project_slot_count==0U)
-            drv_display_draw_text(2U,24U,"NO PROJECT");
-        for(uint8_t page=0U;page<4U;++page)
-            ui_page_settings_draw_centered_label((uint8_t)(page*32U),32U,
-                UI_SETTINGS_FOOTER_LABEL_Y,
-                ui_browser_action_label(ui_browser_action_resolve(
-                    (button_id_t)((uint8_t)BTN_PAGE_1+page),
-                    button_down(BTN_SHIFT),1U),1U));
+        ui_browser_draw_shift_footer(UI_SETTINGS_FOOTER_LABEL_Y, UI_BROWSER_PROJECT);
     }
     else if (level->view == UI_SETTINGS_VIEW_SAMPLER_SLOT)
     {

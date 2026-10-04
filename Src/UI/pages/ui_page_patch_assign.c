@@ -12,6 +12,8 @@
 #include "pages/ui_page_name_edit.h"
 #include "ui_core.h"
 #include "UI/ui_browser_actions.h"
+#include "UI/ui_browser_footer.h"
+#include "Storage/patch_preview.h"
 #include "ui_event.h"
 #include "ui_page_manager.h"
 #include "stm32h7xx_hal.h"
@@ -27,6 +29,7 @@ typedef struct
     patch_product_operation_t name_edit_operation;
     uint16_t name_edit_slot;
     uint32_t status_until_ms;
+    uint8_t preview_held;
     char status[24];
 } ui_page_patch_assign_state_t;
 
@@ -57,6 +60,7 @@ static ui_page_patch_assign_state_t g_patch_assign = {
 typedef enum
 {
     PATCH_ASSIGN_FAMILY_ALL = 0,
+    PATCH_ASSIGN_FAMILY_FOCUS,
     PATCH_ASSIGN_FAMILY_SYNTH,
     PATCH_ASSIGN_FAMILY_SAMPLER,
     PATCH_ASSIGN_FAMILY_DRUM,
@@ -172,6 +176,7 @@ static const char *ui_page_patch_assign_family_filter_label(patch_assign_family_
     switch (filter)
     {
         case PATCH_ASSIGN_FAMILY_ALL: return "ALL";
+        case PATCH_ASSIGN_FAMILY_FOCUS: return "FOCUS";
         case PATCH_ASSIGN_FAMILY_SYNTH: return "SYNTH";
         case PATCH_ASSIGN_FAMILY_SAMPLER: return "SAMPLER";
         case PATCH_ASSIGN_FAMILY_DRUM: return "DRUM";
@@ -197,130 +202,14 @@ static const char *ui_page_patch_assign_type_filter_label(patch_assign_type_filt
     }
 }
 
-static patch_assign_family_filter_t ui_page_patch_assign_family_filter_from_track(track_family_t family)
-{
-    switch (family)
-    {
-        case TRACK_FAMILY_SYNTH: return PATCH_ASSIGN_FAMILY_SYNTH;
-        case TRACK_FAMILY_SAMPLER: return PATCH_ASSIGN_FAMILY_SAMPLER;
-        case TRACK_FAMILY_DRUM: return PATCH_ASSIGN_FAMILY_DRUM;
-        default: return PATCH_ASSIGN_FAMILY_ALL;
-    }
-}
-
-static patch_assign_type_filter_t ui_page_patch_assign_type_filter_from_track(track_family_t family,
-                                                                              track_type_t type)
-{
-    switch (ui_page_patch_assign_family_filter_from_track(family))
-    {
-        case PATCH_ASSIGN_FAMILY_SYNTH:
-            switch (type)
-            {
-                case TRACK_TYPE_PRISM: return PATCH_ASSIGN_TYPE_PRISM;
-                case TRACK_TYPE_WAVE: return PATCH_ASSIGN_TYPE_WAVE;
-                case TRACK_TYPE_STACK: return PATCH_ASSIGN_TYPE_STACK;
-                case TRACK_TYPE_TB303: return PATCH_ASSIGN_TYPE_TB303;
-                case TRACK_TYPE_ACID: return PATCH_ASSIGN_TYPE_ACID;
-                default: return PATCH_ASSIGN_TYPE_ALL;
-            }
-
-        case PATCH_ASSIGN_FAMILY_SAMPLER:
-            switch (type)
-            {
-                case TRACK_TYPE_RAM: return PATCH_ASSIGN_TYPE_RAM;
-                case TRACK_TYPE_STREAM: return PATCH_ASSIGN_TYPE_STREAM;
-                case TRACK_TYPE_MULTI: return PATCH_ASSIGN_TYPE_MULTI;
-                default: return PATCH_ASSIGN_TYPE_ALL;
-            }
-
-        case PATCH_ASSIGN_FAMILY_DRUM:
-            switch (type)
-            {
-                case TRACK_TYPE_DRUM_MD: return PATCH_ASSIGN_TYPE_DRUM_MD;
-                default: return PATCH_ASSIGN_TYPE_ALL;
-            }
-
-        case PATCH_ASSIGN_FAMILY_ALL:
-        default:
-            return PATCH_ASSIGN_TYPE_ALL;
-    }
-}
-
-static uint8_t ui_page_patch_assign_type_filter_allowed(patch_assign_family_filter_t family,
-                                                        patch_assign_type_filter_t type)
-{
-    if (type == PATCH_ASSIGN_TYPE_ALL)
-    {
-        return 1U;
-    }
-
-    switch (family)
-    {
-        case PATCH_ASSIGN_FAMILY_SYNTH:
-            return ((type == PATCH_ASSIGN_TYPE_PRISM)
-                    || (type == PATCH_ASSIGN_TYPE_WAVE)
-                    || (type == PATCH_ASSIGN_TYPE_STACK)
-                    || (type == PATCH_ASSIGN_TYPE_TB303)
-                    || (type == PATCH_ASSIGN_TYPE_ACID)) ? 1U : 0U;
-
-        case PATCH_ASSIGN_FAMILY_SAMPLER:
-            return ((type == PATCH_ASSIGN_TYPE_RAM)
-                    || (type == PATCH_ASSIGN_TYPE_STREAM)
-                    || (type == PATCH_ASSIGN_TYPE_MULTI)) ? 1U : 0U;
-
-        case PATCH_ASSIGN_FAMILY_DRUM:
-            return (type == PATCH_ASSIGN_TYPE_DRUM_MD) ? 1U : 0U;
-
-        case PATCH_ASSIGN_FAMILY_ALL:
-        default:
-            return 0U;
-    }
-}
-
-static patch_assign_type_filter_t ui_page_patch_assign_type_filter_next(int16_t delta)
-{
-    patch_assign_type_filter_t list[PATCH_ASSIGN_TYPE_COUNT];
-    uint8_t count = 0U;
-    list[count++] = PATCH_ASSIGN_TYPE_ALL;
-
-    for (uint8_t raw = 1U; raw < (uint8_t)PATCH_ASSIGN_TYPE_COUNT; ++raw)
-    {
-        const patch_assign_type_filter_t candidate = (patch_assign_type_filter_t)raw;
-        if (ui_page_patch_assign_type_filter_allowed(g_patch_assign_family_filter, candidate) != 0U)
-        {
-            list[count++] = candidate;
-        }
-    }
-
-    uint8_t index = 0U;
-    for (uint8_t i = 0U; i < count; ++i)
-    {
-        if (list[i] == g_patch_assign_type_filter)
-        {
-            index = i;
-            break;
-        }
-    }
-
-    int32_t next = (int32_t)index + (int32_t)delta;
-    if (next < 0)
-    {
-        next = 0;
-    }
-    if (next >= (int32_t)count)
-    {
-        next = (int32_t)count - 1;
-    }
-
-    return list[next];
-}
-
 static uint8_t ui_page_patch_assign_family_matches(track_family_t family)
 {
     switch (g_patch_assign_family_filter)
     {
         case PATCH_ASSIGN_FAMILY_ALL:
             return 1U;
+        case PATCH_ASSIGN_FAMILY_FOCUS:
+            return (family == ui_get_track_family(g_patch_assign.target_track)) ? 1U : 0U;
         case PATCH_ASSIGN_FAMILY_SYNTH:
             return (family == TRACK_FAMILY_SYNTH) ? 1U : 0U;
         case PATCH_ASSIGN_FAMILY_SAMPLER:
@@ -417,7 +306,7 @@ static uint8_t ui_page_patch_assign_slot_visible(uint16_t slot)
 
 static uint16_t ui_page_patch_assign_visible_count(void)
 {
-    uint16_t count = 0U;
+    uint16_t count = 1U;
     for (uint8_t phase = 0U; phase < 3U; ++phase)
     {
         for (uint16_t slot = 0U; slot < PATCH_PRODUCT_SLOT_COUNT; ++slot)
@@ -433,6 +322,8 @@ static uint16_t ui_page_patch_assign_visible_count(void)
 
 static uint16_t ui_page_patch_assign_slot_for_view_index(uint16_t index)
 {
+    if (index == 0U) return PATCH_PRODUCT_INVALID_SLOT;
+    --index;
     uint16_t seen = 0U;
     for (uint8_t phase = 0U; phase < 3U; ++phase)
     {
@@ -454,6 +345,7 @@ static uint16_t ui_page_patch_assign_slot_for_view_index(uint16_t index)
 
 static uint16_t ui_page_patch_assign_view_index_for_slot(uint16_t selected_slot)
 {
+    if (selected_slot == PATCH_PRODUCT_INVALID_SLOT) return 0U;
     uint16_t seen = 0U;
     for (uint8_t phase = 0U; phase < 3U; ++phase)
     {
@@ -465,7 +357,7 @@ static uint16_t ui_page_patch_assign_view_index_for_slot(uint16_t selected_slot)
             }
             if (slot == selected_slot)
             {
-                return seen;
+                return (uint16_t)(seen + 1U);
             }
             ++seen;
         }
@@ -475,19 +367,14 @@ static uint16_t ui_page_patch_assign_view_index_for_slot(uint16_t selected_slot)
 
 static void ui_page_patch_assign_ensure_visible_selection(void)
 {
+    if (g_patch_assign.selected_slot == PATCH_PRODUCT_INVALID_SLOT) return;
     if (ui_page_patch_assign_slot_visible(g_patch_assign.selected_slot) != 0U)
     {
         patch_product_set_current(g_patch_assign.selected_slot);
         return;
     }
 
-    const uint16_t first_slot = ui_page_patch_assign_slot_for_view_index(0U);
-    if (first_slot < PATCH_PRODUCT_SLOT_COUNT)
-    {
-        g_patch_assign.selected_slot = first_slot;
-        patch_product_set_current(g_patch_assign.selected_slot);
-    }
-    else g_patch_assign.selected_slot = PATCH_PRODUCT_INVALID_SLOT;
+    g_patch_assign.selected_slot = PATCH_PRODUCT_INVALID_SLOT;
 }
 
 static void ui_page_patch_assign_step_selection(int16_t delta)
@@ -515,10 +402,12 @@ static void ui_page_patch_assign_step_selection(int16_t delta)
     }
 
     const uint16_t slot = ui_page_patch_assign_slot_for_view_index((uint16_t)next);
-    if (slot < PATCH_PRODUCT_SLOT_COUNT)
+    if ((slot < PATCH_PRODUCT_SLOT_COUNT) || (slot == PATCH_PRODUCT_INVALID_SLOT))
     {
+        (void)patch_preview_note_off();
+        g_patch_assign.preview_held = 0U;
         g_patch_assign.selected_slot = slot;
-        patch_product_set_current(g_patch_assign.selected_slot);
+        if (slot < PATCH_PRODUCT_SLOT_COUNT) patch_product_set_current(slot);
         ui_page_patch_assign_set_status(0);
     }
 }
@@ -535,22 +424,7 @@ static void ui_page_patch_assign_step_family_filter(int16_t delta)
         next = (int32_t)PATCH_ASSIGN_FAMILY_COUNT - 1;
     }
     g_patch_assign_family_filter = (patch_assign_family_filter_t)next;
-    if ((g_patch_assign_family_filter == PATCH_ASSIGN_FAMILY_ALL)
-            || (ui_page_patch_assign_type_filter_allowed(g_patch_assign_family_filter,
-                                                         g_patch_assign_type_filter) == 0U))
-    {
-        g_patch_assign_type_filter = PATCH_ASSIGN_TYPE_ALL;
-    }
-    ui_page_patch_assign_cancel_actions();
-    ui_page_patch_assign_ensure_visible_selection();
-    ui_page_patch_assign_set_status(0);
-}
-
-static void ui_page_patch_assign_step_type_filter(int16_t delta)
-{
-    g_patch_assign_type_filter = (g_patch_assign_family_filter == PATCH_ASSIGN_FAMILY_ALL)
-        ? PATCH_ASSIGN_TYPE_ALL
-        : ui_page_patch_assign_type_filter_next(delta);
+    g_patch_assign_type_filter = PATCH_ASSIGN_TYPE_ALL;
     ui_page_patch_assign_cancel_actions();
     ui_page_patch_assign_ensure_visible_selection();
     ui_page_patch_assign_set_status(0);
@@ -615,6 +489,11 @@ static void ui_page_patch_assign_format_filter(char *out, uint32_t out_size)
         return;
     }
 
+    if (g_patch_assign_family_filter == PATCH_ASSIGN_FAMILY_FOCUS)
+    {
+        (void)snprintf(out, out_size, "FOCUS");
+        return;
+    }
     if ((g_patch_assign_family_filter == PATCH_ASSIGN_FAMILY_ALL)
             && (g_patch_assign_type_filter == PATCH_ASSIGN_TYPE_ALL))
     {
@@ -810,7 +689,7 @@ static void ui_page_patch_assign_clear_action(void)
     if (g_patch_assign.clear_confirm == 0U)
     {
         g_patch_assign.clear_confirm = 1U;
-        ui_page_patch_assign_set_status("CLEAR?");
+        ui_page_patch_assign_set_status("DELETE?");
         return;
     }
     uint16_t next = PATCH_PRODUCT_INVALID_SLOT;
@@ -825,7 +704,7 @@ static void ui_page_patch_assign_clear_action(void)
         patch_product_set_current(g_patch_assign.selected_slot);
     }
     ui_page_patch_assign_set_temporary_status((result == PATCH_PRODUCT_OK)
-                                              ? "PATCH CLEARED"
+                                              ? "PATCH DELETED"
                                               : patch_product_result_label(result));
     g_patch_assign.clear_confirm = 0U;
 }
@@ -837,6 +716,8 @@ static void ui_page_patch_assign_enter(void)
 
 static void ui_page_patch_assign_leave(void)
 {
+    (void)patch_preview_stop();
+    g_patch_assign.preview_held = 0U;
     if (ui_get_hall_mode() == UI_HALL_MODE_PATCH)
     {
         ui_set_hall_mode(g_patch_assign.previous_hall_mode);
@@ -863,11 +744,8 @@ void ui_page_patch_assign_open(uint8_t target_track, ui_hall_mode_t previous_hal
     g_patch_assign.target_track = target_track;
     g_patch_assign.target_mask = (uint16_t)(1UL << target_track);
     ui_page_patch_assign_cancel_actions();
-    g_patch_assign_family_filter =
-        ui_page_patch_assign_family_filter_from_track(ui_get_track_family(target_track));
-    g_patch_assign_type_filter =
-        ui_page_patch_assign_type_filter_from_track(ui_get_track_family(target_track),
-                                                    ui_get_track_type(target_track));
+    g_patch_assign_family_filter = PATCH_ASSIGN_FAMILY_FOCUS;
+    g_patch_assign_type_filter = PATCH_ASSIGN_TYPE_ALL;
 
     const uint16_t current_slot = patch_product_get_current();
     if (current_slot < PATCH_PRODUCT_SLOT_COUNT)
@@ -911,6 +789,12 @@ static void ui_page_patch_assign_handle_event(const ui_event_t *ev)
         return;
     }
 
+    if ((ev->type == UI_EVENT_BUTTON_RELEASE) && (ev->id == (uint8_t)BTN_PAGE_4))
+    {
+        g_patch_assign.preview_held = 0U;
+        (void)patch_preview_note_off();
+        return;
+    }
     if (ev->type != UI_EVENT_BUTTON_PRESS)
     {
         return;
@@ -923,13 +807,11 @@ static void ui_page_patch_assign_handle_event(const ui_event_t *ev)
     switch (ui_browser_action_resolve((button_id_t)ev->id,
                                       button_down(BTN_SHIFT), 0U))
     {
-        case UI_BROWSER_ACTION_NEW:
-            ui_page_patch_assign_begin_save();
-            break;
         case UI_BROWSER_ACTION_SAVE:
         {
             g_patch_assign.clear_confirm = 0U;
             const uint16_t slot = g_patch_assign.selected_slot;
+            if (slot == PATCH_PRODUCT_INVALID_SLOT) { ui_page_patch_assign_begin_save(); break; }
             if (ui_page_patch_assign_selection_is_visible() == 0U
                 || patch_product_slot_state(slot) != PATCH_PRODUCT_SLOT_VALID)
             {
@@ -949,18 +831,25 @@ static void ui_page_patch_assign_handle_event(const ui_event_t *ev)
         }
         case UI_BROWSER_ACTION_LOAD:
             g_patch_assign.clear_confirm = 0U;
-            ui_page_patch_assign_apply_selected();
+            (void)patch_preview_stop();
+            g_patch_assign.preview_held = 0U;
+            if (g_patch_assign.selected_slot == PATCH_PRODUCT_INVALID_SLOT)
+                ui_page_patch_assign_set_temporary_status(
+                    patch_product_result_label(patch_product_clear(g_patch_assign.target_track)));
+            else ui_page_patch_assign_apply_selected();
             break;
         case UI_BROWSER_ACTION_RENAME:
             ui_page_patch_assign_begin_rename();
             break;
-        case UI_BROWSER_ACTION_CLEAR:
+        case UI_BROWSER_ACTION_DELETE:
             ui_page_patch_assign_clear_action();
             break;
-        case UI_BROWSER_ACTION_INIT:
-            g_patch_assign.clear_confirm = 0U;
-            ui_page_patch_assign_set_temporary_status(
-                patch_product_result_label(patch_product_clear(g_patch_assign.target_track)));
+        case UI_BROWSER_ACTION_PREVIEW:
+            if (g_patch_assign.selected_slot < PATCH_PRODUCT_SLOT_COUNT) {
+                g_patch_assign.preview_held = 1U;
+                ui_page_patch_assign_set_status("PREVIEW");
+                (void)patch_product_preview_begin(g_patch_assign.selected_slot);
+            }
             break;
         case UI_BROWSER_ACTION_RETURN:
             ui_page_patch_assign_close();
@@ -1003,7 +892,7 @@ uint8_t ui_page_patch_assign_handle_encoder(uint8_t encoder, int16_t delta)
 
     if (encoder == 2U)
     {
-        ui_page_patch_assign_step_type_filter(delta);
+        ui_page_patch_assign_step_family_filter(delta);
         return 1U;
     }
 
@@ -1038,6 +927,9 @@ static void ui_page_patch_assign_draw_row(uint8_t row,
     char fit[32];
     const uint8_t y = (uint8_t)(PATCH_ASSIGN_LIST_Y0 + (row * PATCH_ASSIGN_LIST_PITCH));
     patch_product_metadata_t meta;
+    if (slot == PATCH_PRODUCT_INVALID_SLOT) {
+        (void)snprintf(line, sizeof(line), "[ + NEW PATCH ]");
+    } else {
     const patch_product_slot_state_t state = patch_product_slot_state(slot);
     if ((state == PATCH_PRODUCT_SLOT_VALID)
             && (patch_product_metadata(slot, &meta) != 0U))
@@ -1071,6 +963,7 @@ static void ui_page_patch_assign_draw_row(uint8_t row,
     else
     {
         (void)snprintf(line, sizeof(line), "EMPTY");
+    }
     }
 
     ui_page_patch_assign_fit_label(fit, sizeof(fit), line, 122U);
@@ -1111,9 +1004,11 @@ static void ui_page_patch_assign_draw_family_band(void)
     } family_band_item_t;
 
     static const family_band_item_t k_items[] = {
-        { PATCH_ASSIGN_FAMILY_SYNTH, "SYN", 0U, 24U },
-        { PATCH_ASSIGN_FAMILY_SAMPLER, "SMP", 25U, 29U },
-        { PATCH_ASSIGN_FAMILY_DRUM, "DRM", 55U, 25U },
+        { PATCH_ASSIGN_FAMILY_ALL, "ALL", 0U, 24U },
+        { PATCH_ASSIGN_FAMILY_FOCUS, "FOCUS", 25U, 29U },
+        { PATCH_ASSIGN_FAMILY_SYNTH, "SYN", 55U, 23U },
+        { PATCH_ASSIGN_FAMILY_SAMPLER, "SMP", 79U, 23U },
+        { PATCH_ASSIGN_FAMILY_DRUM, "DRM", 103U, 25U },
     };
 
     drv_display_set_font(&FONT_4X6);
@@ -1121,8 +1016,7 @@ static void ui_page_patch_assign_draw_family_band(void)
     {
         const family_band_item_t *const item = &k_items[i];
         const uint8_t active =
-            ((g_patch_assign_family_filter == PATCH_ASSIGN_FAMILY_ALL)
-             || (g_patch_assign_family_filter == item->family)) ? 1U : 0U;
+            (g_patch_assign_family_filter == item->family) ? 1U : 0U;
         const uint8_t text_w = drv_display_text_width(item->label);
         const uint8_t text_x = (text_w >= item->w)
             ? item->x
@@ -1183,11 +1077,7 @@ static void ui_page_patch_assign_draw_position(uint16_t selected_view, uint16_t 
 
 static void ui_page_patch_assign_draw_footer(void)
 {
-    for (uint8_t page = 0U; page < 4U; ++page)
-        ui_page_patch_assign_draw_centered_label((uint8_t)(page * 32U), 32U,
-            PATCH_ASSIGN_FOOTER_LABEL_Y,
-            ui_browser_action_label(ui_browser_action_resolve(
-                (button_id_t)((uint8_t)BTN_PAGE_1 + page), button_down(BTN_SHIFT), 0U), 0U));
+    ui_browser_draw_shift_footer(PATCH_ASSIGN_FOOTER_LABEL_Y, UI_BROWSER_PATCH);
 }
 
 static void ui_page_patch_assign_render(void)
@@ -1230,7 +1120,8 @@ static void ui_page_patch_assign_render(void)
             }
 
             const uint16_t slot = ui_page_patch_assign_slot_for_view_index(view_index);
-            if (slot >= PATCH_PRODUCT_SLOT_COUNT)
+            if ((slot >= PATCH_PRODUCT_SLOT_COUNT) &&
+                (slot != PATCH_PRODUCT_INVALID_SLOT))
             {
                 break;
             }
@@ -1257,11 +1148,12 @@ static void ui_page_patch_assign_tick(void)
         ui_page_patch_assign_set_status(0);
     }
 
-    if (g_patch_assign.name_edit_operation == PATCH_PRODUCT_OPERATION_NONE)
-    {
-        return;
-    }
-    if (patch_product_result_pending(g_patch_assign.name_edit_operation) == 0U)
+    patch_product_operation_t awaited = g_patch_assign.name_edit_operation;
+    if ((awaited == PATCH_PRODUCT_OPERATION_NONE)
+            && (patch_product_result_pending(PATCH_PRODUCT_OPERATION_PREVIEW) != 0U))
+        awaited = PATCH_PRODUCT_OPERATION_PREVIEW;
+    if ((awaited == PATCH_PRODUCT_OPERATION_NONE)
+            || (patch_product_result_pending(awaited) == 0U))
     {
         return;
     }
@@ -1273,8 +1165,12 @@ static void ui_page_patch_assign_tick(void)
     {
         return;
     }
-    g_patch_assign.name_edit_operation = PATCH_PRODUCT_OPERATION_NONE;
-    g_patch_assign.name_edit_slot = PATCH_PRODUCT_INVALID_SLOT;
+    if (operation != PATCH_PRODUCT_OPERATION_PREVIEW) {
+        g_patch_assign.name_edit_operation = PATCH_PRODUCT_OPERATION_NONE;
+        g_patch_assign.name_edit_slot = PATCH_PRODUCT_INVALID_SLOT;
+    }
+    if ((operation == PATCH_PRODUCT_OPERATION_PREVIEW) && (g_patch_assign.preview_held == 0U))
+        (void)patch_preview_stop();
     if ((operation == PATCH_PRODUCT_OPERATION_SAVE)
             || (operation == PATCH_PRODUCT_OPERATION_OVERWRITE)
             || ((operation == PATCH_PRODUCT_OPERATION_LOAD)
@@ -1287,7 +1183,9 @@ static void ui_page_patch_assign_tick(void)
         ui_page_patch_assign_ensure_visible_selection();
     ui_page_patch_assign_set_temporary_status(
         (result == PATCH_PRODUCT_OK)
-            ? ((operation == PATCH_PRODUCT_OPERATION_OVERWRITE
+            ? ((operation == PATCH_PRODUCT_OPERATION_PREVIEW)
+               ? "PREVIEW"
+               : (operation == PATCH_PRODUCT_OPERATION_OVERWRITE
                  &&g_patch_assign.selected_slot!=slot)
                  ?"SAVED / FILTER"
                  :((operation == PATCH_PRODUCT_OPERATION_SAVE)

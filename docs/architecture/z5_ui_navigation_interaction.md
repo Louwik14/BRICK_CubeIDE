@@ -8,19 +8,16 @@ STEP 1..8 selectionnent les top-level. En GROUP, STEP 9..16 selectionnent les ch
 
 Le chemin Hall direct met a jour modifiers, selection, mode et double-tap avant le drain de la queue UI. SHIFT+HALL precede TRACK_MOD+HALL. Un evenement consomme par un stage masque les suivants.
 
-La page PATCH porte la grammaire locale canonique PAGE 1 SAVE, PAGE 2 LOAD,
-PAGE 3 RENAME, PAGE 4 CLEAR. LOAD soumet en une fois le slot visible et le masque
-de targets; CLEAR demande une confirmation locale puis remet uniquement le Patch
-live de la track courante a son etat Init. CLEAR ne supprime jamais le fichier du
-slot et ne change pas la selection du browser. Le double-tap Hall n'est plus une
-commande Save: il ouvre le contexte PATCH, dont le Save est porte par PAGE 1.
-L'etat vide d'une liste filtree est rendu dans la zone de contenu sous la forme
-`NO PATCH`; il ne remplace jamais le footer PAGE 1..4, qui reste la navigation
-canonique de PATCH. Les messages transitoires sont rendus au-dessus du footer.
-Ils ont une echeance propre; seuls une operation en cours et la confirmation
-`CLEAR?` constituent un etat persistant. Le Name/Edit commun charge le nom pour
-un Rename, ouvre un Save de nouveau Patch sur un buffer vide et place le curseur
-sur la terminaison, apres le dernier caractere d'un nom charge ou genere.
+La page PATCH porte la grammaire locale canonique PAGE 1 RETURN, PAGE 2 LOAD,
+PAGE 3 SAVE, PAGE 4 PREVIEW; SHIFT remplace la ligne par `- / RENAME / DELETE / -`.
+Le premier element est toujours le slot virtuel `[ + NEW PATCH ]`: LOAD y appelle
+l'initialisation produit et SAVE le Name/Edit de creation. Sur un fichier, LOAD
+charge et SAVE ecrase; DELETE supprime bien le fichier apres confirmation.
+Le catalogue utilise `ALL / FOCUS / SYN / SMP / DRM`, avec FOCUS par defaut et le
+slot virtuel toujours visible. PREVIEW est momentane et utilise le moteur Preview
+produit. Les messages transitoires restent rendus au-dessus du footer. Le
+Name/Edit commun charge le nom pour Rename et place le curseur apres le dernier
+caractere du nom charge ou genere.
 Les browsers dynamiques de SETTINGS appliquent le meme contrat de separation
 entre statut et footer.
 

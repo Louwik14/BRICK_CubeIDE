@@ -48,17 +48,16 @@ static inline ui_browser_action_t ui_browser_action_resolve_context(
         }
     }
     if (shift != 0U) {
-        if (button == BTN_PAGE_4) return UI_BROWSER_ACTION_SAVE;
-        if (button == BTN_PAGE_2) return context == UI_BROWSER_PROJECT
-            ? UI_BROWSER_ACTION_BLANK : UI_BROWSER_ACTION_INIT;
-        if (button == BTN_PAGE_3) return UI_BROWSER_ACTION_RENAME;
+        if (button == BTN_PAGE_2) return UI_BROWSER_ACTION_RENAME;
+        if (button == BTN_PAGE_3) return UI_BROWSER_ACTION_DELETE;
         return UI_BROWSER_ACTION_NONE;
     }
     switch (button) {
         case BTN_PAGE_1: return UI_BROWSER_ACTION_RETURN;
         case BTN_PAGE_2: return UI_BROWSER_ACTION_LOAD;
-        case BTN_PAGE_3: return UI_BROWSER_ACTION_CLEAR;
-        case BTN_PAGE_4: return UI_BROWSER_ACTION_NEW;
+        case BTN_PAGE_3: return UI_BROWSER_ACTION_SAVE;
+        case BTN_PAGE_4: return context == UI_BROWSER_PATCH
+            ? UI_BROWSER_ACTION_PREVIEW : UI_BROWSER_ACTION_NONE;
         default: return UI_BROWSER_ACTION_NONE;
     }
 }
@@ -74,12 +73,12 @@ static inline const char *ui_browser_action_label(ui_browser_action_t action,
                                                    uint8_t project)
 {
     switch (action) {
-        case UI_BROWSER_ACTION_NEW: return project ? "SAVE AS" : "NEW";
+        case UI_BROWSER_ACTION_NEW: return "NEW";
         case UI_BROWSER_ACTION_SAVE: return "SAVE";
         case UI_BROWSER_ACTION_LOAD: return "LOAD";
         case UI_BROWSER_ACTION_BLANK: return project ? "NEW" : "BLANK";
         case UI_BROWSER_ACTION_RENAME: return "RENAME";
-        case UI_BROWSER_ACTION_CLEAR: return project ? "ERASE" : "CLEAR";
+        case UI_BROWSER_ACTION_CLEAR: return "DELETE";
         case UI_BROWSER_ACTION_INIT: return "INIT";
         case UI_BROWSER_ACTION_RETURN: return "RETURN";
         case UI_BROWSER_ACTION_PREVIEW: return "PREVIEW";

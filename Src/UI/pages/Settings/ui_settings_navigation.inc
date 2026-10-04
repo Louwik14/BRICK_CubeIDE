@@ -34,7 +34,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_ROOT:
             return 3U;
         case UI_SETTINGS_VIEW_PROJECT:
-            return g_ui_settings.project_slot_count;
+            return (uint8_t)(g_ui_settings.project_slot_count + 1U);
         case UI_SETTINGS_VIEW_SAMPLE:
             return 4U;
         case UI_SETTINGS_VIEW_SAMPLE_RAM:
@@ -88,6 +88,8 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             }
             return "STREAM";
         case UI_SETTINGS_VIEW_PROJECT:
+            if (index == 0U) return "[ + NEW PROJECT ]";
+            --index;
             if (index >= g_ui_settings.project_slot_count) return "-";
             {project_product_metadata_t meta;
             if(project_product_metadata(g_ui_settings.project_slots[index],&meta)==0U)
@@ -289,7 +291,7 @@ static void ui_page_settings_project_name_begin(uint8_t mode,uint8_t slot)
     g_ui_project_save_slot=slot;g_ui_project_name_mode=mode;
     g_ui_project_save_phase=UI_PROJECT_SAVE_EDIT;
     if(ui_page_name_edit_open(UI_PAGE_SETTINGS,"PROJECT",
-            mode==2U?"RENAME":"SAVE AS",initial,
+            mode==2U?"RENAME":"NEW",initial,
             sizeof(initial),ui_page_settings_project_save_done,NULL)==0U)
     {
         g_ui_project_save_phase=UI_PROJECT_SAVE_IDLE;
@@ -300,22 +302,17 @@ static void ui_page_settings_project_name_begin(uint8_t mode,uint8_t slot)
 static void ui_page_settings_project_action(ui_browser_action_t action)
 {
     ui_settings_menu_level_t *const level=ui_page_settings_current_level();
-    const uint8_t has_focus=(level!=NULL
-        &&level->selected_index<g_ui_settings.project_slot_count)?1U:0U;
-    const uint8_t slot=has_focus?g_ui_settings.project_slots[level->selected_index]:0U;
+    const uint8_t is_new=(level!=NULL && level->selected_index==0U)?1U:0U;
+    const uint8_t has_focus=(level!=NULL && level->selected_index>0U
+        &&level->selected_index<=g_ui_settings.project_slot_count)?1U:0U;
+    const uint8_t slot=has_focus?g_ui_settings.project_slots[level->selected_index-1U]:0U;
     if(action==UI_BROWSER_ACTION_NONE)return;
     if(action==UI_BROWSER_ACTION_RETURN)
     {
         ui_page_settings_back();
         return;
     }
-    if(action==UI_BROWSER_ACTION_NEW)
-    {
-        g_ui_settings.project_confirm_action=0U;
-        ui_page_settings_project_name_begin(1U,0U);
-        return;
-    }
-    if(action==UI_BROWSER_ACTION_BLANK)
+    if(action==UI_BROWSER_ACTION_LOAD && is_new!=0U)
     {
         if(g_ui_settings.project_confirm_action!=2U)
         {
@@ -332,31 +329,36 @@ static void ui_page_settings_project_action(ui_browser_action_t action)
         else ui_page_settings_status("BLANK FAIL");
         return;
     }
+    if(action==UI_BROWSER_ACTION_SAVE && is_new!=0U)
+    {
+        g_ui_settings.project_confirm_action=0U;
+        ui_page_settings_project_name_begin(1U,0U);
+        return;
+    }
     if(has_focus==0U)
     {
         ui_page_settings_status("NO PROJECT");
         return;
     }
-    if(action==UI_BROWSER_ACTION_CLEAR)
+    if(action==UI_BROWSER_ACTION_DELETE)
     {
         if(g_ui_settings.project_confirm_action!=1U
             ||g_ui_settings.project_confirm_slot!=slot)
         {
             g_ui_settings.project_confirm_action=1U;
             g_ui_settings.project_confirm_slot=slot;
-            ui_page_settings_status("ERASE?");
+            ui_page_settings_status("DELETE?");
             return;
         }
         g_ui_settings.project_confirm_action=0U;
         if(project_product_delete(slot)!=0U)
         {
             ui_page_settings_refresh_project_slots();
-            if(level->selected_index>=g_ui_settings.project_slot_count
-                &&g_ui_settings.project_slot_count!=0U)
-                level->selected_index=(uint8_t)(g_ui_settings.project_slot_count-1U);
-            ui_page_settings_status("ERASED");
+            if(level->selected_index>g_ui_settings.project_slot_count)
+                level->selected_index=g_ui_settings.project_slot_count;
+            ui_page_settings_status("DELETED");
         }
-        else ui_page_settings_status("ERASE FAIL");
+        else ui_page_settings_status("DELETE FAIL");
         return;
     }
     g_ui_settings.project_confirm_action=0U;

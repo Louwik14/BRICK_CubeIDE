@@ -38,6 +38,7 @@
 #include "ui_core.h"
 #include "ui_page_manager.h"
 #include "UI/ui_browser_actions.h"
+#include "UI/ui_browser_footer.h"
 
 #include "pages/ui_page_calibration.h"
 #include "pages/ui_page_name_edit.h"

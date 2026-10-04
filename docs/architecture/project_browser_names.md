@@ -5,10 +5,23 @@ labels for these browsers. Blank positions display `-`.
 
 | Browser | PAGE 1 | PAGE 2 | PAGE 3 | PAGE 4 |
 | --- | --- | --- | --- | --- |
-| Patch | RETURN / - | LOAD / INIT | CLEAR / RENAME | NEW / SAVE |
-| Project | RETURN / - | LOAD / BLANK | ERASE / RENAME | NEW / SAVE |
+| Patch | RETURN / - | LOAD / RENAME | SAVE / DELETE | PREVIEW / - |
+| Project | RETURN / - | LOAD / RENAME | SAVE / DELETE | - / - |
 | Asset SD | RETURN / - | LOAD / REFRESH | RENAME / DELETE | PREVIEW / - |
 | Asset pool | RETURN / - | UNLOAD / REFRESH | RENAME / - | PREVIEW / - |
+
+Patch and Project lists begin with a virtual `[ + NEW ... ]` destination. LOAD
+on it initializes the existing product default/blank path; SAVE opens naming and
+creates a physical entry. On an existing entry SAVE overwrites it. RENAME,
+DELETE and Patch PREVIEW are disabled for the virtual destination.
+
+The Patch catalog selector is `ALL -> FOCUS -> SYN -> SMP -> DRM`, defaults to
+FOCUS, and never filters out the virtual entry. FOCUS uses the current track
+family. Patch PREVIEW is momentary (C4, velocity 100) and stops on release,
+selection change, LOAD, or browser exit.
+
+Patch and Project footers share the framed up-arrow indicator. Its inverted
+state means the SHIFT labels are currently displayed; it consumes no extra row.
 
 Each cell lists the action without SHIFT, then with SHIFT. Unavailable actions
 are dimmed. Wavetable PREVIEW is unavailable because its browser has no
