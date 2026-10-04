@@ -32,7 +32,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-            return 3U;
+            return 5U;
         case UI_SETTINGS_VIEW_PROJECT:
             return (uint8_t)(g_ui_settings.project_slot_count + 1U);
         case UI_SETTINGS_VIEW_SAMPLE:
@@ -71,6 +71,18 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             if (index == 2U)
             {
                 return "CALIBRATION";
+            }
+            if (index == 3U)
+            {
+                (void)snprintf(out, out_size, "THEME       %s",
+                               ui_theme_name(ui_theme_get_id()));
+                return out;
+            }
+            if (index == 4U)
+            {
+                (void)snprintf(out, out_size, "CPU LOAD    %s",
+                               ui_theme_show_cpu_load() != 0U ? "ON" : "OFF");
+                return out;
             }
             return "-";
         case UI_SETTINGS_VIEW_SAMPLE:
@@ -422,6 +434,17 @@ static void ui_page_settings_apply_action(void)
             else if (level->selected_index == 2U)
             {
                 ui_page_settings_push(UI_SETTINGS_VIEW_CALIBRATION);
+            }
+            else if (level->selected_index == 3U)
+            {
+                const ui_theme_id_t next = (ui_theme_id_t)(
+                    ((uint8_t)ui_theme_get_id() + 1U) % (uint8_t)UI_THEME_COUNT);
+                if (ui_theme_set(next) == 0U) ui_page_settings_status("THEME SAVE FAIL");
+            }
+            else if (level->selected_index == 4U)
+            {
+                if (ui_theme_set_show_cpu_load((uint8_t)!ui_theme_show_cpu_load()) == 0U)
+                    ui_page_settings_status("CPU SAVE FAIL");
             }
             break;
 

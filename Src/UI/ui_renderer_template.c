@@ -22,6 +22,7 @@
 #include "Param/stack_waveform.h"
 #include "Storage/project_control.h"
 #include "UI/ui_sampler_playhead.h"
+#include "UI/ui_theme.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
 #include "Seq/seq_runtime.h"

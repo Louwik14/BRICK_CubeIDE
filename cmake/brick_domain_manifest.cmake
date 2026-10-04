@@ -189,6 +189,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_step_led_ownership.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_tasklet.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_template_page.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_theme.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_track_catalog.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_track_led_projection.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_widgets.c"

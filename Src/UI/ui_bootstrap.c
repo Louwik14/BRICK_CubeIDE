@@ -17,11 +17,13 @@
 #include "ui_page_manager.h"
 #include "ui_renderer_template.h"
 #include "ui_template_page.h"
+#include "ui_theme.h"
 
 /* Placeholder for intentionally unavailable page slots. */
 
 void ui_bootstrap_init(void)
 {
+    ui_theme_init();
     ui_renderer_template_init();
     ui_template_family_registry_init();
     ui_page_template_env_register_families();

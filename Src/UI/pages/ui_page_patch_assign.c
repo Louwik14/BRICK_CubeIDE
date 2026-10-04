@@ -13,6 +13,7 @@
 #include "ui_core.h"
 #include "UI/ui_browser_actions.h"
 #include "UI/ui_browser_footer.h"
+#include "UI/ui_theme.h"
 #include "Storage/patch_preview.h"
 #include "ui_event.h"
 #include "ui_page_manager.h"
@@ -969,8 +970,8 @@ static void ui_page_patch_assign_draw_row(uint8_t row,
     ui_page_patch_assign_fit_label(fit, sizeof(fit), line, 122U);
     if (selected != 0U)
     {
-        drv_display_fill_rect(0U, (uint8_t)(y - 1U), 124U, PATCH_ASSIGN_SELECT_H);
-        drv_display_draw_text_inverted(1U, y, fit);
+        ui_theme_draw_focus_at(0U, (uint8_t)(y - 1U), 124U,
+                               PATCH_ASSIGN_SELECT_H, fit, 1U, y);
     }
     else
     {
@@ -983,14 +984,20 @@ static void ui_page_patch_assign_draw_header(void)
     char filter[32];
     char fit[32];
 
-    drv_display_set_font(&FONT_4X6);
-    drv_display_draw_text(0U, 0U, "PATCH");
-
-    drv_display_draw_line(43, 0, 43, 5);
     ui_page_patch_assign_format_filter(filter, sizeof(filter));
     ui_page_patch_assign_fit_label(fit, sizeof(fit), filter, 77U);
-    drv_display_draw_text(48U, 0U, fit);
-    drv_display_draw_line(0, PATCH_ASSIGN_HEADER_LINE_Y, 127, PATCH_ASSIGN_HEADER_LINE_Y);
+    if (ui_theme_get_id() == UI_THEME_CLASSIC)
+    {
+        drv_display_set_font(&FONT_4X6);
+        drv_display_draw_text(0U, 0U, "PATCH");
+        drv_display_draw_line(43, 0, 43, 5);
+        drv_display_draw_text(48U, 0U, fit);
+        drv_display_draw_line(0, PATCH_ASSIGN_HEADER_LINE_Y, 127, PATCH_ASSIGN_HEADER_LINE_Y);
+    }
+    else
+    {
+        ui_theme_draw_page_title("PATCH", fit, PATCH_ASSIGN_HEADER_LINE_Y);
+    }
 }
 
 static void ui_page_patch_assign_draw_family_band(void)

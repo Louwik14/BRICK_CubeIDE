@@ -327,16 +327,6 @@ static int ui_renderer_template_center_x(int x, int w, const char *txt)
     return out;
 }
 
-static uint8_t ui_renderer_template_right_x(uint8_t right_margin_px, uint8_t text_w)
-{
-    if (text_w >= (uint8_t)(OLED_WIDTH - right_margin_px))
-    {
-        return 0U;
-    }
-
-    return (uint8_t)(OLED_WIDTH - right_margin_px - text_w);
-}
-
 static void ui_renderer_template_fit_text(char *txt, uint8_t max_px)
 {
     if ((txt == NULL) || (max_px == 0U))
@@ -361,51 +351,9 @@ static void ui_renderer_template_fit_text(char *txt, uint8_t max_px)
     }
 }
 
-static void ui_renderer_template_draw_open_corner_frame(int x, int y, int w, int h)
-{
-    const int c = 2;
-
-    drv_display_draw_line(x + c,         y,             x + w - 1 - c, y);
-    drv_display_draw_line(x + c,         y + h - 1,     x + w - 1 - c, y + h - 1);
-
-    drv_display_draw_line(x,             y + c,         x,             y + h - 1 - c);
-    drv_display_draw_line(x + w - 1,     y + c,         x + w - 1,     y + h - 1 - c);
-
-    drv_display_draw_line(x,             y + c,         x + c,         y);
-    drv_display_draw_line(x + w - 1 - c, y,             x + w - 1,     y + c);
-
-    drv_display_draw_line(x,             y + h - 1 - c, x + c,         y + h - 1);
-    drv_display_draw_line(x + w - 1 - c, y + h - 1,     x + w - 1,     y + h - 1 - c);
-}
-
-static void ui_renderer_template_draw_brick_frame(int x, int y, int w, int h)
-{
-    ui_renderer_template_draw_open_corner_frame(x, y, w, h);
-
-    if ((w > 8) && (h > 8))
-    {
-        drv_display_draw_pixel(x + 2, y + 2, true);
-        drv_display_draw_pixel(x + w - 3, y + 2, true);
-        drv_display_draw_pixel(x + 2, y + h - 3, true);
-        drv_display_draw_pixel(x + w - 3, y + h - 3, true);
-    }
-}
-
 static void ui_renderer_template_draw_param_frame(int x, int y, int w, int h)
 {
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-}
-
-static void ui_renderer_template_draw_inverted_label(uint8_t x, uint8_t y, const char *txt, const font_t *font)
-{
-    drv_display_set_font(font);
-    const uint8_t w = (uint8_t)(drv_display_text_width(txt) + 2U);
-    const uint8_t h = (uint8_t)(drv_display_font_height() + 2U);
-    drv_display_fill_rect(x, y, w, h);
-    drv_display_draw_text_inverted((uint8_t)(x + 1U), (uint8_t)(y + 1U), txt);
+    ui_theme_draw_card_frame(x, y, w, h);
 }
 
 static void ui_renderer_template_fill_lock_label_frame(uint8_t text_x, uint8_t y, uint8_t text_w, uint8_t h)
@@ -424,15 +372,6 @@ static void ui_renderer_template_fill_lock_label_frame(uint8_t text_x, uint8_t y
     }
 
     drv_display_fill_rect(box_x, y, box_w, h);
-}
-
-static void ui_renderer_template_draw_track_badge(uint8_t x, uint8_t y, const char *txt)
-{
-    drv_display_set_font(&FONT_5X7);
-    const uint8_t w = 11U;
-    const uint8_t h = (uint8_t)(drv_display_font_height() + 2U);
-    drv_display_fill_rect(x, y, w, h);
-    drv_display_draw_text_inverted((uint8_t)(ui_renderer_template_center_x(x, w, txt) - 1), (uint8_t)(y + 1U), txt);
 }
 
 static uiw_widget_type_t ui_renderer_template_resolve_widget_type(const ui_template_page_state_t *state,

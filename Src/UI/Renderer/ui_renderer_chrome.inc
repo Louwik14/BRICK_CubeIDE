@@ -11,7 +11,9 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     const uint8_t track_display_id = (uint8_t)(active_track + 1U);
     (void)snprintf(track_label, sizeof(track_label), "%u", (unsigned int)track_display_id);
     ui_get_track_runtime_header_label(active_track, runtime_label, (uint32_t)sizeof(runtime_label));
-    ui_renderer_template_format_cpu_avg(cpu_avg_label, (uint32_t)sizeof(cpu_avg_label));
+    cpu_avg_label[0] = '\0';
+    if (ui_theme_show_cpu_load() != 0U)
+        ui_renderer_template_format_cpu_avg(cpu_avg_label, (uint32_t)sizeof(cpu_avg_label));
     uint8_t draw_bpm = 0U;
     uint8_t bpm_inverted = 0U;
     uint32_t bpm_milli = 0U;
@@ -46,81 +48,43 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     }
     const char *hall_mode_suffix = ui_get_hall_mode_suffix_label();
 
-    ui_renderer_template_draw_brick_frame(0, 0, 15, 15);
-    ui_renderer_template_draw_open_corner_frame(UI_TEMPLATE_HEADER_TITLE_X, 0,
-                                                 UI_TEMPLATE_HEADER_TITLE_W, 15);
-
-    ui_renderer_template_draw_track_badge(2U, 2U, track_label);
-
-    drv_display_set_font(&FONT_4X6);
     char runtime_fit[12];
     char hall_fit[12];
     ui_renderer_template_copy_text(runtime_fit, sizeof(runtime_fit), runtime_label);
     ui_renderer_template_copy_text(hall_fit, sizeof(hall_fit), hall_mode_label);
     ui_renderer_template_fit_text(runtime_fit, 25U);
     ui_renderer_template_fit_text(hall_fit, 20U);
-    drv_display_draw_text(17U, 1U, runtime_fit);
-    drv_display_draw_text(17U, 9U, hall_fit);
+    char suffix_fit[8] = {0};
     if ((hall_mode_suffix != NULL) && (hall_mode_suffix[0] != '\0'))
     {
-        char suffix_fit[8];
         ui_renderer_template_copy_text(suffix_fit, sizeof(suffix_fit), hall_mode_suffix);
         ui_renderer_template_fit_text(suffix_fit, 9U);
-        drv_display_draw_text(33U, 9U, suffix_fit);
     }
 
     char title_fit[16];
     ui_renderer_template_copy_text(title_fit, sizeof(title_fit), family_title);
-    drv_display_set_font(&FONT_5X7);
+    drv_display_set_font(ui_theme_get()->title_font);
     if (drv_display_text_width(title_fit) > 38U)
     {
         drv_display_set_font(&FONT_4X6);
     }
     ui_renderer_template_fit_text(title_fit, 38U);
-    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(UI_TEMPLATE_HEADER_TITLE_X,
-                                                                  UI_TEMPLATE_HEADER_TITLE_W,
-                                                                  title_fit),
-                          4U,
-                          title_fit);
-
     drv_display_set_font(&FONT_4X6);
     ui_renderer_template_fit_text(cpu_avg_label, 30U);
-    const uint8_t bpm_text_w = (draw_bpm != 0U)
-        ? drv_display_text_width(bpm_label) : 0U;
-    if (draw_bpm != 0U)
-    {
-        drv_display_set_font(&FONT_4X6);
-        if (bpm_inverted != 0U)
-        {
-            const uint8_t bpm_box_w = (uint8_t)(bpm_text_w + 2U);
-            ui_renderer_template_draw_inverted_label(ui_renderer_template_right_x(0U, bpm_box_w),
-                                                     1U,
-                                                     bpm_label,
-                                                     &FONT_4X6);
-        }
-        else
-        {
-            drv_display_draw_text(ui_renderer_template_right_x(0U, bpm_text_w), 1U, bpm_label);
-        }
-    }
     char pattern_label[6];
     ui_renderer_template_format_active_pattern_label(pattern_label, sizeof(pattern_label));
-    drv_display_set_font(&FONT_4X6);
-    const uint8_t cpu_text_w = drv_display_text_width(cpu_avg_label);
-    const uint8_t bpm_w = bpm_text_w;
-    const uint8_t bpm_x = (draw_bpm != 0U) ? ui_renderer_template_right_x(0U, bpm_w) : OLED_WIDTH;
-    uint8_t cpu_x = (uint8_t)(108U - cpu_text_w);
-    if ((draw_bpm != 0U) && ((uint8_t)(cpu_x + cpu_text_w + 1U) > bpm_x))
-    {
-        cpu_x = (bpm_x > (uint8_t)(cpu_text_w + 1U)) ? (uint8_t)(bpm_x - cpu_text_w - 1U) : 0U;
-    }
-    if (cpu_x >= 2U)
-    {
-        cpu_x = (uint8_t)(cpu_x - 2U);
-    }
-    drv_display_draw_text(cpu_x, 1U, cpu_avg_label);
-
-    drv_display_draw_text(ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label)), 8U, pattern_label);
+    const ui_theme_header_data_t header = {
+        .track = track_label,
+        .track_name = runtime_fit,
+        .hall_mode = hall_fit,
+        .hall_suffix = suffix_fit,
+        .ensemble = title_fit,
+        .bpm = (draw_bpm != 0U) ? bpm_label : "",
+        .cpu_load = cpu_avg_label,
+        .pattern = pattern_label,
+        .bpm_external = bpm_inverted,
+    };
+    ui_theme_draw_header(&header);
 }
 
 static void ui_renderer_template_draw_footer(const ui_template_page_state_t *state)
@@ -155,30 +119,12 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
 
         if (i == state->active_subpage)
         {
-            drv_display_fill_rect(bx, UI_TEMPLATE_FOOTER_Y, bw, UI_TEMPLATE_FOOTER_H);
-
-            drv_display_draw_pixel(bx,                 UI_TEMPLATE_FOOTER_Y,                 false);
-            drv_display_draw_pixel(bx + 1,             UI_TEMPLATE_FOOTER_Y,                 false);
-            drv_display_draw_pixel(bx,                 UI_TEMPLATE_FOOTER_Y + 1,             false);
-
-            drv_display_draw_pixel(bx + bw - 1,        UI_TEMPLATE_FOOTER_Y,                 false);
-            drv_display_draw_pixel(bx + bw - 2,        UI_TEMPLATE_FOOTER_Y,                 false);
-            drv_display_draw_pixel(bx + bw - 1,        UI_TEMPLATE_FOOTER_Y + 1,             false);
-
-            drv_display_draw_pixel(bx,                 UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 1, false);
-            drv_display_draw_pixel(bx + 1,             UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 1, false);
-            drv_display_draw_pixel(bx,                 UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 2, false);
-
-            drv_display_draw_pixel(bx + bw - 1,        UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 1, false);
-            drv_display_draw_pixel(bx + bw - 2,        UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 1, false);
-            drv_display_draw_pixel(bx + bw - 1,        UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 2, false);
-
-            drv_display_draw_text_inverted((uint8_t)x_label, UI_TEMPLATE_FOOTER_TEXT_Y, label_fit);
+            ui_theme_draw_focus(bx, UI_TEMPLATE_FOOTER_Y, bw, UI_TEMPLATE_FOOTER_H, label_fit);
         }
         else
         {
-            ui_renderer_template_draw_open_corner_frame(bx, UI_TEMPLATE_FOOTER_Y,
-                                                        bw, UI_TEMPLATE_FOOTER_H);
+            ui_theme_draw_frame(bx, UI_TEMPLATE_FOOTER_Y, bw, UI_TEMPLATE_FOOTER_H,
+                                ui_theme_get()->page_frame);
             drv_display_draw_text((uint8_t)x_label, UI_TEMPLATE_FOOTER_TEXT_Y, label_fit);
         }
     }
@@ -233,8 +179,10 @@ static uint32_t ui_renderer_template_header_signature(const ui_template_page_sta
 
     ui_get_track_runtime_header_label(active_track, runtime_label,
                                       (uint32_t)sizeof(runtime_label));
-    ui_renderer_template_format_cpu_avg(cpu_avg_label,
-                                        (uint32_t)sizeof(cpu_avg_label));
+    cpu_avg_label[0] = '\0';
+    if (ui_theme_show_cpu_load() != 0U)
+        ui_renderer_template_format_cpu_avg(cpu_avg_label,
+                                            (uint32_t)sizeof(cpu_avg_label));
     ui_renderer_template_format_active_pattern_label(pattern_label,
                                                      sizeof(pattern_label));
     if (seq_runtime_get_clock_source() == SEQ_CLOCK_SRC_INTERNAL)
@@ -257,6 +205,8 @@ static uint32_t ui_renderer_template_header_signature(const ui_template_page_sta
     }
 
     signature = ui_renderer_template_signature_u32(signature, active_track);
+    signature = ui_renderer_template_signature_u32(signature, (uint32_t)ui_theme_get_id());
+    signature = ui_renderer_template_signature_u32(signature, ui_theme_show_cpu_load());
     signature = ui_renderer_template_signature_text(signature,
         ((family != NULL) && (family->family_title != NULL))
             ? family->family_title : "TEMPLATE");
@@ -274,6 +224,7 @@ static uint32_t ui_renderer_template_footer_signature(const ui_template_page_sta
 {
     const ui_template_family_t *family = ui_template_page_get_active_family(state);
     uint32_t signature = 2166136261UL;
+    signature = ui_renderer_template_signature_u32(signature, (uint32_t)ui_theme_get_id());
     signature = ui_renderer_template_signature_u32(signature,
         (state != NULL) ? state->active_subpage : 0xffU);
     if (family == NULL) return signature;

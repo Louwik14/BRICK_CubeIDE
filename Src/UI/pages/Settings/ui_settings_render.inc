@@ -785,8 +785,8 @@ static void ui_page_settings_render_multi_browser(void)
             if ((left_index == g_ui_settings.sample_selected)
                 && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY))
             {
-                drv_display_fill_rect(0, y - 1U, 58, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
-                drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y, left);
+                ui_theme_draw_focus_at(0, y - 1U, 58, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H,
+                                       left, (uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y);
             }
             else
             {
@@ -805,8 +805,8 @@ static void ui_page_settings_render_multi_browser(void)
             if ((global_slot == g_ui_settings.sample_slot_selected)
                 && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS))
             {
-                drv_display_fill_rect(62, y - 1U, 66, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
-                drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y, right);
+                ui_theme_draw_focus_at(62, y - 1U, 66, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H,
+                                       right, (uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y);
             }
             else
             {
@@ -883,8 +883,8 @@ static void ui_page_settings_render_sample_browser(void)
             if ((left_index == g_ui_settings.sample_selected)
                 && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY))
             {
-                drv_display_fill_rect(0, y - 1U, 58, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
-                drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y, left);
+                ui_theme_draw_focus_at(0, y - 1U, 58, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H,
+                                       left, (uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y);
             }
             else
             {
@@ -903,8 +903,8 @@ static void ui_page_settings_render_sample_browser(void)
             if ((global_slot == g_ui_settings.sample_slot_selected)
                 && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS))
             {
-                drv_display_fill_rect(62, y - 1U, 66, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
-                drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y, right);
+                ui_theme_draw_focus_at(62, y - 1U, 66, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H,
+                                       right, (uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y);
             }
             else
             {
@@ -970,8 +970,8 @@ static void ui_page_settings_render_ram_browser(void)
             if ((left_index == g_ui_settings.sample_selected)
                 && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY))
             {
-                drv_display_fill_rect(0, y - 1U, 58, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
-                drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y, left);
+                ui_theme_draw_focus_at(0, y - 1U, 58, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H,
+                                       left, (uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y);
             }
             else
             {
@@ -989,8 +989,8 @@ static void ui_page_settings_render_ram_browser(void)
         if ((global_slot == g_ui_settings.sample_slot_selected)
             && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS))
         {
-            drv_display_fill_rect(62, y - 1U, 66, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
-            drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y, right);
+            ui_theme_draw_focus_at(62, y - 1U, 66, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H,
+                                   right, (uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y);
         }
         else
         {
@@ -1052,8 +1052,8 @@ static void ui_page_settings_render_wavetable_browser(void)
             if ((left_index == g_ui_settings.sample_selected)
                 && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY))
             {
-                drv_display_fill_rect(0, y - 1U, 58, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
-                drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y, left);
+                ui_theme_draw_focus_at(0, y - 1U, 58, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H,
+                                       left, (uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y);
             }
             else
             {
@@ -1071,8 +1071,8 @@ static void ui_page_settings_render_wavetable_browser(void)
         if ((global_slot == g_ui_settings.sample_slot_selected)
             && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS))
         {
-            drv_display_fill_rect(62, y - 1U, 66, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
-            drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y, right);
+            ui_theme_draw_focus_at(62, y - 1U, 66, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H,
+                                   right, (uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y);
         }
         else
         {
@@ -1121,10 +1121,8 @@ static void ui_page_settings_render(void)
         ui_page_settings_render_wavetable_browser();
         return;
     }
-    drv_display_set_font(&FONT_5X7);
-    drv_display_draw_text(0U, 0U, ui_page_settings_view_title(level->view));
-    drv_display_draw_line(0, 9, 127, 9);
-    drv_display_set_font(&FONT_4X6);
+    ui_theme_draw_page_title(ui_page_settings_view_title(level->view), NULL, 9U);
+    drv_display_set_font(ui_theme_get()->label_font);
 
     const uint8_t count = ui_page_settings_view_item_count(level->view);
     const uint8_t selected = (count > 0U) ? (uint8_t)(level->selected_index % count) : 0U;
@@ -1149,12 +1147,11 @@ static void ui_page_settings_render(void)
 
         if (item == selected)
         {
-            drv_display_fill_rect(0, y - 1U, 128, 8);
-            drv_display_draw_text_inverted(2U, y, label);
+            ui_theme_draw_focus_at(0, y - 1U, 128, 8, label, 2U, y);
         }
         else
         {
-            drv_display_draw_text(2U, y, label);
+            drv_display_draw_text((uint8_t)(2U + ui_theme_get()->content_x_pad), y, label);
         }
     }
 
