@@ -63,6 +63,8 @@ typedef struct
     uint8_t title_x_pad;
     uint8_t content_x_pad;
     uint8_t separator;
+    uint8_t subpage_active_width;
+    uint8_t subpage_spacing;
 } ui_theme_base_t;
 
 typedef struct
@@ -76,6 +78,8 @@ typedef struct
     const char *cpu_load;
     const char *pattern;
     uint8_t bpm_external;
+    uint8_t set_page_index;
+    uint8_t set_page_count;
 } ui_theme_header_data_t;
 
 void ui_theme_init(void);
@@ -95,6 +99,8 @@ void ui_theme_draw_focus(int x, int y, int w, int h, const char *text);
 void ui_theme_draw_focus_at(int x, int y, int w, int h, const char *text,
                             uint8_t text_x, uint8_t text_y);
 void ui_theme_draw_header(const ui_theme_header_data_t *data);
+void ui_theme_draw_subpage_indicator(uint8_t center_x, uint8_t y,
+                                     uint8_t current_page, uint8_t page_count);
 void ui_theme_draw_page_title(const char *title, const char *context, uint8_t line_y);
 
 #endif /* UI_THEME_H */

@@ -21,6 +21,8 @@ typedef struct
     const char *nav_labels[4];
     ui_template_subpage_t subpages[4];
     uint8_t default_subpage;
+    uint8_t set_page_index;
+    uint8_t set_page_count;
 } ui_template_family_t;
 
 typedef enum

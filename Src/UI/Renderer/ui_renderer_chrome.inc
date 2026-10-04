@@ -86,6 +86,8 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
         .cpu_load = cpu_avg_label,
         .pattern = pattern_label,
         .bpm_external = bpm_inverted,
+        .set_page_index = (family != NULL) ? family->set_page_index : 0U,
+        .set_page_count = (family != NULL) ? family->set_page_count : 0U,
     };
     ui_theme_draw_header(&header);
 }
@@ -218,6 +220,10 @@ static uint32_t ui_renderer_template_header_signature(const ui_template_page_sta
     signature = ui_renderer_template_signature_text(signature,
         ((family != NULL) && (family->family_title != NULL))
             ? family->family_title : "TEMPLATE");
+    signature = ui_renderer_template_signature_u32(signature,
+        (family != NULL) ? family->set_page_index : 0U);
+    signature = ui_renderer_template_signature_u32(signature,
+        (family != NULL) ? family->set_page_count : 0U);
     signature = ui_renderer_template_signature_text(signature, runtime_label);
     signature = ui_renderer_template_signature_text(signature, hall_label);
     signature = ui_renderer_template_signature_text(signature,
@@ -573,8 +579,8 @@ static void ui_renderer_template_job_prepare(ui_renderer_template_job_t *job)
     const uint8_t wave_wavetable_subpage =
         ui_renderer_template_is_wave_wavetable_subpage(subpage);
     const uint8_t wave_classic_page = (uint8_t)((wave_wavetable_subpage != 0U)
-        && (family->family_title != NULL)
-        && (strcmp(family->family_title, "TONE 2/2") == 0));
+        && (family->set_page_count == 2U)
+        && (family->set_page_index == 1U));
     if (ui_renderer_template_is_sampler_ram_tone(state, family) != 0U)
     {
         job->body = UI_TEMPLATE_BODY_SAMPLER_RAM;

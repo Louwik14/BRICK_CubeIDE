@@ -21,6 +21,8 @@ static ui_theme_browser_state_t g_theme_browser;
 
 static const ui_template_family_t g_theme_browser_family = {
     .family_title = "FAKE",
+    .set_page_index = 0U,
+    .set_page_count = 3U,
     .nav_labels = { "RETURN", "LOAD", "", "" },
     .subpages = {
         { .title = "THEME", .param_bank = { .params = {

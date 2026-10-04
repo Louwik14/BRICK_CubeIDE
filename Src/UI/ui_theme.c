@@ -29,9 +29,9 @@ typedef struct
 
 static const ui_theme_base_t g_ui_theme_bases[] = {
     {UI_THEME_FRAME_CLASSIC, UI_THEME_FRAME_NONE, UI_THEME_FOCUS_CLASSIC,
-     &FONT_5X7, &FONT_4X6, &FONT_4X6, 2U, 1U, 0U},
+     &FONT_5X7, &FONT_4X6, &FONT_4X6, 2U, 1U, 0U, 4U, 3U},
     {UI_THEME_FRAME_LINE, UI_THEME_FRAME_LINE, UI_THEME_FOCUS_UNDERLINE,
-     &FONT_5X7, &FONT_4X6, &FONT_4X6, 1U, 2U, 0U},
+     &FONT_5X7, &FONT_4X6, &FONT_4X6, 1U, 2U, 0U, 3U, 3U},
 };
 
 static const ui_theme_t g_ui_themes[UI_THEME_COUNT] = {
@@ -298,6 +298,25 @@ static void ui_theme_draw_bpm(uint8_t x, uint8_t y,
     }
 }
 
+void ui_theme_draw_subpage_indicator(uint8_t center_x, uint8_t y,
+                                     uint8_t current_page, uint8_t page_count)
+{
+    if ((page_count <= 1U) || (current_page >= page_count)) return;
+    const ui_theme_base_t *const base = ui_theme_get_base();
+    const uint8_t step = (uint8_t)(base->subpage_active_width + base->subpage_spacing);
+    const uint8_t width = (uint8_t)(base->subpage_active_width
+        + (uint8_t)((page_count - 1U) * step));
+    const int start_x = (int)center_x - ((int)width / 2);
+    for (uint8_t page = 0U; page < page_count; ++page)
+    {
+        const int x = start_x + (int)(page * step);
+        if (page == current_page)
+            drv_display_draw_line(x, y, x + base->subpage_active_width - 1, y);
+        else
+            drv_display_draw_pixel(x + (base->subpage_active_width / 2U), y, true);
+    }
+}
+
 void ui_theme_draw_header(const ui_theme_header_data_t *d)
 {
     if (d == NULL) return;
@@ -320,6 +339,7 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             drv_display_set_font(&FONT_5X7);
             if (drv_display_text_width(d->ensemble) > 38U) drv_display_set_font(&FONT_4X6);
             drv_display_draw_text((uint8_t)ui_theme_center_x(43, 42, d->ensemble), 4U, d->ensemble);
+            ui_theme_draw_subpage_indicator(64U, 12U, d->set_page_index, d->set_page_count);
             drv_display_set_font(&FONT_4X6);
             if ((d->bpm != NULL) && (d->bpm[0] != '\0'))
             {
@@ -342,6 +362,7 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             drv_display_set_font(&FONT_5X7);
             drv_display_draw_text(0U, 1U, d->track);
             drv_display_draw_text(10U, 1U, d->ensemble);
+            ui_theme_draw_subpage_indicator(43U, 8U, d->set_page_index, d->set_page_count);
             drv_display_set_font(&FONT_4X6);
             drv_display_draw_text(0U, 9U, d->track_name);
             drv_display_draw_text(50U, 9U, d->hall_mode);
@@ -367,6 +388,7 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             drv_display_draw_text(17U, 8U, hall);
             drv_display_set_font(&FONT_5X7);
             drv_display_draw_text((uint8_t)ui_theme_center_x(48, 38, ensemble), 4U, ensemble);
+            ui_theme_draw_subpage_indicator(67U, 12U, d->set_page_index, d->set_page_count);
             drv_display_set_font(&FONT_4X6);
             ui_theme_draw_bpm(89U, 1U, d);
             if (cpu[0] != '\0') drv_display_draw_text(89U, 8U, cpu);
@@ -386,6 +408,7 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             drv_display_draw_line(92, 15, 127, 15);
             drv_display_set_font(&FONT_5X7);
             drv_display_draw_text((uint8_t)ui_theme_center_x(0, OLED_WIDTH, ensemble), 1U, ensemble);
+            ui_theme_draw_subpage_indicator(64U, 8U, d->set_page_index, d->set_page_count);
             drv_display_set_font(&FONT_4X6);
             drv_display_draw_text(0U, 2U, d->track);
             drv_display_draw_text(9U, 2U, track_name);
@@ -406,6 +429,7 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             drv_display_draw_text(0U, 1U, d->track);
             drv_display_draw_text(8U, 1U, track_name);
             drv_display_draw_text(48U, 1U, ensemble);
+            ui_theme_draw_subpage_indicator(67U, 7U, d->set_page_index, d->set_page_count);
             ui_theme_draw_bpm(ui_theme_right_x(d->bpm), 1U, d);
             drv_display_draw_line(0, 8, 127, 8);
             drv_display_draw_text(0U, 10U, hall);
@@ -430,6 +454,7 @@ void ui_theme_draw_header(const ui_theme_header_data_t *d)
             drv_display_fill_rect(0, 0, 2, 15);
             drv_display_set_font(&FONT_5X7);
             drv_display_draw_text(6U, 1U, ensemble);
+            ui_theme_draw_subpage_indicator(25U, 8U, d->set_page_index, d->set_page_count);
             drv_display_set_font(&FONT_4X6);
             drv_display_draw_text(6U, 9U, track_name);
             drv_display_draw_line(47, 0, 47, 14);

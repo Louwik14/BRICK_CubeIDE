@@ -19,7 +19,8 @@ descriptor contains only a name, a `base_style` and a `header_layout`:
 | `AXIS` | `MINIMALIST` | Asymmetric split composition: ensemble/track block left, metadata axis right. |
 
 The two `ui_theme_base_t` records are the only owners of page/card frames,
-focus, page-title typography, label typography, separators and body spacing.
+focus, page-title typography, label typography, separators, body spacing and
+the compact set-page indicator geometry.
 Consequently `DECK` and `HALO` render every non-header element exactly like
 `CLASSIC`; `STRIP` and `AXIS` render them exactly like `MINIMALIST`. Header
 layouts receive one shared product model containing active track number/name,
@@ -30,6 +31,17 @@ regions before drawing.
 `CPU LOAD = OFF` removes the CPU string from that model. Layouts do not draw a
 placeholder: tempo, pattern and whitespace retain a balanced composition.
 No dynamic allocation, additional framebuffer or periodic redraw is used.
+
+## Set-page indicator
+
+Template families in a cyclable set publish a zero-based `set_page_index` and
+a `set_page_count`. The shared header primitive draws nothing for a single
+page. For two or more pages it draws one horizontal marker per page: inactive
+pages are one pixel and the active page is a short line. Classic-based themes
+use a 4-pixel active line; minimalist-based themes use a lighter 3-pixel line.
+Each layout centers the marker group in its existing ensemble-title region,
+without changing header height. The header cache signature includes both
+fields, so changing page replaces the old active marker on the normal redraw.
 
 ## Theme browser
 
@@ -43,8 +55,9 @@ frame. No persistence write occurs while scrolling.
 `P2 LOAD` calls `ui_theme_commit_preview()` once, then returns to Settings. P3
 and P4 have no label or action. Leaving through any other route also restores
 the captured theme. The FAKE page exposes the same live track, track name, Hall,
-ensemble, BPM and optional CPU information as ordinary template pages, plus
-representative cards, selected value/focus and page labels.
+ensemble, BPM and optional CPU information as ordinary template pages, plus a
+representative three-page set indicator, cards, selected value/focus and page
+labels.
 
 ## Persistence migration
 
