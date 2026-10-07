@@ -85,6 +85,8 @@ typedef struct
     sample_audio_cursor_t audio_cursor;
     uint8_t plan_valid;
     uint8_t musical_credit;
+    uint8_t requested_page_valid;
+    uint32_t requested_frame;
 } sample_voice_reader_t;
 
 void sample_voice_reader_init(void);
@@ -103,6 +105,18 @@ uint8_t sample_voice_reader_bind_preview_play_plan(
     sample_voice_reader_t *reader, const sample_play_plan_t *plan);
 void sample_voice_reader_set_step(sample_voice_reader_t *reader, float step);
 void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos);
+uint8_t sample_voice_reader_frame_ready(sample_voice_reader_t *reader,
+                                        uint32_t frame_pos);
+uint8_t sample_voice_reader_request_page(sample_voice_reader_t *reader,
+                                         uint32_t frame_pos);
+void sample_voice_reader_cancel_requested_page(sample_voice_reader_t *reader);
+uint8_t sample_voice_reader_requested_page_ready(sample_voice_reader_t *reader);
+void sample_voice_reader_update_bounds(sample_voice_reader_t *reader,
+                                       uint32_t region_begin,
+                                       uint32_t region_end,
+                                       uint32_t loop_begin,
+                                       uint32_t loop_end,
+                                       uint8_t loop_mode);
 void sample_voice_reader_update_frame_pos(sample_voice_reader_t *reader, uint32_t frame_pos);
 void sample_voice_reader_stop(sample_voice_reader_t *reader);
 uint8_t sample_voice_reader_begin_block(sample_voice_reader_t *reader,

@@ -242,6 +242,214 @@ static void brick6_sampler_runtime_clip_reset(uint8_t track_id)
     g_sampler_voice[track_id].multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
     g_sampler_voice[track_id].multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
     g_sampler_voice[track_id].release_pending = 0U;
+    brick6_sampler_runtime_stream_live_reset(track_id);
+}
+
+void __attribute__((used, externally_visible, noinline))
+brick6_sampler_runtime_stream_live_diag_reset(void)
+{
+    memset(&g_sampler_stream_live_diag, 0,
+           sizeof(g_sampler_stream_live_diag));
+}
+
+static void brick6_sampler_runtime_stream_live_reset(uint8_t track_id)
+{
+    if (track_id >= SEQ_TRACK_COUNT) return;
+    brick6_sampler_stream_live_t *const live = &g_sampler_stream_live[track_id];
+    memset(live, 0, sizeof(*live));
+    live->applied_start = g_sampler_voice[track_id].start;
+    live->applied_length = g_sampler_voice[track_id].length;
+}
+
+static void brick6_sampler_runtime_stream_live_apply(
+    uint8_t track_id,
+    brick6_sampler_stream_live_t *live)
+{
+    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
+    const uint8_t loop_mode = (clip->loop_enabled != 0U)
+        ? (uint8_t)SAMPLE_PLAY_LOOP_FORWARD
+        : (uint8_t)SAMPLE_PLAY_LOOP_NONE;
+
+    voice->region_begin = live->pending_region_begin;
+    voice->region_end = live->pending_region_end;
+    voice->loop_begin = live->pending_region_begin;
+    voice->loop_frames = live->pending_region_end
+        - live->pending_region_begin;
+    voice->loop_mode = loop_mode;
+    voice->play_plan.region_begin = voice->region_begin;
+    voice->play_plan.region_end = voice->region_end;
+    voice->play_plan.loop_begin = voice->region_begin;
+    voice->play_plan.loop_end = voice->region_end;
+    voice->play_plan.loop_mode = loop_mode;
+    sample_voice_reader_update_bounds(&voice->reader,
+                                      voice->region_begin,
+                                      voice->region_end,
+                                      voice->region_begin,
+                                      voice->region_end,
+                                      loop_mode);
+    if (live->pending_seek != 0U)
+    {
+        brick6_sampler_runtime_begin_declick_tail(track_id, voice);
+        sample_voice_reader_seek(&voice->reader,
+                                 live->pending_target_frame);
+        voice->position = (float)live->pending_target_frame;
+        brick6_sampler_runtime_start_declick_fade_in(voice);
+        if (clip->use_shifter_engine != 0U)
+        {
+            brick6_sampler_clip_slot_t *const slot =
+                brick6_sampler_runtime_clip_get_slot(track_id);
+            if (slot != NULL)
+                brick6_sampler_runtime_clip_reset_shifter(clip, slot);
+        }
+    }
+    sample_voice_reader_cancel_requested_page(&voice->reader);
+    live->applied_start = voice->start;
+    live->applied_length = voice->length;
+    if ((live->dirty_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START) != 0U)
+        ++g_sampler_stream_live_diag.start_applied;
+    if ((live->dirty_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_END) != 0U)
+        ++g_sampler_stream_live_diag.end_applied;
+    live->dirty_mask = 0U;
+    live->pending = 0U;
+    live->pending_seek = 0U;
+    live->pending_start = 0U;
+}
+
+static void brick6_sampler_runtime_stream_live_schedule(uint8_t track_id)
+{
+    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    brick6_sampler_stream_live_t *const live = &g_sampler_stream_live[track_id];
+    brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
+    sample_resolved_source_t source;
+    sample_resolved_source_init(&source);
+    if ((live->dirty_mask == 0U) || (live->pending != 0U)
+        || (voice->active == 0U)
+        || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
+        || (brick6_sampler_runtime_clip_resolve_source(clip, &source) == 0U)
+        || (source.total_frames == 0U)) return;
+
+    const uint32_t region_begin = brick6_sampler_runtime_clamp_region_begin(
+        source.total_frames, voice->start);
+    uint32_t region_end = region_begin
+        + brick6_sampler_runtime_clamp_region_length(source.total_frames,
+                                                     region_begin,
+                                                     voice->length);
+    if (region_end <= region_begin)
+        region_end = region_begin + 1U;
+
+    uint8_t seek = 0U;
+    uint32_t target = voice->reader.frame_pos;
+    if ((live->dirty_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START) != 0U)
+    {
+        seek = 1U;
+        target = region_begin;
+    }
+    else if (voice->reader.frame_pos < region_begin)
+    {
+        seek = 1U;
+        target = region_begin;
+    }
+    else if (voice->reader.frame_pos >= region_end)
+    {
+        seek = 1U;
+        target = (clip->loop_enabled != 0U)
+            ? region_begin : (region_end - 1U);
+    }
+
+    live->pending_region_begin = region_begin;
+    live->pending_region_end = region_end;
+    live->pending_target_frame = target;
+    live->pending_seek = seek;
+    live->pending_start = ((live->dirty_mask
+        & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START) != 0U) ? 1U : 0U;
+    live->pending_generation = live->generation;
+    live->cooldown_frames = BRICK6_SAMPLER_STREAM_LIVE_INTERVAL_FRAMES;
+
+    if ((seek == 0U)
+        || (sample_voice_reader_frame_ready(&voice->reader, target) != 0U))
+    {
+        if ((seek != 0U) && (live->pending_start != 0U))
+            ++g_sampler_stream_live_diag.start_cache_hits;
+        brick6_sampler_runtime_stream_live_apply(track_id, live);
+        return;
+    }
+    if (sample_voice_reader_request_page(&voice->reader, target) == 0U)
+    {
+        return;
+    }
+    live->pending = 1U;
+    if (live->pending_start != 0U)
+    {
+        ++g_sampler_stream_live_diag.start_cold_loads;
+        if (g_sampler_stream_live_diag.start_pending_max < 1U)
+            g_sampler_stream_live_diag.start_pending_max = 1U;
+    }
+}
+
+static void brick6_sampler_runtime_stream_live_queue(uint8_t track_id,
+                                                     uint8_t dirty_mask)
+{
+    if (track_id >= SEQ_TRACK_COUNT) return;
+    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    brick6_sampler_stream_live_t *const live = &g_sampler_stream_live[track_id];
+    if ((voice->active == 0U)
+        || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_CLIP))
+    {
+        live->applied_start = voice->start;
+        live->applied_length = voice->length;
+        return;
+    }
+    ++live->generation;
+    if ((dirty_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START) != 0U)
+        ++g_sampler_stream_live_diag.start_requested;
+    if ((live->dirty_mask != 0U) || (live->pending != 0U)
+        || (live->cooldown_frames != 0U))
+        if ((dirty_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START) != 0U)
+            ++g_sampler_stream_live_diag.start_coalesced;
+    live->dirty_mask |= dirty_mask;
+    if (live->pending != 0U)
+    {
+        sample_voice_reader_cancel_requested_page(&voice->reader);
+        live->pending = 0U;
+        live->pending_seek = 0U;
+        if (live->pending_start != 0U)
+            ++g_sampler_stream_live_diag.start_obsolete;
+        live->pending_start = 0U;
+    }
+    if (live->cooldown_frames == 0U)
+        brick6_sampler_runtime_stream_live_schedule(track_id);
+}
+
+static void brick6_sampler_runtime_stream_live_service(uint8_t track_id,
+                                                       uint32_t frames)
+{
+    brick6_sampler_stream_live_t *const live = &g_sampler_stream_live[track_id];
+    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    if (live->pending != 0U)
+    {
+        if (live->pending_generation != live->generation)
+        {
+            sample_voice_reader_cancel_requested_page(&voice->reader);
+            live->pending = 0U;
+            if (live->pending_start != 0U)
+                ++g_sampler_stream_live_diag.start_obsolete;
+            live->pending_start = 0U;
+        }
+        else if (sample_voice_reader_requested_page_ready(&voice->reader) != 0U)
+        {
+            if (live->pending_start != 0U)
+                ++g_sampler_stream_live_diag.start_target_ready;
+            brick6_sampler_runtime_stream_live_apply(track_id, live);
+        }
+    }
+    if (live->cooldown_frames > frames)
+        live->cooldown_frames -= frames;
+    else
+        live->cooldown_frames = 0U;
+    if ((live->cooldown_frames == 0U) && (live->pending == 0U)
+        && (live->dirty_mask != 0U))
+        brick6_sampler_runtime_stream_live_schedule(track_id);
 }
 
 static uint32_t brick6_sampler_runtime_clip_ratio_q16(float source_bpm)
@@ -578,6 +786,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     {
         brick6_sampler_runtime_clip_reset_shifter(clip, slot);
     }
+    brick6_sampler_runtime_stream_live_reset(track_id);
     return 1U;
 }
 
@@ -639,6 +848,7 @@ static void brick6_sampler_runtime_clip_stop_playback_internal(uint8_t track_id,
     voice->ram_position_q16 = 0ULL;
     voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
     voice->release_pending = 0U;
+    brick6_sampler_runtime_stream_live_reset(track_id);
     g_sampler_clip_runtime[track_id].state = (uint8_t)BRICK6_SAMPLER_CLIP_STATE_IDLE;
     g_sampler_clip_runtime[track_id].use_shifter_engine = 0U;
     brick6_sampler_runtime_clip_release_slot(track_id);

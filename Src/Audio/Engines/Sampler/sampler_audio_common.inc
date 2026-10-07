@@ -286,11 +286,13 @@ static void brick6_sampler_render_sample_segment_cursor_mono(brick6_sampler_voic
     uint32_t produced = 0U;
     while (produced < frames)
     {
-        sample_audio_segment_t segment;
+        sample_audio_segment_t segment = {0};
         if ((sample_voice_reader_begin_segment(&voice->reader, frames - produced, &segment) == 0U)
             || (segment.status != SAMPLE_AUDIO_SEGMENT_OK) || (segment.frames == 0U)
             || (segment.is_mono == 0U))
         {
+            if (segment.status == SAMPLE_AUDIO_SEGMENT_UNDERRUN)
+                ++g_sampler_stream_live_diag.audio_miss;
             voice->active = 0U;
             voice->position = 0.0f;
             sample_voice_reader_stop(&voice->reader);

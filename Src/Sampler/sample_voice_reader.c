@@ -30,7 +30,12 @@ typedef struct
     sample_audio_cursor_t audio_cursor;
     uint8_t plan_valid;
     uint8_t musical_credit;
+    uint8_t requested_page_valid;
+    uint32_t requested_frame;
 } sample_voice_reader_state_t;
+
+_Static_assert(sizeof(sample_voice_reader_state_t) == sizeof(sample_voice_reader_t),
+               "public and private reader layouts must match");
 
 static uint8_t g_sample_voice_reader_musical_credits;
 

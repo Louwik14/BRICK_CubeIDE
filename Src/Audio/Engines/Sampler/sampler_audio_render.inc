@@ -48,6 +48,9 @@ void brick6_sampler_runtime_render_stream_track(const track_audio_runtime_ctx_t 
         return;
     }
 
+    brick6_sampler_runtime_stream_live_service(
+        ctx->program_route.entity_id, frames);
+
     if (clip->use_shifter_engine != 0U)
     {
         if (slot == NULL)
@@ -122,6 +125,8 @@ void brick6_sampler_runtime_render_stream_track_mono(const track_audio_runtime_c
         brick6_sampler_runtime_mix_declick_tails_mono(track_id, out_mono, frames);
         return;
     }
+
+    brick6_sampler_runtime_stream_live_service(track_id, frames);
 
     if (clip->use_shifter_engine != 0U)
     {

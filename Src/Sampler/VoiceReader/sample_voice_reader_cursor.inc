@@ -55,6 +55,29 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
             valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_LOOP_START_NEXT);
         }
     }
+    if (state->requested_page_valid != 0U)
+    {
+        const uint32_t requested_page =
+            state->requested_frame / state->frames_per_page;
+        uint8_t already_present = 0U;
+        for (uint8_t role = 0U; role < SAMPLE_PAGE_LEASE_PAGE_COUNT; ++role)
+        {
+            if (((valid_mask & SAMPLE_PAGE_LEASE_VALID(role)) != 0U)
+                && (pages[role] == requested_page))
+            {
+                already_present = 1U;
+                break;
+            }
+        }
+        if (already_present == 0U)
+        {
+            /* A live seek keeps CURRENT/NEXT and LOOP_START protected.  The
+             * speculative page temporarily replaces LOOP_START_NEXT. */
+            pages[SAMPLE_PAGE_LEASE_LOOP_START_NEXT] = requested_page;
+            valid_mask |= SAMPLE_PAGE_LEASE_VALID(
+                SAMPLE_PAGE_LEASE_LOOP_START_NEXT);
+        }
+    }
     PERF_END(PERF_CPU_READER_NEED, need_start);
     if ((state->lease_valid_mask != valid_mask)
         || (memcmp(state->lease_pages, pages, sizeof(pages)) != 0))
@@ -524,6 +547,65 @@ void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos)
     reader->frame_pos = frame_pos;
     reader->position = (float)frame_pos;
     sample_voice_reader_publish_lease(sample_voice_reader_state(reader), frame_pos);
+}
+
+uint8_t sample_voice_reader_frame_ready(sample_voice_reader_t *reader,
+                                        uint32_t frame_pos)
+{
+    if ((reader == 0) || (reader->active == 0U)
+        || (reader->frames_per_page == 0U)) return 0U;
+    sample_page_span_t span;
+    const uint32_t page = frame_pos / reader->frames_per_page;
+    return sample_page_cache_audio_resolve_page_key(reader->key, page, &span);
+}
+
+uint8_t sample_voice_reader_request_page(sample_voice_reader_t *reader,
+                                         uint32_t frame_pos)
+{
+    if ((reader == 0) || (reader->active == 0U)
+        || (reader->frames_per_page == 0U)) return 0U;
+    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    state->requested_frame = frame_pos;
+    state->requested_page_valid = 1U;
+    sample_voice_reader_publish_lease(state, state->frame_pos);
+    return 1U;
+}
+
+void sample_voice_reader_cancel_requested_page(sample_voice_reader_t *reader)
+{
+    if (reader == 0) return;
+    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    if (state->requested_page_valid == 0U) return;
+    state->requested_page_valid = 0U;
+    state->requested_frame = 0U;
+    if (state->active != 0U)
+        sample_voice_reader_publish_lease(state, state->frame_pos);
+}
+
+uint8_t sample_voice_reader_requested_page_ready(sample_voice_reader_t *reader)
+{
+    if (reader == 0) return 0U;
+    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    return (state->requested_page_valid != 0U)
+        ? sample_voice_reader_frame_ready(reader, state->requested_frame) : 0U;
+}
+
+void sample_voice_reader_update_bounds(sample_voice_reader_t *reader,
+                                       uint32_t region_begin,
+                                       uint32_t region_end,
+                                       uint32_t loop_begin,
+                                       uint32_t loop_end,
+                                       uint8_t loop_mode)
+{
+    if ((reader == 0) || (reader->plan_valid == 0U)
+        || (region_end <= region_begin)) return;
+    reader->plan.region_begin = region_begin;
+    reader->plan.region_end = region_end;
+    reader->plan.loop_begin = loop_begin;
+    reader->plan.loop_end = loop_end;
+    reader->plan.loop_mode = loop_mode;
+    sample_voice_reader_publish_lease(sample_voice_reader_state(reader),
+                                      reader->frame_pos);
 }
 
 void sample_voice_reader_update_frame_pos(sample_voice_reader_t *reader, uint32_t frame_pos)

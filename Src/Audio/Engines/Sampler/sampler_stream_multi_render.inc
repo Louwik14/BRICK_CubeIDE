@@ -58,10 +58,12 @@ static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *
     uint32_t produced = 0U;
     while (produced < frames)
     {
-        sample_audio_segment_t segment;
+        sample_audio_segment_t segment = {0};
         if ((sample_voice_reader_begin_segment(&voice->reader, frames - produced, &segment) == 0U)
             || (segment.status != SAMPLE_AUDIO_SEGMENT_OK) || (segment.frames == 0U))
         {
+            if (segment.status == SAMPLE_AUDIO_SEGMENT_UNDERRUN)
+                ++g_sampler_stream_live_diag.audio_miss;
             voice->active = 0U;
             voice->position = 0.0f;
             sample_voice_reader_stop(&voice->reader);
@@ -557,6 +559,8 @@ static ITCM_TEXT void brick6_sampler_render_sample(brick6_sampler_voice_t *voice
         if ((underrun != 0U) || (produced < frames)
             || (brick6_sampler_runtime_is_terminal_position(voice, voice->reader.position) != 0U))
         {
+            if (underrun != 0U)
+                ++g_sampler_stream_live_diag.audio_miss;
             voice->active = 0U;
             voice->position = 0.0f;
             sample_voice_reader_stop(&voice->reader);
@@ -592,11 +596,13 @@ static ITCM_TEXT void brick6_sampler_render_sample(brick6_sampler_voice_t *voice
             request_frames = region_remaining;
         }
 
-        sample_reader_block_t block;
+        sample_reader_block_t block = {0};
         if ((sample_voice_reader_begin_block(&voice->reader, request_frames, &block) == 0U)
             || (block.status != SAMPLE_READER_BLOCK_OK)
             || (block.frames == 0U))
         {
+            if (block.status == SAMPLE_READER_BLOCK_UNDERRUN)
+                ++g_sampler_stream_live_diag.audio_miss;
             voice->active = 0U;
             voice->position = 0.0f;
             sample_voice_reader_commit_block(&voice->reader, 0U);

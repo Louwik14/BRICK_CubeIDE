@@ -24,6 +24,25 @@ struct multi_voice_dsp_slot_t;
 #define SAMPLER_MULTI_MAX_VOICES_PER_TRACK (BRICK6_SAMPLER_MULTI_MAX_VOICES)
 #define SAMPLER_MULTI_MAX_GLOBAL_VOICES    (BRICK6_SAMPLER_MULTI_MAX_VOICES)
 #define STREAM_SAMPLER_ROOT_NOTE            (60U)
+#define BRICK6_SAMPLER_STREAM_LIVE_RATE_HZ  (12U)
+#define BRICK6_SAMPLER_STREAM_LIVE_INTERVAL_FRAMES (48000U / BRICK6_SAMPLER_STREAM_LIVE_RATE_HZ)
+
+typedef struct
+{
+    volatile uint32_t start_requested;
+    volatile uint32_t start_applied;
+    volatile uint32_t end_applied;
+    volatile uint32_t start_coalesced;
+    volatile uint32_t start_cache_hits;
+    volatile uint32_t start_cold_loads;
+    volatile uint32_t start_target_ready;
+    volatile uint32_t start_obsolete;
+    volatile uint32_t start_pending_max;
+    volatile uint32_t audio_miss;
+} brick6_sampler_stream_live_diag_t;
+
+extern brick6_sampler_stream_live_diag_t g_sampler_stream_live_diag;
+void brick6_sampler_runtime_stream_live_diag_reset(void);
 
 /* Values 0..3 are disk-compatible with the existing Sample RAM contract.
  * HOLD variants are appended so current projects retain their meaning. */

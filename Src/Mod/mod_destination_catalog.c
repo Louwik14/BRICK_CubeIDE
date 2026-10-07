@@ -412,11 +412,13 @@ static uint8_t mod_destination_apply_sampler_rt(uint8_t track,
             }
             return 1U;
         case PARAM_SAMPLER_START:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
+            if ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM)
+                && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM)) { return 0U; }
             brick6_sampler_runtime_set_start(track, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_SAMPLER_LENGTH:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
+            if ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM)
+                && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM)) { return 0U; }
             brick6_sampler_runtime_set_length(track, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_SAMPLER_LOOP_START:

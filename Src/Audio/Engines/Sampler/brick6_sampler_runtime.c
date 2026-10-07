@@ -178,6 +178,25 @@ typedef struct
 
 typedef struct
 {
+    float applied_start;
+    float applied_length;
+    uint32_t cooldown_frames;
+    uint32_t generation;
+    uint32_t pending_generation;
+    uint32_t pending_region_begin;
+    uint32_t pending_region_end;
+    uint32_t pending_target_frame;
+    uint8_t dirty_mask;
+    uint8_t pending;
+    uint8_t pending_seek;
+    uint8_t pending_start;
+} brick6_sampler_stream_live_t;
+
+#define BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START (1U << 0)
+#define BRICK6_SAMPLER_STREAM_LIVE_DIRTY_END   (1U << 1)
+
+typedef struct
+{
     uint16_t instrument_id;
     float gain;
     uint8_t loop_enabled;
@@ -256,6 +275,10 @@ _Static_assert(SAMPLE_PAGE_LEASE_REC_OVERDUB_READER
                "REC overdub reader must not alias a Stream track");
 #endif
 static brick6_sampler_clip_runtime_t g_sampler_clip_runtime[SEQ_TRACK_COUNT];
+static STREAM_LOCAL_D2 brick6_sampler_stream_live_t
+    g_sampler_stream_live[SEQ_TRACK_COUNT];
+brick6_sampler_stream_live_diag_t g_sampler_stream_live_diag
+    __attribute__((used, externally_visible));
 static brick6_sampler_multi_track_state_t g_sampler_multi_track_state[SEQ_TRACK_COUNT];
 static brick6_sampler_clip_slot_t g_sampler_clip_slots[BRICK6_MAX_CLIP_TRACKS];
 static float g_sampler_clip_shifter_delay_d1[2U][BRICK6_CLIP_SHIFTER_DELAY_FRAMES];
@@ -325,6 +348,11 @@ static uint8_t brick6_sampler_runtime_ram_mode_to_loop_mode(uint8_t mode,
                                                             uint8_t loop_valid);
 static uint8_t brick6_sampler_runtime_ram_mode_playback(uint8_t mode);
 static void brick6_sampler_runtime_reconcile_ram_voice_bounds_live(uint8_t track_id);
+static void brick6_sampler_runtime_stream_live_queue(uint8_t track_id,
+                                                     uint8_t dirty_mask);
+static void brick6_sampler_runtime_stream_live_service(uint8_t track_id,
+                                                       uint32_t frames);
+static void brick6_sampler_runtime_stream_live_reset(uint8_t track_id);
 static void brick6_sampler_runtime_reproject_ram_voice_tune_live(uint8_t track_id);
 static float brick6_sampler_runtime_pitch_ratio(float semitones);
 static uint32_t brick6_sampler_runtime_clip_resolve_timing_ratio_q16(uint8_t track_id,

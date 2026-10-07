@@ -308,17 +308,7 @@ static void codec_fm_state(codec_io_t *io, fm_control_state_t *state)
     }
     for (uint8_t i = 0U; i < 4U; ++i) codec_u8(io, &state->base.pitch_rates[i]);
     for (uint8_t i = 0U; i < 4U; ++i) codec_u8(io, &state->base.pitch_levels[i]);
-    if ((io->mode == CODEC_READ)
-            && (io->document_version == PERSIST_CODEC_PREVIOUS_VERSION))
-    {
-        uint8_t legacy_transpose = 24U;
-        codec_u8(io, &legacy_transpose);
-        state->base.transpose_cents = (uint16_t)legacy_transpose * 100U;
-    }
-    else
-    {
-        codec_u16(io, &state->base.transpose_cents);
-    }
+    codec_u16(io, &state->base.transpose_cents);
     codec_u8(io, &state->base.algorithm);
     codec_u8(io, &state->base.feedback); codec_u8(io, &state->base.key_sync);
     codec_f32(io, &state->macros.ratio); codec_f32(io, &state->macros.bright);
@@ -352,7 +342,11 @@ static void codec_tone(codec_io_t *io,tone_program_control_t*t)
     case TRACK_RUNTIME_TYPE_RAM:
         codec_f32(io,&t->state.ram.gain);codec_f32(io,&t->state.ram.start);codec_f32(io,&t->state.ram.length);codec_f32(io,&t->state.ram.mode);codec_f32(io,&t->state.ram.tune);codec_f32(io,&t->state.ram.loop_start);codec_f32(io,&t->state.ram.slice_count);break;
     case TRACK_RUNTIME_TYPE_STREAM:
-        codec_f32(io,&t->state.stream.gain);codec_f32(io,&t->state.stream.source_bpm);codec_f32(io,&t->state.stream.play_mode);codec_f32(io,&t->state.stream.loop);codec_f32(io,&t->state.stream.stretch_mode);codec_f32(io,&t->state.stream.pitch);codec_f32(io,&t->state.stream.sync_length);codec_f32(io,&t->state.stream.grain);codec_f32(io,&t->state.stream.source);codec_f32(io,&t->state.stream.heads);codec_f32(io,&t->state.stream.window);codec_f32(io,&t->state.stream.dispersion);break;
+        codec_f32(io,&t->state.stream.gain);
+        if((io->mode==CODEC_READ)&&(io->document_version==PERSIST_CODEC_PREVIOUS_VERSION))
+        {t->state.stream.start=0.0f;t->state.stream.length=1.0f;}
+        else{codec_f32(io,&t->state.stream.start);codec_f32(io,&t->state.stream.length);}
+        codec_f32(io,&t->state.stream.source_bpm);codec_f32(io,&t->state.stream.play_mode);codec_f32(io,&t->state.stream.loop);codec_f32(io,&t->state.stream.stretch_mode);codec_f32(io,&t->state.stream.pitch);codec_f32(io,&t->state.stream.sync_length);codec_f32(io,&t->state.stream.grain);codec_f32(io,&t->state.stream.source);codec_f32(io,&t->state.stream.heads);codec_f32(io,&t->state.stream.window);codec_f32(io,&t->state.stream.dispersion);break;
     case TRACK_RUNTIME_TYPE_MULTI:codec_f32(io,&t->state.multi.gain);codec_f32(io,&t->state.multi.loop);break;
     case TRACK_RUNTIME_TYPE_MIDI:
         codec_f32(io,&t->state.midi.program);for(uint8_t bank=0U;bank<3U;++bank)codec_float_block(io,t->state.midi.cc[bank],4U);break;
