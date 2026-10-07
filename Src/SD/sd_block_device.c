@@ -40,6 +40,11 @@ static uint32_t g_sd_block_device_next_token;
 static uint32_t g_trace_write_submit_reject;
 static uint8_t g_sd_block_device_initialized;
 
+static uint32_t sd_block_device_timestamp_cycles(void)
+{
+    return DWT->CYCCNT;
+}
+
 void sd_block_device_debug_snapshot(sd_block_device_debug_snapshot_t *out)
 {
     if (out == 0) return;
@@ -120,9 +125,8 @@ static void sd_block_device_complete(sd_block_device_async_request_t *entry,
         brick_perf_wall((entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
             ? PERF_WALL_STREAM_DMA : PERF_WALL_REC_WRITE,
             ((entry->perf_complete_cycles != 0U)
-                ? entry->perf_complete_cycles : brick_perf_now())
+                ? entry->perf_complete_cycles : sd_block_device_timestamp_cycles())
                 - entry->perf_dma_cycles);
-        entry->perf_dma_cycles = 0U;
     }
     if (result != SD_BLOCK_DEVICE_OK)
         rec_sd_trace_note_sd(REC_SD_TRACE_SD_IO, entry->lba,
@@ -381,7 +385,7 @@ static void sd_block_device_async_start_head(void)
         dma_launch_start);
     if (start_result == MSD_OK)
     {
-        entry->perf_dma_cycles = brick_perf_now();
+        entry->perf_dma_cycles = sd_block_device_timestamp_cycles();
         brick_perf_wall((entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
             ? PERF_WALL_STREAM_SUBMIT_DMA : PERF_WALL_REC_SUBMIT_DMA,
             entry->perf_dma_cycles - entry->perf_submit_cycles);
@@ -454,7 +458,7 @@ static sd_block_device_result_t sd_block_device_async_read_submit_internal(
     entry->read_destination_cpu_clean = destination_cpu_clean;
     entry->token = sd_block_device_allocate_token();
     entry->queued_tick = HAL_GetTick();
-    entry->perf_submit_cycles = brick_perf_now();
+    entry->perf_submit_cycles = sd_block_device_timestamp_cycles();
     entry->media_epoch = sd_access_media_epoch();
     entry->owner_client = (uint8_t)sd_access_gate_current_owner();
     entry->queued = 1U;
@@ -572,7 +576,7 @@ sd_block_device_result_t sd_block_device_async_write_submit(
     entry->owner_generation = owner_generation;
     entry->token = sd_block_device_allocate_token();
     entry->queued_tick = HAL_GetTick();
-    entry->perf_submit_cycles = brick_perf_now();
+    entry->perf_submit_cycles = sd_block_device_timestamp_cycles();
     entry->media_epoch = sd_access_media_epoch();
     entry->owner_client = (uint8_t)sd_access_gate_current_owner();
     entry->queued = 1U;
@@ -903,7 +907,7 @@ void sd_block_device_async_read_complete_isr(void)
         sd_block_device_async_request_t *const entry =
             g_sd_block_device_async_fifo[g_sd_block_device_active_index];
         entry->irq_complete = 1U;
-        entry->perf_complete_cycles = brick_perf_now();
+        entry->perf_complete_cycles = sd_block_device_timestamp_cycles();
         if(g_sd_block_device_prepared_valid != 0U)
         {
             uint32_t token = 0U;
@@ -916,7 +920,7 @@ void sd_block_device_async_read_complete_isr(void)
                 entry->chained_next = 1U;
                 next->prepared = 0U;
                 next->started = 1U;
-                next->perf_dma_cycles = brick_perf_now();
+                next->perf_dma_cycles = sd_block_device_timestamp_cycles();
                 brick_perf_wall(PERF_WALL_STREAM_SUBMIT_DMA,
                                 next->perf_dma_cycles - next->perf_submit_cycles);
                 g_sd_block_device_active_index = g_sd_block_device_prepared_index;
@@ -945,7 +949,7 @@ void sd_block_device_async_write_complete_isr(void)
         sd_block_device_async_request_t *const entry =
             g_sd_block_device_async_fifo[g_sd_block_device_active_index];
         entry->irq_complete = 1U;
-        entry->perf_complete_cycles = brick_perf_now();
+        entry->perf_complete_cycles = sd_block_device_timestamp_cycles();
         g_sd_block_device_active_valid = 0U;
         g_sd_block_device_async_tx_complete = 1U;
     }

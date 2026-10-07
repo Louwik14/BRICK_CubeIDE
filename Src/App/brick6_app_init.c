@@ -35,6 +35,7 @@
 #include "Storage/waveform_cache.h"
 #include "Storage/waveform_service.h"
 #include "Platform/brick6_sd_config.h"
+#include "SD/sd_random_bench.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_calibration.h"
@@ -92,6 +93,8 @@ void brick6_app_init(void)
         },
     };
     control_domain_init();
+    sd_random_bench_init();
+    return;
     seq_engine_control_init();
     audio_domain_init(&audio_boot);
     brick6_boot_fx_policy_init();
@@ -155,6 +158,8 @@ static void brick6_app_service_storage(void)
 
 void brick6_app_process(void)
 {
+    sd_random_bench_service();
+    return;
     engine_tasklet_poll();
     brick6_stream_service_task_poll();
     if (groove_bank_boot_complete() == 0U)

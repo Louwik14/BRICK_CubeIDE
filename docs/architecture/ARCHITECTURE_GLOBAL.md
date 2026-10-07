@@ -1,5 +1,8 @@
 # Architecture globale BRICK6
 
+Mesure temporaire active dans le firmware Release courant :
+[benchmark SD aleatoire 64 KiB](sd_random_boot_benchmark.md).
+
 Le code courant est l'autorite finale. Ce document est l'unique porte d'entree documentaire; les documents de domaine portent les contrats detailles sans les repeter ici.
 
 ## Invariants produit

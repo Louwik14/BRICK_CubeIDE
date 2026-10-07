@@ -1,0 +1,556 @@
+#include "SD/sd_random_bench.h"
+
+#include <string.h>
+
+#include "Platform/memory_layout.h"
+#include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_stream_backend_physical.h"
+#include "Sampler/sample_stream_fatfs_map.h"
+#include "SD/sd_scheduler_runtime.h"
+#include "Storage/sd_access_gate.h"
+#include "ff.h"
+#include "stm32h7xx.h"
+#include "stm32h7xx_hal.h"
+
+#define SD_BENCH_PATH              "0:/BRICK/TEST/SD_RANDOM.B6T"
+#define SD_BENCH_FILE_512_MIB      (UINT32_C(512) * 1024U * 1024U)
+#define SD_BENCH_FILE_256_MIB      (UINT32_C(256) * 1024U * 1024U)
+#define SD_BENCH_PAGE_BYTES        (64U * 1024U)
+#define SD_BENCH_PAGE_SECTORS      (SD_BENCH_PAGE_BYTES / 512U)
+#define SD_BENCH_READ_COUNT        (100000U)
+#define SD_BENCH_MAX_PAGES         (SD_BENCH_FILE_512_MIB / SD_BENCH_PAGE_BYTES)
+
+enum
+{
+    SD_BENCH_ERROR_NONE = 0,
+    SD_BENCH_ERROR_GATE,
+    SD_BENCH_ERROR_MOUNT,
+    SD_BENCH_ERROR_DIRECTORY,
+    SD_BENCH_ERROR_FILE,
+    SD_BENCH_ERROR_EXPAND,
+    SD_BENCH_ERROR_WRITE,
+    SD_BENCH_ERROR_SYNC,
+    SD_BENCH_ERROR_MAP,
+    SD_BENCH_ERROR_FRAGMENT,
+    SD_BENCH_ERROR_SUBMIT,
+    SD_BENCH_ERROR_READ
+};
+
+typedef struct
+{
+    FIL file;
+    sample_stream_safe_metadata_t metadata;
+    sample_stream_backend_physical_async_t io;
+    sample_stream_physical_cursor_t cursor;
+    sample_page_load_target_t target;
+    uint32_t create_offset;
+    uint32_t prng;
+    uint32_t request_cycles;
+    uint16_t page_order[SD_BENCH_MAX_PAGES];
+    uint16_t page_count;
+    uint8_t gate_held;
+    uint8_t file_open;
+    uint8_t io_active;
+    uint8_t sort_stage;
+} sd_random_bench_runtime_t;
+
+volatile sd_random_bench_result_t g_sd_random_bench;
+SDRAM_STREAM_SERVICE static sd_random_bench_runtime_t g_sd_bench_runtime;
+SDRAM_STREAM_SCRATCH static uint8_t g_sd_bench_buffer[SD_BENCH_PAGE_BYTES];
+SDRAM_STREAM_SCRATCH static uint32_t g_sd_bench_latency[SD_BENCH_READ_COUNT];
+SDRAM_STREAM_SCRATCH static uint32_t g_sd_bench_transaction[SD_BENCH_READ_COUNT];
+
+static uint32_t sd_bench_now(void)
+{
+    return DWT->CYCCNT;
+}
+
+static uint32_t sd_bench_cycles_to_us(uint32_t cycles)
+{
+    const uint32_t hz = (g_sd_random_bench.cpu_hz != 0U)
+        ? g_sd_random_bench.cpu_hz : 1U;
+    return (uint32_t)(((uint64_t)cycles * UINT64_C(1000000) + (hz / 2U)) / hz);
+}
+
+static uint32_t sd_bench_prng(void)
+{
+    uint32_t x = g_sd_bench_runtime.prng;
+    x ^= x << 13U;
+    x ^= x >> 17U;
+    x ^= x << 5U;
+    g_sd_bench_runtime.prng = x;
+    return x;
+}
+
+static void sd_bench_release_gate(void)
+{
+    if (g_sd_bench_runtime.gate_held != 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
+        g_sd_bench_runtime.gate_held = 0U;
+    }
+}
+
+static void sd_bench_fail(uint32_t error, FRESULT fr,
+                          sd_block_device_result_t block_result)
+{
+    if (g_sd_bench_runtime.file_open != 0U)
+    {
+        (void)f_close(&g_sd_bench_runtime.file);
+        g_sd_bench_runtime.file_open = 0U;
+    }
+    sd_bench_release_gate();
+    g_sd_random_bench.error = error;
+    g_sd_random_bench.last_fresult = (int32_t)fr;
+    g_sd_random_bench.last_block_result = (uint32_t)block_result;
+    g_sd_random_bench.errors++;
+    if (block_result == SD_BLOCK_DEVICE_TIMEOUT)
+    {
+        g_sd_random_bench.timeouts++;
+    }
+    g_sd_random_bench.state = SD_RANDOM_BENCH_ERROR;
+    g_sd_random_bench.done = 1U;
+}
+
+static uint8_t sd_bench_make_dirs(void)
+{
+    FRESULT fr = f_mkdir("0:/BRICK");
+    if ((fr != FR_OK) && (fr != FR_EXIST)) return 0U;
+    fr = f_mkdir("0:/BRICK/TEST");
+    return ((fr == FR_OK) || (fr == FR_EXIST)) ? 1U : 0U;
+}
+
+static FRESULT sd_bench_create_file(uint32_t bytes)
+{
+    FRESULT fr = f_open(&g_sd_bench_runtime.file, SD_BENCH_PATH,
+                        FA_CREATE_ALWAYS | FA_WRITE);
+    if (fr != FR_OK) return fr;
+    g_sd_bench_runtime.file_open = 1U;
+    fr = f_expand(&g_sd_bench_runtime.file, (FSIZE_t)bytes, 1U);
+    if (fr == FR_OK) fr = f_lseek(&g_sd_bench_runtime.file, 0U);
+    if (fr != FR_OK)
+    {
+        (void)f_close(&g_sd_bench_runtime.file);
+        g_sd_bench_runtime.file_open = 0U;
+        (void)f_unlink(SD_BENCH_PATH);
+    }
+    return fr;
+}
+
+static void sd_bench_fill_pattern(void)
+{
+    uint32_t x = UINT32_C(0x6B8B4567);
+    uint32_t *const words = (uint32_t *)(void *)g_sd_bench_buffer;
+    for (uint32_t i = 0U; i < (SD_BENCH_PAGE_BYTES / sizeof(uint32_t)); ++i)
+    {
+        x ^= x << 13U;
+        x ^= x >> 17U;
+        x ^= x << 5U;
+        words[i] = x ^ i;
+    }
+}
+
+static uint8_t sd_bench_open_and_map(void)
+{
+    FRESULT fr = f_open(&g_sd_bench_runtime.file, SD_BENCH_PATH, FA_READ);
+    if (fr != FR_OK)
+    {
+        sd_bench_fail(SD_BENCH_ERROR_FILE, fr, SD_BLOCK_DEVICE_OK);
+        return 0U;
+    }
+    g_sd_bench_runtime.file_open = 1U;
+    memset(&g_sd_bench_runtime.metadata, 0, sizeof(g_sd_bench_runtime.metadata));
+    if (sample_stream_fatfs_map_build_from_file(
+            &g_sd_bench_runtime.file, &g_sd_bench_runtime.metadata) == 0U)
+    {
+        sd_bench_fail(SD_BENCH_ERROR_MAP, FR_INT_ERR, SD_BLOCK_DEVICE_OK);
+        return 0U;
+    }
+    fr = f_close(&g_sd_bench_runtime.file);
+    g_sd_bench_runtime.file_open = 0U;
+    if (fr != FR_OK)
+    {
+        sd_bench_fail(SD_BENCH_ERROR_FILE, fr, SD_BLOCK_DEVICE_OK);
+        return 0U;
+    }
+    g_sd_bench_runtime.metadata.block_align = 1U;
+    g_sd_bench_runtime.metadata.data_offset_bytes = 0U;
+    g_sd_bench_runtime.metadata.file_size = g_sd_random_bench.file_size;
+    g_sd_bench_runtime.page_count = (uint16_t)(
+        g_sd_random_bench.file_size / SD_BENCH_PAGE_BYTES);
+    return 1U;
+}
+
+static void sd_bench_shuffle_pages(void)
+{
+    const uint16_t count = g_sd_bench_runtime.page_count;
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        g_sd_bench_runtime.page_order[i] = i;
+    }
+    for (uint32_t i = count; i > 1U; --i)
+    {
+        const uint32_t j = sd_bench_prng() % i;
+        const uint16_t tmp = g_sd_bench_runtime.page_order[i - 1U];
+        g_sd_bench_runtime.page_order[i - 1U] = g_sd_bench_runtime.page_order[j];
+        g_sd_bench_runtime.page_order[j] = tmp;
+    }
+    if ((g_sd_random_bench.completed_reads != 0U) && (count > 1U)
+        && (g_sd_bench_runtime.page_order[0] == g_sd_random_bench.last_page))
+    {
+        const uint16_t tmp = g_sd_bench_runtime.page_order[0];
+        g_sd_bench_runtime.page_order[0] = g_sd_bench_runtime.page_order[1];
+        g_sd_bench_runtime.page_order[1] = tmp;
+    }
+}
+
+static void sd_bench_start_running(void)
+{
+    sd_bench_release_gate();
+    g_sd_bench_runtime.prng = UINT32_C(0x9E3779B9);
+    sd_bench_shuffle_pages();
+    g_sd_random_bench.progress = 0U;
+    g_sd_random_bench.progress_total = SD_BENCH_READ_COUNT;
+    g_sd_random_bench.state = SD_RANDOM_BENCH_RUNNING;
+}
+
+static void sd_bench_prepare_file(void)
+{
+    if (g_sd_bench_runtime.gate_held == 0U)
+    {
+        if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
+        {
+            sd_bench_fail(SD_BENCH_ERROR_GATE, FR_LOCKED,
+                          SD_BLOCK_DEVICE_GATE_NOT_HELD);
+            return;
+        }
+        g_sd_bench_runtime.gate_held = 1U;
+        if (sd_access_fs_mount_if_needed() == 0U)
+        {
+            sd_bench_fail(SD_BENCH_ERROR_MOUNT, FR_NOT_READY,
+                          SD_BLOCK_DEVICE_OK);
+            return;
+        }
+        if (sd_bench_make_dirs() == 0U)
+        {
+            sd_bench_fail(SD_BENCH_ERROR_DIRECTORY, FR_DISK_ERR,
+                          SD_BLOCK_DEVICE_OK);
+            return;
+        }
+
+        FILINFO info;
+        const FRESULT stat_fr = f_stat(SD_BENCH_PATH, &info);
+        if ((stat_fr == FR_OK)
+            && ((info.fsize == SD_BENCH_FILE_512_MIB)
+                || (info.fsize == SD_BENCH_FILE_256_MIB)))
+        {
+            g_sd_random_bench.file_size = (uint32_t)info.fsize;
+            if (sd_bench_open_and_map() != 0U) sd_bench_start_running();
+            return;
+        }
+        if ((stat_fr != FR_OK) && (stat_fr != FR_NO_FILE))
+        {
+            sd_bench_fail(SD_BENCH_ERROR_FILE, stat_fr, SD_BLOCK_DEVICE_OK);
+            return;
+        }
+        if (stat_fr == FR_OK) (void)f_unlink(SD_BENCH_PATH);
+
+        FRESULT fr = sd_bench_create_file(SD_BENCH_FILE_512_MIB);
+        if (fr != FR_OK)
+        {
+            fr = sd_bench_create_file(SD_BENCH_FILE_256_MIB);
+            if (fr != FR_OK)
+            {
+                sd_bench_fail(SD_BENCH_ERROR_EXPAND, fr, SD_BLOCK_DEVICE_OK);
+                return;
+            }
+            g_sd_random_bench.file_size = SD_BENCH_FILE_256_MIB;
+        }
+        else
+        {
+            g_sd_random_bench.file_size = SD_BENCH_FILE_512_MIB;
+        }
+        sd_bench_fill_pattern();
+        g_sd_random_bench.progress_total = g_sd_random_bench.file_size;
+    }
+
+    if (g_sd_bench_runtime.create_offset < g_sd_random_bench.file_size)
+    {
+        UINT written = 0U;
+        const FRESULT fr = f_write(&g_sd_bench_runtime.file,
+                                   g_sd_bench_buffer,
+                                   SD_BENCH_PAGE_BYTES, &written);
+        if ((fr != FR_OK) || (written != SD_BENCH_PAGE_BYTES))
+        {
+            sd_bench_fail(SD_BENCH_ERROR_WRITE, fr, SD_BLOCK_DEVICE_OK);
+            return;
+        }
+        g_sd_bench_runtime.create_offset += written;
+        g_sd_random_bench.progress = g_sd_bench_runtime.create_offset;
+        return;
+    }
+
+    FRESULT fr = f_sync(&g_sd_bench_runtime.file);
+    if (fr != FR_OK)
+    {
+        sd_bench_fail(SD_BENCH_ERROR_SYNC, fr, SD_BLOCK_DEVICE_OK);
+        return;
+    }
+    fr = f_close(&g_sd_bench_runtime.file);
+    g_sd_bench_runtime.file_open = 0U;
+    if (fr != FR_OK)
+    {
+        sd_bench_fail(SD_BENCH_ERROR_FILE, fr, SD_BLOCK_DEVICE_OK);
+        return;
+    }
+    if (sd_bench_open_and_map() != 0U) sd_bench_start_running();
+}
+
+static uint8_t sd_bench_begin_read(void)
+{
+    if ((g_sd_random_bench.completed_reads != 0U)
+        && ((g_sd_random_bench.completed_reads
+             % g_sd_bench_runtime.page_count) == 0U))
+    {
+        sd_bench_shuffle_pages();
+    }
+    const uint32_t ordinal = g_sd_random_bench.completed_reads
+        % g_sd_bench_runtime.page_count;
+    const uint32_t page = g_sd_bench_runtime.page_order[ordinal];
+    sample_stream_physical_span_t span;
+    memset(&g_sd_bench_runtime.cursor, 0, sizeof(g_sd_bench_runtime.cursor));
+    if ((sample_stream_physical_map_resolve(
+            &g_sd_bench_runtime.metadata.physical_map,
+            (uint64_t)page * SD_BENCH_PAGE_BYTES, SD_BENCH_PAGE_BYTES,
+            &g_sd_bench_runtime.cursor, &span) == 0U)
+        || (span.first_sector_skip != 0U)
+        || (span.logical_bytes != SD_BENCH_PAGE_BYTES)
+        || (span.sector_count != SD_BENCH_PAGE_SECTORS))
+    {
+        sd_bench_fail(SD_BENCH_ERROR_FRAGMENT, FR_INT_ERR,
+                      SD_BLOCK_DEVICE_INVALID_ARG);
+        return 0U;
+    }
+
+    memset(&g_sd_bench_runtime.target, 0, sizeof(g_sd_bench_runtime.target));
+    g_sd_bench_runtime.target.start_frame = page * SD_BENCH_PAGE_BYTES;
+    g_sd_bench_runtime.target.frame_count = SD_BENCH_PAGE_BYTES;
+    memset(&g_sd_bench_runtime.cursor, 0, sizeof(g_sd_bench_runtime.cursor));
+    g_sd_bench_runtime.request_cycles = sd_bench_now();
+    if (sample_stream_backend_physical_begin(
+            &g_sd_bench_runtime.io, &g_sd_bench_runtime.metadata,
+            &g_sd_bench_runtime.target, &g_sd_bench_runtime.cursor,
+            g_sd_bench_buffer, sizeof(g_sd_bench_buffer), 0U,
+            UINT32_MAX) == 0U)
+    {
+        sd_bench_fail(SD_BENCH_ERROR_SUBMIT, FR_INT_ERR,
+                      SD_BLOCK_DEVICE_BUSY);
+        return 0U;
+    }
+    g_sd_random_bench.last_page = page;
+    g_sd_random_bench.last_request_cycles = g_sd_bench_runtime.request_cycles;
+    g_sd_bench_runtime.io_active = 1U;
+    return 1U;
+}
+
+static void sd_bench_record_read(void)
+{
+    sample_page_load_result_t result;
+    const uint8_t *source = 0;
+    uint32_t source_bytes = 0U;
+    uint8_t physical_reads = 0U;
+    if (sample_stream_backend_physical_poll(
+            &g_sd_bench_runtime.io, &result, &source,
+            &source_bytes, &physical_reads) == 0U)
+    {
+        return;
+    }
+    g_sd_bench_runtime.io_active = 0U;
+    const sd_block_device_async_request_t *const request =
+        &g_sd_bench_runtime.io.request;
+    const uint32_t ready_cycles = sd_bench_now();
+    if ((result != SAMPLE_PAGE_LOAD_OK) || (source != g_sd_bench_buffer)
+        || (source_bytes != SD_BENCH_PAGE_BYTES) || (physical_reads != 1U)
+        || (request->result != SD_BLOCK_DEVICE_OK)
+        || (request->perf_dma_cycles == 0U)
+        || (request->perf_complete_cycles == 0U))
+    {
+        sd_bench_fail(SD_BENCH_ERROR_READ, FR_DISK_ERR, request->result);
+        return;
+    }
+
+    const uint32_t index = g_sd_random_bench.completed_reads;
+    const uint32_t latency_us = sd_bench_cycles_to_us(
+        ready_cycles - g_sd_bench_runtime.request_cycles);
+    const uint32_t transaction_us = sd_bench_cycles_to_us(
+        request->perf_complete_cycles - request->perf_dma_cycles);
+    const uint32_t queue_us = sd_bench_cycles_to_us(
+        request->perf_dma_cycles - g_sd_bench_runtime.request_cycles);
+    g_sd_bench_latency[index] = latency_us;
+    g_sd_bench_transaction[index] = transaction_us;
+    g_sd_random_bench.latency_sum_us += latency_us;
+    g_sd_random_bench.transaction_sum_us += transaction_us;
+    g_sd_random_bench.queue_sum_us += queue_us;
+    if (latency_us < g_sd_random_bench.latency_min_us)
+        g_sd_random_bench.latency_min_us = latency_us;
+    if (latency_us > g_sd_random_bench.latency_max_us)
+        g_sd_random_bench.latency_max_us = latency_us;
+    if (transaction_us < g_sd_random_bench.transaction_min_us)
+        g_sd_random_bench.transaction_min_us = transaction_us;
+    if (transaction_us > g_sd_random_bench.transaction_max_us)
+        g_sd_random_bench.transaction_max_us = transaction_us;
+    if (queue_us > g_sd_random_bench.queue_max_us)
+        g_sd_random_bench.queue_max_us = queue_us;
+    g_sd_random_bench.last_transaction_start_cycles = request->perf_dma_cycles;
+    g_sd_random_bench.last_transaction_end_cycles = request->perf_complete_cycles;
+    g_sd_random_bench.last_ready_cycles = ready_cycles;
+    g_sd_random_bench.completed_reads = index + 1U;
+    g_sd_random_bench.progress = index + 1U;
+    if (g_sd_random_bench.completed_reads >= SD_BENCH_READ_COUNT)
+    {
+        g_sd_random_bench.state = SD_RANDOM_BENCH_SORTING;
+    }
+}
+
+static void sd_bench_heap_sort(uint32_t *values, uint32_t count)
+{
+    if (count < 2U) return;
+    for (uint32_t start = count / 2U; start > 0U; --start)
+    {
+        uint32_t root = start - 1U;
+        const uint32_t value = values[root];
+        while ((root * 2U + 1U) < count)
+        {
+            uint32_t child = root * 2U + 1U;
+            if (((child + 1U) < count) && (values[child] < values[child + 1U]))
+                child++;
+            if (value >= values[child]) break;
+            values[root] = values[child];
+            root = child;
+        }
+        values[root] = value;
+    }
+    for (uint32_t end = count - 1U; end > 0U; --end)
+    {
+        const uint32_t tmp = values[end];
+        values[end] = values[0];
+        uint32_t root = 0U;
+        while ((root * 2U + 1U) < end)
+        {
+            uint32_t child = root * 2U + 1U;
+            if (((child + 1U) < end) && (values[child] < values[child + 1U]))
+                child++;
+            if (tmp >= values[child]) break;
+            values[root] = values[child];
+            root = child;
+        }
+        values[root] = tmp;
+    }
+}
+
+static uint32_t sd_bench_percentile(const uint32_t *values, uint32_t count,
+                                    uint32_t permille)
+{
+    uint32_t rank = (uint32_t)(((uint64_t)count * permille + 999U) / 1000U);
+    if (rank == 0U) rank = 1U;
+    if (rank > count) rank = count;
+    return values[rank - 1U];
+}
+
+static void sd_bench_finalize(void)
+{
+    const uint32_t count = g_sd_random_bench.completed_reads;
+    if (g_sd_bench_runtime.sort_stage == 0U)
+    {
+        sd_bench_heap_sort(g_sd_bench_latency, count);
+        g_sd_bench_runtime.sort_stage = 1U;
+        return;
+    }
+    if (g_sd_bench_runtime.sort_stage == 1U)
+    {
+        sd_bench_heap_sort(g_sd_bench_transaction, count);
+        g_sd_bench_runtime.sort_stage = 2U;
+        return;
+    }
+    g_sd_random_bench.num_reads = count;
+    g_sd_random_bench.total_bytes = (uint64_t)count * SD_BENCH_PAGE_BYTES;
+    g_sd_random_bench.total_time_us = g_sd_random_bench.latency_sum_us;
+    g_sd_random_bench.latency_avg_us = (uint32_t)(
+        g_sd_random_bench.latency_sum_us / count);
+    g_sd_random_bench.latency_p50_us = sd_bench_percentile(
+        g_sd_bench_latency, count, 500U);
+    g_sd_random_bench.latency_p90_us = sd_bench_percentile(
+        g_sd_bench_latency, count, 900U);
+    g_sd_random_bench.latency_p95_us = sd_bench_percentile(
+        g_sd_bench_latency, count, 950U);
+    g_sd_random_bench.latency_p99_us = sd_bench_percentile(
+        g_sd_bench_latency, count, 990U);
+    g_sd_random_bench.latency_p999_us = sd_bench_percentile(
+        g_sd_bench_latency, count, 999U);
+    g_sd_random_bench.transaction_avg_us = (uint32_t)(
+        g_sd_random_bench.transaction_sum_us / count);
+    g_sd_random_bench.transaction_p99_us = sd_bench_percentile(
+        g_sd_bench_transaction, count, 990U);
+    g_sd_random_bench.queue_avg_us = (uint32_t)(
+        g_sd_random_bench.queue_sum_us / count);
+    if (g_sd_random_bench.total_time_us != 0U)
+    {
+        g_sd_random_bench.pages_per_second_x1000 = (uint32_t)(
+            ((uint64_t)count * UINT64_C(1000000000))
+            / g_sd_random_bench.total_time_us);
+        g_sd_random_bench.pages_per_second =
+            (g_sd_random_bench.pages_per_second_x1000 + 500U) / 1000U;
+        g_sd_random_bench.bytes_per_second =
+            (g_sd_random_bench.total_bytes * UINT64_C(1000000))
+            / g_sd_random_bench.total_time_us;
+    }
+    g_sd_random_bench.state = SD_RANDOM_BENCH_DONE;
+    g_sd_random_bench.done = 1U;
+}
+
+void sd_random_bench_init(void)
+{
+    memset((void *)&g_sd_random_bench, 0, sizeof(g_sd_random_bench));
+    memset(&g_sd_bench_runtime, 0, sizeof(g_sd_bench_runtime));
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0U;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    g_sd_random_bench.magic = SD_RANDOM_BENCH_MAGIC;
+    g_sd_random_bench.version = SD_RANDOM_BENCH_VERSION;
+    g_sd_random_bench.size = sizeof(g_sd_random_bench);
+    g_sd_random_bench.cpu_hz = SystemCoreClock;
+    g_sd_random_bench.page_size = SD_BENCH_PAGE_BYTES;
+    g_sd_random_bench.num_reads = SD_BENCH_READ_COUNT;
+    g_sd_random_bench.latency_min_us = UINT32_MAX;
+    g_sd_random_bench.transaction_min_us = UINT32_MAX;
+    g_sd_random_bench.state = SD_RANDOM_BENCH_CREATING_FILE;
+}
+
+void sd_random_bench_service(void)
+{
+    switch ((sd_random_bench_state_t)g_sd_random_bench.state)
+    {
+        case SD_RANDOM_BENCH_CREATING_FILE:
+            sd_bench_prepare_file();
+            break;
+        case SD_RANDOM_BENCH_RUNNING:
+            if (g_sd_bench_runtime.io_active == 0U)
+            {
+                (void)sd_bench_begin_read();
+            }
+            else
+            {
+                sd_scheduler_runtime_service();
+                sd_bench_record_read();
+            }
+            break;
+        case SD_RANDOM_BENCH_SORTING:
+            sd_bench_finalize();
+            break;
+        case SD_RANDOM_BENCH_DONE:
+        case SD_RANDOM_BENCH_ERROR:
+        default:
+            __WFI();
+            break;
+    }
+}

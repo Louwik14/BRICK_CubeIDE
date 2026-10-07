@@ -204,6 +204,7 @@ set(DOMAIN_STORAGE
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/sd_block_device.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/sd_diskio.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/sd_io_hooks.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/sd_random_bench.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/sdmmc_async_transport.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/sd_scheduler.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/sd_scheduler_runtime.c"
