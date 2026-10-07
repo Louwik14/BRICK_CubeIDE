@@ -31,10 +31,25 @@ STORAGE alloue, charge par DMA asynchrone et publie la page.
 
 AUDIO teste READY aux blocs suivants et n'applique le nouveau plan et le seek
 qu'apres publication coherente. Il n'attend jamais STORAGE et n'effectue aucune
-lecture synchrone. Une generation logique identifie la valeur la plus recente.
-Si une nouvelle valeur arrive pendant le chargement, l'ancien besoin est retire
-du lease et ne peut plus etre applique; une completion deja engagee peut finir
-dans le cache, sans devenir la cible active.
+lecture synchrone. La valeur echantillonnee au tick 12 Hz devient un snapshot
+accepte et reste le besoin du reader jusqu'a READY. Les valeurs de modulation
+recues pendant ce chargement sont coalescees separement pour le tick suivant;
+elles ne peuvent donc ni annuler le chargement toutes les 64 frames, ni changer
+le resultat selon qu'une page etait deja en cache. Un snapshot n'est obsolete
+que si la voix est arretee ou retriggeree avant son application. Les generations
+et media epochs du cache continuent d'interdire toute completion recyclee.
+
+La fenetre de 4000 frames demarre lors de l'application effective, et non lors
+de la demande STORAGE. Deux applications ne peuvent donc pas se suivre dans le
+meme bloc apres une lecture lente: le plafond porte bien sur les changements
+audibles, pas seulement sur les requetes.
+
+Cette separation `apply_mask`/`dirty_mask` est une contrainte de determinisme.
+Le LFO/Matrix publie toutes les 64 frames, plus vite qu'une lecture froide de
+64 KiB. Annuler le snapshot accepte a chaque nouvelle valeur ferait dependre le
+seek du hasard d'un cache hit ou d'une completion SD en moins d'un bloc. Le
+snapshot accepte termine donc son cycle, tandis que le prochain converge vers
+la derniere valeur recue.
 
 ## Chemin END
 

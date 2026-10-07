@@ -256,9 +256,9 @@ static void brick6_sampler_runtime_stream_live_reset(uint8_t track_id)
 {
     if (track_id >= SEQ_TRACK_COUNT) return;
     brick6_sampler_stream_live_t *const live = &g_sampler_stream_live[track_id];
+    if ((live->pending != 0U) && (live->pending_start != 0U))
+        ++g_sampler_stream_live_diag.start_obsolete;
     memset(live, 0, sizeof(*live));
-    live->applied_start = g_sampler_voice[track_id].start;
-    live->applied_length = g_sampler_voice[track_id].length;
 }
 
 static void brick6_sampler_runtime_stream_live_apply(
@@ -304,16 +304,15 @@ static void brick6_sampler_runtime_stream_live_apply(
         }
     }
     sample_voice_reader_cancel_requested_page(&voice->reader);
-    live->applied_start = voice->start;
-    live->applied_length = voice->length;
-    if ((live->dirty_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START) != 0U)
+    if ((live->apply_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START) != 0U)
         ++g_sampler_stream_live_diag.start_applied;
-    if ((live->dirty_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_END) != 0U)
+    if ((live->apply_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_END) != 0U)
         ++g_sampler_stream_live_diag.end_applied;
-    live->dirty_mask = 0U;
+    live->apply_mask = 0U;
     live->pending = 0U;
     live->pending_seek = 0U;
     live->pending_start = 0U;
+    live->cooldown_frames = BRICK6_SAMPLER_STREAM_LIVE_INTERVAL_FRAMES;
 }
 
 static void brick6_sampler_runtime_stream_live_schedule(uint8_t track_id)
@@ -361,10 +360,10 @@ static void brick6_sampler_runtime_stream_live_schedule(uint8_t track_id)
     live->pending_region_end = region_end;
     live->pending_target_frame = target;
     live->pending_seek = seek;
-    live->pending_start = ((live->dirty_mask
+    live->apply_mask = live->dirty_mask;
+    live->dirty_mask = 0U;
+    live->pending_start = ((live->apply_mask
         & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START) != 0U) ? 1U : 0U;
-    live->pending_generation = live->generation;
-    live->cooldown_frames = BRICK6_SAMPLER_STREAM_LIVE_INTERVAL_FRAMES;
 
     if ((seek == 0U)
         || (sample_voice_reader_frame_ready(&voice->reader, target) != 0U))
@@ -376,6 +375,10 @@ static void brick6_sampler_runtime_stream_live_schedule(uint8_t track_id)
     }
     if (sample_voice_reader_request_page(&voice->reader, target) == 0U)
     {
+        live->dirty_mask |= live->apply_mask;
+        live->apply_mask = 0U;
+        live->pending_seek = 0U;
+        live->pending_start = 0U;
         return;
     }
     live->pending = 1U;
@@ -395,12 +398,7 @@ static void brick6_sampler_runtime_stream_live_queue(uint8_t track_id,
     brick6_sampler_stream_live_t *const live = &g_sampler_stream_live[track_id];
     if ((voice->active == 0U)
         || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_CLIP))
-    {
-        live->applied_start = voice->start;
-        live->applied_length = voice->length;
         return;
-    }
-    ++live->generation;
     if ((dirty_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START) != 0U)
         ++g_sampler_stream_live_diag.start_requested;
     if ((live->dirty_mask != 0U) || (live->pending != 0U)
@@ -408,16 +406,7 @@ static void brick6_sampler_runtime_stream_live_queue(uint8_t track_id,
         if ((dirty_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START) != 0U)
             ++g_sampler_stream_live_diag.start_coalesced;
     live->dirty_mask |= dirty_mask;
-    if (live->pending != 0U)
-    {
-        sample_voice_reader_cancel_requested_page(&voice->reader);
-        live->pending = 0U;
-        live->pending_seek = 0U;
-        if (live->pending_start != 0U)
-            ++g_sampler_stream_live_diag.start_obsolete;
-        live->pending_start = 0U;
-    }
-    if (live->cooldown_frames == 0U)
+    if ((live->cooldown_frames == 0U) && (live->pending == 0U))
         brick6_sampler_runtime_stream_live_schedule(track_id);
 }
 
@@ -428,15 +417,7 @@ static void brick6_sampler_runtime_stream_live_service(uint8_t track_id,
     brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
     if (live->pending != 0U)
     {
-        if (live->pending_generation != live->generation)
-        {
-            sample_voice_reader_cancel_requested_page(&voice->reader);
-            live->pending = 0U;
-            if (live->pending_start != 0U)
-                ++g_sampler_stream_live_diag.start_obsolete;
-            live->pending_start = 0U;
-        }
-        else if (sample_voice_reader_requested_page_ready(&voice->reader) != 0U)
+        if (sample_voice_reader_requested_page_ready(&voice->reader) != 0U)
         {
             if (live->pending_start != 0U)
                 ++g_sampler_stream_live_diag.start_target_ready;

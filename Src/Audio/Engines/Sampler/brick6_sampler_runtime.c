@@ -178,15 +178,12 @@ typedef struct
 
 typedef struct
 {
-    float applied_start;
-    float applied_length;
     uint32_t cooldown_frames;
-    uint32_t generation;
-    uint32_t pending_generation;
     uint32_t pending_region_begin;
     uint32_t pending_region_end;
     uint32_t pending_target_frame;
     uint8_t dirty_mask;
+    uint8_t apply_mask;
     uint8_t pending;
     uint8_t pending_seek;
     uint8_t pending_start;
