@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #ifndef BRICK_PATTERN_RECALL_DIAG
-#define BRICK_PATTERN_RECALL_DIAG 0
+#define BRICK_PATTERN_RECALL_DIAG 1
 #endif
 
 #if BRICK_PATTERN_RECALL_DIAG

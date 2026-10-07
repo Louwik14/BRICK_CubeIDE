@@ -6,7 +6,7 @@
 #include "stm32h7xx.h"
 
 #ifndef BRICK_PERF_DIAG
-#define BRICK_PERF_DIAG 1
+#define BRICK_PERF_DIAG 0
 #endif
 
 typedef struct { uint32_t calls; uint32_t max; uint64_t total; } brick_perf_span_t;

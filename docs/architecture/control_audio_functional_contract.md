@@ -170,15 +170,21 @@ de ce contrat fonctionnel.
 ## Restore atomique
 
 `PreparedPattern` contient les preuves CONTROL et le slot SEQ compile, et
-reserve aussi un slot `PreparedAudio`. Ce dernier contient directement les 16
-descripteurs PROGRAM, les etats Tone/FM/Filter/VCA/Mixer/FX/Poly/Mod, les
-bindings de ressources, MIDI et les globals deja projetes dans le domaine des
-commandes AUDIO. Sa construction et ses resolutions statiques ont lieu hors IRQ.
-Les handles de ressources et la projection AUDIO des globals sont finalises
-cote CONTROL apres installation des assets et avant publication.
+reserve aussi un slot `PreparedAudio`. Le slot de 8 736 octets contient un etat
+de 8 728 octets: 16 descripteurs PROGRAM, les etats
+Tone/FM/Filter/VCA/Mixer/FX/Poly/Mod, les bindings de ressources, MIDI et les
+globals deja projetes dans le domaine des commandes AUDIO. Les resolutions
+statiques et un candidat PROGRAM sont construits hors IRQ. Apres installation
+du candidat CONTROL, chaque entree est reconstruite depuis les owners installes,
+PROGRAM inclus; les handles de ressources et la projection AUDIO des globals
+sont finalises depuis cette meme autorite avant publication. Une liste d'assets
+vide signifie explicitement `none`, et mute/default/OFF sont des valeurs cibles,
+jamais « conserver l'ancien etat ». Il ne s'agit donc pas d'un snapshot integral
+fige des le decode, mais la publication reste une cible complete et non un delta.
 
 Pattern et Project publient un unique `AUDIO_STATE_COMMIT(slot,generation)` dans
-la FIFO. A son timestamp, AUDIO compare encore les PROGRAM cibles au runtime
+la FIFO. A son timestamp, AUDIO calcule encore `changed_program_mask` en
+comparant les PROGRAM cibles au runtime
 effectif, car des commandes live peuvent preceder le commit. L'installer fait
 ensuite PANIC pour Project seulement, ferme tous les PROGRAM modifies, installe
 OFF pour liberer avant acquisition, installe tous les PROGRAM cibles, applique

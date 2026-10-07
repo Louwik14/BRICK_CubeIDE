@@ -245,8 +245,7 @@ void ui_theme_draw_focus_at(int x, int y, int w, int h, const char *text,
             break;
         case UI_THEME_FOCUS_UNDERLINE:
             drv_display_draw_text((uint8_t)tx, text_y, text);
-            drv_display_draw_line(x + 3, y + h - 1, x + w - 4, y + h - 1);
-            drv_display_draw_pixel(x + 1, y + h - 2, true);
+            drv_display_draw_line(x + 1, y + h - 1, x + w - 4, y + h - 1);
             drv_display_draw_pixel(x + w - 2, y + h - 2, true);
             break;
     }
@@ -497,7 +496,6 @@ void ui_theme_draw_page_title(const char *title, const char *context, uint8_t li
         drv_display_set_font(base->header_font);
         drv_display_draw_text(ui_theme_right_x(context), 0U, context);
     }
-    ui_theme_draw_frame(0, 0, OLED_WIDTH, (int)line_y + 1, base->page_frame);
     if (base->separator != 0U || base->page_frame == UI_THEME_FRAME_LINE)
         drv_display_draw_line(0, line_y, 127, line_y);
 }

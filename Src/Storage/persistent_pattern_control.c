@@ -697,6 +697,13 @@ persist_codec_result_t persistent_pattern_control_validate(const persist_control
             UINT32_MAX,0U,0U,0U,0U,0U,0U,0U);
         return r;
     }
+    return persistent_pattern_control_validate_decoded(p);
+}
+
+persist_codec_result_t persistent_pattern_control_validate_decoded(
+    const persist_control_pattern_t *p)
+{
+    if (p == NULL) return PERSIST_CODEC_INVALID_ARGUMENT;
     const uint8_t active=(p->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type==PERSIST_TYPE_GROUP)?1U:0U;
     track_config_t cfg[BRICK_ENTITY_CAPACITY];uint8_t inputs[TRACK_COUNT];uint8_t families[BRICK_ENTITY_CAPACITY];uint8_t types[BRICK_ENTITY_CAPACITY];uint8_t voice_counts[BRICK_ENTITY_CAPACITY];
     for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
@@ -836,68 +843,6 @@ static uint8_t apply_plock_value(param_id_t id,
     return seq_param_iface_encode_param_value(id, value, out);
 }
 
-static uint8_t persistent_sequence_changed(uint8_t e, const persist_control_entity_t *x)
-{
-    if ((e >= SEQ_LANE_CAPACITY) || (x == NULL)) return 1U;
-    uint8_t value = 0U;
-    seq_track_timing_config_t timing;
-    uint8_t direction = (uint8_t)SEQ_DIRECTION_FWD;
-    int8_t rotate = 0;
-    if (seq_model_get_track_length(e) != x->sequence.length
-            || seq_model_get_track_page_mask(e) != x->sequence.page_mask
-            || seq_runtime_get_track_div(e, &value) == 0U || value != x->sequence.division
-            || seq_runtime_get_track_traversal(e, &direction, &rotate) == 0U
-            || direction != x->sequence.direction || rotate != x->sequence.rotate
-            || seq_runtime_get_track_timing(e, &timing) == 0U
-            || timing.base!=x->sequence.timing.base
-            || timing.quantize!=x->sequence.timing.quantize
-            || timing.timing!=x->sequence.timing.timing
-            || timing.random!=x->sequence.timing.random
-            || timing.velocity!=x->sequence.timing.velocity
-            || timing.global!=x->sequence.timing.global
-            || strncmp(timing.groove_name,x->sequence.timing.groove_name,
-                       SEQ_GROOVE_NAME_BYTES)!=0) return 1U;
-    for (uint8_t s = 0U; s < PERSIST_CONTROL_STEP_COUNT; ++s)
-    {
-        const persist_control_step_t *st = &x->sequence.steps[s];
-        if ((seq_model_get_trig(e, s) != st->trigger) || (seq_model_get_step_roll(e, s) != st->roll)) return 1U;
-        for (uint8_t v = 0U; v < SEQ_PLAY_MAX_CAPACITY; ++v)
-        {
-            const persist_control_play_item_t *p = &st->play[v];
-            const uint8_t masks[] = { SEQ_STEP_PLAY_FIELD_NOTE, SEQ_STEP_PLAY_FIELD_VELOCITY, SEQ_STEP_PLAY_FIELD_LENGTH, SEQ_STEP_PLAY_FIELD_MICROTIMING };
-            const int16_t expected[] = { p->note, p->velocity, p->length, p->microtiming };
-            for (uint8_t f = 0U; f < 4U; ++f)
-            {
-                int16_t current = 0;
-                const uint8_t present = seq_model_play_get(e, s, v, (seq_step_play_field_t)masks[f], &current);
-                if (present != ((p->present_mask >> f) & 1U) || (present != 0U && current != expected[f])) return 1U;
-            }
-        }
-        if (seq_model_step_param_plock_count(e, s) != st->lock_count) return 1U;
-        for (uint8_t i = 0U; i < st->lock_count; ++i)
-        {
-            seq_plock_entry_t raw;
-            uint8_t tone_slot;
-            param_id_t target_id;
-            param_id_t current_id;
-            seq_value16_t encoded;
-            if (seq_model_step_param_plock_get_at(e, s, i, &raw) == 0U) return 1U;
-            if (persist_key_tone_slot_from_disk(st->locks[i].parameter, &tone_slot) != 0U)
-            {
-                encoded = (seq_value16_t)(st->locks[i].value.f32 * 65535.0f + 0.5f);
-                if ((raw.set_id != SEQ_PLOCK_SET_TONE) || (raw.param_slot != tone_slot)
-                        || (raw.flags != st->locks[i].flags) || (raw.value16 != encoded)) return 1U;
-                continue;
-            }
-            if ((persist_key_param_from_disk(st->locks[i].parameter, &target_id) == 0U)
-                    || (seq_param_iface_slot_to_param(e, raw.set_id, raw.param_slot, &current_id) == 0U)
-                    || (current_id != target_id)
-                    || (apply_plock_value(target_id, &st->locks[i], &encoded) == 0U)
-                    || (raw.flags != st->locks[i].flags) || (raw.value16 != encoded)) return 1U;
-        }
-    }
-    return 0U;
-}
 static uint8_t apply_sequence(uint8_t e,const persist_control_entity_t*x,
     const persistent_pattern_prepared_t *prepared){uint16_t resolved_index=0U;seq_model_set_track_length(e,x->sequence.length);seq_runtime_set_track_div(e,x->sequence.division);seq_runtime_set_track_traversal(e,x->sequence.direction,x->sequence.rotate);seq_runtime_set_track_timing(e,&x->sequence.timing);for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t*st=&x->sequence.steps[s];seq_model_set_trig(e,s,st->trigger);seq_model_set_step_roll(e,s,st->roll);seq_model_play_clear_step(e,s);seq_model_step_param_plock_clear(e,s);for(uint8_t v=0U;v<st->play_count;++v){const persist_control_play_item_t*p=&st->play[v];if(((p->present_mask&SEQ_STEP_PLAY_PRESENT_NOTE)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_NOTE,p->note)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_VELOCITY)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_VELOCITY,p->velocity)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_LENGTH)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_LENGTH,p->length)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_MICROTIMING)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_MICROTIMING,p->microtiming)==0U))return 0U;}for(uint8_t i=0U;i<st->lock_count;++i){param_id_t id;uint8_t set;seq_param_slot_t slot;uint8_t found=0U;seq_value16_t value;if(prepared!=NULL){if(resolved_index>=prepared->lock_count[e]||!seq_param_iface_key_to_address(prepared->locks[e][resolved_index++],&set,&slot))return 0U;if(set==SEQ_PLOCK_SET_TONE)value=(seq_value16_t)(st->locks[i].value.f32*65535.0f+0.5f);else if(!seq_param_iface_slot_to_param_for_type(track_runtime_type_from_ui((track_type_t)prepared->type[e]),set,slot,&id)||!apply_plock_value(id,&st->locks[i],&value))return 0U;found=1U;}else if(persist_key_tone_slot_from_disk(st->locks[i].parameter,&slot)!=0U){set=SEQ_PLOCK_SET_TONE;value=(seq_value16_t)(st->locks[i].value.f32*65535.0f+0.5f);found=1U;}else{if(persist_key_param_from_disk(st->locks[i].parameter,&id)==0U||apply_plock_value(id,&st->locks[i],&value)==0U)return 0U;for(set=0U;set<SEQ_PLOCK_SET_COUNT;++set)if(seq_param_iface_param_to_slot(e,set,id,&slot)!=0U){found=1U;break;}}if(found==0U)return 0U;seq_plock_op_status_t status=seq_model_step_plock_upsert(e,s,set,slot,value,st->locks[i].flags);if(status!=SEQ_PLOCK_OP_CREATED&&status!=SEQ_PLOCK_OP_UPDATED)return 0U;}}return (prepared==NULL||resolved_index==prepared->lock_count[e])?1U:0U;}
 static uint8_t apply_note_fx(uint8_t e,uint8_t active,const persist_control_entity_t*x){persist_entity_caps_t caps;if(persist_entity_caps_resolve(active,e,&caps)==0U)return 0U;if(caps.note_fx_owner==0U){const uint8_t*value=(const uint8_t*)&x->note_fx;for(uint8_t i=0U;i<sizeof(x->note_fx);++i)if(value[i]!=0U)return 0U;return 1U;}return note_fx_chain_state_install_track(e,&x->note_fx);}
@@ -1500,25 +1445,7 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
             inputs[entity] = prepared->input[entity];
     }
 
-    const uint8_t current_group_active = entity_topology_group_is_active();
     seq_runtime_set_groove_seed(pattern->globals.groove_seed);
-    for (uint8_t entity = 0U;
-         entity < PERSIST_CONTROL_ENTITY_COUNT; ++entity)
-    {
-        entity_topology_descriptor_t current_topology;
-        entity_topology_descriptor_t target_topology;
-        if ((entity_topology_resolve(current_group_active, entity,
-                &current_topology) == 0U)
-                || (current_topology.active == 0U))
-            continue;
-        if ((entity_topology_resolve(group_active, entity,
-                &target_topology) == 0U)
-                || (target_topology.active == 0U)
-                || (persistent_sequence_changed(
-                    entity, &pattern->entities[entity]) != 0U))
-            seq_engine_control_mark_dirty();
-    }
-
     if (track_structure_apply_entity_bulk_with_inputs_and_polyphony(
             families, types, midi_channels, midi_sources, inputs,
             voice_counts) == 0U)
@@ -1625,7 +1552,8 @@ persist_codec_result_t persistent_pattern_control_prepare(
 #endif
     if(seq_engine_control_prepared()!=0U)return PERSIST_CODEC_IO_ERROR;
     prepared->pattern=pattern;
-    const persist_codec_result_t validation=persistent_pattern_control_validate(pattern);
+    const persist_codec_result_t validation=
+        persistent_pattern_control_validate_decoded(pattern);
     if(validation!=PERSIST_CODEC_OK)return validation;
 #if BRICK_PATTERN_RECALL_DIAG
     pattern_recall_diag_phase(PATTERN_DIAG_PHASE_PATTERN_VALIDATED);

@@ -10,7 +10,7 @@
 
 PERSIST_DEBUG_ATTR volatile persist_debug_block_t g_persist_dbg = {
     .magic = PERSIST_DEBUG_MAGIC,
-    .version = 4U,
+    .version = 5U,
     .word_count = sizeof(persist_debug_block_t) / sizeof(uint32_t)
 };
 
@@ -29,8 +29,6 @@ void persist_debug_begin(persist_dbg_op_t op, uint32_t bank, uint32_t slot)
     g_persist_dbg.io_generation = 0U;
     g_persist_dbg.boundary_track = 0U;
     g_persist_dbg.boundary_armed = 0U;
-    g_persist_dbg.boundary_generation = 0U;
-    g_persist_dbg.boundary_observed_generation = 0U;
     g_persist_dbg.boundary_due = 0U;
     g_persist_dbg.commit_done = 0U;
     g_persist_dbg.project_phase = PERSIST_DBG_PROJECT_PHASE_NONE;
@@ -84,8 +82,8 @@ void persist_debug_workspace_owner(uint32_t workspace_owner)
 {g_persist_dbg.workspace_owner=workspace_owner;}
 void persist_debug_details(uint32_t a,uint32_t b,uint32_t c,uint32_t d)
 {g_persist_dbg.detail0=a;g_persist_dbg.detail1=b;g_persist_dbg.detail2=c;g_persist_dbg.detail3=d;}
-void persist_debug_pattern_state(uint32_t phase,uint32_t current,uint32_t candidate,uint32_t request_generation,uint32_t io_generation,uint32_t boundary_track,uint32_t boundary_armed,uint32_t boundary_generation)
-{g_persist_dbg.candidate_phase=phase;g_persist_dbg.current_pattern=current;g_persist_dbg.candidate_pattern=candidate;g_persist_dbg.request_generation=request_generation;g_persist_dbg.io_generation=io_generation;g_persist_dbg.boundary_track=boundary_track;g_persist_dbg.boundary_armed=boundary_armed;g_persist_dbg.boundary_generation=boundary_generation;}
+void persist_debug_pattern_state(uint32_t phase,uint32_t current,uint32_t candidate,uint32_t request_generation,uint32_t io_generation,uint32_t boundary_track,uint32_t boundary_armed)
+{g_persist_dbg.candidate_phase=phase;g_persist_dbg.current_pattern=current;g_persist_dbg.candidate_pattern=candidate;g_persist_dbg.request_generation=request_generation;g_persist_dbg.io_generation=io_generation;g_persist_dbg.boundary_track=boundary_track;g_persist_dbg.boundary_armed=boundary_armed;}
 void persist_debug_publication(uint8_t audio,uint8_t seq)
 {if(audio!=0U)++g_persist_dbg.audio_publish;if(seq!=0U)++g_persist_dbg.seq_publish;}
 void persist_debug_project(persist_dbg_project_phase_t phase,uint32_t progress,uint32_t detail)

@@ -30,7 +30,7 @@ typedef enum
     PATTERN_CANDIDATE_EMPTY = 0,
     PATTERN_CANDIDATE_REQUESTED,
     PATTERN_CANDIDATE_LOADING,
-    PATTERN_CANDIDATE_VALIDATED,
+    PATTERN_CANDIDATE_DECODED,
     PATTERN_CANDIDATE_PREPARED
 } pattern_candidate_phase_t;
 
@@ -39,7 +39,6 @@ typedef struct
     pattern_candidate_phase_t phase;
     uint32_t request_generation;
     uint64_t boundary_sample;
-    uint32_t boundary_generation;
     uint8_t bank;
     uint8_t pattern;
     uint8_t boundary_track;
@@ -84,8 +83,7 @@ static void pattern_debug_state(void)
         (g_pattern_io_operation == PATTERN_CONTROL_BANK_ASYNC_LOAD)
             ? g_pattern_io_request_generation : 0U,
         g_pattern_candidate.boundary_track,
-        g_pattern_candidate.boundary_armed,
-        g_pattern_candidate.boundary_generation);
+        g_pattern_candidate.boundary_armed);
     g_persist_dbg.candidate_generation =
         g_pattern_candidate.request_generation;
 }
@@ -184,8 +182,6 @@ static uint8_t pattern_candidate_apply(uint8_t resume_transport)
 
     g_active_bank = g_pattern_candidate.bank;
     g_active_pattern = g_pattern_candidate.pattern;
-    const uint32_t boundary_generation =
-        g_pattern_candidate.boundary_generation;
     const uint32_t request_generation =
         g_pattern_candidate.request_generation;
     pattern_candidate_clear();
@@ -198,7 +194,6 @@ static uint8_t pattern_candidate_apply(uint8_t resume_transport)
     (void)param_macro_sync_sources();
     pattern_debug_state();
     g_persist_dbg.request_generation = request_generation;
-    g_persist_dbg.boundary_generation = boundary_generation;
     g_persist_dbg.current_generation = request_generation;
     persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS, 0);
     g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_SUCCEEDED;
@@ -237,7 +232,6 @@ static uint8_t pattern_candidate_arm_boundary(void)
         return 0U;
     g_pattern_candidate.boundary_track = boundary_track;
     g_pattern_candidate.boundary_sample = boundary_sample;
-    g_pattern_candidate.boundary_generation = 0U;
     g_pattern_candidate.boundary_armed = 1U;
     return 1U;
 }
@@ -246,20 +240,9 @@ static void pattern_candidate_decoded(void)
 {
     if (g_pattern_candidate.phase != PATTERN_CANDIDATE_LOADING
         && g_pattern_candidate.phase != PATTERN_CANDIDATE_REQUESTED
-        && g_pattern_candidate.phase != PATTERN_CANDIDATE_VALIDATED)
+        && g_pattern_candidate.phase != PATTERN_CANDIDATE_DECODED)
         return;
-    const persist_codec_result_t validation =
-        persistent_pattern_control_validate(&g_pattern_io_workspace->pattern);
-    if (validation != PERSIST_CODEC_OK)
-    {
-        g_persist_dbg.cancel_reason = PERSIST_DBG_CANCEL_VALIDATION_FAILED;
-        persist_debug_error(PERSIST_DBG_STAGE_VALIDATE,(int32_t)validation);
-        pattern_candidate_clear();
-        pattern_candidate_release_payload();
-        return;
-    }
-
-    g_pattern_candidate.phase = PATTERN_CANDIDATE_VALIDATED;
+    g_pattern_candidate.phase = PATTERN_CANDIDATE_DECODED;
     const persist_codec_result_t prepared=persistent_pattern_control_prepare(
         &g_pattern_io_workspace->pattern,
         &g_pattern_io_workspace->prepared_pattern,
@@ -276,7 +259,6 @@ static void pattern_candidate_decoded(void)
 #endif
     g_pattern_candidate.phase = PATTERN_CANDIDATE_PREPARED;
     g_pattern_candidate.boundary_armed = 0U;
-    g_pattern_candidate.boundary_generation = 0U;
     if (seq_runtime_is_running() != 0U)
     {
         if (pattern_candidate_arm_boundary() == 0U)
@@ -522,7 +504,7 @@ void pattern_load_service(uint32_t byte_budget)
         return;
     }
 
-    if (g_pattern_candidate.phase == PATTERN_CANDIDATE_VALIDATED)
+    if (g_pattern_candidate.phase == PATTERN_CANDIDATE_DECODED)
     {pattern_candidate_decoded();return;}
     if (g_pattern_candidate.phase != PATTERN_CANDIDATE_REQUESTED) return;
     if ((g_pattern_io_workspace != 0)
@@ -596,7 +578,7 @@ uint8_t pattern_load_is_pending(void)
 {
     return ((g_pattern_candidate.phase == PATTERN_CANDIDATE_REQUESTED)
             || (g_pattern_candidate.phase == PATTERN_CANDIDATE_LOADING)
-            || (g_pattern_candidate.phase == PATTERN_CANDIDATE_VALIDATED)
+            || (g_pattern_candidate.phase == PATTERN_CANDIDATE_DECODED)
             || (g_pattern_candidate.phase == PATTERN_CANDIDATE_PREPARED))
         ? 1U : 0U;
 }

@@ -69,7 +69,8 @@ typedef enum {
     PERSIST_DBG_PATTERN_PHASE_EMPTY = 0,
     PERSIST_DBG_PATTERN_PHASE_REQUESTED,
     PERSIST_DBG_PATTERN_PHASE_LOADING,
-    PERSIST_DBG_PATTERN_PHASE_PENDING
+    PERSIST_DBG_PATTERN_PHASE_DECODED,
+    PERSIST_DBG_PATTERN_PHASE_PREPARED
 } persist_dbg_pattern_phase_t;
 
 typedef enum {
@@ -159,8 +160,6 @@ typedef struct {
     volatile uint32_t io_generation;
     volatile uint32_t boundary_track;
     volatile uint32_t boundary_armed;
-    volatile uint32_t boundary_generation;
-    volatile uint32_t boundary_observed_generation;
     volatile uint32_t boundary_due;
     volatile uint32_t transport_running;
     volatile uint32_t decision_reason;
@@ -205,8 +204,8 @@ typedef struct {
     volatile uint32_t active_track_before;
 } persist_debug_block_t;
 
-_Static_assert(sizeof(persist_debug_block_t) == 244U,
-               "Persistence debug v4 layout changed");
+_Static_assert(sizeof(persist_debug_block_t) == 236U,
+               "Persistence debug v5 layout changed");
 
 extern volatile persist_debug_block_t g_persist_dbg;
 
@@ -220,8 +219,7 @@ void persist_debug_pattern_state(uint32_t candidate_phase,
                                  uint32_t request_generation,
                                  uint32_t io_generation,
                                  uint32_t boundary_track,
-                                 uint32_t boundary_armed,
-                                 uint32_t boundary_generation);
+                                 uint32_t boundary_armed);
 void persist_debug_publication(uint8_t audio, uint8_t seq);
 void persist_debug_project(persist_dbg_project_phase_t phase,
                            uint32_t progress, uint32_t detail);

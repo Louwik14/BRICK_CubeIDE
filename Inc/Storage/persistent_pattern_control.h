@@ -33,6 +33,9 @@ typedef struct
     uint32_t audio_generation;
 } persistent_pattern_prepared_t;
 
+_Static_assert(sizeof(persistent_pattern_prepared_t) == 8876U,
+               "Prepared Pattern metadata size changed");
+
 typedef struct
 {
     param_global_control_state_t global_audio;
@@ -44,6 +47,10 @@ persist_codec_result_t persistent_pattern_control_build_defaults(
     const persistent_pattern_default_context_t *context);
 persist_codec_result_t persistent_pattern_control_capture(persist_control_pattern_t *out_pattern);
 persist_codec_result_t persistent_pattern_control_validate(const persist_control_pattern_t *pattern);
+/* Runtime/topology validation for a Pattern already accepted by the codec. */
+persist_codec_result_t persistent_pattern_control_validate_decoded(
+    const persist_control_pattern_t *pattern);
+/* The Pattern must already have passed persist_codec_validate_pattern(). */
 persist_codec_result_t persistent_pattern_control_prepare(
     const persist_control_pattern_t *pattern,
     persistent_pattern_prepared_t *prepared,
