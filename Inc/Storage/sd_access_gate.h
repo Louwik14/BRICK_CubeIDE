@@ -47,6 +47,7 @@ const char *sd_access_gate_client_label(sd_access_client_t client);
 const char *sd_access_gate_busy_label(void);
 
 uint8_t sd_access_fs_mount_if_needed(void);
+FRESULT sd_access_fs_last_result(void);
 uint8_t sd_access_fs_reprobe_if_unavailable(void);
 void sd_access_fs_invalidate_mount(void);
 sd_storage_status_t sd_access_storage_status(void);

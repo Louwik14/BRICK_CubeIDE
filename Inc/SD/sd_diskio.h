@@ -34,6 +34,8 @@
 /* Exported constants --------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
 extern const Diskio_drvTypeDef  SD_Driver;
+uint32_t sd_diskio_debug_status(void);
+uint32_t sd_diskio_debug_card_state(void);
 
 /* USER CODE BEGIN lastSection */
 /* can be used to modify / undefine previous code or add new definitions */

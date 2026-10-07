@@ -18,6 +18,21 @@ typedef enum
     SD_RANDOM_BENCH_ERROR
 } sd_random_bench_state_t;
 
+typedef enum
+{
+    SD_RANDOM_BENCH_FAIL_NONE = 0,
+    SD_RANDOM_BENCH_FAIL_MOUNT = 1,
+    SD_RANDOM_BENCH_FAIL_MKDIR = 2,
+    SD_RANDOM_BENCH_FAIL_OPEN = 3,
+    SD_RANDOM_BENCH_FAIL_EXPAND = 4,
+    SD_RANDOM_BENCH_FAIL_WRITE = 5,
+    SD_RANDOM_BENCH_FAIL_SYNC = 6,
+    SD_RANDOM_BENCH_FAIL_CLOSE = 7,
+    SD_RANDOM_BENCH_FAIL_REOPEN = 8,
+    SD_RANDOM_BENCH_FAIL_MAP = 9,
+    SD_RANDOM_BENCH_FAIL_RANDOM_READ = 10
+} sd_random_bench_fail_step_t;
+
 typedef struct
 {
     uint32_t magic;
@@ -28,8 +43,13 @@ typedef struct
     uint32_t progress_total;
     volatile uint32_t done;
     volatile uint32_t error;
+    uint32_t fail_step;
     int32_t last_fresult;
     uint32_t last_block_result;
+    uint32_t write_offset;
+    uint32_t bytes_written;
+    uint32_t disk_status;
+    uint32_t card_state;
     uint32_t cpu_hz;
     uint32_t file_size;
     uint32_t page_size;

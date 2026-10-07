@@ -113,6 +113,16 @@ __ALIGN_BEGIN static uint8_t scratch[BLOCKSIZE * SD_READ_BOUNCE_BLOCK_COUNT] __A
 static volatile DSTATUS Stat = STA_NOINIT;
 
 static volatile  UINT  WriteStatus = 0, ReadStatus = 0;
+
+uint32_t sd_diskio_debug_status(void)
+{
+  return (uint32_t)Stat;
+}
+
+uint32_t sd_diskio_debug_card_state(void)
+{
+  return (uint32_t)BSP_SD_GetCardState();
+}
 /* Private function prototypes -----------------------------------------------*/
 static DSTATUS SD_CheckStatus(BYTE lun);
 DSTATUS SD_initialize (BYTE);
@@ -188,9 +198,10 @@ static int SD_CheckStatusWithTimeout(uint32_t timeout)
  */
 static DSTATUS SD_CheckStatus(BYTE lun)
 {
+  (void)lun;
   Stat = STA_NOINIT;
 
-  if(BSP_SD_GetCardState() == MSD_OK)
+  if(BSP_SD_IsDetected() == SD_PRESENT)
   {
     Stat &= ~STA_NOINIT;
   }
@@ -225,7 +236,10 @@ DSTATUS SD_initialize(BYTE lun)
   const uint8_t init_status = BSP_SD_Init();
   if(init_status == MSD_OK)
   {
-    Stat = SD_CheckStatus(lun);
+    if (SD_CheckStatusWithTimeout(SD_TIMEOUT) == 0)
+    {
+      Stat &= ~STA_NOINIT;
+    }
     if((Stat & STA_NOINIT) != 0U)
     {
       sd_access_storage_report_init_failure(0U);

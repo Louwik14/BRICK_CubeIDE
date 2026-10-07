@@ -36,6 +36,10 @@
 #include "Storage/waveform_service.h"
 #include "Platform/brick6_sd_config.h"
 #include "SD/sd_random_bench.h"
+#include "SD/sd_block_device.h"
+#include "SD/sd_scheduler_runtime.h"
+#include "Storage/sd_access_gate.h"
+#include "Sampler/sample_stream_fatfs_map.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_calibration.h"
@@ -92,7 +96,10 @@ void brick6_app_init(void)
             { .slot = 2U, .type = (uint8_t)BRICK6_AUDIO_BOOT_FX_COMP_LAB },
         },
     };
-    control_domain_init();
+    sd_access_gate_init();
+    sample_stream_physical_map_pool_reset();
+    sd_block_device_async_init();
+    sd_scheduler_runtime_init();
     sd_random_bench_init();
     return;
     seq_engine_control_init();

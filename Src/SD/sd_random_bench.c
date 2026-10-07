@@ -7,6 +7,7 @@
 #include "Sampler/sample_stream_backend_physical.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "SD/sd_scheduler_runtime.h"
+#include "SD/sd_diskio.h"
 #include "Storage/sd_access_gate.h"
 #include "ff.h"
 #include "stm32h7xx.h"
@@ -27,7 +28,6 @@ enum
     SD_BENCH_ERROR_MOUNT,
     SD_BENCH_ERROR_DIRECTORY,
     SD_BENCH_ERROR_FILE,
-    SD_BENCH_ERROR_EXPAND,
     SD_BENCH_ERROR_WRITE,
     SD_BENCH_ERROR_SYNC,
     SD_BENCH_ERROR_MAP,
@@ -91,7 +91,13 @@ static void sd_bench_release_gate(void)
     }
 }
 
-static void sd_bench_fail(uint32_t error, FRESULT fr,
+static void sd_bench_snapshot_media(void)
+{
+    g_sd_random_bench.disk_status = sd_diskio_debug_status();
+    g_sd_random_bench.card_state = sd_diskio_debug_card_state();
+}
+
+static void sd_bench_fail(uint32_t error, uint32_t fail_step, FRESULT fr,
                           sd_block_device_result_t block_result)
 {
     if (g_sd_bench_runtime.file_open != 0U)
@@ -101,8 +107,10 @@ static void sd_bench_fail(uint32_t error, FRESULT fr,
     }
     sd_bench_release_gate();
     g_sd_random_bench.error = error;
+    g_sd_random_bench.fail_step = fail_step;
     g_sd_random_bench.last_fresult = (int32_t)fr;
     g_sd_random_bench.last_block_result = (uint32_t)block_result;
+    sd_bench_snapshot_media();
     g_sd_random_bench.errors++;
     if (block_result == SD_BLOCK_DEVICE_TIMEOUT)
     {
@@ -112,29 +120,21 @@ static void sd_bench_fail(uint32_t error, FRESULT fr,
     g_sd_random_bench.done = 1U;
 }
 
-static uint8_t sd_bench_make_dirs(void)
+static FRESULT sd_bench_make_dirs(void)
 {
     FRESULT fr = f_mkdir("0:/BRICK");
-    if ((fr != FR_OK) && (fr != FR_EXIST)) return 0U;
+    if ((fr != FR_OK) && (fr != FR_EXIST)) return fr;
     fr = f_mkdir("0:/BRICK/TEST");
-    return ((fr == FR_OK) || (fr == FR_EXIST)) ? 1U : 0U;
+    return (fr == FR_EXIST) ? FR_OK : fr;
 }
 
-static FRESULT sd_bench_create_file(uint32_t bytes)
+static FRESULT sd_bench_create_file(void)
 {
     FRESULT fr = f_open(&g_sd_bench_runtime.file, SD_BENCH_PATH,
                         FA_CREATE_ALWAYS | FA_WRITE);
     if (fr != FR_OK) return fr;
     g_sd_bench_runtime.file_open = 1U;
-    fr = f_expand(&g_sd_bench_runtime.file, (FSIZE_t)bytes, 1U);
-    if (fr == FR_OK) fr = f_lseek(&g_sd_bench_runtime.file, 0U);
-    if (fr != FR_OK)
-    {
-        (void)f_close(&g_sd_bench_runtime.file);
-        g_sd_bench_runtime.file_open = 0U;
-        (void)f_unlink(SD_BENCH_PATH);
-    }
-    return fr;
+    return FR_OK;
 }
 
 static void sd_bench_fill_pattern(void)
@@ -155,7 +155,8 @@ static uint8_t sd_bench_open_and_map(void)
     FRESULT fr = f_open(&g_sd_bench_runtime.file, SD_BENCH_PATH, FA_READ);
     if (fr != FR_OK)
     {
-        sd_bench_fail(SD_BENCH_ERROR_FILE, fr, SD_BLOCK_DEVICE_OK);
+        sd_bench_fail(SD_BENCH_ERROR_FILE, SD_RANDOM_BENCH_FAIL_REOPEN,
+                      fr, SD_BLOCK_DEVICE_OK);
         return 0U;
     }
     g_sd_bench_runtime.file_open = 1U;
@@ -163,14 +164,16 @@ static uint8_t sd_bench_open_and_map(void)
     if (sample_stream_fatfs_map_build_from_file(
             &g_sd_bench_runtime.file, &g_sd_bench_runtime.metadata) == 0U)
     {
-        sd_bench_fail(SD_BENCH_ERROR_MAP, FR_INT_ERR, SD_BLOCK_DEVICE_OK);
+        sd_bench_fail(SD_BENCH_ERROR_MAP, SD_RANDOM_BENCH_FAIL_MAP,
+                      FR_INT_ERR, SD_BLOCK_DEVICE_OK);
         return 0U;
     }
     fr = f_close(&g_sd_bench_runtime.file);
     g_sd_bench_runtime.file_open = 0U;
     if (fr != FR_OK)
     {
-        sd_bench_fail(SD_BENCH_ERROR_FILE, fr, SD_BLOCK_DEVICE_OK);
+        sd_bench_fail(SD_BENCH_ERROR_FILE, SD_RANDOM_BENCH_FAIL_CLOSE,
+                      fr, SD_BLOCK_DEVICE_OK);
         return 0U;
     }
     g_sd_bench_runtime.metadata.block_align = 1U;
@@ -220,20 +223,24 @@ static void sd_bench_prepare_file(void)
     {
         if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
         {
-            sd_bench_fail(SD_BENCH_ERROR_GATE, FR_LOCKED,
+            sd_bench_fail(SD_BENCH_ERROR_GATE, SD_RANDOM_BENCH_FAIL_MOUNT,
+                          FR_LOCKED,
                           SD_BLOCK_DEVICE_GATE_NOT_HELD);
             return;
         }
         g_sd_bench_runtime.gate_held = 1U;
         if (sd_access_fs_mount_if_needed() == 0U)
         {
-            sd_bench_fail(SD_BENCH_ERROR_MOUNT, FR_NOT_READY,
+            sd_bench_fail(SD_BENCH_ERROR_MOUNT, SD_RANDOM_BENCH_FAIL_MOUNT,
+                          sd_access_fs_last_result(),
                           SD_BLOCK_DEVICE_OK);
             return;
         }
-        if (sd_bench_make_dirs() == 0U)
+        const FRESULT mkdir_fr = sd_bench_make_dirs();
+        if (mkdir_fr != FR_OK)
         {
-            sd_bench_fail(SD_BENCH_ERROR_DIRECTORY, FR_DISK_ERR,
+            sd_bench_fail(SD_BENCH_ERROR_DIRECTORY,
+                          SD_RANDOM_BENCH_FAIL_MKDIR, mkdir_fr,
                           SD_BLOCK_DEVICE_OK);
             return;
         }
@@ -250,25 +257,39 @@ static void sd_bench_prepare_file(void)
         }
         if ((stat_fr != FR_OK) && (stat_fr != FR_NO_FILE))
         {
-            sd_bench_fail(SD_BENCH_ERROR_FILE, stat_fr, SD_BLOCK_DEVICE_OK);
+            sd_bench_fail(SD_BENCH_ERROR_FILE, SD_RANDOM_BENCH_FAIL_OPEN,
+                          stat_fr, SD_BLOCK_DEVICE_OK);
             return;
         }
         if (stat_fr == FR_OK) (void)f_unlink(SD_BENCH_PATH);
 
-        FRESULT fr = sd_bench_create_file(SD_BENCH_FILE_512_MIB);
-        if (fr != FR_OK)
+        DWORD free_clusters = 0U;
+        FATFS *free_fs = 0;
+        FRESULT fr = f_getfree("0:", &free_clusters, &free_fs);
+        if ((fr != FR_OK) || (free_fs == 0))
         {
-            fr = sd_bench_create_file(SD_BENCH_FILE_256_MIB);
-            if (fr != FR_OK)
-            {
-                sd_bench_fail(SD_BENCH_ERROR_EXPAND, fr, SD_BLOCK_DEVICE_OK);
-                return;
-            }
-            g_sd_random_bench.file_size = SD_BENCH_FILE_256_MIB;
+            sd_bench_fail(SD_BENCH_ERROR_FILE, SD_RANDOM_BENCH_FAIL_OPEN,
+                          fr, SD_BLOCK_DEVICE_OK);
+            return;
         }
+        const uint64_t free_bytes = (uint64_t)free_clusters
+            * (uint64_t)free_fs->csize * 512U;
+        if (free_bytes >= SD_BENCH_FILE_512_MIB)
+            g_sd_random_bench.file_size = SD_BENCH_FILE_512_MIB;
+        else if (free_bytes >= SD_BENCH_FILE_256_MIB)
+            g_sd_random_bench.file_size = SD_BENCH_FILE_256_MIB;
         else
         {
-            g_sd_random_bench.file_size = SD_BENCH_FILE_512_MIB;
+            sd_bench_fail(SD_BENCH_ERROR_FILE, SD_RANDOM_BENCH_FAIL_OPEN,
+                          FR_DENIED, SD_BLOCK_DEVICE_OK);
+            return;
+        }
+        fr = sd_bench_create_file();
+        if (fr != FR_OK)
+        {
+            sd_bench_fail(SD_BENCH_ERROR_FILE, SD_RANDOM_BENCH_FAIL_OPEN,
+                          fr, SD_BLOCK_DEVICE_OK);
+            return;
         }
         sd_bench_fill_pattern();
         g_sd_random_bench.progress_total = g_sd_random_bench.file_size;
@@ -280,12 +301,16 @@ static void sd_bench_prepare_file(void)
         const FRESULT fr = f_write(&g_sd_bench_runtime.file,
                                    g_sd_bench_buffer,
                                    SD_BENCH_PAGE_BYTES, &written);
+        g_sd_random_bench.bytes_written = written;
+        g_sd_bench_runtime.create_offset += written;
+        g_sd_random_bench.write_offset = g_sd_bench_runtime.create_offset;
+        sd_bench_snapshot_media();
         if ((fr != FR_OK) || (written != SD_BENCH_PAGE_BYTES))
         {
-            sd_bench_fail(SD_BENCH_ERROR_WRITE, fr, SD_BLOCK_DEVICE_OK);
+            sd_bench_fail(SD_BENCH_ERROR_WRITE, SD_RANDOM_BENCH_FAIL_WRITE,
+                          fr, SD_BLOCK_DEVICE_OK);
             return;
         }
-        g_sd_bench_runtime.create_offset += written;
         g_sd_random_bench.progress = g_sd_bench_runtime.create_offset;
         return;
     }
@@ -293,14 +318,16 @@ static void sd_bench_prepare_file(void)
     FRESULT fr = f_sync(&g_sd_bench_runtime.file);
     if (fr != FR_OK)
     {
-        sd_bench_fail(SD_BENCH_ERROR_SYNC, fr, SD_BLOCK_DEVICE_OK);
+        sd_bench_fail(SD_BENCH_ERROR_SYNC, SD_RANDOM_BENCH_FAIL_SYNC,
+                      fr, SD_BLOCK_DEVICE_OK);
         return;
     }
     fr = f_close(&g_sd_bench_runtime.file);
     g_sd_bench_runtime.file_open = 0U;
     if (fr != FR_OK)
     {
-        sd_bench_fail(SD_BENCH_ERROR_FILE, fr, SD_BLOCK_DEVICE_OK);
+        sd_bench_fail(SD_BENCH_ERROR_FILE, SD_RANDOM_BENCH_FAIL_CLOSE,
+                      fr, SD_BLOCK_DEVICE_OK);
         return;
     }
     if (sd_bench_open_and_map() != 0U) sd_bench_start_running();
@@ -327,7 +354,8 @@ static uint8_t sd_bench_begin_read(void)
         || (span.logical_bytes != SD_BENCH_PAGE_BYTES)
         || (span.sector_count != SD_BENCH_PAGE_SECTORS))
     {
-        sd_bench_fail(SD_BENCH_ERROR_FRAGMENT, FR_INT_ERR,
+        sd_bench_fail(SD_BENCH_ERROR_FRAGMENT,
+                      SD_RANDOM_BENCH_FAIL_RANDOM_READ, FR_INT_ERR,
                       SD_BLOCK_DEVICE_INVALID_ARG);
         return 0U;
     }
@@ -343,7 +371,8 @@ static uint8_t sd_bench_begin_read(void)
             g_sd_bench_buffer, sizeof(g_sd_bench_buffer), 0U,
             UINT32_MAX) == 0U)
     {
-        sd_bench_fail(SD_BENCH_ERROR_SUBMIT, FR_INT_ERR,
+        sd_bench_fail(SD_BENCH_ERROR_SUBMIT,
+                      SD_RANDOM_BENCH_FAIL_RANDOM_READ, FR_INT_ERR,
                       SD_BLOCK_DEVICE_BUSY);
         return 0U;
     }
@@ -375,7 +404,9 @@ static void sd_bench_record_read(void)
         || (request->perf_dma_cycles == 0U)
         || (request->perf_complete_cycles == 0U))
     {
-        sd_bench_fail(SD_BENCH_ERROR_READ, FR_DISK_ERR, request->result);
+        sd_bench_fail(SD_BENCH_ERROR_READ,
+                      SD_RANDOM_BENCH_FAIL_RANDOM_READ,
+                      FR_DISK_ERR, request->result);
         return;
     }
 
@@ -524,6 +555,7 @@ void sd_random_bench_init(void)
     g_sd_random_bench.latency_min_us = UINT32_MAX;
     g_sd_random_bench.transaction_min_us = UINT32_MAX;
     g_sd_random_bench.state = SD_RANDOM_BENCH_CREATING_FILE;
+    sd_bench_snapshot_media();
 }
 
 void sd_random_bench_service(void)
