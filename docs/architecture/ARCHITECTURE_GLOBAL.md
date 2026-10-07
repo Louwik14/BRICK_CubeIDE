@@ -96,7 +96,7 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 - [stream_need_contract.md](stream_need_contract.md): Sampler RAM, Wavetable, Multi, streaming, page-cache et transport I/O.
 - [recorder_sd.md](recorder_sd.md): bus AUDIO REC unique, Recorder, REC_SOURCE A/B, export cooperatif et lecture Streamer.
 - [stream_rec_perf_baseline.md](stream_rec_perf_baseline.md): protocole et limites de la baseline CPU/DMA Streamer et Recorder H743.
-- [sampler_stream_ram_unification_audit.md](sampler_stream_ram_unification_audit.md): audit de faisabilite de l'UX SAMPLE unifiee, acces aleatoires STREAM, caches et migration.
+- [sampler_stream_ram_unification_audit.md](sampler_stream_ram_unification_audit.md): audit strict de l'UX SAMPLE unifiee par trajectoire, admission zero-raté, cache et limites physiques.
 - [control_audio_functional_contract.md](control_audio_functional_contract.md): FIFO locale unique et consumer AUDIO.
 - [monocore_data_planes.md](monocore_data_planes.md): data planes locaux, cache, DMA et recyclage.
 - [audio_service_publications.md](audio_service_publications.md): publications AUDIO vers les services cooperatifs.
