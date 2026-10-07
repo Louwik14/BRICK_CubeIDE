@@ -1,9 +1,13 @@
 # Benchmark SD aleatoire 64 KiB (temporaire)
 
-Ce firmware Release est volontairement un firmware de mesure. Apres
-initialisation du stockage, il ne demarre ni AUDIO, ni UI, ni sequenceur. Il
-monte FatFs, cree si necessaire `0:/BRICK/TEST/SD_RANDOM.B6T`, puis reste dans
-le benchmark jusqu'a son etat terminal.
+Ce firmware Release demarre par le boot BRICK normal complet, AUDIO et UI
+compris. Lorsque l'ecran de boot est termine et que l'audio a demarre, il attend
+trois secondes. Il attend ensuite que le gate, le scheduler et le block device
+SD soient idle, arrete l'audio et bascule dans le benchmark exclusif. A partir
+de cette bascule, UI, sequenceur et services Storage normaux ne sont plus
+servis; le DMA AUDIO est arrete, TIM12 est stoppe et l'ecran reste fige sur sa
+derniere image normale. Le benchmark cree si necessaire
+`0:/BRICK/TEST/SD_RANDOM.B6T`, puis reste actif jusqu'a son etat terminal.
 
 Le fichier fait 512 MiB lorsque l'espace libre le permet, avec repli sur
 256 MiB. Sa creation est volontairement sequentielle, uniquement par
@@ -18,7 +22,8 @@ maintenance D-cache, dans un buffer benchmark unique.
 
 `g_sd_random_bench` contient la progression, l'etape d'echec, l'offset
 d'ecriture, le dernier nombre d'octets ecrits, les etats disque/carte et les
-resultats en microsecondes.
+resultats en microsecondes. Les percentiles proviennent de deux histogrammes
+RAM a pas de 100 us; moyenne, minimum et maximum restent mesures directement.
 
 `fail_step` vaut 1 MOUNT, 2 MKDIR, 3 OPEN, 4 EXPAND (reserve, non utilise),
 5 WRITE, 6 SYNC, 7 CLOSE, 8 REOPEN, 9 MAP ou 10 RANDOM_READ.

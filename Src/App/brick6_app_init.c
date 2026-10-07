@@ -9,6 +9,7 @@
 #include "App/engine_tasklet.h"
 #include "App/power_shutdown.h"
 #include "Audio/audio_domain.h"
+#include "Audio/audio.h"
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"
@@ -39,13 +40,14 @@
 #include "SD/sd_block_device.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/sd_access_gate.h"
-#include "Sampler/sample_stream_fatfs_map.h"
+#include "Sampler/sample_stream_backend_physical.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_loop.h"
 #include "Seq/seq_runtime.h"
 #include "UI/ui_active_track_sync.h"
+#include "tim.h"
 
 typedef enum
 {
@@ -55,6 +57,14 @@ typedef enum
 } brick6_boot_audio_state_t;
 
 static brick6_boot_audio_state_t g_boot_audio_state;
+static uint8_t g_sd_bench_mode;
+static uint8_t g_sd_bench_delay_started;
+static uint32_t g_sd_bench_delay_tick;
+
+uint8_t brick6_app_sd_bench_active(void)
+{
+    return g_sd_bench_mode;
+}
 
 static void brick6_process_hall_ui_keyboard_chain(void)
 {
@@ -96,17 +106,15 @@ void brick6_app_init(void)
             { .slot = 2U, .type = (uint8_t)BRICK6_AUDIO_BOOT_FX_COMP_LAB },
         },
     };
-    sd_access_gate_init();
-    sample_stream_physical_map_pool_reset();
-    sd_block_device_async_init();
-    sd_scheduler_runtime_init();
-    sd_random_bench_init();
-    return;
+    control_domain_init();
     seq_engine_control_init();
     audio_domain_init(&audio_boot);
     brick6_boot_fx_policy_init();
     control_domain_start(audio_boot.postgain, audio_boot.output_compensation);
     g_boot_audio_state = BRICK6_BOOT_WAIT_MASTER;
+    g_sd_bench_mode = 0U;
+    g_sd_bench_delay_started = 0U;
+    g_sd_bench_delay_tick = 0U;
 }
 
 
@@ -165,8 +173,11 @@ static void brick6_app_service_storage(void)
 
 void brick6_app_process(void)
 {
-    sd_random_bench_service();
-    return;
+    if (g_sd_bench_mode != 0U)
+    {
+        sd_random_bench_service();
+        return;
+    }
     engine_tasklet_poll();
     brick6_stream_service_task_poll();
     if (groove_bank_boot_complete() == 0U)
@@ -209,6 +220,28 @@ void brick6_app_process(void)
     }
     brick6_stream_service_task_poll();
     ui_boot_loading_service();
+    if ((g_boot_audio_state == BRICK6_BOOT_AUDIO_RUNNING)
+        && (ui_boot_loading_is_active() == 0U))
+    {
+        if (g_sd_bench_delay_started == 0U)
+        {
+            g_sd_bench_delay_started = 1U;
+            g_sd_bench_delay_tick = HAL_GetTick();
+        }
+        else if (((HAL_GetTick() - g_sd_bench_delay_tick) >= 3000U)
+            && (sd_access_gate_current_owner() == SD_ACCESS_CLIENT_NONE)
+            && (sd_scheduler_runtime_owner() == SD_SCHEDULER_OWNER_IDLE)
+            && (sd_block_device_async_pending_count() == 0U)
+            && (sample_stream_backend_physical_busy() == 0U))
+        {
+            audio_stop();
+            (void)HAL_TIM_Base_Stop_IT(&htim12);
+            sd_access_gate_set_streaming_critical(0U);
+            sd_random_bench_init();
+            g_sd_bench_mode = 1U;
+            return;
+        }
+    }
     if (power_shutdown_mutations_frozen() != 0U)
     {
         return;

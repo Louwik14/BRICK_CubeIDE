@@ -334,25 +334,28 @@ int main(void)
 	     board_usb_process();
 	     lowcost_bootloader_shift_step16_service();
 
-	     uint32_t ui_ticks_processed = 0U;
-	     while ((engine_tick_count != last_tick) && (ui_ticks_processed < UI_TASKLET_CATCHUP_BUDGET))
+	     if (brick6_app_sd_bench_active() == 0U)
 	     {
-	         last_tick++;
-	         ui_tasklet_divider++;
-	         if (ui_tasklet_divider < UI_TASKLET_ENGINE_DIVIDER)
+	         uint32_t ui_ticks_processed = 0U;
+	         while ((engine_tick_count != last_tick) && (ui_ticks_processed < UI_TASKLET_CATCHUP_BUDGET))
 	         {
-	             continue;
+	             last_tick++;
+	             ui_tasklet_divider++;
+	             if (ui_tasklet_divider < UI_TASKLET_ENGINE_DIVIDER)
+	             {
+	                 continue;
+	             }
+
+	             ui_tasklet_divider = 0U;
+	             ui_tasklet_poll();
+	             ui_ticks_processed++;
 	         }
 
-	         ui_tasklet_divider = 0U;
-	         ui_tasklet_poll();
-	         ui_ticks_processed++;
-	     }
-
-	     if (ui_tasklet_is_initialized() != 0U)
-	     {
-	         ui_renderer_oled_service_poll();
-	         display_flush_service_poll();
+	         if (ui_tasklet_is_initialized() != 0U)
+	         {
+	             ui_renderer_oled_service_poll();
+	             display_flush_service_poll();
+	         }
 	     }
 
 

@@ -20,6 +20,8 @@
 #define SD_BENCH_PAGE_SECTORS      (SD_BENCH_PAGE_BYTES / 512U)
 #define SD_BENCH_READ_COUNT        (100000U)
 #define SD_BENCH_MAX_PAGES         (SD_BENCH_FILE_512_MIB / SD_BENCH_PAGE_BYTES)
+#define SD_BENCH_HISTOGRAM_BIN_US  (100U)
+#define SD_BENCH_HISTOGRAM_BINS    (8192U)
 
 enum
 {
@@ -51,14 +53,15 @@ typedef struct
     uint8_t gate_held;
     uint8_t file_open;
     uint8_t io_active;
-    uint8_t sort_stage;
 } sd_random_bench_runtime_t;
 
 volatile sd_random_bench_result_t g_sd_random_bench;
 SDRAM_STREAM_SERVICE static sd_random_bench_runtime_t g_sd_bench_runtime;
 SDRAM_STREAM_SCRATCH static uint8_t g_sd_bench_buffer[SD_BENCH_PAGE_BYTES];
-SDRAM_STREAM_SCRATCH static uint32_t g_sd_bench_latency[SD_BENCH_READ_COUNT];
-SDRAM_STREAM_SCRATCH static uint32_t g_sd_bench_transaction[SD_BENCH_READ_COUNT];
+SDRAM_STREAM_SCRATCH static uint32_t
+    g_sd_bench_latency_histogram[SD_BENCH_HISTOGRAM_BINS];
+SDRAM_STREAM_SCRATCH static uint32_t
+    g_sd_bench_transaction_histogram[SD_BENCH_HISTOGRAM_BINS];
 
 static uint32_t sd_bench_now(void)
 {
@@ -417,8 +420,14 @@ static void sd_bench_record_read(void)
         request->perf_complete_cycles - request->perf_dma_cycles);
     const uint32_t queue_us = sd_bench_cycles_to_us(
         request->perf_dma_cycles - g_sd_bench_runtime.request_cycles);
-    g_sd_bench_latency[index] = latency_us;
-    g_sd_bench_transaction[index] = transaction_us;
+    uint32_t latency_bin = latency_us / SD_BENCH_HISTOGRAM_BIN_US;
+    uint32_t transaction_bin = transaction_us / SD_BENCH_HISTOGRAM_BIN_US;
+    if (latency_bin >= SD_BENCH_HISTOGRAM_BINS)
+        latency_bin = SD_BENCH_HISTOGRAM_BINS - 1U;
+    if (transaction_bin >= SD_BENCH_HISTOGRAM_BINS)
+        transaction_bin = SD_BENCH_HISTOGRAM_BINS - 1U;
+    g_sd_bench_latency_histogram[latency_bin]++;
+    g_sd_bench_transaction_histogram[transaction_bin]++;
     g_sd_random_bench.latency_sum_us += latency_us;
     g_sd_random_bench.transaction_sum_us += transaction_us;
     g_sd_random_bench.queue_sum_us += queue_us;
@@ -443,85 +452,42 @@ static void sd_bench_record_read(void)
     }
 }
 
-static void sd_bench_heap_sort(uint32_t *values, uint32_t count)
-{
-    if (count < 2U) return;
-    for (uint32_t start = count / 2U; start > 0U; --start)
-    {
-        uint32_t root = start - 1U;
-        const uint32_t value = values[root];
-        while ((root * 2U + 1U) < count)
-        {
-            uint32_t child = root * 2U + 1U;
-            if (((child + 1U) < count) && (values[child] < values[child + 1U]))
-                child++;
-            if (value >= values[child]) break;
-            values[root] = values[child];
-            root = child;
-        }
-        values[root] = value;
-    }
-    for (uint32_t end = count - 1U; end > 0U; --end)
-    {
-        const uint32_t tmp = values[end];
-        values[end] = values[0];
-        uint32_t root = 0U;
-        while ((root * 2U + 1U) < end)
-        {
-            uint32_t child = root * 2U + 1U;
-            if (((child + 1U) < end) && (values[child] < values[child + 1U]))
-                child++;
-            if (tmp >= values[child]) break;
-            values[root] = values[child];
-            root = child;
-        }
-        values[root] = tmp;
-    }
-}
-
-static uint32_t sd_bench_percentile(const uint32_t *values, uint32_t count,
+static uint32_t sd_bench_percentile(const uint32_t *histogram, uint32_t count,
                                     uint32_t permille)
 {
     uint32_t rank = (uint32_t)(((uint64_t)count * permille + 999U) / 1000U);
     if (rank == 0U) rank = 1U;
-    if (rank > count) rank = count;
-    return values[rank - 1U];
+    uint32_t cumulative = 0U;
+    for (uint32_t bin = 0U; bin < SD_BENCH_HISTOGRAM_BINS; ++bin)
+    {
+        cumulative += histogram[bin];
+        if (cumulative >= rank) return bin * SD_BENCH_HISTOGRAM_BIN_US;
+    }
+    return (SD_BENCH_HISTOGRAM_BINS - 1U) * SD_BENCH_HISTOGRAM_BIN_US;
 }
 
 static void sd_bench_finalize(void)
 {
     const uint32_t count = g_sd_random_bench.completed_reads;
-    if (g_sd_bench_runtime.sort_stage == 0U)
-    {
-        sd_bench_heap_sort(g_sd_bench_latency, count);
-        g_sd_bench_runtime.sort_stage = 1U;
-        return;
-    }
-    if (g_sd_bench_runtime.sort_stage == 1U)
-    {
-        sd_bench_heap_sort(g_sd_bench_transaction, count);
-        g_sd_bench_runtime.sort_stage = 2U;
-        return;
-    }
     g_sd_random_bench.num_reads = count;
     g_sd_random_bench.total_bytes = (uint64_t)count * SD_BENCH_PAGE_BYTES;
     g_sd_random_bench.total_time_us = g_sd_random_bench.latency_sum_us;
     g_sd_random_bench.latency_avg_us = (uint32_t)(
         g_sd_random_bench.latency_sum_us / count);
     g_sd_random_bench.latency_p50_us = sd_bench_percentile(
-        g_sd_bench_latency, count, 500U);
+        g_sd_bench_latency_histogram, count, 500U);
     g_sd_random_bench.latency_p90_us = sd_bench_percentile(
-        g_sd_bench_latency, count, 900U);
+        g_sd_bench_latency_histogram, count, 900U);
     g_sd_random_bench.latency_p95_us = sd_bench_percentile(
-        g_sd_bench_latency, count, 950U);
+        g_sd_bench_latency_histogram, count, 950U);
     g_sd_random_bench.latency_p99_us = sd_bench_percentile(
-        g_sd_bench_latency, count, 990U);
+        g_sd_bench_latency_histogram, count, 990U);
     g_sd_random_bench.latency_p999_us = sd_bench_percentile(
-        g_sd_bench_latency, count, 999U);
+        g_sd_bench_latency_histogram, count, 999U);
     g_sd_random_bench.transaction_avg_us = (uint32_t)(
         g_sd_random_bench.transaction_sum_us / count);
     g_sd_random_bench.transaction_p99_us = sd_bench_percentile(
-        g_sd_bench_transaction, count, 990U);
+        g_sd_bench_transaction_histogram, count, 990U);
     g_sd_random_bench.queue_avg_us = (uint32_t)(
         g_sd_random_bench.queue_sum_us / count);
     if (g_sd_random_bench.total_time_us != 0U)
@@ -543,6 +509,10 @@ void sd_random_bench_init(void)
 {
     memset((void *)&g_sd_random_bench, 0, sizeof(g_sd_random_bench));
     memset(&g_sd_bench_runtime, 0, sizeof(g_sd_bench_runtime));
+    memset(g_sd_bench_latency_histogram, 0,
+           sizeof(g_sd_bench_latency_histogram));
+    memset(g_sd_bench_transaction_histogram, 0,
+           sizeof(g_sd_bench_transaction_histogram));
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0U;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
