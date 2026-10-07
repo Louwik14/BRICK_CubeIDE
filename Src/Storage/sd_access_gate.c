@@ -16,7 +16,6 @@ static volatile uint32_t g_sd_media_epoch;
 static uint8_t g_sd_media_present_known;
 static uint8_t g_sd_media_present;
 static volatile sd_storage_status_t g_sd_storage_status;
-static FRESULT g_sd_fs_last_result;
 static uint32_t g_trace_last_recorder_gate_reject;
 
 static void sd_access_trace_recorder_gate(sd_access_client_t client,
@@ -66,7 +65,6 @@ void sd_access_gate_init(void)
     g_sd_media_present_known = 0U;
     g_sd_media_present = 0U;
     g_sd_storage_status = SD_STORAGE_STATUS_UNKNOWN;
-    g_sd_fs_last_result = FR_NOT_READY;
     g_trace_last_recorder_gate_reject = UINT32_MAX;
     g_sd_media_epoch++;
     if (g_sd_media_epoch == 0U)
@@ -80,7 +78,6 @@ uint8_t sd_access_fs_mount_if_needed(void)
     if ((g_sd_storage_status == SD_STORAGE_STATUS_NO_MEDIA)
         || (g_sd_storage_status == SD_STORAGE_STATUS_FAULT))
     {
-        g_sd_fs_last_result = FR_NOT_READY;
         rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS,
             0x100U | (uint32_t)g_sd_storage_status,
             (rec_sd_trace_sd_meta_t){
@@ -92,12 +89,10 @@ uint8_t sd_access_fs_mount_if_needed(void)
     }
     if (g_sd_fs_mounted != 0U)
     {
-        g_sd_fs_last_result = FR_OK;
         return 1U;
     }
 
     const FRESULT fr = f_mount(&g_sd_fs, "0:", 1U);
-    g_sd_fs_last_result = fr;
     if (fr != FR_OK)
     {
         rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS, (uint32_t)fr,
@@ -116,11 +111,6 @@ uint8_t sd_access_fs_mount_if_needed(void)
     g_sd_fs_mounted = 1U;
     g_sd_storage_status = SD_STORAGE_STATUS_READY;
     return 1U;
-}
-
-FRESULT sd_access_fs_last_result(void)
-{
-    return g_sd_fs_last_result;
 }
 
 uint8_t sd_access_fs_reprobe_if_unavailable(void)

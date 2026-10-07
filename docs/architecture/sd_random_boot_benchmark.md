@@ -11,8 +11,10 @@ derniere image normale. Le benchmark cree si necessaire
 
 Le fichier fait 512 MiB lorsque l'espace libre le permet, avec repli sur
 256 MiB. Sa creation est volontairement sequentielle, uniquement par
-`f_write` de tranches de 64 KiB, avant `f_sync`, fermeture et reouverture.
-Un fichier existant de 512 ou 256 MiB est reutilise.
+le wrapper normal `persistent_fatfs_io` et son sink de tranches de 64 KiB,
+avant `f_sync`, fermeture et reouverture via ce meme wrapper. Le benchmark ne
+remonte pas FatFs : il exige le statut READY etabli par le boot normal. Un
+fichier existant de 512 ou 256 MiB est reutilise.
 
 Les 100 000 lectures font exactement 64 KiB. Chaque balayage utilise une
 permutation pseudo-aleatoire deterministe de toutes les pages du fichier. Le

@@ -9,6 +9,7 @@
 #include "SD/sd_scheduler_runtime.h"
 #include "SD/sd_diskio.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/persistent_fatfs_io.h"
 #include "ff.h"
 #include "stm32h7xx.h"
 #include "stm32h7xx_hal.h"
@@ -40,7 +41,7 @@ enum
 
 typedef struct
 {
-    FIL file;
+    persistent_fatfs_file_t file;
     sample_stream_safe_metadata_t metadata;
     sample_stream_backend_physical_async_t io;
     sample_stream_physical_cursor_t cursor;
@@ -105,7 +106,7 @@ static void sd_bench_fail(uint32_t error, uint32_t fail_step, FRESULT fr,
 {
     if (g_sd_bench_runtime.file_open != 0U)
     {
-        (void)f_close(&g_sd_bench_runtime.file);
+        persistent_fatfs_close(&g_sd_bench_runtime.file);
         g_sd_bench_runtime.file_open = 0U;
     }
     sd_bench_release_gate();
@@ -131,15 +132,6 @@ static FRESULT sd_bench_make_dirs(void)
     return (fr == FR_EXIST) ? FR_OK : fr;
 }
 
-static FRESULT sd_bench_create_file(void)
-{
-    FRESULT fr = f_open(&g_sd_bench_runtime.file, SD_BENCH_PATH,
-                        FA_CREATE_ALWAYS | FA_WRITE);
-    if (fr != FR_OK) return fr;
-    g_sd_bench_runtime.file_open = 1U;
-    return FR_OK;
-}
-
 static void sd_bench_fill_pattern(void)
 {
     uint32_t x = UINT32_C(0x6B8B4567);
@@ -155,23 +147,26 @@ static void sd_bench_fill_pattern(void)
 
 static uint8_t sd_bench_open_and_map(void)
 {
-    FRESULT fr = f_open(&g_sd_bench_runtime.file, SD_BENCH_PATH, FA_READ);
-    if (fr != FR_OK)
+    if (persistent_fatfs_open_read(
+            &g_sd_bench_runtime.file, SD_BENCH_PATH) == 0U)
     {
         sd_bench_fail(SD_BENCH_ERROR_FILE, SD_RANDOM_BENCH_FAIL_REOPEN,
-                      fr, SD_BLOCK_DEVICE_OK);
+                      g_sd_bench_runtime.file.last_result,
+                      SD_BLOCK_DEVICE_OK);
         return 0U;
     }
     g_sd_bench_runtime.file_open = 1U;
     memset(&g_sd_bench_runtime.metadata, 0, sizeof(g_sd_bench_runtime.metadata));
     if (sample_stream_fatfs_map_build_from_file(
-            &g_sd_bench_runtime.file, &g_sd_bench_runtime.metadata) == 0U)
+            &g_sd_bench_runtime.file.file,
+            &g_sd_bench_runtime.metadata) == 0U)
     {
         sd_bench_fail(SD_BENCH_ERROR_MAP, SD_RANDOM_BENCH_FAIL_MAP,
                       FR_INT_ERR, SD_BLOCK_DEVICE_OK);
         return 0U;
     }
-    fr = f_close(&g_sd_bench_runtime.file);
+    const FRESULT fr = persistent_fatfs_close_result(
+        &g_sd_bench_runtime.file);
     g_sd_bench_runtime.file_open = 0U;
     if (fr != FR_OK)
     {
@@ -232,10 +227,10 @@ static void sd_bench_prepare_file(void)
             return;
         }
         g_sd_bench_runtime.gate_held = 1U;
-        if (sd_access_fs_mount_if_needed() == 0U)
+        if (sd_access_storage_status() != SD_STORAGE_STATUS_READY)
         {
             sd_bench_fail(SD_BENCH_ERROR_MOUNT, SD_RANDOM_BENCH_FAIL_MOUNT,
-                          sd_access_fs_last_result(),
+                          FR_NOT_READY,
                           SD_BLOCK_DEVICE_OK);
             return;
         }
@@ -287,28 +282,33 @@ static void sd_bench_prepare_file(void)
                           FR_DENIED, SD_BLOCK_DEVICE_OK);
             return;
         }
-        fr = sd_bench_create_file();
+        fr = persistent_fatfs_open_write_result(
+            &g_sd_bench_runtime.file, SD_BENCH_PATH);
         if (fr != FR_OK)
         {
             sd_bench_fail(SD_BENCH_ERROR_FILE, SD_RANDOM_BENCH_FAIL_OPEN,
                           fr, SD_BLOCK_DEVICE_OK);
             return;
         }
+        g_sd_bench_runtime.file_open = 1U;
         sd_bench_fill_pattern();
         g_sd_random_bench.progress_total = g_sd_random_bench.file_size;
     }
 
     if (g_sd_bench_runtime.create_offset < g_sd_random_bench.file_size)
     {
-        UINT written = 0U;
-        const FRESULT fr = f_write(&g_sd_bench_runtime.file,
-                                   g_sd_bench_buffer,
-                                   SD_BENCH_PAGE_BYTES, &written);
-        g_sd_random_bench.bytes_written = written;
-        g_sd_bench_runtime.create_offset += written;
+        const persist_codec_sink_t sink = persistent_fatfs_sink(
+            &g_sd_bench_runtime.file);
+        const uint8_t write_ok = sink.write(
+            sink.context, g_sd_bench_buffer, SD_BENCH_PAGE_BYTES);
+        const FRESULT fr = g_sd_bench_runtime.file.last_result;
+        g_sd_random_bench.bytes_written =
+            g_sd_bench_runtime.file.transferred;
+        g_sd_bench_runtime.create_offset +=
+            g_sd_bench_runtime.file.transferred;
         g_sd_random_bench.write_offset = g_sd_bench_runtime.create_offset;
         sd_bench_snapshot_media();
-        if ((fr != FR_OK) || (written != SD_BENCH_PAGE_BYTES))
+        if (write_ok == 0U)
         {
             sd_bench_fail(SD_BENCH_ERROR_WRITE, SD_RANDOM_BENCH_FAIL_WRITE,
                           fr, SD_BLOCK_DEVICE_OK);
@@ -318,14 +318,14 @@ static void sd_bench_prepare_file(void)
         return;
     }
 
-    FRESULT fr = f_sync(&g_sd_bench_runtime.file);
+    FRESULT fr = f_sync(&g_sd_bench_runtime.file.file);
     if (fr != FR_OK)
     {
         sd_bench_fail(SD_BENCH_ERROR_SYNC, SD_RANDOM_BENCH_FAIL_SYNC,
                       fr, SD_BLOCK_DEVICE_OK);
         return;
     }
-    fr = f_close(&g_sd_bench_runtime.file);
+    fr = persistent_fatfs_close_result(&g_sd_bench_runtime.file);
     g_sd_bench_runtime.file_open = 0U;
     if (fr != FR_OK)
     {
