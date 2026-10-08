@@ -31,7 +31,7 @@ void brick6_sampler_preview_reset(void)
     g_sampler_preview.voice.multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
     g_sampler_preview.clip.gain = 1.0f;
     g_sampler_preview.clip.source_bpm = 120.0f;
-    g_sampler_preview.clip.loop_enabled = 1U;
+    g_sampler_preview.clip.mode = BRICK6_SAMPLER_MODE_ONE;
     g_sampler_preview.clip.grain_size = BRICK6_SAMPLER_CLIP_DEFAULT_GRAIN_FRAMES;
     g_sampler_preview.clip.law_grain_size = BRICK6_SAMPLER_CLIP_DEFAULT_GRAIN_FRAMES;
     g_sampler_preview.clip.shifter_heads = 2U;
@@ -77,9 +77,9 @@ uint8_t brick6_sampler_preview_apply_param(param_id_t id, float value)
         case PARAM_SAMPLER_START: voice->start = value; return 1U;
         case PARAM_SAMPLER_LENGTH: voice->length = value; return 1U;
         case PARAM_SAMPLER_MODE:
-            voice->mode = (uint8_t)(value + 0.5f);
-            clip->loop_enabled = (uint8_t)(voice->mode == BRICK6_SAMPLER_MODE_LOOP
-                || voice->mode == BRICK6_SAMPLER_MODE_HOLD_LOOP);
+            clip->mode = (uint8_t)(value + 0.5f);
+            if (clip->mode >= BRICK6_SAMPLER_MODE_COUNT)
+                clip->mode = BRICK6_SAMPLER_MODE_ONE;
             return 1U;
         case PARAM_SAMPLER_TUNE:
             voice->tune = value;
@@ -177,6 +177,21 @@ static uint8_t brick6_sampler_preview_bind_source(
     sample_play_plan_t plan;
     if (sample_play_plan_build_from_source(source, &options, &plan)
             != SAMPLE_PLAY_PLAN_BUILD_OK) return 0U;
+    if (source_kind == BRICK6_SAMPLER_VOICE_CLIP)
+    {
+        const uint8_t mode = g_sampler_preview.clip.mode;
+        plan.loop_mode = brick6_sampler_mode_loop(mode);
+        plan.loop_begin = (plan.loop_mode == SAMPLE_PLAY_LOOP_FORWARD)
+            ? source->loop_begin : plan.region_begin;
+        plan.loop_end = plan.region_end;
+        plan.initial_reverse = (mode == BRICK6_SAMPLER_MODE_REVERSE_ONE) ? 1U : 0U;
+        plan.start_frame = (plan.initial_reverse != 0U)
+            ? (plan.region_end - 1U) : plan.region_begin;
+        if ((plan.initial_reverse != 0U)
+            || (plan.loop_mode == SAMPLE_PLAY_LOOP_PINGPONG))
+            plan.kernel_type = SAMPLE_KERNEL_DIRECTIONAL_LINEAR;
+        voice->mode = mode;
+    }
     if (!sample_voice_reader_bind_preview_play_plan(&voice->reader, &plan))
         return 0U;
     voice->note = note;
@@ -226,7 +241,8 @@ uint8_t brick6_sampler_preview_note_on(uint8_t note, uint8_t velocity)
                 g_sampler_preview.runtime_id, &source)) return 0U;
         return brick6_sampler_preview_bind_source(&source, note, velocity,
             BRICK6_SAMPLER_VOICE_CLIP, g_sampler_preview.clip.gain,
-            g_sampler_preview.clip.loop_enabled);
+            brick6_sampler_mode_loop(g_sampler_preview.clip.mode)
+                != SAMPLE_PLAY_LOOP_NONE);
     }
     multi_sample_audio_source_t projected;
     if (!multi_sample_audio_projection_resolve(g_sampler_preview.runtime_id,

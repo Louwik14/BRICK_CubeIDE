@@ -55,6 +55,34 @@ static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *
 
     const float render_gain = voice->gain * voice->trigger_velocity_gain;
 
+    if (voice->play_plan.kernel_type == SAMPLE_KERNEL_DIRECTIONAL_LINEAR)
+    {
+        float fade_buf[AUDIO_BLOCK_SIZE];
+        const float *fade_ptr = NULL;
+        if (voice->start_fade_remaining != 0U)
+        {
+            for (uint32_t i = 0U; i < frames; ++i) fade_buf[i] = 1.0f;
+            (void)brick6_sampler_runtime_apply_start_fade(voice, fade_buf, frames);
+            fade_ptr = fade_buf;
+        }
+        uint8_t underrun = 0U;
+        float last_l = 0.0f, last_r = 0.0f;
+        const uint32_t rendered = sample_voice_reader_render_directional_stereo(
+            &voice->reader, render_gain, fade_ptr, frames, out_l, out_r, frames,
+            &underrun, &last_l, &last_r);
+        if (rendered != 0U)
+            brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
+        if (underrun != 0U) ++g_sampler_stream_live_diag.audio_miss;
+        voice->position = voice->reader.position;
+        if (voice->reader.active == 0U)
+        {
+            voice->active = 0U;
+            voice->position = 0.0f;
+            sample_voice_reader_stop(&voice->reader);
+        }
+        return;
+    }
+
     uint32_t produced = 0U;
     while (produced < frames)
     {

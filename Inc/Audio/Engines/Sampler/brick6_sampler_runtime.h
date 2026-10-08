@@ -46,12 +46,28 @@ void brick6_sampler_runtime_stream_live_diag_reset(void);
 
 typedef enum
 {
+    /* Historical single-parameter contract. Values match the UI/persistence
+     * order; HOLD variants ignore NOTE_OFF for the active voice. */
     BRICK6_SAMPLER_MODE_ONE = 0,
+    BRICK6_SAMPLER_MODE_REVERSE_ONE,
     BRICK6_SAMPLER_MODE_LOOP,
+    BRICK6_SAMPLER_MODE_PINGPONG,
     BRICK6_SAMPLER_MODE_HOLD_ONE,
     BRICK6_SAMPLER_MODE_HOLD_LOOP,
+    BRICK6_SAMPLER_MODE_HOLD_PINGPONG,
     BRICK6_SAMPLER_MODE_COUNT
 } brick6_sampler_mode_t;
+
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+_Static_assert(BRICK6_SAMPLER_MODE_ONE == 0
+    && BRICK6_SAMPLER_MODE_REVERSE_ONE == 1
+    && BRICK6_SAMPLER_MODE_LOOP == 2
+    && BRICK6_SAMPLER_MODE_PINGPONG == 3
+    && BRICK6_SAMPLER_MODE_HOLD_ONE == 4
+    && BRICK6_SAMPLER_MODE_HOLD_LOOP == 5
+    && BRICK6_SAMPLER_MODE_HOLD_PINGPONG == 6,
+    "Sampler playback mode order is a UI and persistence contract");
+#endif
 
 typedef enum
 {
@@ -105,7 +121,6 @@ void brick6_sampler_runtime_set_clip_source(uint8_t track_id, uint8_t source);
 uint8_t brick6_sampler_runtime_clip_source_is_rec(uint8_t track_id);
 void brick6_sampler_runtime_set_clip_sync_length(uint8_t track_id, uint8_t sync_length);
 void brick6_sampler_runtime_set_clip_pitch(uint8_t track_id, float semitones);
-void brick6_sampler_runtime_set_clip_loop(uint8_t track_id, uint8_t loop_enabled);
 void brick6_sampler_runtime_set_clip_stretch_mode(uint8_t track_id, uint8_t stretch_mode);
 void brick6_sampler_runtime_set_clip_grain_size(uint8_t track_id, uint16_t grain_size);
 void brick6_sampler_runtime_set_clip_shifter_heads(uint8_t track_id, uint8_t heads);

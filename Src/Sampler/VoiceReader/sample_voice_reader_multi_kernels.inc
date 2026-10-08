@@ -469,6 +469,141 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
     return produced;
 }
 
+static uint8_t sample_voice_reader_directional_frame(
+    sample_voice_reader_t *reader, uint32_t frame, float *out_l, float *out_r)
+{
+    if ((reader == NULL) || (out_l == NULL) || (out_r == NULL)
+        || (reader->frames_per_page == 0U))
+        return 0U;
+    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    if ((state->audio_cursor.current_acquired == 0U)
+        || (frame < state->audio_cursor.current_start_frame)
+        || (frame >= state->audio_cursor.current_start_frame
+            + state->audio_cursor.current_frame_count))
+    {
+        sample_voice_reader_release_audio_cursor(state);
+        if (sample_voice_reader_acquire_audio_page(state, frame) == 0U)
+            return 0U;
+    }
+    const uint32_t offset = (frame - state->audio_cursor.current_start_frame)
+        * state->audio_cursor.stride_floats;
+    *out_l = state->audio_cursor.current_base[offset];
+    *out_r = (state->audio_cursor.format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO)
+        ? *out_l : state->audio_cursor.current_base[offset + 1U];
+    return 1U;
+}
+
+uint32_t sample_voice_reader_render_directional_stereo(
+    sample_voice_reader_t *reader, float gain, const float *fade_gain,
+    uint32_t fade_count, float *out_l, float *out_r, uint32_t frames,
+    uint8_t *out_underrun, float *out_last_l, float *out_last_r)
+{
+    if (out_underrun != NULL) *out_underrun = 0U;
+    if ((reader == NULL) || (reader->active == 0U) || (out_l == NULL)
+        || (out_r == NULL) || (frames == 0U) || (reader->plan_valid == 0U))
+        return 0U;
+    const float begin = (float)reader->plan.region_begin;
+    const float last = (float)(reader->plan.region_end - 1U);
+    const uint8_t pingpong = (reader->plan.loop_mode == SAMPLE_PLAY_LOOP_PINGPONG);
+    uint32_t produced = 0U;
+    float last_l = 0.0f, last_r = 0.0f;
+    while (produced < frames)
+    {
+        if ((reader->position < begin) || (reader->position > last))
+        {
+            if (pingpong == 0U) { reader->active = 0U; break; }
+            if (last <= begin) reader->position = begin;
+            else
+            {
+                while ((reader->position < begin) || (reader->position > last))
+                {
+                    if (reader->position > last)
+                    {
+                        reader->position = last - (reader->position - last);
+                        reader->reverse = 1U;
+                    }
+                    else
+                    {
+                        reader->position = begin + (begin - reader->position);
+                        reader->reverse = 0U;
+                    }
+                }
+            }
+        }
+        const uint32_t base = (uint32_t)reader->position;
+        const uint32_t neighbor = (base + 1U < reader->plan.region_end)
+            ? base + 1U : base;
+        sample_voice_reader_publish_lease(sample_voice_reader_state(reader), base);
+        float a_l, a_r, b_l, b_r;
+        if ((sample_voice_reader_directional_frame(reader, base, &a_l, &a_r) == 0U)
+            || (sample_voice_reader_directional_frame(reader, neighbor, &b_l, &b_r) == 0U))
+        {
+            if (out_underrun != NULL) *out_underrun = 1U;
+            break;
+        }
+        const float fraction = reader->position - (float)base;
+        const float fade = ((fade_gain != NULL) && (produced < fade_count))
+            ? fade_gain[produced] : 1.0f;
+        last_l = (a_l + ((b_l - a_l) * fraction)) * gain * fade;
+        last_r = (a_r + ((b_r - a_r) * fraction)) * gain * fade;
+        out_l[produced] += last_l;
+        out_r[produced] += last_r;
+        ++produced;
+        if (last <= begin)
+        {
+            reader->active = 0U;
+        }
+        else
+        {
+            reader->position += (reader->reverse != 0U) ? -reader->step : reader->step;
+            if (pingpong != 0U)
+            {
+                while ((reader->position < begin) || (reader->position > last))
+                {
+                    if (reader->position > last)
+                    {
+                        reader->position = last - (reader->position - last);
+                        reader->reverse = 1U;
+                    }
+                    else
+                    {
+                        reader->position = begin + (begin - reader->position);
+                        reader->reverse = 0U;
+                    }
+                }
+            }
+            else if ((reader->position < begin) || (reader->position > last))
+            {
+                reader->active = 0U;
+            }
+        }
+    }
+    if (reader->active != 0U)
+    {
+        uint32_t frame = (reader->position <= begin) ? reader->plan.region_begin
+            : (reader->position >= last) ? (reader->plan.region_end - 1U)
+            : (uint32_t)reader->position;
+        reader->frame_pos = frame;
+        sample_voice_reader_publish_lease(sample_voice_reader_state(reader), frame);
+    }
+    if ((produced != 0U) && (out_last_l != NULL)) *out_last_l = last_l;
+    if ((produced != 0U) && (out_last_r != NULL)) *out_last_r = last_r;
+    return produced;
+}
+
+uint32_t sample_voice_reader_render_directional_mono(
+    sample_voice_reader_t *reader, float gain, const float *fade_gain,
+    uint32_t fade_count, float *out_mono, uint32_t frames,
+    uint8_t *out_underrun, float *out_last)
+{
+    if ((out_mono == NULL) || (frames == 0U)) return 0U;
+    const uint32_t produced = sample_voice_reader_render_directional_stereo(
+        reader, gain * 0.5f, fade_gain, fade_count, out_mono, out_mono, frames,
+        out_underrun, out_last, NULL);
+    if ((produced != 0U) && (out_last != NULL)) *out_last *= 2.0f;
+    return produced;
+}
+
 uint8_t sample_voice_reader_render_fwd_1x_ready_simple_mono(sample_voice_reader_t *reader,
                                                             float gain,
                                                             float *out_mono,

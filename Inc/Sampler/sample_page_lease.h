@@ -42,6 +42,13 @@ typedef enum
     SAMPLE_PAGE_LEASE_PAGE_COUNT
 } sample_page_lease_page_role_t;
 
+typedef enum
+{
+    SAMPLE_PAGE_SEQUENCE_NONE = 0,
+    SAMPLE_PAGE_SEQUENCE_FORWARD,
+    SAMPLE_PAGE_SEQUENCE_REVERSE
+} sample_page_sequence_direction_t;
+
 #define SAMPLE_PAGE_LEASE_VALID(role) ((uint8_t)(1U << (uint8_t)(role)))
 
 typedef struct
@@ -50,11 +57,12 @@ typedef struct
     sample_audio_key_t key;
     uint32_t registration_epoch;
     uint32_t pages[SAMPLE_PAGE_LEASE_PAGE_COUNT];
-    /* Exclusive forward page boundary.  It is advisory prefetch metadata;
+    /* Inclusive/exclusive sequential boundaries. They are advisory metadata;
      * pages[] remains the complete protection/ownership set. */
+    uint32_t sequential_page_begin;
     uint32_t sequential_page_end;
     uint8_t valid_mask;
-    uint8_t sequential_forward;
+    uint8_t sequential_direction;
     uint8_t jump_pending;
     uint8_t reserved;
 } sample_page_lease_t;

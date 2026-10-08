@@ -71,8 +71,9 @@ typedef struct
     uint8_t lease_valid;
     uint32_t lease_pages[SAMPLE_PAGE_LEASE_PAGE_COUNT];
     uint8_t lease_valid_mask;
-    uint8_t lease_sequential_forward;
+    uint8_t lease_sequential_direction;
     uint8_t lease_jump_pending;
+    uint32_t lease_sequential_page_begin;
     uint32_t lease_sequential_page_end;
     uint16_t sample_id;
     sample_audio_key_t key;
@@ -84,6 +85,7 @@ typedef struct
     float step;
     uint32_t frame_pos;
     uint8_t active;
+    uint8_t reverse;
     sample_play_plan_t plan;
     sample_audio_cursor_t audio_cursor;
     uint8_t plan_valid;
@@ -107,6 +109,7 @@ uint8_t sample_voice_reader_bind_musical_play_plan(sample_voice_reader_t *reader
 uint8_t sample_voice_reader_bind_preview_play_plan(
     sample_voice_reader_t *reader, const sample_play_plan_t *plan);
 void sample_voice_reader_set_step(sample_voice_reader_t *reader, float step);
+void sample_voice_reader_set_direction(sample_voice_reader_t *reader, uint8_t reverse);
 void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos);
 uint8_t sample_voice_reader_frame_ready(sample_voice_reader_t *reader,
                                         uint32_t frame_pos);
@@ -213,6 +216,14 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   uint8_t *out_underrun,
                                                   float *out_last_l,
                                                   float *out_last_r);
+uint32_t sample_voice_reader_render_directional_stereo(
+    sample_voice_reader_t *reader, float gain, const float *fade_gain,
+    uint32_t fade_count, float *out_l, float *out_r, uint32_t frames,
+    uint8_t *out_underrun, float *out_last_l, float *out_last_r);
+uint32_t sample_voice_reader_render_directional_mono(
+    sample_voice_reader_t *reader, float gain, const float *fade_gain,
+    uint32_t fade_count, float *out_mono, uint32_t frames,
+    uint8_t *out_underrun, float *out_last);
 
 #ifdef __cplusplus
 }

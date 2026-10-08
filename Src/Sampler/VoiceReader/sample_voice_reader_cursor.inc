@@ -34,12 +34,19 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
                                    ? ((window_end - 1U)
                                       / state->frames_per_page)
                                    : page;
+    const uint32_t first_page = (state->plan_valid != 0U)
+        ? (state->plan.region_begin / state->frames_per_page) : page;
     const uint32_t sequential_page_end = last_page + 1U;
     pages[SAMPLE_PAGE_LEASE_CURRENT] = page;
     valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_CURRENT);
-    if (page < last_page)
+    if ((state->reverse == 0U) && (page < last_page))
     {
         pages[SAMPLE_PAGE_LEASE_NEXT] = page + 1U;
+        valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_NEXT);
+    }
+    else if ((state->reverse != 0U) && (page > first_page))
+    {
+        pages[SAMPLE_PAGE_LEASE_NEXT] = page - 1U;
         valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_NEXT);
     }
     if ((state->plan_valid != 0U)
@@ -84,27 +91,31 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
     const uint8_t jump_pending = (uint8_t)(
         (state->requested_page_valid != 0U)
         && (requested_page != page)
-        && (requested_page != (page + 1U)));
-    const uint8_t sequential_forward = (uint8_t)(
+        && (requested_page != ((state->reverse != 0U && page != 0U)
+            ? (page - 1U) : (page + 1U))));
+    const uint8_t sequential_direction = (uint8_t)(
         (state->plan_valid != 0U)
-        && ((state->plan.kernel_type == SAMPLE_KERNEL_FWD_1X)
-            || (state->plan.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR))
-        && (jump_pending == 0U));
+        && (jump_pending == 0U)
+            ? ((state->reverse != 0U) ? SAMPLE_PAGE_SEQUENCE_REVERSE
+                                      : SAMPLE_PAGE_SEQUENCE_FORWARD)
+            : SAMPLE_PAGE_SEQUENCE_NONE);
     PERF_END(PERF_CPU_READER_NEED, need_start);
     if ((state->lease_valid_mask != valid_mask)
+        || (state->lease_sequential_page_begin != first_page)
         || (state->lease_sequential_page_end != sequential_page_end)
-        || (state->lease_sequential_forward != sequential_forward)
+        || (state->lease_sequential_direction != sequential_direction)
         || (state->lease_jump_pending != jump_pending)
         || (memcmp(state->lease_pages, pages, sizeof(pages)) != 0))
     {
         (void)sample_page_lease_audio_publish(
             state->lease_slot, state->key, state->registration_epoch,
-            pages, valid_mask, sequential_page_end,
-            sequential_forward, jump_pending);
+            pages, valid_mask, first_page, sequential_page_end,
+            sequential_direction, jump_pending);
         memcpy(state->lease_pages, pages, sizeof(pages));
         state->lease_valid_mask = valid_mask;
+        state->lease_sequential_page_begin = first_page;
         state->lease_sequential_page_end = sequential_page_end;
-        state->lease_sequential_forward = sequential_forward;
+        state->lease_sequential_direction = sequential_direction;
         state->lease_jump_pending = jump_pending;
     }
 }
@@ -487,7 +498,8 @@ static uint8_t sample_voice_reader_bind_play_plan_slot(
 {
     if ((reader == 0) || (plan == 0)
         || ((plan->kernel_type != SAMPLE_KERNEL_FWD_1X)
-            && (plan->kernel_type != SAMPLE_KERNEL_PITCH_FWD_LINEAR)))
+            && (plan->kernel_type != SAMPLE_KERNEL_PITCH_FWD_LINEAR)
+            && (plan->kernel_type != SAMPLE_KERNEL_DIRECTIONAL_LINEAR)))
     {
         return 0U;
     }
@@ -513,6 +525,7 @@ static uint8_t sample_voice_reader_bind_play_plan_slot(
     state->step = (float)plan->step_q16 / (float)SAMPLE_Q16_ONE;
     state->frame_pos = plan->start_frame;
     state->active = 1U;
+    state->reverse = plan->initial_reverse;
     state->plan = *plan;
     state->plan_valid = 1U;
     sample_voice_reader_publish_lease(state, plan->start_frame);
@@ -597,6 +610,13 @@ uint8_t sample_voice_reader_frame_ready(sample_voice_reader_t *reader,
                 reader->key, page, &span) != 0U)
         && (frame_pos >= span.start_frame)
         && (frame_pos < (span.start_frame + span.frame_count));
+}
+
+void sample_voice_reader_set_direction(sample_voice_reader_t *reader, uint8_t reverse)
+{
+    if ((reader == 0) || (reader->active == 0U)) return;
+    reader->reverse = (reverse != 0U) ? 1U : 0U;
+    sample_voice_reader_publish_lease(sample_voice_reader_state(reader), reader->frame_pos);
 }
 
 uint8_t sample_voice_reader_request_page(sample_voice_reader_t *reader,

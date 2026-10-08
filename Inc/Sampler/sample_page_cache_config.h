@@ -11,7 +11,7 @@
 /*
  * Product page-cache sizing.
  *
- * Classic Stream, Multi and RAM share the global pool; runtime reader windows
+ * Classic, Group and Multi share the global pool; runtime reader windows
  * use the reserved reader range.
  */
 

@@ -12,13 +12,15 @@ extern "C" {
 typedef enum
 {
     SAMPLE_KERNEL_FWD_1X = 0,
-    SAMPLE_KERNEL_PITCH_FWD_LINEAR
+    SAMPLE_KERNEL_PITCH_FWD_LINEAR,
+    SAMPLE_KERNEL_DIRECTIONAL_LINEAR
 } sample_kernel_type_t;
 
 typedef enum
 {
     SAMPLE_PLAY_LOOP_NONE = 0,
-    SAMPLE_PLAY_LOOP_FORWARD
+    SAMPLE_PLAY_LOOP_FORWARD,
+    SAMPLE_PLAY_LOOP_PINGPONG
 } sample_play_loop_mode_t;
 
 typedef enum
@@ -82,6 +84,7 @@ typedef struct
     uint32_t step_q16;
     uint8_t loop_mode;
     uint8_t stop_on_underrun;
+    uint8_t initial_reverse;
     sample_kernel_type_t kernel_type;
 } sample_play_plan_t;
 

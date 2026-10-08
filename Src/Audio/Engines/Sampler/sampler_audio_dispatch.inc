@@ -288,30 +288,18 @@ void brick6_sampler_runtime_set_mode(uint8_t track_id, uint8_t mode)
     {
         return;
     }
-    const uint8_t previous_hold = brick6_sampler_runtime_mode_is_hold(track_id);
-    g_sampler_voice[track_id].mode = (mode < BRICK6_SAMPLER_MODE_COUNT)
+    g_sampler_clip_runtime[track_id].mode = (mode < BRICK6_SAMPLER_MODE_COUNT)
         ? mode : BRICK6_SAMPLER_MODE_ONE;
-    const uint8_t loop = (uint8_t)((mode == BRICK6_SAMPLER_MODE_LOOP)
-        || (mode == BRICK6_SAMPLER_MODE_HOLD_LOOP));
-    brick6_sampler_runtime_set_clip_loop(track_id, loop);
-    if ((previous_hold != 0U)
-            && (brick6_sampler_runtime_mode_is_hold(track_id) == 0U)
-            && (audio_note_engine_adapter_entity_has_held_output(track_id) == 0U))
-    {
-        track_audio_runtime_ctx_t ctx;
-        if ((audio_note_engine_adapter_current_ctx(track_id, &ctx) != 0U)
-                && (ctx.program_route.mix_track_id < MIXER_MAX_TRACKS))
-            mixer_track_vca_all_notes_off(ctx.program_route.mix_track_id);
-    }
 }
 
 uint8_t brick6_sampler_runtime_mode_is_hold(uint8_t track_id)
 {
     if (track_id >= SEQ_TRACK_COUNT)
         return 0U;
-    const uint8_t mode = g_sampler_voice[track_id].mode;
-    return (uint8_t)((mode == BRICK6_SAMPLER_MODE_HOLD_ONE)
-        || (mode == BRICK6_SAMPLER_MODE_HOLD_LOOP));
+    const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    const uint8_t mode = (voice->active != 0U)
+        ? voice->mode : g_sampler_clip_runtime[track_id].mode;
+    return brick6_sampler_mode_is_hold_value(mode);
 }
 
 void brick6_sampler_runtime_set_tune(uint8_t track_id, float tune)
@@ -408,21 +396,6 @@ void brick6_sampler_runtime_set_clip_pitch(uint8_t track_id, float semitones)
     }
 
     g_sampler_clip_runtime[track_id].pitch_semitones = semitones;
-}
-
-void brick6_sampler_runtime_set_clip_loop(uint8_t track_id, uint8_t loop_enabled)
-{
-    if ((track_id >= SEQ_TRACK_COUNT) || (brick6_sampler_runtime_track_is_clip(track_id) == 0U))
-    {
-        return;
-    }
-
-    const uint8_t enabled = (loop_enabled != 0U) ? 1U : 0U;
-    g_sampler_clip_runtime[track_id].loop_enabled = enabled;
-    g_sampler_voice[track_id].loop_mode = (enabled != 0U) ? BRICK6_SAMPLER_LOOP_FORWARD
-                                                          : BRICK6_SAMPLER_LOOP_NONE;
-    g_sampler_voice[track_id].play_plan.loop_mode = g_sampler_voice[track_id].loop_mode;
-    g_sampler_voice[track_id].reader.plan.loop_mode = g_sampler_voice[track_id].loop_mode;
 }
 
 void brick6_sampler_runtime_set_clip_stretch_mode(uint8_t track_id, uint8_t stretch_mode)

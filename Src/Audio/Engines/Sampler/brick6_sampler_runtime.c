@@ -130,7 +130,7 @@ typedef struct
     uint8_t shifter_dispersion;
     uint8_t sync_length;
     float pitch_semitones;
-    uint8_t loop_enabled;
+    uint8_t mode;
     uint8_t stretch_mode;
     uint8_t state;
     uint8_t use_shifter_engine;
@@ -194,8 +194,27 @@ typedef struct
 enum
 {
     BRICK6_SAMPLER_LOOP_NONE = 0,
-    BRICK6_SAMPLER_LOOP_FORWARD = 1
+    BRICK6_SAMPLER_LOOP_FORWARD = 1,
+    BRICK6_SAMPLER_LOOP_PINGPONG = 2
 };
+
+static uint8_t brick6_sampler_mode_is_hold_value(uint8_t mode)
+{
+    return (uint8_t)((mode == BRICK6_SAMPLER_MODE_HOLD_ONE)
+        || (mode == BRICK6_SAMPLER_MODE_HOLD_LOOP)
+        || (mode == BRICK6_SAMPLER_MODE_HOLD_PINGPONG));
+}
+
+static uint8_t brick6_sampler_mode_loop(uint8_t mode)
+{
+    if ((mode == BRICK6_SAMPLER_MODE_PINGPONG)
+        || (mode == BRICK6_SAMPLER_MODE_HOLD_PINGPONG))
+        return (uint8_t)SAMPLE_PLAY_LOOP_PINGPONG;
+    if ((mode == BRICK6_SAMPLER_MODE_LOOP)
+        || (mode == BRICK6_SAMPLER_MODE_HOLD_LOOP))
+        return (uint8_t)SAMPLE_PLAY_LOOP_FORWARD;
+    return (uint8_t)SAMPLE_PLAY_LOOP_NONE;
+}
 
 typedef enum
 {

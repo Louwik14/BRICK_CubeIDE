@@ -31,15 +31,24 @@ aucune architecture memoire: ses children sont des Classic STREAM. Une source
 deja residente peut etre exploitee par le Streamer comme optimisation; elle ne
 cree pas de moteur distinct.
 
-Reverse et ping-pong ne font pas partie du sampler courant. Ils sont retires
-jusqu'a une implementation forward/backward native dans VoiceReader et le Page
-Cache, sans moteur de secours. Les seuls modes sont `ONE`, `LOOP`, `H.ONE` et
-`H.LOOP`.
+Classic et Group retrouvent l'unique parametre historique `Mode`, avec les
+labels et l'ordre exacts `ONE`, `REV.ONE`, `LOOP`, `PINGPONG`, `H.ONE`,
+`H.LOOP`, `H.PINGPONG`. `H` signifie hold (NOTE_OFF ignore): `H.LOOP` est une
+loop forward hold. Le ping-pong est porte par `PINGPONG`/`H.PINGPONG` et alterne
+entre START et END; la loop forward reprend a LOOP START. Le mode est capture
+au NOTE_ON, P-lockable, et exclu de la Matrix/modulation continue.
+
+Reverse et ping-pong tournent dans le VoiceReader canonique. Reverse consomme
+les pages de la fin vers le debut, tandis que le backend conserve des lectures
+SD physiques croissantes et peut remplir 2/3/4 slots en un burst. Aucun buffer
+64 KiB, cache secondaire ou moteur RAM n'est ajoute. Multi conserve son
+booleen forward `LOOP ON until release`: au NOTE_OFF il sort de la loop et lit
+la tail jusqu'a SAMPLE END.
 
 Recorder et `REC_SOURCE` assignent et relisent leurs takes via le Streamer.
 Looper/Overdub conservent leur ring et leurs gros writes asynchrones. Preview
 utilise le meme runtime sampler STREAM; Multi conserve ses voix polyphoniques
 sur le meme Page Cache et le meme transport physique.
 
-Le codec courant est la version 16. Il ne reconnait aucun format anterieur et
+Le codec courant est la version 17. Il ne reconnait aucun format anterieur et
 ne contient ni type moteur alternatif, ni migration, ni alias sampler.

@@ -98,7 +98,9 @@ playheads et ses leases.
 ## Format audio
 
 Une page sample produit de 16 KiB porte 2048 frames FLOAT32 stereo entrelacees.
-Le Streamer est exclusivement forward; reverse et ping-pong sont absents.
+Le Streamer supporte forward, `REV.ONE` et ping-pong. Le cursor reverse consomme
+les pages precedentes; le transport SD conserve des lectures physiques
+croissantes et le meme Page Cache.
 Format, stride et frames/page sont derives par
 `sample_audio_format.h` et restent immutables pendant la voix.
 

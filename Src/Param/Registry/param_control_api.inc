@@ -57,6 +57,7 @@ uint8_t param_registry_is_modulatable(param_id_t id)
 
     switch (id)
     {
+        case PARAM_SAMPLER_MODE:
         case PARAM_FM_ALGORITHM:
         case PARAM_FM_FEEDBACK:
         case PARAM_FM_SYNC:

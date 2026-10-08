@@ -153,13 +153,18 @@ static uint8_t sample_stream_manager_submit_fastpath(
 {
     if ((first_target == 0) || (candidate == 0) || (lease == 0)
         || (candidate->page_role != SAMPLE_PAGE_LEASE_NEXT)
-        || (lease->sequential_forward == 0U)
+        || (lease->sequential_direction == SAMPLE_PAGE_SEQUENCE_NONE)
         || (lease->jump_pending != 0U)
         || ((lease->valid_mask
              & SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_CURRENT)) == 0U)
-        || (lease->pages[SAMPLE_PAGE_LEASE_CURRENT] + 1U
-            != candidate->page_index)
-        || (lease->sequential_page_end <= candidate->page_index + 1U)
+        || ((lease->sequential_direction == SAMPLE_PAGE_SEQUENCE_FORWARD)
+            && ((lease->pages[SAMPLE_PAGE_LEASE_CURRENT] + 1U
+                    != candidate->page_index)
+                || (lease->sequential_page_end <= candidate->page_index + 1U)))
+        || ((lease->sequential_direction == SAMPLE_PAGE_SEQUENCE_REVERSE)
+            && ((candidate->page_index + 1U
+                    != lease->pages[SAMPLE_PAGE_LEASE_CURRENT])
+                || (candidate->page_index <= lease->sequential_page_begin)))
         || (first_target->frame_count != first_target->frames_per_page)
         || (sample_page_cache_get_page_state_key(
                 lease->key,
@@ -178,12 +183,35 @@ static uint8_t sample_stream_manager_submit_fastpath(
             != SAMPLE_STREAM_BACKEND_PHYSICAL))
         return 0U;
 
-    uint32_t remaining_pages = lease->sequential_page_end
-        - candidate->page_index;
+    const uint8_t reverse = (lease->sequential_direction
+        == SAMPLE_PAGE_SEQUENCE_REVERSE) ? 1U : 0U;
+    uint32_t remaining_pages = (reverse != 0U)
+        ? (candidate->page_index - lease->sequential_page_begin + 1U)
+        : (lease->sequential_page_end - candidate->page_index);
     uint8_t desired = (remaining_pages > SAMPLE_STREAM_FASTPATH_MAX_PAGES)
         ? SAMPLE_STREAM_FASTPATH_MAX_PAGES : (uint8_t)remaining_pages;
-    desired = sample_stream_backend_physical_contiguous_page_count(
-        &stream.stream_safe, first_target->start_frame, desired);
+    if (reverse != 0U)
+    {
+        uint8_t contiguous = 0U;
+        for (uint8_t pages = desired; pages >= 2U; --pages)
+        {
+            const uint32_t physical_start_frame =
+                (candidate->page_index - (uint32_t)(pages - 1U))
+                * first_target->frames_per_page;
+            if (sample_stream_backend_physical_contiguous_page_count(
+                    &stream.stream_safe, physical_start_frame, pages) == pages)
+            {
+                contiguous = pages;
+                break;
+            }
+        }
+        desired = contiguous;
+    }
+    else
+    {
+        desired = sample_stream_backend_physical_contiguous_page_count(
+            &stream.stream_safe, first_target->start_frame, desired);
+    }
     if (desired < 2U)
     {
         g_sample_stream_fastpath_diag.fastpath_fallback_noncontiguous++;
@@ -191,12 +219,15 @@ static uint8_t sample_stream_manager_submit_fastpath(
     }
 
     sample_page_load_target_t target[SAMPLE_STREAM_FASTPATH_MAX_PAGES];
+    sample_page_load_target_t reserved_target[SAMPLE_STREAM_FASTPATH_MAX_PAGES];
     sample_page_load_token_t token[SAMPLE_STREAM_FASTPATH_MAX_PAGES];
-    target[0] = *first_target;
+    reserved_target[0] = *first_target;
     uint8_t reserved = 1U;
     while (reserved < desired)
     {
-        const uint32_t page_index = candidate->page_index + reserved;
+        const uint32_t page_index = (reverse != 0U)
+            ? (candidate->page_index - reserved)
+            : (candidate->page_index + reserved);
         const sample_page_state_t state =
             sample_page_cache_get_page_state_key(candidate->key, page_index);
         if ((state == SAMPLE_PAGE_READY) || (state == SAMPLE_PAGE_LOADING)
@@ -204,13 +235,13 @@ static uint8_t sample_stream_manager_submit_fastpath(
         if (sample_page_cache_reserve_page_target_key_alloc(
                 candidate->key, page_index,
                 SAMPLE_PAGE_ALLOC_VOICE_WINDOW,
-                &target[reserved]) == 0U)
+                &reserved_target[reserved]) == 0U)
         {
             g_sample_stream_fastpath_diag.fastpath_fallback_cache_reserve++;
             break;
         }
-        if (target[reserved].frame_count
-            != target[reserved].frames_per_page)
+        if (reserved_target[reserved].frame_count
+            != reserved_target[reserved].frames_per_page)
         {
             (void)sample_page_cache_cancel_reserved_page_key(
                 candidate->key, page_index,
@@ -220,6 +251,10 @@ static uint8_t sample_stream_manager_submit_fastpath(
         ++reserved;
     }
     if (reserved < 2U) return 0U;
+
+    for (uint8_t page = 0U; page < reserved; ++page)
+        target[page] = (reverse != 0U)
+            ? reserved_target[reserved - 1U - page] : reserved_target[page];
 
     uint8_t loading = 0U;
     while ((loading < reserved)

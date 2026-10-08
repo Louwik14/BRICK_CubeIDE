@@ -115,7 +115,6 @@ static uint8_t mod_destination_is_direct_sampler(param_id_t dest)
         case PARAM_SAMPLER_START:
         case PARAM_SAMPLER_LENGTH:
         case PARAM_SAMPLER_LOOP_START:
-        case PARAM_SAMPLER_MODE:
         case PARAM_SAMPLER_TUNE:
         case PARAM_SAMPLER_SLICE_COUNT:
         case PARAM_SAMPLER_CLIP_SOURCE_BPM:
@@ -133,7 +132,6 @@ static uint8_t mod_destination_is_structural_sampler(param_id_t dest)
 {
     switch (dest)
     {
-        case PARAM_SAMPLER_MODE:
         case PARAM_SAMPLER_SLICE_COUNT:
         case PARAM_SAMPLER_CLIP_SOURCE_BPM:
         case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
@@ -416,10 +414,6 @@ static uint8_t mod_destination_apply_sampler_rt(uint8_t track,
         case PARAM_SAMPLER_LOOP_START:
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }
             brick6_sampler_runtime_set_loop_start(track, mod_destination_clampf(value, 0.0f, 1.0f));
-            return 1U;
-        case PARAM_SAMPLER_MODE:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }
-            brick6_sampler_runtime_set_mode(track, (uint8_t)(mod_destination_clampf(value, 0.0f, 6.0f) + 0.5f));
             return 1U;
         case PARAM_SAMPLER_TUNE:
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }

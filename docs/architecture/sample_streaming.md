@@ -91,8 +91,13 @@ cache hit ne lance aucune transaction SD. Une cible froide reserve une page de
 avant `READY`. Multi et les transitions de loop reutilisent le meme transport;
 aucune plage au-dela du watermark n'est exposee au rendu.
 
-Le sampler produit reste forward-only. Reverse et ping-pong sont temporairement
-retires: ils ne reviendront qu'avec un contrat natif VoiceReader/Page Cache.
+Classic et Group exposent le parametre historique unique `Mode`, dans cet ordre:
+`ONE`, `REV.ONE`, `LOOP`, `PINGPONG`, `H.ONE`, `H.LOOP`, `H.PINGPONG`.
+`H` signifie hold: le NOTE_OFF est ignore. `H.LOOP` est donc une loop forward
+hold, et non un ping-pong. `PINGPONG` et `H.PINGPONG` alternent sur toute la
+region START/END; `LOOP` et `H.LOOP` jouent d'abord depuis START puis rebouclent
+depuis LOOP START. Le mode est echantillonne au NOTE_ON, reglable et P-lockable,
+mais n'est pas une destination de modulation continue.
 
 ## IRQ et charge CPU
 
@@ -137,7 +142,9 @@ pas a un type de track. Le burst est envisage uniquement pour `NEXT`, lorsque
 suite sequentielle, qu'aucun saut hors de `CURRENT/NEXT` n'est pending et que
 la borne END ou LOOP END laisse au moins deux pages completes utiles. Le pitch
 ne sert pas de drapeau d'eligibilite: x1, x2, x4 et x8 utilisent le meme
-contrat. La premiere politique tente simplement jusqu'a quatre pages utiles.
+contrat. En reverse, `NEXT` est la page precedente et le burst physique reste
+soumis dans l'ordre croissant des pages; AUDIO consomme ensuite les slots en
+ordre decroissant. La premiere politique tente jusqu'a quatre pages utiles.
 
 Avant la soumission, le Stream Manager fige les keys et generations, verifie
 le format FLOAT32 stereo canonique, le mapping physique, puis reserve les slots
@@ -168,8 +175,8 @@ Chaque voix Multi possede toujours son lease et son fastpath. Aucun burst ne
 melange deux voix, fichiers ou zones, meme si leurs LBA sont voisins. Classic
 garde START live et les P-locks. Pour une loop forward, la borne sequentielle
 est LOOP END et les roles `LOOP_START`/`LOOP_START_NEXT` restent prepares par
-le mecanisme existant; rien n'est lu au-dela. Reverse et ping-pong ne font pas
-partie du produit. Les writes
+le mecanisme existant; rien n'est lu au-dela. Le ping-pong inverse uniquement
+le cursor aux bornes START/END et reutilise le meme cache. Les writes
 Recorder/Looper/Overdub restent de gros blocs asynchrones et partagent sans
 changement l'admission du scheduler; ils ne sont jamais decoupes en writes de
 512 octets.
