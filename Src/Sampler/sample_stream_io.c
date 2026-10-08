@@ -95,6 +95,7 @@ void sample_stream_io_init(void)
 {
     memset(g_sample_stream_io_async, 0, sizeof(g_sample_stream_io_async));
     g_sample_stream_io_next_order = 1U;
+    sample_stream_backend_physical_init();
     sd_block_device_async_init();
     sd_scheduler_runtime_init();
     if (sample_stream_io_chunk_valid(g_sample_stream_io_chunk_kib) == 0U)

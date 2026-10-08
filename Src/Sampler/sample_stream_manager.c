@@ -80,6 +80,9 @@ static void sample_stream_manager_init_storage_once(void)
 
 void sample_stream_manager_init(void)
 {
+    /* This guard lives in a deliberate NOLOAD hot section.  Establish its
+     * cold-boot value explicitly before the first guarded initialization. */
+    g_sample_stream_manager_initialized = 0U;
     sample_stream_manager_init_storage_once();
     sample_stream_manager_reset();
 }

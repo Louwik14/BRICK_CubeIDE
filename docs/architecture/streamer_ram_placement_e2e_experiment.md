@@ -200,7 +200,8 @@ expulses restent en SDRAM : leur premier acces applicatif intervient apres
 
 ### Diagnostic materiel GDB
 
-`g_boot_diag` est conserve dans la fenetre D3 non-cacheable a `0x3800CE20`. Les
+`g_boot_diag` est conserve dans la fenetre D3 non-cacheable (adresse Release
+actuelle `0x3800CE80`). Les
 handlers HardFault, MemManage, BusFault et UsageFault capturent desormais les
 registres SCB et la frame empilee puis restent arretes, au lieu de demander un reset
 immediat. `Error_Handler` capture egalement son adresse appelante.
@@ -239,3 +240,86 @@ Le cache reste a 368 pages, dont 36 pages de reserve VoiceReader. Le placement
 Streamer est inchange; seul l'objet non-Streamer `g_fm_voice` (15 040 octets) revient
 en memoire interne a cause de son constructeur pre-FMC. Aucune fonctionnalite ni
 initialisation n'est supprimee.
+## Suivi du blocage storage au boot (`8757c0c09`)
+
+`g_boot_diag.stage == 21` is `BOOT_DIAG_STAGE_SUPERLOOP`.  The application
+initialization and entry into `main()`'s superloop completed; stage 22
+(`BOOT_DIAG_STAGE_SD_MOUNTED`) was never reached.  The observed
+`last_pc_tag == 0x080098E9` is the return site in `main()` immediately after
+marking stage 21.  The active boot loop is therefore
+`brick6_app_process()` -> `groove_bank_boot_complete()` ->
+`groove_bank_service()`.
+
+There is no destructive SDRAM memory test or 0x55/0xAA fill in the firmware
+boot path.  `SDRAM_Init()` performs the FMC command sequence and then clears
+only `[__sdram_audio_cold_start__, __sdram_audio_cold_end__)`, currently
+`0xC1E4FA20..0xC1EBE180`.  `g_stream_end_to_end_bench` is a NOLOAD object at
+`0xC1AD19A0` in `.sdram_stream_service`, outside that interval, and its init
+has not run at stage 21.  Its `0x55555555` words are consequently retained or
+power-up contents of an intentionally uninitialized SDRAM range, not a
+benchmark result and not evidence of a post-clear firmware write.  The
+benchmark init itself starts with complete `memset()` calls for its public
+record, runtime, and histograms.
+
+The actual initialization defect exposed by the aggressive placement was in
+the internal hot NOLOAD sections.  `g_sample_stream_manager_initialized` was
+moved from ordinary startup-cleared BSS to `.dtcm_audio`.  Its first use was
+as an initialization guard, before any explicit write.  A retained nonzero
+value skipped `sample_stream_io_init()`, leaving the relocated D1 async jobs
+and the scheduler/block-device runtime uninitialized.  Stale active-job state
+can keep `streaming_critical` asserted, which makes the groove bank's
+background scheduler admission return `NOT_NOW` indefinitely before the
+first mount.  The physical backend pending pointers and its nonzero generation
+seed had the same NOLOAD initialization defect.
+
+The correction keeps the placement unchanged: the manager's public cold init
+now establishes the guard before using it, and the stream I/O init explicitly
+clears the physical pending array and restores generation 1.  No Streamer
+object was moved, and the cache remains 368 pages.
+
+`g_groove_boot_diag` is now exported in uncached D3 at `0x38008000` (76 bytes).
+It records the real groove state and previous state, service step, scheduler
+admission/owner/class, SD gate owner/count/streaming-critical flag, media
+epoch/status, FatFs result, progress, call count, and last transition cycle.
+The state values are the public `GROOVE_STATE_*` enum (0 WAIT_MEDIA through 15
+FAILED).  In particular, a repeat of the original starvation is directly
+identified by state 0, step `GROOVE_BOOT_STEP_WAIT_STORAGE_ADMISSION`,
+admission 0, and `streaming_critical != 0` and/or a non-idle owner.
+
+The complete `.sdram_audio_cold` Release interval is 452,448 bytes:
+
+| Address | Bytes | Object(s) | Required initialization |
+|---|---:|---|---|
+| `0xC1E4FA20` | 304 | sampler RAM global-to-slot | explicit init, including invalid-slot sentinels |
+| `0xC1E4FB60` | 5,472 | sampler RAM audio slots | explicit zero/init |
+| `0xC1E510C0` | 20,480 | Multi sample projections | explicit zero/init |
+| `0xC1E560C0` | 16,384 | Multi zones | explicit zero/init |
+| `0xC1E5A0C0` | 320 | Multi instruments | explicit zero/init |
+| `0xC1E5A200` | 29,568 | pattern slot A | pointers and generations assigned by `seq_engine_control_init()` |
+| `0xC1E61580` | 12,288 | locks A | zero payload; attached explicitly to pattern A |
+| `0xC1E64580` | 12,032 | audio wavetable registry | explicit zero/init |
+| `0xC1E67480` | 16,384 | SD preview ring | payload scratch; indices initialized separately |
+| `0xC1E6B480` | 16,384 | wavetable pool I/O | overwrite-before-use scratch |
+| `0xC1E6F480` | 4,096 | SD preview I/O | overwrite-before-use scratch |
+| `0xC1E70480` | 65,536 | clip-shifter delay | zero history, then runtime init |
+| `0xC1E80480` | 6,400 | Braids poly runtime | explicit per-instance init; no pre-main constructor |
+| `0xC1E81D80` | 6,400 | Braids runtime | explicit per-instance init; no pre-main constructor |
+| `0xC1E83680` | 2,688 | wavetable poly runtime | explicit per-instance reset |
+| `0xC1E84100` | 2,688 | wavetable runtime | explicit per-instance reset |
+| `0xC1E84B80` | 4,800 | TB303 runtime | explicit reset with nonzero coefficients/sentinels |
+| `0xC1E85E40` | 65,536 | Vibe history | explicit zero/init |
+| `0xC1E95E40` | 6,144 | audio FX runtime | explicit zero then model initialization |
+| `0xC1E97640` | 8,192 | global mod-FX history | explicit zero/init |
+| `0xC1E99640` | 9,608 | Haas right history | explicit clear through delay init |
+| `0xC1E9BBE0` | 9,608 | Haas left history | explicit clear through delay init |
+| `0xC1E9E180` | 131,072 | RevB engine buffer | initialized by `engine.Init()`; raw float buffer, no constructor |
+
+All objects in this arena either require zero/scratch semantics or have an
+explicit functional initialization after FMC.  None has a nontrivial C++
+pre-main constructor.  `g_fm_voice` remains the sole object returned to
+internal SRAM specifically because its C++ construction occurs before FMC.
+
+Release build after the correction: DTCM 89,152 bytes, D1 500,128 bytes, D3
+52,992 bytes, SDRAM 32,235,904 bytes.  Hardware validation remains required;
+a successful link alone does not establish that the board reaches stages
+22-24.

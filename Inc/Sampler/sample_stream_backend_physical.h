@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+void sample_stream_backend_physical_init(void);
+
 typedef struct
 {
     const sample_stream_physical_map_t *map;

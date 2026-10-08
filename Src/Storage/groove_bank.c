@@ -10,6 +10,7 @@
 #include "Storage/groove_flash_backend.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_shared_io.h"
+#include "stm32h7xx.h"
 #include "ff.h"
 
 #define BGRB_MAGIC UINT32_C(0x42524742) /* BGRB */
@@ -46,26 +47,6 @@ _Static_assert(GROOVE_BANK_WORST_CASE_BYTES < GROOVE_FLASH_SIZE,
                "BGRB bank exceeds Groove Flash");
 _Static_assert(STORAGE_SHARED_IO_BYTES >= 13824U,
                "shared Storage scratch too small for Groove import");
-
-typedef enum
-{
-    GROOVE_STATE_WAIT_MEDIA = 0,
-    GROOVE_STATE_SCAN_OPEN,
-    GROOVE_STATE_SCAN_NEXT,
-    GROOVE_STATE_SCAN_CLOSE,
-    GROOVE_STATE_DECIDE,
-    GROOVE_STATE_ERASE,
-    GROOVE_STATE_IMPORT_OPEN,
-    GROOVE_STATE_IMPORT_READ,
-    GROOVE_STATE_IMPORT_CLOSE,
-    GROOVE_STATE_RECORD_PROGRAM,
-    GROOVE_STATE_CATALOG_PROGRAM,
-    GROOVE_STATE_HEADER_PROGRAM,
-    GROOVE_STATE_COMMIT,
-    GROOVE_STATE_REMOVE_MARKER,
-    GROOVE_STATE_READY,
-    GROOVE_STATE_FAILED
-} groove_state_t;
 
 typedef struct
 {
@@ -116,6 +97,56 @@ typedef struct
 } groove_bank_runtime_t;
 
 STORAGE_STATE_SDRAM static groove_bank_runtime_t g_groove;
+IRQ_SHARED_D3 volatile groove_boot_diag_t g_groove_boot_diag
+    __attribute__((used, externally_visible));
+
+#define GROOVE_BOOT_DIAG_MAGIC UINT32_C(0x47525644) /* GRVD */
+#define GROOVE_BOOT_DIAG_VERSION 1U
+
+static uint32_t groove_diag_progress(void)
+{
+    switch (g_groove.state)
+    {
+        case GROOVE_STATE_SCAN_NEXT: return g_groove.source_count;
+        case GROOVE_STATE_IMPORT_OPEN:
+        case GROOVE_STATE_IMPORT_CLOSE: return g_groove.import_source;
+        case GROOVE_STATE_IMPORT_READ: return g_groove.file_bytes;
+        case GROOVE_STATE_RECORD_PROGRAM:
+        case GROOVE_STATE_CATALOG_PROGRAM: return g_groove.program_offset;
+        default: return 0U;
+    }
+}
+
+static void groove_diag_observe(groove_boot_step_t step)
+{
+    const uint32_t state = (uint32_t)g_groove.state;
+    if (g_groove_boot_diag.state != state)
+    {
+        g_groove_boot_diag.previous_state = g_groove_boot_diag.state;
+        g_groove_boot_diag.state = state;
+        g_groove_boot_diag.last_transition_cycles = DWT->CYCCNT;
+    }
+    g_groove_boot_diag.step = (uint32_t)step;
+    g_groove_boot_diag.progress = groove_diag_progress();
+    g_groove_boot_diag.media_epoch = sd_access_media_epoch();
+    g_groove_boot_diag.storage_status = (uint32_t)sd_access_storage_status();
+    g_groove_boot_diag.scheduler_owner =
+        (uint32_t)sd_scheduler_runtime_owner();
+    g_groove_boot_diag.scheduler_class =
+        (uint32_t)sd_scheduler_runtime_active_class();
+    g_groove_boot_diag.gate_owner =
+        (uint32_t)sd_access_gate_current_owner();
+    g_groove_boot_diag.gate_held_count = sd_access_gate_held_count();
+    g_groove_boot_diag.streaming_critical =
+        sd_access_gate_streaming_critical_active();
+    __DMB();
+}
+
+static void groove_diag_fresult(FRESULT result)
+{
+    g_groove_boot_diag.fresult = (int32_t)result;
+    if (result != FR_OK) g_groove_boot_diag.error = 2U;
+}
 
 static uint8_t *catalog_scratch(void) { return g_storage_shared_io; }
 static uint8_t *record_scratch(void)
@@ -251,11 +282,17 @@ static uint8_t bank_precommit_valid(void)
 }
 
 static void publish_bank(void)
-{groove_flash_backend_publish_barrier();g_groove.published=g_groove.intrinsic_valid;g_groove.state=GROOVE_STATE_READY;}
+{groove_flash_backend_publish_barrier();g_groove.published=g_groove.intrinsic_valid;g_groove.state=GROOVE_STATE_READY;groove_diag_observe(GROOVE_BOOT_STEP_COMPLETE);}
 
 static uint8_t storage_begin(sd_scheduler_background_kind_t kind,uint32_t bytes)
 {const sd_scheduler_background_request_t r={bytes,sd_access_media_epoch(),kind};
- return(sd_scheduler_runtime_background_try_begin(&r)==SD_SCHEDULER_BACKGROUND_GO)?1U:0U;}
+ const sd_scheduler_background_admission_t admission=
+     sd_scheduler_runtime_background_try_begin(&r);
+ g_groove_boot_diag.background_admission=(uint32_t)admission;
+ if(admission==SD_SCHEDULER_BACKGROUND_INVALID)g_groove_boot_diag.error=1U;
+ groove_diag_observe((admission==SD_SCHEDULER_BACKGROUND_GO)
+     ?GROOVE_BOOT_STEP_STORAGE_ADMITTED:GROOVE_BOOT_STEP_WAIT_STORAGE_ADMISSION);
+ return(admission==SD_SCHEDULER_BACKGROUND_GO)?1U:0U;}
 static void storage_end(void){sd_scheduler_runtime_background_end();}
 
 static const char *attribute(const char *tag,const char *name)
@@ -414,18 +451,32 @@ static void mark_import_result(uint8_t valid)
 
 void groove_bank_init(void)
 {
+    memset((void *)&g_groove_boot_diag,0,sizeof(g_groove_boot_diag));
+    g_groove_boot_diag.magic=GROOVE_BOOT_DIAG_MAGIC;
+    g_groove_boot_diag.version=GROOVE_BOOT_DIAG_VERSION;
+    g_groove_boot_diag.size=sizeof(g_groove_boot_diag);
+    g_groove_boot_diag.state=UINT32_MAX;
+    g_groove_boot_diag.previous_state=UINT32_MAX;
+    g_groove_boot_diag.fresult=(int32_t)FR_OK;
     memset(&g_groove,0,sizeof(g_groove));g_groove.intrinsic_valid=bank_intrinsic_valid();
     g_groove.state=GROOVE_STATE_WAIT_MEDIA;
+    groove_diag_observe(GROOVE_BOOT_STEP_INIT);
 }
 
 void groove_bank_service(void)
 {
     FRESULT fr;UINT amount=0U;
+    ++g_groove_boot_diag.calls;
+    groove_diag_observe(GROOVE_BOOT_STEP_SERVICE);
+    if((g_groove.state>=GROOVE_STATE_ERASE)
+            &&(g_groove.state<=GROOVE_STATE_COMMIT))
+        groove_diag_observe(GROOVE_BOOT_STEP_FLASH);
     switch(g_groove.state)
     {
         case GROOVE_STATE_WAIT_MEDIA:
             if(sd_access_storage_status()==SD_STORAGE_STATUS_NO_MEDIA||sd_access_storage_status()==SD_STORAGE_STATUS_FAULT){publish_bank();return;}
             if(!storage_begin(SD_SCHEDULER_BACKGROUND_METADATA,0U))return;
+            groove_diag_observe(GROOVE_BOOT_STEP_MOUNT);
             if (sd_access_fs_mount_if_needed() != 0U)
                 g_groove.state = GROOVE_STATE_SCAN_OPEN;
             storage_end();
@@ -433,8 +484,9 @@ void groove_bank_service(void)
         case GROOVE_STATE_SCAN_OPEN:
             if(!storage_begin(SD_SCHEDULER_BACKGROUND_METADATA,0U))return;
             memset(catalog_scratch(),0xFF,BGRB_CATALOG_BYTES);g_groove.source_count=0U;g_groove.flags=0U;g_groove.marker_present=0U;
-            fr=f_opendir(&g_groove.directory,"0:/Grooves");g_groove.directory_open=(fr==FR_OK);g_groove.state=(fr==FR_OK)?GROOVE_STATE_SCAN_NEXT:GROOVE_STATE_DECIDE;storage_end();return;
-        case GROOVE_STATE_SCAN_NEXT:{if(!storage_begin(SD_SCHEDULER_BACKGROUND_METADATA,0U))return;FILINFO info;memset(&info,0,sizeof(info));fr=f_readdir(&g_groove.directory,&info);
+            groove_diag_observe(GROOVE_BOOT_STEP_DIRECTORY_OPEN);
+            fr=f_opendir(&g_groove.directory,"0:/Grooves");groove_diag_fresult(fr);g_groove.directory_open=(fr==FR_OK);g_groove.state=(fr==FR_OK)?GROOVE_STATE_SCAN_NEXT:GROOVE_STATE_DECIDE;storage_end();return;
+        case GROOVE_STATE_SCAN_NEXT:{if(!storage_begin(SD_SCHEDULER_BACKGROUND_METADATA,0U))return;FILINFO info;memset(&info,0,sizeof(info));groove_diag_observe(GROOVE_BOOT_STEP_DIRECTORY_READ);fr=f_readdir(&g_groove.directory,&info);groove_diag_fresult(fr);
             if(fr!=FR_OK||info.fname[0]=='\0')g_groove.state=GROOVE_STATE_SCAN_CLOSE;
             else if ((info.fattrib & AM_DIR) == 0U)
             {
@@ -451,6 +503,7 @@ void groove_bank_service(void)
             return;}
         case GROOVE_STATE_SCAN_CLOSE:
             if(!storage_begin(SD_SCHEDULER_BACKGROUND_METADATA,0U))return;
+            groove_diag_observe(GROOVE_BOOT_STEP_DIRECTORY_CLOSE);
             (void)f_closedir(&g_groove.directory);
             g_groove.directory_open=0U;
             g_groove.state=GROOVE_STATE_DECIDE;
@@ -466,12 +519,12 @@ void groove_bank_service(void)
             if(g_groove.import_source>=g_groove.source_count){g_groove.program_offset=0U;g_groove.state=GROOVE_STATE_CATALOG_PROGRAM;return;}
             if(!storage_begin(SD_SCHEDULER_BACKGROUND_METADATA,0U))return;
             {const char *name=(const char *)scratch_entry(g_groove.import_source);const int n=snprintf(g_groove.path,sizeof(g_groove.path),"0:/Grooves/%s.agr",name);
-             parser_reset();fr=(n>0&&(size_t)n<sizeof(g_groove.path))?f_open(&g_groove.file,g_groove.path,FA_READ):FR_INVALID_NAME;
+             parser_reset();groove_diag_observe(GROOVE_BOOT_STEP_FILE_OPEN);fr=(n>0&&(size_t)n<sizeof(g_groove.path))?f_open(&g_groove.file,g_groove.path,FA_READ):FR_INVALID_NAME;groove_diag_fresult(fr);
              if(fr==FR_OK&&f_size(&g_groove.file)<=BGRB_XML_MAX_BYTES){g_groove.file_open=1U;g_groove.state=GROOVE_STATE_IMPORT_READ;}
              else{if(fr==FR_OK)(void)f_close(&g_groove.file);mark_import_result(0U);}storage_end();return;}
         case GROOVE_STATE_IMPORT_READ:
             if(!storage_begin(SD_SCHEDULER_BACKGROUND_DATA,BGRB_XML_IO_BYTES))return;
-            fr=f_read(&g_groove.file,xml_scratch(),BGRB_XML_IO_BYTES,&amount);if(fr!=FR_OK){g_groove.parser_invalid=1U;g_groove.state=GROOVE_STATE_IMPORT_CLOSE;}
+            groove_diag_observe(GROOVE_BOOT_STEP_FILE_READ);fr=f_read(&g_groove.file,xml_scratch(),BGRB_XML_IO_BYTES,&amount);groove_diag_fresult(fr);if(fr!=FR_OK){g_groove.parser_invalid=1U;g_groove.state=GROOVE_STATE_IMPORT_CLOSE;}
             else if (amount == 0U) g_groove.state = GROOVE_STATE_IMPORT_CLOSE;
             else
             {
@@ -482,6 +535,7 @@ void groove_bank_service(void)
             return;
         case GROOVE_STATE_IMPORT_CLOSE:
             if(!storage_begin(SD_SCHEDULER_BACKGROUND_METADATA,0U))return;
+            groove_diag_observe(GROOVE_BOOT_STEP_FILE_CLOSE);
             if(g_groove.file_open)(void)f_close(&g_groove.file);
             g_groove.file_open=0U;
             mark_import_result(parser_finalize());
@@ -501,7 +555,9 @@ void groove_bank_service(void)
             if(!groove_flash_backend_program(GROOVE_FLASH_BASE,word)){g_groove.state=GROOVE_STATE_FAILED;return;}g_groove.intrinsic_valid=bank_intrinsic_valid();if(!g_groove.intrinsic_valid){g_groove.state=GROOVE_STATE_FAILED;return;}g_groove.state=g_groove.marker_present?GROOVE_STATE_REMOVE_MARKER:GROOVE_STATE_READY;if(!g_groove.marker_present)publish_bank();return;}
         case GROOVE_STATE_REMOVE_MARKER:
             if(!storage_begin(SD_SCHEDULER_BACKGROUND_METADATA,0U))return;
+            groove_diag_observe(GROOVE_BOOT_STEP_REMOVE_MARKER);
             fr=f_unlink("0:/Grooves/REBUILD.BRK");
+            groove_diag_fresult(fr);
             storage_end();
             if(fr==FR_OK||fr==FR_NO_FILE)publish_bank();
             else g_groove.state=GROOVE_STATE_FAILED;
@@ -512,7 +568,7 @@ void groove_bank_service(void)
 }
 
 uint8_t groove_bank_boot_complete(void)
-{return(g_groove.state==GROOVE_STATE_READY||g_groove.state==GROOVE_STATE_FAILED)?1U:0U;}
+{const uint8_t complete=(g_groove.state==GROOVE_STATE_READY||g_groove.state==GROOVE_STATE_FAILED)?1U:0U;if(complete!=0U)groove_diag_observe(GROOVE_BOOT_STEP_COMPLETE);return complete;}
 uint8_t groove_bank_ready(void){return g_groove.published;}
 uint8_t groove_bank_overflow(void)
 {return(g_groove.published&&((((const uint8_t *)GROOVE_FLASH_BASE)[16U]&1U)!=0U))?1U:0U;}

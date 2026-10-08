@@ -15,6 +15,13 @@ STREAM_BENCH_HOT_DTCM static sample_stream_backend_physical_async_t
     *g_sample_stream_physical_pending[SAMPLE_STREAM_PHYSICAL_PENDING_COUNT];
 STREAM_BENCH_HOT_DTCM static uint32_t g_sample_stream_physical_next_generation = 1U;
 
+void sample_stream_backend_physical_init(void)
+{
+    memset(g_sample_stream_physical_pending, 0,
+           sizeof(g_sample_stream_physical_pending));
+    g_sample_stream_physical_next_generation = 1U;
+}
+
 static int32_t sample_stream_backend_physical_find(
     const sample_stream_backend_physical_async_t *async)
 {
