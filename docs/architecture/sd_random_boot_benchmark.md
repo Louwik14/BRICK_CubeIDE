@@ -26,6 +26,14 @@ sample page cache est contourne : le chemin mesure est la map physique FatFs,
 le provider STREAM, le scheduler SD, le block device SDMMC/IDMA et sa
 maintenance D-cache, dans un buffer benchmark unique.
 
+Pour cette campagne a demi-frequence, la source SDMMC est PLL2R a 200 MHz.
+Le chemin normal High Speed utilise `CLKCR.CLKDIV=2`, soit 50 MHz selon
+`SDMMC_CK = kernel / (2 * CLKDIV)`. A l'entree du benchmark exclusivement,
+`hsd1.Init.ClockDiv` et le seul champ `CLKCR.CLKDIV` passent a 4, soit 25 MHz.
+Largeur 4 bits, mode carte, commandes multi-blocs et IDMA restent
+inchanges. `sd_clock_divider` et `sd_clock_hz` publient les valeurs relues et
+calculees dans `g_sd_random_bench`.
+
 `g_sd_random_bench` contient la progression, l'etape d'echec, l'offset
 d'ecriture, le dernier nombre d'octets ecrits, les etats disque/carte et les
 resultats en microsecondes. Quatre histogrammes de 2 048 buckets a pas de
@@ -83,7 +91,7 @@ physique validee reste commande READ -> CMDREND/DATA -> DATAEND -> CMD12.
 
 RAM statique : les quatre histogrammes occupent 32 768 octets, contre 65 536
 octets pour les deux anciens histogrammes. Les resultats et timestamps ajoutent
-1 452 octets. Le bilan net est donc une economie de 31 316 octets par rapport
+1 460 octets. Le bilan net est donc une economie de 31 308 octets par rapport
 au benchmark precedent.
 
 `fail_step` vaut 1 MOUNT, 2 MKDIR, 3 OPEN, 4 EXPAND (reserve, non utilise),

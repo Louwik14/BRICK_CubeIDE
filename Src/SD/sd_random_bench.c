@@ -11,6 +11,7 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/persistent_fatfs_io.h"
 #include "ff.h"
+#include "sdmmc.h"
 #include "stm32h7xx.h"
 #include "stm32h7xx_hal.h"
 
@@ -23,6 +24,7 @@
 #define SD_BENCH_MAX_PAGES         (SD_BENCH_FILE_512_MIB / SD_BENCH_PAGE_BYTES)
 #define SD_BENCH_HISTOGRAM_BIN_US  (10U)
 #define SD_BENCH_HISTOGRAM_BINS    (2048U)
+#define SD_BENCH_SD_CLOCK_DIVIDER  (4U)
 
 enum
 {
@@ -78,6 +80,24 @@ static uint32_t sd_bench_cycles_to_us(uint32_t cycles)
     const uint32_t hz = (g_sd_random_bench.cpu_hz != 0U)
         ? g_sd_random_bench.cpu_hz : 1U;
     return (uint32_t)(((uint64_t)cycles * UINT64_C(1000000) + (hz / 2U)) / hz);
+}
+
+static uint8_t sd_bench_configure_sd_clock(void)
+{
+    const uint32_t kernel_hz =
+        HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_SDMMC);
+    if (kernel_hz == 0U) return 0U;
+    hsd1.Init.ClockDiv = SD_BENCH_SD_CLOCK_DIVIDER;
+    MODIFY_REG(hsd1.Instance->CLKCR, SDMMC_CLKCR_CLKDIV,
+               SD_BENCH_SD_CLOCK_DIVIDER);
+    __DSB();
+    g_sd_random_bench.sd_clock_divider =
+        (hsd1.Instance->CLKCR & SDMMC_CLKCR_CLKDIV_Msk)
+            >> SDMMC_CLKCR_CLKDIV_Pos;
+    if (g_sd_random_bench.sd_clock_divider == 0U) return 0U;
+    g_sd_random_bench.sd_clock_hz = kernel_hz
+        / (2U * g_sd_random_bench.sd_clock_divider);
+    return 1U;
 }
 
 static void sd_bench_metric_init(volatile sd_random_bench_metric_t *metric)
@@ -738,6 +758,15 @@ void sd_random_bench_init(void)
     g_sd_random_bench.version = SD_RANDOM_BENCH_VERSION;
     g_sd_random_bench.size = sizeof(g_sd_random_bench);
     g_sd_random_bench.cpu_hz = SystemCoreClock;
+    if (sd_bench_configure_sd_clock() == 0U)
+    {
+        g_sd_random_bench.error = SD_BENCH_ERROR_SUBMIT;
+        g_sd_random_bench.fail_step = SD_RANDOM_BENCH_FAIL_MOUNT;
+        g_sd_random_bench.errors = 1U;
+        g_sd_random_bench.state = SD_RANDOM_BENCH_ERROR;
+        g_sd_random_bench.done = 1U;
+        return;
+    }
     g_sd_random_bench.page_size = SD_BENCH_PAGE_BYTES;
     g_sd_random_bench.num_reads = SD_BENCH_READ_COUNT;
     g_sd_random_bench.latency_min_us = UINT32_MAX;

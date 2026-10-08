@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define SD_RANDOM_BENCH_MAGIC   UINT32_C(0x53444236)
-#define SD_RANDOM_BENCH_VERSION (4U)
+#define SD_RANDOM_BENCH_VERSION (5U)
 
 typedef struct
 {
@@ -64,6 +64,8 @@ typedef struct
     uint32_t disk_status;
     uint32_t card_state;
     uint32_t cpu_hz;
+    uint32_t sd_clock_hz;
+    uint32_t sd_clock_divider;
     uint32_t file_size;
     uint32_t page_size;
     uint32_t num_reads;
