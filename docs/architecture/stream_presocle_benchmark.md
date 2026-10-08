@@ -1,26 +1,25 @@
 # Benchmark STREAM : dimensionnement du presocle
 
-Le firmware Release mesure la taille minimale de donnees source deja presentes
-en RAM qui permet a 1, 2, 4 ou 8 voix STREAM cold de demarrer ensemble sans
-starvation, a x1 ou x4. Le KPI principal est
+Le firmware Release mesure automatiquement la taille minimale de donnees source
+deja presentes en RAM qui permet a 8 voix STREAM cold de demarrer ensemble sans
+starvation a x4. Le KPI principal est
 `minimum_continuation_margin_us`; le critere candidat est
 `starvation_count == 0 && minimum_continuation_margin_us >= 0` sur 10 000
 batches.
 
-## Configuration
+## Sweep automatique
 
-Les constantes en tete de `Src/SD/stream_end_to_end_bench.c` sont
-surchargeables a la compilation :
+Une seule image enchaine sept campagnes :
 
-```c
-STREAM_E2E_BENCH_SIMULTANEOUS_COLD_STARTS /* 1, 2, 4, 8 */
-STREAM_E2E_BENCH_PLAYBACK_RATE_X          /* 1, 4 */
-STREAM_E2E_BENCH_PRESOCLE_BYTES           /* multiple de 8, <= 16384 */
+```text
+16384, 8192, 4096, 2048, 1024, 512, 256 octets
 ```
 
-L'image par defaut mesure 8 voix, x4, presocle 16 KiB.
-`STREAM_E2E_BENCH_NUM_REQUESTS` designe 10 000 batches, pas 10 000 voix. Les
-tailles prioritaires sont 256, 512, 1024, 2048, 4096, 8192 et 16384 octets.
+Chaque taille execute son warm-up normal puis 10 000 batches. Le Page Cache
+n'est jamais vide artificiellement entre deux tailles; la selection conserve
+le controle cold miss de chaque batch. Seuls les compteurs, histogrammes,
+readers et etats transitoires du benchmark sont reinitialises. Le sweep reste
+fixe a 8 voix et x4 par des gardes de compilation.
 
 L'architecture reste figee : page 16 KiB, 32 chunks progressifs de 512 octets,
 un CMD18 et un CMD12 par page, IDMA double-buffer, SDMMC1 priorite 1, AUDIO
@@ -97,5 +96,23 @@ starvation_count = 0
 minimum_continuation_margin_us >= 0
 ```
 
-La recherche materielle commence a 8 voix/x4/16 KiB puis descend jusqu'a la
-premiere taille qui starve. Aucun resultat materiel n'est deduit du build seul.
+Les sept resultats compacts restent dans `g_stream_presocle_sweep.result`.
+Chaque entree contient son PASS/FAIL, ses marges, starvations, controles
+d'integrite, charge AUDIO, maxima SD et RAM equivalente pour 64 slices. Le
+sweep continue apres un FAIL et ne publie `done = 1` qu'apres la septieme
+campagne. Les champs de synthese sont
+`smallest_zero_starvation_presocle_bytes` et
+`first_failing_presocle_bytes`.
+
+Dump GDB :
+
+```gdb
+shell cls
+set pagination off
+set print pretty on
+p g_stream_presocle_sweep
+p g_stream_presocle_sweep.smallest_zero_starvation_presocle_bytes
+p g_stream_presocle_sweep.first_failing_presocle_bytes
+```
+
+Aucun resultat materiel n'est deduit du build seul.

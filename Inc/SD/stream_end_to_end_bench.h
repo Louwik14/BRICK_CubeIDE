@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "Sampler/sample_audio_key.h"
@@ -13,6 +14,9 @@ extern "C" {
 #define STREAM_END_TO_END_BENCH_VERSION (5U)
 #define STREAM_END_TO_END_BENCH_MAX_BATCH (8U)
 #define STREAM_END_TO_END_BENCH_OUTLIERS  (16U)
+#define STREAM_PRESOCLE_SWEEP_COUNT         (7U)
+#define STREAM_PRESOCLE_SWEEP_MAGIC         UINT32_C(0x50535750)
+#define STREAM_PRESOCLE_SWEEP_VERSION       (1U)
 
 typedef struct
 {
@@ -115,6 +119,51 @@ typedef struct
     uint8_t starved;
     uint16_t reserved;
 } stream_end_to_end_voice_queue_t;
+
+typedef struct
+{
+    uint32_t presocle_bytes;
+    uint32_t ram_for_64_slices_bytes;
+    uint32_t batches_completed;
+    uint32_t voices_completed;
+    uint32_t error;
+    uint32_t starvation_count;
+    uint32_t batch_with_starvation_count;
+    int32_t minimum_continuation_margin_us;
+    int32_t continuation_margin_p50_us;
+    int32_t continuation_margin_p90_us;
+    int32_t continuation_margin_p99_us;
+    int32_t continuation_margin_p999_us;
+    uint32_t starvation_duration_max_us;
+    uint32_t presocle_transition_mismatch_count;
+    uint32_t chunk_data_mismatch_count;
+    uint32_t generation_mismatch_count;
+    uint32_t duplicate_chunk_publish_count;
+    uint32_t out_of_order_chunk_publish_count;
+    uint32_t rearm_deadline_miss_count;
+    uint32_t audio_irq_load_percent;
+    uint32_t audio_irq_cycles_max;
+    uint32_t sd_rearm_cycles_max;
+    uint32_t sd_handler_cycles_max;
+    bool pass;
+    uint8_t reserved[3];
+} stream_presocle_sweep_result_t;
+
+typedef struct
+{
+    uint32_t magic;
+    uint32_t version;
+    uint32_t size;
+    volatile uint32_t done;
+    volatile uint32_t current_index;
+    uint32_t result_count;
+    uint32_t simultaneous_cold_starts;
+    uint32_t playback_rate_x;
+    uint32_t largest_tested_presocle_bytes;
+    uint32_t smallest_zero_starvation_presocle_bytes;
+    uint32_t first_failing_presocle_bytes;
+    stream_presocle_sweep_result_t result[STREAM_PRESOCLE_SWEEP_COUNT];
+} stream_presocle_sweep_t;
 
 typedef struct
 {
@@ -269,6 +318,7 @@ typedef struct
 } stream_end_to_end_bench_result_t;
 
 extern volatile stream_end_to_end_bench_result_t g_stream_end_to_end_bench;
+extern volatile stream_presocle_sweep_t g_stream_presocle_sweep;
 
 void stream_end_to_end_bench_init(void);
 void stream_end_to_end_bench_service(void);
