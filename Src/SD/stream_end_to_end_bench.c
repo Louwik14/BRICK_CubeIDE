@@ -7,6 +7,7 @@
 #include "Platform/memory_layout.h"
 #include "Sampler/multi_sample_config.h"
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_page_cache_audio.h"
 #include "Sampler/sample_page_cache_config.h"
 #include "Sampler/sample_page_cache_port.h"
 #include "Sampler/sample_stream_fatfs_map.h"
@@ -101,6 +102,8 @@ typedef struct
     uint32_t reserve_begin;
     uint32_t reserve_end;
     uint32_t backend_submit;
+    uint32_t first_chunk_available;
+    uint32_t published_frames;
     uint32_t page_ready;
     uint32_t audio_seen;
     uint32_t resolve_begin;
@@ -621,8 +624,9 @@ static void stream_e2e_insert_outlier(
         - voice->physical.command_cycles);
     item.trigger_to_page_ready_us = stream_e2e_cycles_to_us(
         voice->page_ready - voice->trigger);
-    item.page_ready_to_audio_seen_us = stream_e2e_cycles_to_us(
-        voice->audio_seen - voice->page_ready);
+    item.page_ready_to_audio_seen_us = (voice->audio_seen >= voice->page_ready)
+        ? stream_e2e_cycles_to_us(voice->audio_seen - voice->page_ready)
+        : 0U;
     item.trigger_to_first_render_us = stream_e2e_cycles_to_us(
         voice->first_render - voice->trigger);
 
@@ -709,7 +713,8 @@ static void stream_e2e_record_batch(void)
     {
         const stream_e2e_voice_runtime_t *const v =
             &g_stream_e2e_runtime.voice[i];
-        if ((v->page_ready == 0U) || (v->first_render == 0U))
+        if ((v->page_ready == 0U) || (v->first_render == 0U)
+            || (v->first_chunk_available == 0U))
         {
             stream_e2e_fail(STREAM_E2E_ERROR_IO, 11U, FR_INT_ERR,
                             SD_BLOCK_DEVICE_READ_FAIL);
@@ -743,8 +748,17 @@ static void stream_e2e_record_batch(void)
                            v->backend_submit, v->trigger);
             STREAM_E2E_ADD(g_stream_end_to_end_bench.trigger_to_page_ready,
                            v->page_ready, v->trigger);
-            STREAM_E2E_ADD(g_stream_end_to_end_bench.page_ready_to_audio_seen,
-                           v->audio_seen, v->page_ready);
+            STREAM_E2E_ADD(g_stream_end_to_end_bench.trigger_to_full_page_ready,
+                           v->page_ready, v->trigger);
+            STREAM_E2E_ADD(
+                g_stream_end_to_end_bench.trigger_to_first_chunk_available,
+                v->first_chunk_available, v->trigger);
+            STREAM_E2E_ADD(
+                g_stream_end_to_end_bench.first_chunk_available_to_audio_seen,
+                v->audio_seen, v->first_chunk_available);
+            if(v->audio_seen >= v->page_ready)
+                STREAM_E2E_ADD(g_stream_end_to_end_bench.page_ready_to_audio_seen,
+                               v->audio_seen, v->page_ready);
             STREAM_E2E_ADD(g_stream_end_to_end_bench.audio_seen_to_reader_resolve,
                            v->resolve_begin, v->audio_seen);
             STREAM_E2E_ADD(g_stream_end_to_end_bench.reader_resolve_to_first_render,
@@ -757,6 +771,9 @@ static void stream_e2e_record_batch(void)
                                 v->first_render - v->trigger);
             stream_e2e_record_physical(v);
             stream_e2e_insert_outlier(v, g_stream_e2e_runtime.batch_size);
+            if(v->first_render >= v->page_ready)
+                ++g_stream_end_to_end_bench
+                    .first_render_not_before_ready_count;
             const uint32_t render_us = stream_e2e_cycles_to_us(
                 v->first_render - v->trigger);
             if (render_us <= g_stream_end_to_end_bench.audio_block_us)
@@ -859,6 +876,7 @@ void stream_end_to_end_bench_init(void)
            sizeof(g_stream_end_to_end_bench));
     memset(&g_stream_e2e_runtime, 0, sizeof(g_stream_e2e_runtime));
     memset(g_stream_e2e_hist, 0, sizeof(g_stream_e2e_hist));
+    stream_e2e_fill_file_pattern();
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     g_stream_e2e_runtime.key = sample_audio_key_multi(
@@ -868,6 +886,7 @@ void stream_end_to_end_bench_init(void)
     g_stream_end_to_end_bench.size = sizeof(g_stream_end_to_end_bench);
     g_stream_end_to_end_bench.cpu_hz = SystemCoreClock;
     g_stream_end_to_end_bench.page_size = STREAM_E2E_BENCH_PAGE_BYTES;
+    g_stream_end_to_end_bench.chunk_size = 4096U;
     g_stream_end_to_end_bench.num_requests =
         STREAM_E2E_BENCH_NUM_REQUESTS;
     g_stream_end_to_end_bench.simultaneous_cold_starts =
@@ -999,9 +1018,9 @@ void stream_end_to_end_bench_audio_boundary(uint32_t frames)
             plan.registration_epoch = g_stream_e2e_runtime.registration_epoch;
             plan.start_frame = start;
             plan.region_begin = start;
-            plan.region_end = start + 1U;
+            plan.region_end = start + STREAM_E2E_AUDIO_BLOCK_FRAMES;
             plan.loop_begin = start;
-            plan.loop_end = start + 1U;
+            plan.loop_end = start + STREAM_E2E_AUDIO_BLOCK_FRAMES;
             plan.step_q16 = 65536U;
             plan.loop_mode = SAMPLE_PLAY_LOOP_NONE;
             plan.kernel_type = SAMPLE_KERNEL_FWD_1X;
@@ -1022,43 +1041,51 @@ void stream_end_to_end_bench_audio_boundary(uint32_t frames)
 
     if (g_stream_e2e_runtime.batch_active == 0U) return;
     uint32_t complete = 0U;
+    uint8_t all_ready = 1U;
     for (uint32_t i = 0U; i < g_stream_e2e_runtime.batch_size; ++i)
     {
         stream_e2e_voice_runtime_t *const voice =
             &g_stream_e2e_runtime.voice[i];
         if (voice->rendered != 0U)
         {
+            if(voice->page_ready == 0U) all_ready = 0U;
             ++complete;
             continue;
         }
-        if ((voice->audio_seen == 0U)
-            && (sample_page_cache_audio_get_page_state_key(
-                    g_stream_e2e_runtime.key,
-                    voice->page) == SAMPLE_PAGE_READY))
+        const uint32_t available =
+            sample_page_cache_audio_available_frame_end_key(
+                g_stream_e2e_runtime.key, voice->page);
+        if ((voice->audio_seen == 0U) && (available != 0U))
             voice->audio_seen = stream_e2e_now();
-        float out_l = 0.0f;
-        float out_r = 0.0f;
+        if(voice->page_ready == 0U) all_ready = 0U;
+        float out_l[STREAM_E2E_AUDIO_BLOCK_FRAMES] = {0};
+        float out_r[STREAM_E2E_AUDIO_BLOCK_FRAMES] = {0};
         float last_l = 0.0f;
         float last_r = 0.0f;
         uint32_t rendered = 0U;
         (void)sample_voice_reader_render_fwd_1x_ready_simple(
             &g_stream_e2e_runtime.reader[i], 1.0f,
-            &out_l, &out_r, 1U, 0U, &rendered, &last_l, &last_r);
-        if (rendered != 0U)
+            out_l, out_r, STREAM_E2E_AUDIO_BLOCK_FRAMES, 0U,
+            &rendered, &last_l, &last_r);
+        if (rendered == STREAM_E2E_AUDIO_BLOCK_FRAMES)
         {
-            g_stream_e2e_runtime.render_sink += out_l + out_r;
+            g_stream_e2e_runtime.render_sink += last_l + last_r;
             voice->first_render = stream_e2e_now();
             voice->rendered = 1U;
             sample_voice_reader_stop(&g_stream_e2e_runtime.reader[i]);
             ++complete;
         }
-        else if (voice->page_ready == 0U)
+        else if (voice->audio_seen != 0U)
+        {
+            ++g_stream_end_to_end_bench.starvation_count;
+        }
+        else
         {
             ++g_stream_end_to_end_bench.audio_page_missing;
         }
     }
     (void)frames;
-    if (complete == g_stream_e2e_runtime.batch_size)
+    if ((complete == g_stream_e2e_runtime.batch_size) && (all_ready != 0U))
     {
         g_stream_e2e_runtime.batch_complete = 1U;
         __DMB();
@@ -1191,5 +1218,78 @@ void stream_end_to_end_bench_probe_io_complete(
     voice->backend_submit = result->request_cycles;
     voice->physical = result->timing;
     voice->page_ready = page_ready_cycles;
+    sample_page_span_t span;
+    if(sample_page_cache_control_resolve_page_key(
+            result->token.key, result->token.registration_epoch,
+            result->token.page_index, &span) != 0U)
+    {
+        const uint32_t *const actual =
+            (const uint32_t *)(const void *)span.frames_interleaved;
+        const uint32_t *const pattern =
+            (const uint32_t *)(const void *)g_stream_e2e_file_buffer;
+        for(uint32_t chunk = 0U; chunk < 4U; ++chunk)
+        {
+            uint8_t match = 1U;
+            for(uint32_t word = 0U; word < (4096U / sizeof(uint32_t)); ++word)
+            {
+                const uint32_t page_word =
+                    chunk * (4096U / sizeof(uint32_t)) + word;
+                const uint32_t pattern_word =
+                    (page_word + (AUDIO_RECORDER_WAV_HEADER_BYTES
+                                  / sizeof(uint32_t)))
+                    % (STREAM_E2E_BENCH_PAGE_BYTES / sizeof(uint32_t));
+                if(actual[page_word] != pattern[pattern_word])
+                {
+                    match = 0U;
+                    break;
+                }
+            }
+            if(match != 0U)
+                ++g_stream_end_to_end_bench.chunk_bit_perfect_count;
+            else
+                ++g_stream_end_to_end_bench.chunk_data_mismatch_count;
+        }
+    }
+    else
+    {
+        g_stream_end_to_end_bench.chunk_data_mismatch_count += 4U;
+    }
     ++g_stream_end_to_end_bench.pages_ready;
+}
+
+void stream_end_to_end_bench_probe_chunk_publish(
+    sample_audio_key_t key, uint32_t page_index,
+    uint32_t available_frame_end, uint32_t publish_cycles,
+    uint8_t accepted, uint8_t duplicate)
+{
+    stream_e2e_voice_runtime_t *const voice =
+        stream_e2e_find_voice(key, page_index);
+    if(accepted == 0U)
+    {
+        if(duplicate != 0U)
+            ++g_stream_end_to_end_bench.duplicate_chunk_publish_count;
+        else
+            ++g_stream_end_to_end_bench.generation_mismatch_count;
+        return;
+    }
+    if(voice == NULL) return;
+    if(available_frame_end != (voice->published_frames + 512U))
+        ++g_stream_end_to_end_bench.out_of_order_chunk_publish_count;
+    voice->published_frames = available_frame_end;
+    ++g_stream_end_to_end_bench.chunk_publish_count;
+    const uint32_t chunk = (available_frame_end / 512U) - 1U;
+    if(chunk == 0U)
+    {
+        g_stream_end_to_end_bench.chunk0_publish_cycles = publish_cycles;
+        if(voice->first_chunk_available == 0U)
+            voice->first_chunk_available = publish_cycles;
+    }
+    else if(chunk == 1U)
+        g_stream_end_to_end_bench.chunk1_publish_cycles = publish_cycles;
+    else if(chunk == 2U)
+        g_stream_end_to_end_bench.chunk2_publish_cycles = publish_cycles;
+    else if(chunk == 3U)
+        g_stream_end_to_end_bench.chunk3_publish_cycles = publish_cycles;
+    else
+        ++g_stream_end_to_end_bench.out_of_order_chunk_publish_count;
 }

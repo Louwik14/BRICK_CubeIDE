@@ -11,6 +11,8 @@ extern "C" {
 void sample_page_cache_audio_init(void);
 sample_page_state_t sample_page_cache_audio_get_page_state_key(
     sample_audio_key_t key, uint32_t page_index);
+uint32_t sample_page_cache_audio_available_frame_end_key(
+    sample_audio_key_t key, uint32_t page_index);
 uint8_t sample_page_cache_audio_resolve_page_key(
     sample_audio_key_t key, uint32_t page_index, sample_page_span_t *out_span);
 uint8_t sample_page_cache_audio_resolve_page(

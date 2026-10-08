@@ -45,6 +45,9 @@ typedef enum
     SD_BLOCK_DEVICE_HW_ERROR_LATCHED
 } sd_block_device_hardware_state_t;
 
+typedef uint8_t (*sd_block_device_read_progress_isr_t)(
+    void *context, uint32_t available_bytes, uint32_t publish_cycles);
+
 typedef struct
 {
     uint32_t lba;
@@ -96,6 +99,9 @@ typedef struct
     uint8_t prepared;
     uint8_t chained_next;
     uint8_t queued;
+    uint8_t progressive_chunks_invalidated;
+    sd_block_device_read_progress_isr_t progress_isr;
+    void *progress_context;
 } sd_block_device_async_request_t;
 
 void sd_block_device_async_init(void);
@@ -117,6 +123,12 @@ sd_block_device_result_t sd_block_device_async_read_submit_request(
     sd_block_device_async_request_t *request, uint32_t lba,
     uint32_t sector_count, void *dst, uint32_t owner_generation,
     uint8_t destination_cpu_clean);
+sd_block_device_result_t sd_block_device_async_read_submit_progressive_request(
+    sd_block_device_async_request_t *request, uint32_t lba,
+    uint32_t sector_count, void *dst, uint32_t owner_generation,
+    uint8_t destination_cpu_clean,
+    sd_block_device_read_progress_isr_t progress_isr,
+    void *progress_context);
 sd_block_device_result_t sd_block_device_async_write_submit(
     uint32_t lba,
     uint32_t sector_count,
@@ -145,6 +157,7 @@ sd_block_device_result_t sd_block_device_async_abort_generation(
 void sd_block_device_async_cancel(void);
 void sd_block_device_async_invalidate_prepared(void);
 void sd_block_device_async_read_complete_isr(void);
+void sd_block_device_async_read_chunk_isr(uint32_t chunk_index);
 void sd_block_device_async_write_complete_isr(void);
 void sd_block_device_async_abort_complete_isr(void);
 void sd_block_device_async_error_isr(void);

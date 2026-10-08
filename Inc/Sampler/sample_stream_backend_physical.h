@@ -30,6 +30,7 @@ typedef struct
     uint32_t deadline_margin_us;
     uint32_t deadline_started_ms;
     uint32_t owner_generation;
+    sample_page_load_token_t page_token;
     uint32_t perf_accept_cycles;
     uint32_t perf_map_start_cycles;
     uint32_t perf_map_end_cycles;
@@ -38,6 +39,7 @@ typedef struct
     sd_block_device_async_request_t request;
     uint8_t current_span_valid;
     uint8_t destination_cpu_clean;
+    uint8_t progressive_enabled;
 } sample_stream_backend_physical_async_t;
 
 uint8_t sample_stream_backend_physical_begin(

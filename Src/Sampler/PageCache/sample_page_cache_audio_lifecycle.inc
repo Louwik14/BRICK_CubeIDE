@@ -31,15 +31,19 @@ uint8_t sample_page_cache_audio_resolve_page_key(sample_audio_key_t key,
     if (page == 0) return 0U;
     const sample_page_state_t state = page->state;
     __DMB();
-    if (state != SAMPLE_PAGE_READY) return 0U;
     const sample_page_desc_t snapshot = *page;
+    const uint32_t available = (state == SAMPLE_PAGE_READY)
+        ? snapshot.frame_count : snapshot.available_frame_end;
+    __DMB();
+    if (((state != SAMPLE_PAGE_READY) && (state != SAMPLE_PAGE_LOADING))
+        || (available == 0U) || (available > snapshot.frame_count)) return 0U;
     float *const payload = sample_page_cache_data_resolve(&snapshot);
     if (payload == 0) return 0U;
     if ((snapshot.generation == 0U)
         || (snapshot.page_index != page_index)
         || (sample_audio_key_equal(&snapshot.key, &key) == 0U)) return 0U;
     out_span->frames_interleaved = payload;
-    out_span->frame_count = snapshot.frame_count;
+    out_span->frame_count = available;
     out_span->start_frame = snapshot.start_frame;
     out_span->page_index = snapshot.page_index;
     out_span->page_generation = snapshot.generation;
@@ -76,7 +80,11 @@ uint8_t sample_page_cache_audio_resolve_page_ref_key(sample_audio_key_t key,
     const sample_page_state_t state = page->state;
     __DMB();
     const sample_page_desc_t snapshot = *page;
-    if ((state != SAMPLE_PAGE_READY)
+    const uint32_t available = (state == SAMPLE_PAGE_READY)
+        ? snapshot.frame_count : snapshot.available_frame_end;
+    __DMB();
+    if ((((state != SAMPLE_PAGE_READY) && (state != SAMPLE_PAGE_LOADING))
+         || (available == 0U) || (available > snapshot.frame_count))
         || (sample_audio_key_equal(&snapshot.key, &key) == 0U)
         || (snapshot.page_index != ref->page_index)
         || (snapshot.generation != ref->page_generation)
@@ -93,7 +101,7 @@ uint8_t sample_page_cache_audio_resolve_page_ref_key(sample_audio_key_t key,
     float *const payload = sample_page_cache_data_resolve(&snapshot);
     if (payload == 0) return 0U;
     out_span->frames_interleaved = payload;
-    out_span->frame_count = snapshot.frame_count;
+    out_span->frame_count = available;
     out_span->start_frame = snapshot.start_frame;
     out_span->page_index = snapshot.page_index;
     out_span->page_generation = snapshot.generation;
@@ -104,4 +112,21 @@ uint8_t sample_page_cache_audio_resolve_page_ref_key(sample_audio_key_t key,
     out_span->registration_epoch = snapshot.registration_epoch;
     out_span->slot_index = ref->slot_index;
     return 1U;
+}
+
+uint32_t sample_page_cache_audio_available_frame_end_key(
+    sample_audio_key_t key, uint32_t page_index)
+{
+    const sample_page_desc_t *const page =
+        sample_page_cache_audio_find_page_key(key, page_index);
+    if (page == NULL) return 0U;
+    const sample_page_state_t state = page->state;
+    __DMB();
+    const sample_page_desc_t snapshot = *page;
+    if ((snapshot.page_index != page_index)
+        || (sample_audio_key_equal(&snapshot.key, &key) == 0U)
+        || ((state != SAMPLE_PAGE_LOADING) && (state != SAMPLE_PAGE_READY)))
+        return 0U;
+    return (state == SAMPLE_PAGE_READY)
+        ? snapshot.frame_count : snapshot.available_frame_end;
 }

@@ -96,9 +96,25 @@ void brick_sd_sdmmc_irq_handler(void)
 
     switch(sdmmc_async_transport_irq_handler())
     {
+        case SDMMC_ASYNC_EVENT_READ_CHUNK:
+        {
+            uint32_t chunk_index;
+            if(sdmmc_async_transport_take_completed_chunk(&chunk_index) != 0U)
+            {
+                sd_block_device_async_read_chunk_isr(chunk_index);
+            }
+            break;
+        }
         case SDMMC_ASYNC_EVENT_READ_COMPLETE:
+        {
+            uint32_t chunk_index;
+            if(sdmmc_async_transport_take_completed_chunk(&chunk_index) != 0U)
+            {
+                sd_block_device_async_read_chunk_isr(chunk_index);
+            }
             brick_sd_async_read_complete_isr();
             break;
+        }
         case SDMMC_ASYNC_EVENT_WRITE_COMPLETE:
             brick_sd_async_write_complete_isr();
             break;

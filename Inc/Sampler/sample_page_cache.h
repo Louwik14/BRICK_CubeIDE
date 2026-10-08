@@ -172,6 +172,12 @@ uint8_t sample_page_cache_resolve_loading_target(const sample_page_load_token_t 
                                                  sample_page_load_target_t *out_target);
 uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
                                            sample_page_finish_result_t result);
+/* Prototype-only progressive publication for canonical 16 KiB STREAM pages.
+ * Called from the SDMMC IRQ after cache invalidation of the completed chunk. */
+uint8_t sample_page_cache_publish_loading_progress_isr(
+    const sample_page_load_token_t *token,
+    uint32_t available_frame_end,
+    uint32_t publish_cycles);
 uint8_t sample_page_cache_cancel_loading_key(sample_audio_key_t key,
                                                uint32_t page_index);
 uint8_t sample_page_cache_prepare_bulk_page_key_alloc(

@@ -8,6 +8,10 @@
 #include "stm32h7xx_ll_sdmmc.h"
 
 #define SDMMC_ASYNC_SECTOR_BYTES (512U)
+#define SDMMC_ASYNC_PROGRESS_BYTES (4096U)
+#define SDMMC_ASYNC_PROGRESS_SECTORS (32U)
+#define SDMMC_ASYNC_PROGRESS_CHUNKS (4U)
+#define SDMMC_ASYNC_REARM_DEADLINE_US (164U)
 #define SDMMC_ASYNC_COMMAND_INTERRUPTS \
     (SDMMC_IT_CMDREND | SDMMC_IT_CTIMEOUT | SDMMC_IT_CCRCFAIL)
 #define SDMMC_ASYNC_DATA_INTERRUPTS \
@@ -34,6 +38,11 @@ typedef struct
     uint32_t data_end_cycles;
     uint8_t command;
     uint8_t multi_block;
+    uint8_t progressive;
+    uint8_t next_chunk;
+    volatile uint8_t completed_chunk_pending;
+    uint8_t completed_chunk_index;
+    uint8_t *buffer;
 } sdmmc_async_context_t;
 
 typedef struct
@@ -52,6 +61,7 @@ typedef struct
 
 static sdmmc_async_context_t g_sdmmc_async;
 static sdmmc_async_prepared_descriptor_t g_sdmmc_async_prepared;
+volatile sdmmc_async_progress_diag_t g_sdmmc_async_progress_diag;
 static void sdmmc_async_disable_transport_interrupts(void)
 {
     __HAL_SD_DISABLE_IT(&hsd1, SDMMC_ASYNC_ALL_INTERRUPTS);
@@ -76,6 +86,14 @@ static void sdmmc_async_send_command(uint8_t command, uint32_t argument)
         .CPSM = SDMMC_CPSM_ENABLE,
     };
     g_sdmmc_async.command = command;
+    if(command == SDMMC_CMD_READ_MULT_BLOCK)
+    {
+        ++g_sdmmc_async_progress_diag.cmd18_count;
+    }
+    else if(command == SDMMC_CMD_STOP_TRANSMISSION)
+    {
+        ++g_sdmmc_async_progress_diag.cmd12_count;
+    }
     __HAL_SD_CLEAR_FLAG(&hsd1, SDMMC_STATIC_CMD_FLAGS);
     __HAL_SD_ENABLE_IT(&hsd1, SDMMC_ASYNC_COMMAND_INTERRUPTS);
     if(g_sdmmc_async.state == SDMMC_ASYNC_STATE_CMD_START)
@@ -139,6 +157,10 @@ static uint32_t sdmmc_async_data_error(uint32_t status)
     {
         error |= HAL_SD_ERROR_RX_OVERRUN;
     }
+    if((status & SDMMC_FLAG_IDMATE) != 0U)
+    {
+        error |= HAL_SD_ERROR_DMA;
+    }
     return error;
 }
 
@@ -190,7 +212,8 @@ static void sdmmc_async_send_stop(void)
 static uint8_t sdmmc_async_start(sdmmc_async_operation_t operation,
                                  const void *buffer,
                                  uint32_t lba,
-                                 uint32_t sector_count)
+                                 uint32_t sector_count,
+                                 uint8_t progressive_requested)
 {
     if((buffer == NULL) || (sector_count == 0U)
             || (g_sdmmc_async.state != SDMMC_ASYNC_STATE_IDLE)
@@ -223,11 +246,33 @@ static uint8_t sdmmc_async_start(sdmmc_async_operation_t operation,
     (void)SDMMC_ConfigData(hsd1.Instance, &data);
     __SDMMC_CMDTRANS_ENABLE(hsd1.Instance);
     hsd1.Instance->IDMABASE0 = (uint32_t)(uintptr_t)buffer;
-    hsd1.Instance->IDMACTRL = SDMMC_ENABLE_IDMA_SINGLE_BUFF;
+
+    const uint8_t progressive = (uint8_t)(
+        (progressive_requested != 0U)
+        && (operation == SDMMC_ASYNC_OPERATION_READ)
+        && (sector_count == SDMMC_ASYNC_PROGRESS_SECTORS)
+        && ((((uintptr_t)buffer) & 31U) == 0U));
+    if(progressive != 0U)
+    {
+        hsd1.Instance->IDMABASE1 =
+            (uint32_t)(uintptr_t)((const uint8_t *)buffer
+                                  + SDMMC_ASYNC_PROGRESS_BYTES);
+        hsd1.Instance->IDMABSIZE = SDMMC_ASYNC_PROGRESS_BYTES;
+        hsd1.Instance->IDMACTRL = SDMMC_ENABLE_IDMA_DOUBLE_BUFF0;
+    }
+    else
+    {
+        hsd1.Instance->IDMABSIZE = 0U;
+        hsd1.Instance->IDMACTRL = SDMMC_ENABLE_IDMA_SINGLE_BUFF;
+    }
 
     g_sdmmc_async.operation = operation;
     g_sdmmc_async.sector_count = sector_count;
     g_sdmmc_async.multi_block = (sector_count > 1U) ? 1U : 0U;
+    g_sdmmc_async.progressive = progressive;
+    g_sdmmc_async.next_chunk = 0U;
+    g_sdmmc_async.completed_chunk_pending = 0U;
+    g_sdmmc_async.buffer = (uint8_t *)(uintptr_t)buffer;
     g_sdmmc_async.state = SDMMC_ASYNC_STATE_CMD_START;
     hsd1.ErrorCode = HAL_SD_ERROR_NONE;
     hsd1.State = HAL_SD_STATE_BUSY;
@@ -262,6 +307,7 @@ void sdmmc_async_transport_init(void)
     g_sdmmc_async = (sdmmc_async_context_t){0};
     g_sdmmc_async.state = SDMMC_ASYNC_STATE_IDLE;
     g_sdmmc_async_prepared = (sdmmc_async_prepared_descriptor_t){0};
+    g_sdmmc_async_progress_diag = (sdmmc_async_progress_diag_t){0};
 }
 
 uint8_t sdmmc_async_transport_start_read(void *dst,
@@ -269,7 +315,15 @@ uint8_t sdmmc_async_transport_start_read(void *dst,
                                          uint32_t sector_count)
 {
     return sdmmc_async_start(SDMMC_ASYNC_OPERATION_READ,
-                             dst, lba, sector_count);
+                             dst, lba, sector_count, 0U);
+}
+
+uint8_t sdmmc_async_transport_start_read_progressive(void *dst,
+                                                     uint32_t lba,
+                                                     uint32_t sector_count)
+{
+    return sdmmc_async_start(SDMMC_ASYNC_OPERATION_READ,
+                             dst, lba, sector_count, 1U);
 }
 
 uint8_t sdmmc_async_transport_start_write(const void *src,
@@ -277,7 +331,7 @@ uint8_t sdmmc_async_transport_start_write(const void *src,
                                           uint32_t sector_count)
 {
     return sdmmc_async_start(SDMMC_ASYNC_OPERATION_WRITE,
-                             src, lba, sector_count);
+                             src, lba, sector_count, 0U);
 }
 
 uint8_t sdmmc_async_transport_arm_next(
@@ -327,7 +381,7 @@ sdmmc_async_chain_result_t sdmmc_async_transport_chain_next(
     if(sdmmc_async_start(operation,
                          g_sdmmc_async_prepared.buffer,
                          g_sdmmc_async_prepared.lba,
-                         g_sdmmc_async_prepared.sector_count) == 0U)
+                         g_sdmmc_async_prepared.sector_count, 0U) == 0U)
     {
         g_sdmmc_async_prepared.state = SDMMC_ASYNC_PREPARED_ERROR;
         hsd1.ErrorCode |= HAL_SD_ERROR_GENERAL_UNKNOWN_ERR;
@@ -390,7 +444,9 @@ sdmmc_async_event_t sdmmc_async_transport_irq_handler(void)
             else
             {
                 g_sdmmc_async.state = SDMMC_ASYNC_STATE_DATA_ACTIVE;
-                __HAL_SD_ENABLE_IT(&hsd1, SDMMC_ASYNC_DATA_INTERRUPTS);
+                __HAL_SD_ENABLE_IT(&hsd1, SDMMC_ASYNC_DATA_INTERRUPTS
+                    | ((g_sdmmc_async.progressive != 0U)
+                        ? SDMMC_IT_IDMABTC : 0U));
             }
         }
     }
@@ -398,6 +454,15 @@ sdmmc_async_event_t sdmmc_async_transport_irq_handler(void)
     {
         if((status & SDMMC_FLAG_DATAEND) != 0U)
         {
+            if((g_sdmmc_async.progressive != 0U)
+                && (g_sdmmc_async.next_chunk
+                    == (SDMMC_ASYNC_PROGRESS_CHUNKS - 1U)))
+            {
+                g_sdmmc_async.completed_chunk_index =
+                    g_sdmmc_async.next_chunk++;
+                g_sdmmc_async.completed_chunk_pending = 1U;
+                __DMB();
+            }
             g_sdmmc_async.data_end_cycles = DWT->CYCCNT;
             __HAL_SD_CLEAR_FLAG(&hsd1, SDMMC_STATIC_DATA_FLAGS);
             __HAL_SD_DISABLE_IT(&hsd1, SDMMC_ASYNC_DATA_INTERRUPTS);
@@ -407,10 +472,86 @@ sdmmc_async_event_t sdmmc_async_transport_irq_handler(void)
             if(g_sdmmc_async.multi_block != 0U)
             {
                 sdmmc_async_send_stop();
+                if(g_sdmmc_async.completed_chunk_pending != 0U)
+                {
+                    event = SDMMC_ASYNC_EVENT_READ_CHUNK;
+                }
             }
             else
             {
                 event = sdmmc_async_complete();
+            }
+        }
+        else if((status & SDMMC_FLAG_IDMABTC) != 0U)
+        {
+            const uint32_t entry_cycles = DWT->CYCCNT;
+            __HAL_SD_CLEAR_FLAG(&hsd1, SDMMC_FLAG_IDMABTC);
+            ++g_sdmmc_async_progress_diag.idmabtc_count;
+            const uint32_t chunk = g_sdmmc_async.next_chunk;
+            if((g_sdmmc_async.progressive == 0U)
+                || (chunk >= (SDMMC_ASYNC_PROGRESS_CHUNKS - 1U)))
+            {
+                event = sdmmc_async_fail(HAL_SD_ERROR_DMA);
+            }
+            else
+            {
+                if(chunk < 2U)
+                {
+                    const uint32_t active = hsd1.Instance->IDMACTRL
+                        & SDMMC_IDMA_IDMABACT;
+                    if((chunk == 0U) && (active != 0U))
+                    {
+                        hsd1.Instance->IDMABASE0 = (uint32_t)(uintptr_t)(
+                            g_sdmmc_async.buffer
+                            + (2U * SDMMC_ASYNC_PROGRESS_BYTES));
+                    }
+                    else if((chunk == 1U) && (active == 0U))
+                    {
+                        hsd1.Instance->IDMABASE1 = (uint32_t)(uintptr_t)(
+                            g_sdmmc_async.buffer
+                            + (3U * SDMMC_ASYNC_PROGRESS_BYTES));
+                    }
+                    else
+                    {
+                        ++g_sdmmc_async_progress_diag
+                            .rearm_deadline_miss_count;
+                        event = sdmmc_async_fail(HAL_SD_ERROR_DMA);
+                    }
+                    if(event == SDMMC_ASYNC_EVENT_NONE)
+                    {
+                        const uint32_t rearm_cycles = DWT->CYCCNT - entry_cycles;
+                        ++g_sdmmc_async_progress_diag.rearm_count;
+                        g_sdmmc_async_progress_diag.rearm_cycles_sum += rearm_cycles;
+                        g_sdmmc_async_progress_diag.average_rearm_cycles =
+                            g_sdmmc_async_progress_diag.rearm_cycles_sum
+                            / g_sdmmc_async_progress_diag.rearm_count;
+                        if(rearm_cycles
+                            > g_sdmmc_async_progress_diag.max_rearm_cycles)
+                        {
+                            g_sdmmc_async_progress_diag.max_rearm_cycles =
+                                rearm_cycles;
+                            g_sdmmc_async_progress_diag.max_rearm_us =
+                                (uint32_t)(((uint64_t)rearm_cycles * 1000000U
+                                            + (SystemCoreClock / 2U))
+                                           / SystemCoreClock);
+                        }
+                        if(rearm_cycles > (uint32_t)(
+                            ((uint64_t)SystemCoreClock
+                             * SDMMC_ASYNC_REARM_DEADLINE_US) / 1000000U))
+                        {
+                            ++g_sdmmc_async_progress_diag
+                                .rearm_deadline_miss_count;
+                        }
+                    }
+                }
+                if(event == SDMMC_ASYNC_EVENT_NONE)
+                {
+                    g_sdmmc_async.completed_chunk_index = chunk;
+                    g_sdmmc_async.completed_chunk_pending = 1U;
+                    g_sdmmc_async.next_chunk = (uint8_t)(chunk + 1U);
+                    __DMB();
+                    event = SDMMC_ASYNC_EVENT_READ_CHUNK;
+                }
             }
         }
     }
@@ -434,6 +575,19 @@ sdmmc_async_event_t sdmmc_async_transport_irq_handler(void)
     }
 
     return event;
+}
+
+uint8_t sdmmc_async_transport_take_completed_chunk(uint32_t *out_chunk_index)
+{
+    if((out_chunk_index == NULL)
+        || (g_sdmmc_async.completed_chunk_pending == 0U))
+    {
+        return 0U;
+    }
+    __DMB();
+    *out_chunk_index = g_sdmmc_async.completed_chunk_index;
+    g_sdmmc_async.completed_chunk_pending = 0U;
+    return 1U;
 }
 
 uint8_t sdmmc_async_transport_release_complete(void)

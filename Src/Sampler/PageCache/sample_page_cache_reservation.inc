@@ -137,6 +137,7 @@ uint8_t sample_page_cache_begin_loading(const sample_page_load_target_t *target,
         out_token->registration_epoch = page->registration_epoch;
         out_token->slot_index = target->slot_index;
         page->load_cancel_requested = 0U;
+        page->available_frame_end = 0U;
         sample_page_cache_set_state(page, SAMPLE_PAGE_LOADING);
     }
     sample_page_cache_unlock(primask);
@@ -206,6 +207,16 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
             ((result == SAMPLE_PAGE_FINISH_READY) && (cancelled == 0U))
                 ? SAMPLE_PAGE_READY
                 : SAMPLE_PAGE_FAILED;
+        if (final_state == SAMPLE_PAGE_READY)
+        {
+            __DMB();
+            page->available_frame_end = page->frame_count;
+            __DMB();
+        }
+        else
+        {
+            page->available_frame_end = 0U;
+        }
         page->load_cancel_requested = 0U;
         if ((cancelled != 0U) && (page->static_resident == 0U)
             && (sample_page_cache_page_is_leased(page) == 0U))
@@ -241,6 +252,50 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
             PERF_COUNT(PERF_N_REC_READY);
     }
     return completed;
+}
+
+uint8_t sample_page_cache_publish_loading_progress_isr(
+    const sample_page_load_token_t *token,
+    uint32_t available_frame_end,
+    uint32_t publish_cycles)
+{
+    if ((token == NULL) || (token->slot_index >= SAMPLE_PAGE_MAX_COUNT))
+    {
+        return 0U;
+    }
+
+    sample_page_desc_t *const page = &g_sample_page_desc[token->slot_index];
+    if ((page->state != SAMPLE_PAGE_LOADING)
+        || (page->load_cancel_requested != 0U)
+        || (page->page_index != token->page_index)
+        || (page->generation != token->page_generation)
+        || (page->registration_epoch != token->registration_epoch)
+        || (sample_audio_key_equal(&page->key, &token->key) == 0U)
+        || (available_frame_end == 0U)
+        || (available_frame_end > page->frame_count))
+    {
+        stream_end_to_end_bench_probe_chunk_publish(
+            token->key, token->page_index, available_frame_end,
+            publish_cycles, 0U, 0U);
+        return 0U;
+    }
+
+    const uint32_t previous = page->available_frame_end;
+    if (available_frame_end <= previous)
+    {
+        stream_end_to_end_bench_probe_chunk_publish(
+            token->key, token->page_index, available_frame_end,
+            publish_cycles, 0U, 1U);
+        return 0U;
+    }
+
+    __DMB();
+    page->available_frame_end = available_frame_end;
+    __DMB();
+    stream_end_to_end_bench_probe_chunk_publish(
+        token->key, token->page_index, available_frame_end,
+        publish_cycles, 1U, 0U);
+    return 1U;
 }
 
 uint8_t sample_page_cache_get_stream_load_info_key(

@@ -16,6 +16,7 @@ typedef enum
 typedef enum
 {
     SDMMC_ASYNC_EVENT_NONE = 0,
+    SDMMC_ASYNC_EVENT_READ_CHUNK,
     SDMMC_ASYNC_EVENT_READ_COMPLETE,
     SDMMC_ASYNC_EVENT_WRITE_COMPLETE,
     SDMMC_ASYNC_EVENT_ERROR
@@ -40,6 +41,21 @@ typedef enum
 
 typedef struct
 {
+    volatile uint32_t idmabtc_count;
+    volatile uint32_t cmd18_count;
+    volatile uint32_t cmd12_count;
+    volatile uint32_t rearm_count;
+    volatile uint32_t rearm_cycles_sum;
+    volatile uint32_t average_rearm_cycles;
+    volatile uint32_t max_rearm_cycles;
+    volatile uint32_t max_rearm_us;
+    volatile uint32_t rearm_deadline_miss_count;
+} sdmmc_async_progress_diag_t;
+
+extern volatile sdmmc_async_progress_diag_t g_sdmmc_async_progress_diag;
+
+typedef struct
+{
     uint32_t lba;
     uint32_t sector_count;
     void *buffer;
@@ -55,6 +71,9 @@ void sdmmc_async_transport_init(void);
 uint8_t sdmmc_async_transport_start_read(void *dst,
                                          uint32_t lba,
                                          uint32_t sector_count);
+uint8_t sdmmc_async_transport_start_read_progressive(void *dst,
+                                                     uint32_t lba,
+                                                     uint32_t sector_count);
 uint8_t sdmmc_async_transport_start_write(const void *src,
                                           uint32_t lba,
                                           uint32_t sector_count);
@@ -66,6 +85,7 @@ uint8_t sdmmc_async_transport_invalidate_next(void);
 sdmmc_async_prepared_state_t sdmmc_async_transport_prepared_state(void);
 uint8_t sdmmc_async_transport_irq_owned(void);
 sdmmc_async_event_t sdmmc_async_transport_irq_handler(void);
+uint8_t sdmmc_async_transport_take_completed_chunk(uint32_t *out_chunk_index);
 uint8_t sdmmc_async_transport_release_complete(void);
 uint8_t sdmmc_async_transport_abort(void);
 sdmmc_async_state_t sdmmc_async_transport_state(void);
