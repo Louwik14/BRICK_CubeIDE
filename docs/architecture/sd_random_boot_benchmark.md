@@ -1,4 +1,4 @@
-# Benchmark SD aleatoire 64 KiB (temporaire)
+# Benchmark SD aleatoire 16 KiB (temporaire)
 
 Ce firmware Release demarre par le boot BRICK normal complet, AUDIO et UI
 compris. Lorsque l'ecran de boot est termine et que l'audio a demarre, il attend
@@ -15,24 +15,22 @@ peut continuer a remplir `pc_to_brick` sans consommateur.
 
 Le fichier fait 512 MiB lorsque l'espace libre le permet, avec repli sur
 256 MiB. Sa creation est volontairement sequentielle, uniquement par
-le wrapper normal `persistent_fatfs_io` et son sink de tranches de 64 KiB,
+le wrapper normal `persistent_fatfs_io` et son sink de tranches de 16 KiB,
 avant `f_sync`, fermeture et reouverture via ce meme wrapper. Le benchmark ne
 remonte pas FatFs : il exige le statut READY etabli par le boot normal. Un
 fichier existant de 512 ou 256 MiB est reutilise.
 
-Les 100 000 lectures font exactement 64 KiB. Chaque balayage utilise une
+Les 100 000 lectures font exactement 16 KiB. Chaque balayage utilise une
 permutation pseudo-aleatoire deterministe de toutes les pages du fichier. Le
 sample page cache est contourne : le chemin mesure est la map physique FatFs,
 le provider STREAM, le scheduler SD, le block device SDMMC/IDMA et sa
 maintenance D-cache, dans un buffer benchmark unique.
 
-Pour cette campagne a demi-frequence, la source SDMMC est PLL2R a 200 MHz.
-Le chemin normal High Speed utilise `CLKCR.CLKDIV=2`, soit 50 MHz selon
-`SDMMC_CK = kernel / (2 * CLKDIV)`. A l'entree du benchmark exclusivement,
-`hsd1.Init.ClockDiv` et le seul champ `CLKCR.CLKDIV` passent a 4, soit 25 MHz.
-Largeur 4 bits, mode carte, commandes multi-blocs et IDMA restent
-inchanges. `sd_clock_divider` et `sd_clock_hz` publient les valeurs relues et
-calculees dans `g_sd_random_bench`.
+La source SDMMC est PLL2R a 200 MHz. Le benchmark utilise la configuration
+High Speed baseline `CLKCR.CLKDIV=2`, soit 50 MHz selon
+`SDMMC_CK = kernel / (2 * CLKDIV)`. Largeur 4 bits, mode carte, commandes
+multi-blocs et IDMA restent inchanges. `sd_clock_divider` et `sd_clock_hz`
+publient les valeurs relues et calculees dans `g_sd_random_bench`.
 
 `g_sd_random_bench` contient la progression, l'etape d'echec, l'offset
 d'ecriture, le dernier nombre d'octets ecrits, les etats disque/carte et les
