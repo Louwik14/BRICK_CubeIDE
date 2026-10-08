@@ -21,7 +21,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/brick6_boot_fx_policy.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/brick6_master_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/brick6_app_init.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/sd_random_bench.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/stream_end_to_end_bench.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/power_shutdown.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/ControlRT/control_audio_fifo_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/control_domain.c"

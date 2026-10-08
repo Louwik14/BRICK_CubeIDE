@@ -162,6 +162,7 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
         }
         g_sample_page_free_cursor = (uint16_t)(range_start
             + (((selected_free - range_start) + 1U) % range_count));
+        stream_end_to_end_bench_probe_allocation(key, page_index, 0U, 0U);
         return page;
     }
 
@@ -207,10 +208,12 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
         return 0;
     }
 
+    const uint32_t recycle_start = DWT->CYCCNT;
     if (sample_page_cache_claim_for_recycle(evict_page) == 0U)
     {
         return 0;
     }
+    const uint32_t recycle_cycles = DWT->CYCCNT - recycle_start;
 
     const uint32_t slot_index = (uint32_t)(evict_page - g_sample_page_desc);
     sample_page_cache_clear_desc(evict_page, slot_index);
@@ -232,6 +235,8 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     }
     g_sample_page_evict_cursor =
         (uint16_t)(range_start + (((slot_index - range_start) + 1U) % range_count));
+    stream_end_to_end_bench_probe_allocation(key, page_index, 1U,
+                                             recycle_cycles);
     return evict_page;
 }
 

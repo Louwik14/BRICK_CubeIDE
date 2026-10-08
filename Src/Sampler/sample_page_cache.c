@@ -12,6 +12,7 @@
 #include "Platform/cache_maintenance.h"
 #include "Storage/waveform_service.h"
 #include "SD/sd_block_device.h"
+#include "SD/stream_end_to_end_bench.h"
 #include "stm32h7xx.h"
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)

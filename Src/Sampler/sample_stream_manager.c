@@ -1,5 +1,6 @@
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_page_lease_control.h"
+#include "SD/stream_end_to_end_bench.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -124,8 +125,12 @@ static uint8_t sample_stream_manager_finish_io(
             ? SAMPLE_PAGE_FINISH_READY : SAMPLE_PAGE_FINISH_ERROR;
     if (sample_page_cache_finish_loading(&io_result->token, finish) == 0U)
     {
+        stream_end_to_end_bench_probe_io_complete(io_result, 0U);
         return 0U;
     }
+    const uint32_t page_ready_cycles = DWT->CYCCNT;
+    stream_end_to_end_bench_probe_io_complete(io_result,
+                                              page_ready_cycles);
     if (io_result->load_result != SAMPLE_PAGE_LOAD_OK) return 0U;
     if (io_result->request_cycles != 0U)
         brick_perf_wall(PERF_WALL_STREAM_REQUEST_READY,
@@ -162,8 +167,13 @@ static uint8_t sample_stream_manager_candidate_for_slot(
                 && (lease.pages[previous] == page_index)) duplicate = 1U;
         }
         if (duplicate != 0U) continue;
+        const uint32_t lookup_start = DWT->CYCCNT;
         const sample_page_state_t state =
             sample_page_cache_get_page_state_key(lease.key, page_index);
+        const uint32_t lookup_cycles = DWT->CYCCNT - lookup_start;
+        stream_end_to_end_bench_probe_storage_seen(
+            lease.key, page_index, lookup_start, lookup_cycles,
+            (uint8_t)(state == SAMPLE_PAGE_READY));
         if (state == SAMPLE_PAGE_READY) { PERF_COUNT(PERF_N_CACHE_READY); ++page_rank; continue; }
 
         if (out_pending != 0) *out_pending = 1U;
@@ -199,6 +209,7 @@ static uint8_t sample_stream_manager_probe_candidate(
 static uint8_t sample_stream_manager_pick_next(
     sample_page_load_target_t *out_target)
 {
+    const uint32_t bench_pick_start = DWT->CYCCNT;
     PERF_START(perf_start);
     if (out_target == 0)
     {
@@ -213,15 +224,25 @@ static uint8_t sample_stream_manager_pick_next(
     {
         return 0U;
     }
+    const uint32_t bench_pick_end = DWT->CYCCNT;
+    stream_end_to_end_bench_probe_manager_pick(
+        candidate.key, candidate.page_index,
+        bench_pick_start, bench_pick_end);
     PERF_END(PERF_CPU_MANAGER_PICK, perf_start);
     sample_page_load_target_t target;
     PERF_COUNT(PERF_N_CACHE_MISS);
     PERF_START(reserve_start);
-    if (sample_page_cache_reserve_page_target_key_alloc(
+    const uint32_t bench_reserve_start = DWT->CYCCNT;
+    const uint8_t reserve_ok = sample_page_cache_reserve_page_target_key_alloc(
             candidate.key,
             candidate.page_index,
             SAMPLE_PAGE_ALLOC_VOICE_WINDOW,
-            &target) == 0U)
+            &target);
+    const uint32_t bench_reserve_end = DWT->CYCCNT;
+    stream_end_to_end_bench_probe_reserve(
+        candidate.key, candidate.page_index,
+        bench_reserve_start, bench_reserve_end, reserve_ok);
+    if (reserve_ok == 0U)
     {
         PERF_COUNT(PERF_N_CACHE_ALLOC_FAIL);
         return 0U;

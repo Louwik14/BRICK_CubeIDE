@@ -12,11 +12,32 @@ extern "C" {
 
 typedef struct
 {
+    uint32_t backend_accept_cycles;
+    uint32_t map_start_cycles;
+    uint32_t map_end_cycles;
+    uint32_t storage_submit_enter_cycles;
+    uint32_t storage_accept_cycles;
+    uint32_t launch_enter_cycles;
+    uint32_t pre_cache_start_cycles;
+    uint32_t pre_cache_end_cycles;
+    uint32_t command_cycles;
+    uint32_t data_start_cycles;
+    uint32_t data_end_cycles;
+    uint32_t physical_complete_cycles;
+    uint32_t cache_start_cycles;
+    uint32_t cache_end_cycles;
+    uint32_t block_publish_cycles;
+    uint32_t backend_complete_cycles;
+} sample_stream_io_timing_trace_t;
+
+typedef struct
+{
     sample_page_load_token_t token;
     sample_page_load_result_t load_result;
     uint32_t source_bytes;
     uint32_t read_bytes;
     uint32_t request_cycles;
+    sample_stream_io_timing_trace_t timing;
 } sample_stream_io_result_t;
 
 typedef enum

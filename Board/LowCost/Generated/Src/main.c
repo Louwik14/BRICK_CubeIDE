@@ -334,7 +334,7 @@ int main(void)
 	     board_usb_process();
 	     lowcost_bootloader_shift_step16_service();
 
-	     if (brick6_app_sd_bench_active() == 0U)
+	     if (brick6_app_stream_bench_active() == 0U)
 	     {
 	         uint32_t ui_ticks_processed = 0U;
 	         while ((engine_tick_count != last_tick) && (ui_ticks_processed < UI_TASKLET_CATCHUP_BUDGET))

@@ -1,4 +1,5 @@
 #include "Sampler/sample_voice_reader.h"
+#include "SD/stream_end_to_end_bench.h"
 #include "Sampler/sample_page_cache_config.h"
 #include "Audio/sample_page_lease_audio.h"
 

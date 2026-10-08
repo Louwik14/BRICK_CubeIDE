@@ -13,6 +13,6 @@
 
 void brick6_app_init(void);
 void brick6_app_process(void);
-uint8_t brick6_app_sd_bench_active(void);
+uint8_t brick6_app_stream_bench_active(void);
 
 #endif /* BRICK6_APP_INIT_H */

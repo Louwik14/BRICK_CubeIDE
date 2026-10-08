@@ -20,6 +20,9 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
 {
     if ((state == 0) || (state->lease_valid == 0U)
         || (state->frames_per_page == 0U)) return;
+    const uint8_t bench_probe = stream_end_to_end_bench_probe_key(state->key);
+    const uint32_t bench_need_start = (bench_probe != 0U)
+        ? DWT->CYCCNT : 0U;
     PERF_START(need_start);
 
     const uint32_t page = frame_pos / state->frames_per_page;
@@ -67,6 +70,9 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
         memcpy(state->lease_pages, pages, sizeof(pages));
         state->lease_valid_mask = valid_mask;
     }
+    if (bench_probe != 0U)
+        stream_end_to_end_bench_probe_need(state->key, page,
+                                           bench_need_start, DWT->CYCCNT);
 }
 
 static void sample_voice_reader_release_audio_cursor(sample_voice_reader_state_t *state)
@@ -89,6 +95,9 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
     }
 
     sample_voice_reader_publish_lease(state, frame_pos);
+    const uint8_t bench_probe = stream_end_to_end_bench_probe_key(state->key);
+    const uint32_t bench_resolve_start = (bench_probe != 0U)
+        ? DWT->CYCCNT : 0U;
     PERF_START(resolve_start);
     const sample_audio_format_t expected_format = sample_audio_format_or_stereo(state->format);
     sample_page_span_t span;
@@ -96,6 +105,10 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
         sample_audio_format_page_index_from_frame(expected_format, frame_pos);
     const uint8_t acquired = sample_page_cache_audio_resolve_page_key(
         state->key, page_index, &span);
+    if (bench_probe != 0U)
+        stream_end_to_end_bench_probe_resolve(
+            state->key, page_index, bench_resolve_start,
+            DWT->CYCCNT, acquired);
     if (acquired == 0U)
     {
         PERF_COUNT(PERF_N_AUDIO_PAGE_MISSING);
@@ -423,7 +436,7 @@ void sample_voice_reader_bind(sample_voice_reader_t *reader,
 
 static uint8_t sample_voice_reader_bind_play_plan_slot(
     sample_voice_reader_t *reader, const sample_play_plan_t *plan,
-    uint8_t lease_slot)
+    uint8_t lease_slot, uint8_t require_ready)
 {
     if ((reader == 0) || (plan == 0)
         || ((plan->kernel_type != SAMPLE_KERNEL_FWD_1X)
@@ -457,7 +470,9 @@ static uint8_t sample_voice_reader_bind_play_plan_slot(
     state->plan_valid = 1U;
     sample_voice_reader_publish_lease(state, plan->start_frame);
 
-    if (sample_voice_reader_acquire_audio_page(state, plan->start_frame) == 0U)
+    if ((require_ready != 0U)
+        && (sample_voice_reader_acquire_audio_page(
+                state, plan->start_frame) == 0U))
     {
         sample_voice_reader_reset(reader);
         return 0U;
@@ -472,14 +487,25 @@ uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
 {
     const uint8_t lease_slot = (plan != NULL)
         ? sample_voice_reader_lease_slot(plan->key, reader_id) : UINT8_MAX;
-    return sample_voice_reader_bind_play_plan_slot(reader, plan, lease_slot);
+    return sample_voice_reader_bind_play_plan_slot(
+        reader, plan, lease_slot, 1U);
+}
+
+uint8_t sample_voice_reader_bind_play_plan_deferred(
+    sample_voice_reader_t *reader, const sample_play_plan_t *plan,
+    uint8_t reader_id)
+{
+    const uint8_t lease_slot = (plan != NULL)
+        ? sample_voice_reader_lease_slot(plan->key, reader_id) : UINT8_MAX;
+    return sample_voice_reader_bind_play_plan_slot(
+        reader, plan, lease_slot, 0U);
 }
 
 uint8_t sample_voice_reader_bind_preview_play_plan(
     sample_voice_reader_t *reader, const sample_play_plan_t *plan)
 {
     return sample_voice_reader_bind_play_plan_slot(
-        reader, plan, SAMPLE_PAGE_LEASE_PREVIEW_SLOT);
+        reader, plan, SAMPLE_PAGE_LEASE_PREVIEW_SLOT, 1U);
 }
 
 uint8_t sample_voice_reader_bind_musical_play_plan(sample_voice_reader_t *reader,

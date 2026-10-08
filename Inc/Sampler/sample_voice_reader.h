@@ -96,6 +96,11 @@ void sample_voice_reader_bind(sample_voice_reader_t *reader,
 uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
                                            const sample_play_plan_t *plan,
                                            uint8_t reader_id);
+/* Benchmark instrumentation entry: identical VoiceReader/lease binding but
+ * permits the first page to be cold. Normal product binding remains strict. */
+uint8_t sample_voice_reader_bind_play_plan_deferred(
+    sample_voice_reader_t *reader, const sample_play_plan_t *plan,
+    uint8_t reader_id);
 uint8_t sample_voice_reader_bind_musical_play_plan(sample_voice_reader_t *reader,
                                                    const sample_play_plan_t *plan,
                                                    uint8_t reader_id);

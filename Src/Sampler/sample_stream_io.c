@@ -261,7 +261,9 @@ uint8_t sample_stream_io_begin(const sample_page_load_token_t *token,
     async->media_epoch = sd_access_media_epoch();
     async->token = *token;
     async->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-    async->request_cycles = brick_perf_now();
+    /* Always retain the STORAGE submit boundary for the end-to-end truth
+     * benchmark; BRICK_PERF_DIAG may legitimately be disabled in Release. */
+    async->request_cycles = DWT->CYCCNT;
     if ((sample_page_cache_resolve_loading_target(&async->token, &target) == 0U)
         || (sample_page_cache_get_stream_load_info_key(
                 async->token.key, &async->stream) == 0U)
@@ -428,12 +430,34 @@ static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
             && (async->perf_dma_done_cycles != 0U))
             brick_perf_wall(PERF_WALL_STREAM_DMA_IO_FINALIZE,
                             brick_perf_now() - async->perf_dma_done_cycles);
+        const sample_stream_backend_physical_async_t *const physical =
+            &async->physical;
+        const sd_block_device_async_request_t *const request =
+            &physical->request;
         *out_result = (sample_stream_io_result_t){
             .token = async->token,
             .load_result = async->load_result,
             .source_bytes = async->source_bytes,
             .read_bytes = async->read_bytes,
             .request_cycles = async->request_cycles,
+            .timing = {
+                .backend_accept_cycles = physical->perf_accept_cycles,
+                .map_start_cycles = physical->perf_map_start_cycles,
+                .map_end_cycles = physical->perf_map_end_cycles,
+                .storage_submit_enter_cycles = request->perf_submit_enter_cycles,
+                .storage_accept_cycles = request->perf_submit_cycles,
+                .launch_enter_cycles = request->perf_launch_enter_cycles,
+                .pre_cache_start_cycles = request->perf_pre_cache_start_cycles,
+                .pre_cache_end_cycles = request->perf_pre_cache_end_cycles,
+                .command_cycles = request->perf_command_cycles,
+                .data_start_cycles = request->perf_data_start_cycles,
+                .data_end_cycles = request->perf_data_end_cycles,
+                .physical_complete_cycles = request->perf_complete_cycles,
+                .cache_start_cycles = request->perf_cache_start_cycles,
+                .cache_end_cycles = request->perf_cache_end_cycles,
+                .block_publish_cycles = request->perf_publish_cycles,
+                .backend_complete_cycles = physical->perf_complete_cycles,
+            },
         };
         memset(async, 0, sizeof(*async));
         return 1U;

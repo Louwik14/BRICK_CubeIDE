@@ -43,6 +43,7 @@
 #include "Audio/Engines/wavetable_engine.h"
 #include "Platform/brick_media_clock.h"
 #include "Seq/seq_audio_boundary.h"
+#include "SD/stream_end_to_end_bench.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -261,6 +262,10 @@ static void process_half(uint32_t half_index)
     seq_engine_audio_boundary(block_start_sample, recovering);
     audio_command_executor_seq_begin_block(
         seq_engine_audio_track_mask());
+
+    /* The end-to-end STREAM benchmark remains inside the real AUDIO IRQ.
+     * The inactive path is a single state test in the hook. */
+    stream_end_to_end_bench_audio_boundary(AUDIO_FRAMES_PER_HALF);
 
     /* RX DMA -> CPU: la zone est non-cacheable par contrat MPU. */
 #if AUDIO_DMA_BUFFER_IS_CACHEABLE
