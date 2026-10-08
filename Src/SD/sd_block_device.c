@@ -322,7 +322,8 @@ static uint8_t sd_block_device_prepare_next(uint8_t index)
         .media_epoch = next->media_epoch,
         .owner = next->owner_client,
         .operation = 0U,
-        .flags = 0U,
+        .flags = (next->progress_isr != NULL)
+            ? SDMMC_ASYNC_PREPARED_FLAG_PROGRESSIVE : 0U,
     };
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();

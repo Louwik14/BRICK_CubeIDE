@@ -104,6 +104,41 @@ campagne. Les champs de synthese sont
 `smallest_zero_starvation_presocle_bytes` et
 `first_failing_presocle_bytes`.
 
+## Validation multi-voix et lectures chainees
+
+Le premier sweep materiel s'arretait pendant la premiere batch de warm-up.
+Deux des huit requetes avaient ete preparees par le block device puis lancees
+par `sdmmc_async_transport_chain_next`. Ce chemin oubliait le caractere
+progressif de la requete et appelait le transport avec
+`progressive_requested = 0`. Ces deux pages devenaient READY et etaient
+bit-perfect apres l'invalidation finale, mais ne publiaient ni chunk0 ni les 32
+watermarks. Les six autres pages expliquent les 192 IDMABTC et publications;
+les huit validations finales expliquent les 256 chunks bit-perfect.
+
+Le descripteur prepare transporte maintenant explicitement le flag progressif.
+Une batch de huit pages 16 KiB doit verifier, hors reset de campagne :
+
+```text
+cmd18 = dataend = cmd12 = 8
+idmabtc = chunk_publish = 256
+final_chunk_idmabtc = 8
+chunk_bit_perfect = 256
+```
+
+La validation `fail_step = 11` publie desormais
+`error_snapshot.validation_voice_index` et
+`error_snapshot.validation_missing_mask`. Les bits `0x0004`, `0x0800` et
+`0x1000` signifient chunk0 absent, nombre de chunks incomplet et masque de
+chunks incomplet. Le run fautif reunissait ces trois conditions (`0x1804`) sur
+les lectures chainees non progressives.
+
+Les compteurs produit et histogrammes excluent volontairement le warm-up. Dans
+le run fautif, `warmup_pages_ready` restait a zero parce que la validation
+precedait son incrementation; aucune batch mesuree n'avait commence. Le
+snapshot `queue[0..7]` est maintenant alimente aux frontieres reelles (trigger,
+lease, submit, debut physique, chunk0 et consommation du presocle), y compris
+pendant le warm-up, et n'est plus construit en fin de batch.
+
 Dump GDB :
 
 ```gdb

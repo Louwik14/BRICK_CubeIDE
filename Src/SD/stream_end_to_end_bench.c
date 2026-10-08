@@ -173,6 +173,8 @@ typedef struct
     uint32_t permutation_cursor;
     uint32_t warmup_submitted;
     uint32_t presocle_bytes;
+    uint32_t validation_missing_mask;
+    uint32_t validation_voice_index;
     uint8_t sweep_started;
     uint16_t page_order[STREAM_E2E_BENCH_MAX_PAGES];
     uint16_t page_count;
@@ -185,6 +187,23 @@ typedef struct
     uint8_t file_open;
     volatile float render_sink;
 } stream_e2e_runtime_t;
+
+enum
+{
+    STREAM_E2E_MISSING_PAGE_READY = 1U << 0,
+    STREAM_E2E_MISSING_FIRST_RENDER = 1U << 1,
+    STREAM_E2E_MISSING_FIRST_CHUNK = 1U << 2,
+    STREAM_E2E_MISSING_NEED = 1U << 3,
+    STREAM_E2E_MISSING_STORAGE_SEEN = 1U << 4,
+    STREAM_E2E_MISSING_MANAGER_PICK = 1U << 5,
+    STREAM_E2E_MISSING_RESERVE = 1U << 6,
+    STREAM_E2E_MISSING_BACKEND_SUBMIT = 1U << 7,
+    STREAM_E2E_MISSING_AUDIO_SEEN = 1U << 8,
+    STREAM_E2E_MISSING_RESOLVE = 1U << 9,
+    STREAM_E2E_MISSING_PRESOCLE_EXHAUST = 1U << 10,
+    STREAM_E2E_MISSING_CHUNK_COUNT = 1U << 11,
+    STREAM_E2E_MISSING_CHUNK_MASK = 1U << 12
+};
 
 SDRAM_STREAM_SERVICE volatile stream_end_to_end_bench_result_t
     g_stream_end_to_end_bench;
@@ -349,6 +368,17 @@ static stream_e2e_voice_runtime_t *stream_e2e_find_voice(
     return NULL;
 }
 
+static volatile stream_end_to_end_voice_queue_t *stream_e2e_queue_for_voice(
+    const stream_e2e_voice_runtime_t *voice)
+{
+    if ((voice == NULL) || (voice < &g_stream_e2e_runtime.voice[0])
+        || (voice >= &g_stream_e2e_runtime.voice[
+                STREAM_END_TO_END_BENCH_MAX_BATCH]))
+        return NULL;
+    const uint32_t index = (uint32_t)(voice - &g_stream_e2e_runtime.voice[0]);
+    return &g_stream_end_to_end_bench.queue[index];
+}
+
 static void stream_e2e_release_gate(void)
 {
     if (g_stream_e2e_runtime.gate_held != 0U)
@@ -392,6 +422,10 @@ static void stream_e2e_capture_error_snapshot(uint32_t error, uint32_t step,
     snapshot->sample_id = g_stream_e2e_runtime.key.object_id;
     snapshot->sample_generation = g_stream_e2e_runtime.key.generation;
     snapshot->registration_epoch = g_stream_e2e_runtime.registration_epoch;
+    snapshot->validation_missing_mask =
+        g_stream_e2e_runtime.validation_missing_mask;
+    snapshot->validation_voice_index =
+        g_stream_e2e_runtime.validation_voice_index;
     if(voice != NULL)
     {
         snapshot->page_index = voice->page;
@@ -934,19 +968,27 @@ static void stream_e2e_record_batch(void)
     {
         const stream_e2e_voice_runtime_t *const v =
             &g_stream_e2e_runtime.voice[i];
-        if ((v->page_ready_seen == 0U) || (v->first_render_seen == 0U)
-            || (v->first_chunk_seen == 0U)
-            || (v->need_publish_valid == 0U)
-            || (v->storage_seen_valid == 0U)
-            || (v->manager_pick_valid == 0U)
-            || (v->reserve_valid == 0U)
-            || (v->backend_submit_valid == 0U)
-            || (v->audio_seen_valid == 0U)
-            || (v->resolve_valid == 0U)
-            || (v->presocle_exhausted_valid == 0U)
-            || (v->published_chunk_count != SDMMC_ASYNC_PROGRESS_CHUNKS)
-            || (v->published_chunk_mask != UINT32_MAX))
+        uint32_t missing = 0U;
+        if (v->page_ready_seen == 0U) missing |= STREAM_E2E_MISSING_PAGE_READY;
+        if (v->first_render_seen == 0U) missing |= STREAM_E2E_MISSING_FIRST_RENDER;
+        if (v->first_chunk_seen == 0U) missing |= STREAM_E2E_MISSING_FIRST_CHUNK;
+        if (v->need_publish_valid == 0U) missing |= STREAM_E2E_MISSING_NEED;
+        if (v->storage_seen_valid == 0U) missing |= STREAM_E2E_MISSING_STORAGE_SEEN;
+        if (v->manager_pick_valid == 0U) missing |= STREAM_E2E_MISSING_MANAGER_PICK;
+        if (v->reserve_valid == 0U) missing |= STREAM_E2E_MISSING_RESERVE;
+        if (v->backend_submit_valid == 0U) missing |= STREAM_E2E_MISSING_BACKEND_SUBMIT;
+        if (v->audio_seen_valid == 0U) missing |= STREAM_E2E_MISSING_AUDIO_SEEN;
+        if (v->resolve_valid == 0U) missing |= STREAM_E2E_MISSING_RESOLVE;
+        if (v->presocle_exhausted_valid == 0U)
+            missing |= STREAM_E2E_MISSING_PRESOCLE_EXHAUST;
+        if (v->published_chunk_count != SDMMC_ASYNC_PROGRESS_CHUNKS)
+            missing |= STREAM_E2E_MISSING_CHUNK_COUNT;
+        if (v->published_chunk_mask != UINT32_MAX)
+            missing |= STREAM_E2E_MISSING_CHUNK_MASK;
+        if (missing != 0U)
         {
+            g_stream_e2e_runtime.validation_missing_mask = missing;
+            g_stream_e2e_runtime.validation_voice_index = i;
             stream_e2e_fail(STREAM_E2E_ERROR_IO, 11U, FR_INT_ERR,
                             SD_BLOCK_DEVICE_READ_FAIL);
             return;
@@ -959,10 +1001,8 @@ static void stream_e2e_record_batch(void)
         if (render_delta > last_render_delta) last_render_delta = render_delta;
         if (warmup == 0U)
         {
-            stream_end_to_end_voice_queue_t *const queue =
-                (stream_end_to_end_voice_queue_t *)(void *)
-                    &g_stream_end_to_end_bench.queue[i];
-            memset(queue, 0, sizeof(*queue));
+            volatile stream_end_to_end_voice_queue_t *const queue =
+                &g_stream_end_to_end_bench.queue[i];
             queue->voice_index = i;
             ++g_stream_end_to_end_bench.voices_presocle_exhausted;
             queue->target_page = v->page;
@@ -976,6 +1016,11 @@ static void stream_e2e_record_batch(void)
                 v->first_chunk_available - v->trigger);
             queue->presocle_exhausted_us = stream_e2e_cycles_to_us(
                 v->presocle_exhausted - v->trigger);
+            queue->request_publish_valid = 1U;
+            queue->backend_submit_valid = 1U;
+            queue->physical_start_valid = 1U;
+            queue->first_chunk_available_valid = 1U;
+            queue->presocle_exhausted_valid = 1U;
             const int32_t margin_cycles = (int32_t)(
                 v->presocle_exhausted - v->first_chunk_available);
             const int32_t margin_us =
@@ -1137,6 +1182,8 @@ static void stream_e2e_reset_campaign_result(uint32_t state,
     g_stream_e2e_runtime.batch_complete = 0U;
     g_stream_e2e_runtime.batch_size = 0U;
     g_stream_e2e_runtime.batch_is_warmup = 0U;
+    g_stream_e2e_runtime.validation_missing_mask = 0U;
+    g_stream_e2e_runtime.validation_voice_index = 0U;
     memset((void *)&g_stream_end_to_end_bench, 0,
            sizeof(g_stream_end_to_end_bench));
     memset(g_stream_e2e_hist, 0, sizeof(g_stream_e2e_hist));
@@ -1519,6 +1566,17 @@ void stream_end_to_end_bench_audio_boundary(uint32_t frames)
             voice->presocle_exhausted = trigger + exhaust_cycles;
             voice->presocle_exhausted_valid = 1U;
             voice->expected_source_frame = start - presocle_frames;
+            volatile stream_end_to_end_voice_queue_t *const queue =
+                &g_stream_end_to_end_bench.queue[i];
+            memset((void *)queue, 0, sizeof(*queue));
+            queue->voice_index = i;
+            queue->target_page = voice->page;
+            queue->continuation_page_index = voice->page;
+            queue->presocle_frames_total = presocle_frames;
+            queue->presocle_exhausted_us = stream_e2e_cycles_to_us(
+                voice->presocle_exhausted - trigger);
+            queue->presocle_exhausted_valid = 1U;
+            queue->presocle_active = 1U;
             if (sample_voice_reader_bind_play_plan_deferred(
                     &g_stream_e2e_runtime.reader[i], &plan,
                     (uint8_t)i) == 0U)
@@ -1527,6 +1585,9 @@ void stream_end_to_end_bench_audio_boundary(uint32_t frames)
                                 FR_INT_ERR, SD_BLOCK_DEVICE_OK);
                 return;
             }
+            queue->reader_active = 1U;
+            queue->reader_state = 1U;
+            queue->lease_published = 1U;
             ++g_stream_end_to_end_bench.cache_misses;
         }
         g_stream_e2e_runtime.trigger_pending = 0U;
@@ -1588,6 +1649,14 @@ void stream_end_to_end_bench_audio_boundary(uint32_t frames)
         const uint32_t available =
             sample_page_cache_audio_available_frame_end_key(
                 g_stream_e2e_runtime.key, voice->page);
+        volatile stream_end_to_end_voice_queue_t *const queue =
+            &g_stream_end_to_end_bench.queue[i];
+        queue->presocle_frames_consumed =
+            voice->presocle_output_frames
+            * STREAM_E2E_BENCH_PLAYBACK_RATE_X;
+        queue->presocle_active = (uint8_t)(
+            voice->presocle_output_frames < presocle_output_total);
+        queue->continuation_available_frame_end = available;
         if ((voice->audio_seen_valid == 0U) && (available != 0U))
         {
             voice->audio_seen = stream_e2e_now();
@@ -1703,6 +1772,7 @@ void stream_end_to_end_bench_audio_boundary(uint32_t frames)
                         / STREAM_E2E_SAMPLE_RATE_HZ));
                 voice->starvation_active = 1U;
                 voice->starved = 1U;
+                queue->starved = 1U;
                 if (g_stream_e2e_runtime.batch_is_warmup == 0U)
                     ++g_stream_end_to_end_bench.starvation_count;
                 if ((voice->audio_seen_valid == 0U)
@@ -1715,6 +1785,8 @@ void stream_end_to_end_bench_audio_boundary(uint32_t frames)
             voice->starvation_cycles += stream_e2e_now()
                 - voice->starvation_begin;
             voice->starvation_active = 0U;
+            queue->starvation_us = stream_e2e_cycles_to_us(
+                voice->starvation_cycles);
         }
 
         const uint32_t continuation_output_total =
@@ -1726,9 +1798,13 @@ void stream_end_to_end_bench_audio_boundary(uint32_t frames)
                 voice->starvation_cycles += stream_e2e_now()
                     - voice->starvation_begin;
                 voice->starvation_active = 0U;
+                queue->starvation_us = stream_e2e_cycles_to_us(
+                    voice->starvation_cycles);
             }
             voice->rendered = 1U;
             sample_voice_reader_stop(&g_stream_e2e_runtime.reader[i]);
+            queue->reader_active = 0U;
+            queue->reader_state = 2U;
             ++complete;
         }
     }
@@ -1760,6 +1836,15 @@ void stream_end_to_end_bench_probe_need(sample_audio_key_t key,
     {
         voice->need_publish = publish_cycles;
         voice->need_publish_valid = 1U;
+        volatile stream_end_to_end_voice_queue_t *const queue =
+            stream_e2e_queue_for_voice(voice);
+        if (queue != NULL)
+        {
+            queue->request_publish_us = stream_e2e_cycles_to_us(
+                publish_cycles - voice->trigger);
+            queue->request_publish_valid = 1U;
+            queue->lease_published = 1U;
+        }
     }
 }
 
@@ -1877,6 +1962,18 @@ void stream_end_to_end_bench_probe_io_complete(
     voice->physical = result->timing;
     voice->page_ready = page_ready_cycles;
     voice->page_ready_seen = 1U;
+    volatile stream_end_to_end_voice_queue_t *const queue =
+        stream_e2e_queue_for_voice(voice);
+    if (queue != NULL)
+    {
+        queue->backend_submit_us = stream_e2e_cycles_to_us(
+            voice->backend_submit - voice->trigger);
+        queue->physical_start_us = stream_e2e_cycles_to_us(
+            voice->physical.command_cycles - voice->trigger);
+        queue->backend_submit_valid = 1U;
+        queue->physical_start_valid = 1U;
+        queue->continuation_available_frame_end = SAMPLE_PAGE_FRAMES;
+    }
     sample_page_span_t span;
     if(sample_page_cache_control_resolve_page_key(
             result->token.key, result->token.registration_epoch,
@@ -1964,6 +2061,20 @@ void stream_end_to_end_bench_probe_chunk_publish(
         {
             voice->first_chunk_available = publish_cycles;
             voice->first_chunk_seen = 1U;
+            volatile stream_end_to_end_voice_queue_t *const queue =
+                stream_e2e_queue_for_voice(voice);
+            if (queue != NULL)
+            {
+                queue->first_chunk_available_us = stream_e2e_cycles_to_us(
+                    publish_cycles - voice->trigger);
+                const int32_t margin_cycles = (int32_t)(
+                    voice->presocle_exhausted - publish_cycles);
+                queue->continuation_margin_us =
+                    stream_e2e_signed_cycles_to_us(margin_cycles);
+                queue->continuation_available_before_exhaust =
+                    (uint8_t)(margin_cycles >= 0);
+                queue->first_chunk_available_valid = 1U;
+            }
             if (g_stream_e2e_runtime.batch_is_warmup == 0U)
             {
                 const uint32_t elapsed = publish_cycles - voice->trigger;

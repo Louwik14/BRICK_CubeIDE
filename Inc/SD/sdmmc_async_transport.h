@@ -45,6 +45,7 @@ typedef enum
 } sdmmc_async_chain_result_t;
 
 #define SDMMC_ASYNC_PROGRESS_TRACE_COUNT (8U)
+#define SDMMC_ASYNC_PREPARED_FLAG_PROGRESSIVE (1U << 0)
 
 typedef struct
 {

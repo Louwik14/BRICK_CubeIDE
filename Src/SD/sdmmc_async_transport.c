@@ -512,7 +512,10 @@ sdmmc_async_chain_result_t sdmmc_async_transport_chain_next(
     if(sdmmc_async_start(operation,
                          g_sdmmc_async_prepared.buffer,
                          g_sdmmc_async_prepared.lba,
-                         g_sdmmc_async_prepared.sector_count, 0U) == 0U)
+                         g_sdmmc_async_prepared.sector_count,
+                         (uint8_t)((g_sdmmc_async_prepared.flags
+                             & SDMMC_ASYNC_PREPARED_FLAG_PROGRESSIVE) != 0U))
+            == 0U)
     {
         g_sdmmc_async_prepared.state = SDMMC_ASYNC_PREPARED_ERROR;
         hsd1.ErrorCode |= HAL_SD_ERROR_GENERAL_UNKNOWN_ERR;

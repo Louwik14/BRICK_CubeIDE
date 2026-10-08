@@ -99,6 +99,8 @@ typedef struct
     uint32_t gate_owner;
     uint32_t last_successful_stage;
     uint32_t first_failed_stage;
+    uint32_t validation_missing_mask;
+    uint32_t validation_voice_index;
     uint16_t sample_id;
     uint8_t sample_domain;
     uint8_t block_owner;
@@ -115,9 +117,22 @@ typedef struct
     uint32_t presocle_exhausted_us;
     int32_t continuation_margin_us;
     uint32_t starvation_us;
+    uint32_t presocle_frames_total;
+    uint32_t presocle_frames_consumed;
+    uint32_t continuation_page_index;
+    uint32_t continuation_available_frame_end;
     uint8_t continuation_available_before_exhaust;
     uint8_t starved;
-    uint16_t reserved;
+    uint8_t reader_active;
+    uint8_t lease_published;
+    uint8_t presocle_active;
+    uint8_t request_publish_valid;
+    uint8_t backend_submit_valid;
+    uint8_t physical_start_valid;
+    uint8_t first_chunk_available_valid;
+    uint8_t presocle_exhausted_valid;
+    uint8_t reader_state;
+    uint8_t reserved[2];
 } stream_end_to_end_voice_queue_t;
 
 typedef struct
