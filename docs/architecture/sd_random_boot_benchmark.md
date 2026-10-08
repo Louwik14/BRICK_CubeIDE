@@ -46,8 +46,10 @@ Les frontieres DWT mesurees sur le vrai chemin sont :
 - `perf_launch_enter_cycles` : debut de preparation du lancement materiel ;
 - `perf_pre_cache_start_cycles` / `perf_pre_cache_end_cycles` : invalidate
   D-cache conservateur avant lecture ;
-- `perf_command_cycles` : retour immediat de l'ecriture de la commande READ
-  SDMMC initiale ; cette valeur n'est jamais remplacee par celle de CMD12 ;
+- `perf_command_cycles` : instant juste avant l'appel qui ecrit ARG/CMD et
+  active le CPSM pour la commande READ SDMMC initiale ; cette valeur est donc
+  posee avant qu'une IRQ CMDREND puisse preempter le chemin, et n'est jamais
+  remplacee par celle de CMD12 ;
 - `perf_data_start_cycles` : reponse commande observee dans l'IRQ SDMMC et
   passage du transport en phase DATA ;
 - `perf_data_end_cycles` : drapeau SDMMC DATAEND observe dans l'IRQ ;

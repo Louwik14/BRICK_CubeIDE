@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define SD_RANDOM_BENCH_MAGIC   UINT32_C(0x53444236)
-#define SD_RANDOM_BENCH_VERSION (3U)
+#define SD_RANDOM_BENCH_VERSION (4U)
 
 typedef struct
 {
