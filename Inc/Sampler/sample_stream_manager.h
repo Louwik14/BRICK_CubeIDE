@@ -10,6 +10,22 @@ extern "C" {
 
 #define SAMPLE_STREAM_STEP_Q16_ONE (65536U)
 
+typedef struct
+{
+    uint32_t fastpath_requests;
+    uint32_t fastpath_pages_requested;
+    uint32_t fastpath_2page_count;
+    uint32_t fastpath_3page_count;
+    uint32_t fastpath_4page_count;
+    uint32_t fastpath_fallback_noncontiguous;
+    uint32_t fastpath_fallback_cache_reserve;
+    uint32_t fastpath_cancel_before_submit;
+    uint32_t fastpath_completed;
+    uint32_t normal_16k_requests;
+} sample_stream_fastpath_diag_t;
+
+extern volatile sample_stream_fastpath_diag_t g_sample_stream_fastpath_diag;
+
 /*
  * STREAM facade.
  *

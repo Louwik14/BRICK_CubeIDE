@@ -19,6 +19,8 @@ typedef struct
     uint32_t registration_epoch;
     uint8_t voice_id;
     uint8_t page_rank;
+    uint8_t page_role;
+    uint8_t priority;
     uint8_t round_robin_slot;
     uint8_t active;
 } sample_stream_scheduler_candidate_t;

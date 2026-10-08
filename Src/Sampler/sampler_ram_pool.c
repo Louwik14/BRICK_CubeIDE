@@ -1138,6 +1138,7 @@ static void sampler_ram_pool_load_async_step(void)
             target.frame_count = frames;
             if (sample_stream_backend_physical_begin(
                     &job->physical_read, &job->stream_info.stream_safe, &target,
+                    1U,
                     &job->stream_cursor, (uint8_t *)(void *)destination,
                     job->allocation.capacity_bytes
                         - job->frames_done * job->candidate.bytes_per_frame,

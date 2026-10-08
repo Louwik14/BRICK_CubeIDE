@@ -50,8 +50,13 @@ typedef struct
     sample_audio_key_t key;
     uint32_t registration_epoch;
     uint32_t pages[SAMPLE_PAGE_LEASE_PAGE_COUNT];
+    /* Exclusive forward page boundary.  It is advisory prefetch metadata;
+     * pages[] remains the complete protection/ownership set. */
+    uint32_t sequential_page_end;
     uint8_t valid_mask;
-    uint8_t reserved[3];
+    uint8_t sequential_forward;
+    uint8_t jump_pending;
+    uint8_t reserved;
 } sample_page_lease_t;
 
 extern sample_page_lease_t g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];

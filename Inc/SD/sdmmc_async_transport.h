@@ -7,6 +7,9 @@
 #define SDMMC_ASYNC_PROGRESS_CHUNK_BYTES (512U)
 #define SDMMC_ASYNC_PROGRESS_CHUNKS \
     (SDMMC_ASYNC_PROGRESS_PAGE_BYTES / SDMMC_ASYNC_PROGRESS_CHUNK_BYTES)
+#define SDMMC_ASYNC_PROGRESS_MAX_BYTES   (65536U)
+#define SDMMC_ASYNC_PROGRESS_MAX_CHUNKS \
+    (SDMMC_ASYNC_PROGRESS_MAX_BYTES / SDMMC_ASYNC_PROGRESS_CHUNK_BYTES)
 #define SDMMC_ASYNC_PREPARED_FLAG_PROGRESSIVE (1U << 0)
 
 typedef enum
@@ -58,6 +61,9 @@ typedef struct
     uint8_t flags;
 } sdmmc_async_prepared_transfer_t;
 
+typedef uint8_t *(*sdmmc_async_chunk_address_isr_t)(
+    void *context, uint32_t chunk_index);
+
 void sdmmc_async_transport_init(void);
 uint8_t sdmmc_async_transport_start_read(void *dst,
                                          uint32_t lba,
@@ -65,6 +71,10 @@ uint8_t sdmmc_async_transport_start_read(void *dst,
 uint8_t sdmmc_async_transport_start_read_progressive(void *dst,
                                                      uint32_t lba,
                                                      uint32_t sector_count);
+uint8_t sdmmc_async_transport_start_read_progressive_scatter(
+    void *dst, uint32_t lba, uint32_t sector_count,
+    sdmmc_async_chunk_address_isr_t chunk_address_isr,
+    void *chunk_address_context);
 uint8_t sdmmc_async_transport_start_write(const void *src,
                                           uint32_t lba,
                                           uint32_t sector_count);

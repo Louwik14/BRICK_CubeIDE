@@ -71,6 +71,9 @@ typedef struct
     uint8_t lease_valid;
     uint32_t lease_pages[SAMPLE_PAGE_LEASE_PAGE_COUNT];
     uint8_t lease_valid_mask;
+    uint8_t lease_sequential_forward;
+    uint8_t lease_jump_pending;
+    uint32_t lease_sequential_page_end;
     uint16_t sample_id;
     sample_audio_key_t key;
     sample_audio_format_t format;

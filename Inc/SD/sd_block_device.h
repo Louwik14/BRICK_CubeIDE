@@ -47,6 +47,8 @@ typedef enum
 
 typedef uint8_t (*sd_block_device_read_progress_isr_t)(
     void *context, uint32_t available_bytes);
+typedef uint8_t *(*sd_block_device_read_chunk_address_isr_t)(
+    void *context, uint32_t chunk_index);
 
 typedef struct
 {
@@ -89,9 +91,11 @@ typedef struct
     uint8_t prepared;
     uint8_t chained_next;
     uint8_t queued;
-    uint8_t progressive_chunks_invalidated;
+    uint16_t progressive_chunks_invalidated;
     sd_block_device_read_progress_isr_t progress_isr;
     void *progress_context;
+    sd_block_device_read_chunk_address_isr_t chunk_address_isr;
+    void *chunk_address_context;
 } sd_block_device_async_request_t;
 
 void sd_block_device_async_init(void);
@@ -119,6 +123,14 @@ sd_block_device_result_t sd_block_device_async_read_submit_progressive_request(
     uint8_t destination_cpu_clean,
     sd_block_device_read_progress_isr_t progress_isr,
     void *progress_context);
+sd_block_device_result_t sd_block_device_async_read_submit_progressive_scatter_request(
+    sd_block_device_async_request_t *request, uint32_t lba,
+    uint32_t sector_count, void *first_dst, uint32_t owner_generation,
+    uint8_t destination_cpu_clean,
+    sd_block_device_read_progress_isr_t progress_isr,
+    void *progress_context,
+    sd_block_device_read_chunk_address_isr_t chunk_address_isr,
+    void *chunk_address_context);
 sd_block_device_result_t sd_block_device_async_write_submit(
     uint32_t lba,
     uint32_t sector_count,

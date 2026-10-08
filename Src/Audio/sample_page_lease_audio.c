@@ -22,13 +22,19 @@ uint8_t sample_page_lease_audio_publish(uint8_t slot,
                                        sample_audio_key_t key,
                                        uint32_t registration_epoch,
                                        const uint32_t pages[SAMPLE_PAGE_LEASE_PAGE_COUNT],
-                                       uint8_t valid_mask)
+                                       uint8_t valid_mask,
+                                       uint32_t sequential_page_end,
+                                       uint8_t sequential_forward,
+                                       uint8_t jump_pending)
 {
     if ((slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT) || (pages == NULL)) return 0U;
     sample_page_lease_t *const lease = &g_sample_page_leases[slot];
     if ((sample_audio_key_equal(&lease->key, &key) != 0U)
         && (lease->registration_epoch == registration_epoch)
         && (lease->valid_mask == valid_mask)
+        && (lease->sequential_page_end == sequential_page_end)
+        && (lease->sequential_forward == sequential_forward)
+        && (lease->jump_pending == jump_pending)
         && (memcmp(lease->pages, pages, sizeof(lease->pages)) == 0)) return 1U;
     PERF_START(lease_start);
     uint32_t seq = lease->seq;
@@ -38,7 +44,10 @@ uint8_t sample_page_lease_audio_publish(uint8_t slot,
     lease->key = key;
     lease->registration_epoch = registration_epoch;
     memcpy(lease->pages, pages, sizeof(lease->pages));
+    lease->sequential_page_end = sequential_page_end;
     lease->valid_mask = valid_mask;
+    lease->sequential_forward = sequential_forward;
+    lease->jump_pending = jump_pending;
     __DMB();
     lease->seq = seq + 2U;
     __DMB();
@@ -59,5 +68,6 @@ void sample_page_lease_audio_clear(uint8_t slot)
     if (slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT) return;
     const uint32_t empty[SAMPLE_PAGE_LEASE_PAGE_COUNT] = {0};
     const sample_audio_key_t key = { SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U };
-    (void)sample_page_lease_audio_publish(slot, key, 0U, empty, 0U);
+    (void)sample_page_lease_audio_publish(
+        slot, key, 0U, empty, 0U, 0U, 0U, 0U);
 }

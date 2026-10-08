@@ -8,5 +8,8 @@ uint8_t sample_page_lease_audio_publish(
     sample_audio_key_t key,
     uint32_t registration_epoch,
     const uint32_t pages[SAMPLE_PAGE_LEASE_PAGE_COUNT],
-    uint8_t valid_mask);
+    uint8_t valid_mask,
+    uint32_t sequential_page_end,
+    uint8_t sequential_forward,
+    uint8_t jump_pending);
 void sample_page_lease_audio_clear(uint8_t slot);

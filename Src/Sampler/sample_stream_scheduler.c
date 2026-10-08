@@ -41,6 +41,9 @@ uint8_t sample_stream_scheduler_pick(
     }
     for (;;)
     {
+        uint8_t found = 0U;
+        uint8_t best_distance = 0U;
+        sample_stream_scheduler_candidate_t best;
         for (uint8_t distance = 0U;
              distance < g_sample_stream_scheduler_slots_left;
              ++distance)
@@ -53,12 +56,23 @@ uint8_t sample_stream_scheduler_pick(
                 && (candidate.active != 0U)
                 && (candidate.round_robin_slot == slot))
             {
-                *out_candidate = candidate;
-                g_sample_stream_scheduler_slots_left -= (uint8_t)(distance + 1U);
-                g_sample_stream_scheduler_round_robin_cursor = (uint8_t)(
-                    (slot + 1U) % SAMPLE_STREAM_SCHEDULER_SLOT_COUNT);
-                return 1U;
+                if ((found == 0U) || (candidate.priority < best.priority))
+                {
+                    best = candidate;
+                    best_distance = distance;
+                    found = 1U;
+                }
             }
+        }
+        if (found != 0U)
+        {
+            *out_candidate = best;
+            g_sample_stream_scheduler_slots_left -=
+                (uint8_t)(best_distance + 1U);
+            g_sample_stream_scheduler_round_robin_cursor = (uint8_t)(
+                (best.round_robin_slot + 1U)
+                % SAMPLE_STREAM_SCHEDULER_SLOT_COUNT);
+            return 1U;
         }
         g_sample_stream_scheduler_round_robin_cursor =
             (uint8_t)((g_sample_stream_scheduler_round_robin_cursor

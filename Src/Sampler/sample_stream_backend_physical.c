@@ -13,6 +13,9 @@
 
 _Static_assert(SAMPLE_PAGE_BYTES == SDMMC_ASYNC_PROGRESS_PAGE_BYTES,
                "page-cache and progressive transport geometry must match");
+_Static_assert(SAMPLE_STREAM_FASTPATH_MAX_BYTES
+                == SDMMC_ASYNC_PROGRESS_MAX_BYTES,
+               "fastpath and SDMMC burst geometry must match");
 _Static_assert((SDMMC_ASYNC_PROGRESS_CHUNK_BYTES
                 % SAMPLE_PAGE_BYTES_PER_FRAME) == 0U,
                "a progressive chunk must contain complete stereo frames");
@@ -58,9 +61,99 @@ static uint8_t sample_stream_backend_physical_progress_isr(
     {
         return 0U;
     }
+    const uint32_t completed_byte = available_bytes - 1U;
+    const uint32_t page = completed_byte / SAMPLE_PAGE_BYTES;
+    if (page >= async->page_count) return 0U;
+    const uint32_t page_bytes = available_bytes
+        - (page * SAMPLE_PAGE_BYTES);
     return sample_page_cache_publish_loading_progress_isr(
-        &async->page_token,
-        available_bytes / SAMPLE_PAGE_BYTES_PER_FRAME);
+        &async->page_token[page],
+        page_bytes / SAMPLE_PAGE_BYTES_PER_FRAME);
+}
+
+static uint8_t *sample_stream_backend_physical_chunk_address_isr(
+    void *context, uint32_t chunk_index)
+{
+    sample_stream_backend_physical_async_t *const async = context;
+    const uint32_t chunks_per_page =
+        SAMPLE_PAGE_BYTES / SDMMC_ASYNC_PROGRESS_CHUNK_BYTES;
+    const uint32_t page = chunk_index / chunks_per_page;
+    const uint32_t page_chunk = chunk_index % chunks_per_page;
+    if ((async == 0) || (page >= async->page_count)
+        || (async->page_buffer[page] == 0)) return 0;
+    return async->page_buffer[page]
+        + (page_chunk * SDMMC_ASYNC_PROGRESS_CHUNK_BYTES);
+}
+
+static uint8_t sample_stream_backend_physical_resolve_contiguous(
+    const sample_stream_physical_map_t *map,
+    uint64_t file_byte_offset,
+    uint32_t requested_bytes,
+    sample_stream_physical_cursor_t *cursor,
+    sample_stream_physical_span_t *out_span)
+{
+    if ((out_span == 0) || (requested_bytes == 0U)) return 0U;
+    sample_stream_physical_span_t part;
+    uint32_t resolved = 0U;
+    uint32_t sectors = 0U;
+    uint32_t expected_lba = 0U;
+    uint16_t first_extent = 0U;
+    while (resolved < requested_bytes)
+    {
+        if (sample_stream_physical_map_resolve(
+                map, file_byte_offset + resolved, requested_bytes - resolved,
+                cursor, &part) == 0U) return 0U;
+        if ((part.first_sector_skip != 0U)
+            || (part.logical_bytes == 0U)
+            || ((part.logical_bytes % SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE) != 0U))
+            return 0U;
+        if (resolved == 0U)
+        {
+            *out_span = part;
+            first_extent = part.extent_index;
+        }
+        else if (part.lba != expected_lba)
+        {
+            return 0U;
+        }
+        resolved += part.logical_bytes;
+        sectors += part.sector_count;
+        expected_lba = part.lba + part.sector_count;
+    }
+    out_span->sector_count = sectors;
+    out_span->logical_bytes = resolved;
+    out_span->first_sector_skip = 0U;
+    out_span->extent_index = first_extent;
+    return 1U;
+}
+
+uint8_t sample_stream_backend_physical_contiguous_page_count(
+    const sample_stream_safe_metadata_t *metadata,
+    uint32_t start_frame,
+    uint8_t requested_pages)
+{
+    if ((metadata == 0)
+        || (metadata->block_align != SAMPLE_PAGE_BYTES_PER_FRAME)
+        || (requested_pages == 0U)
+        || (requested_pages > SAMPLE_STREAM_FASTPATH_MAX_PAGES)) return 0U;
+    const uint64_t file_offset = (uint64_t)metadata->data_offset_bytes
+        + (uint64_t)start_frame * metadata->block_align;
+    if ((file_offset % SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE) != 0U) return 0U;
+    for (uint8_t pages = requested_pages; pages != 0U; --pages)
+    {
+        const uint32_t bytes = pages * SAMPLE_PAGE_BYTES;
+        sample_stream_physical_cursor_t cursor = {0};
+        sample_stream_physical_span_t span;
+        if ((file_offset + bytes <= metadata->file_size)
+            && (sample_stream_backend_physical_resolve_contiguous(
+                    &metadata->physical_map, file_offset, bytes,
+                    &cursor, &span) != 0U)
+            && (span.logical_bytes == bytes)
+            && (span.sector_count
+                == bytes / SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE))
+            return pages;
+    }
+    return 0U;
 }
 
 static void sample_stream_backend_physical_invalidate_span(
@@ -98,9 +191,14 @@ static uint8_t sample_stream_backend_physical_next_span_impl(
             async->file_byte_offset + async->logical_queued;
         const uint32_t requested_bytes =
             async->source_bytes - async->logical_queued;
-        if (sample_stream_physical_map_resolve(
+        const uint8_t resolved = (async->scatter_enabled != 0U)
+            ? sample_stream_backend_physical_resolve_contiguous(
                 async->map, file_byte_offset, requested_bytes,
-                async->cursor, span) == 0U)
+                async->cursor, span)
+            : sample_stream_physical_map_resolve(
+                async->map, file_byte_offset, requested_bytes,
+                async->cursor, span);
+        if (resolved == 0U)
         {
             return 0U;
         }
@@ -138,6 +236,7 @@ uint8_t sample_stream_backend_physical_begin(
     sample_stream_backend_physical_async_t *async,
     const sample_stream_safe_metadata_t *metadata,
     const sample_page_load_target_t *target,
+    uint8_t page_count,
     sample_stream_physical_cursor_t *cursor,
     uint8_t *buffer,
     uint32_t buffer_capacity,
@@ -150,6 +249,8 @@ uint8_t sample_stream_backend_physical_begin(
     }
     if ((async == 0) || (metadata == 0) || (target == 0)
         || (buffer == 0)
+        || (page_count == 0U)
+        || (page_count > SAMPLE_STREAM_FASTPATH_MAX_PAGES)
         || (metadata->block_align == 0U)
         || (sample_stream_physical_map_is_current(
                 &metadata->physical_map) == 0U))
@@ -157,7 +258,25 @@ uint8_t sample_stream_backend_physical_begin(
         return 0U;
     }
 
-    const uint32_t source_bytes = target->frame_count * metadata->block_align;
+    uint32_t source_bytes = 0U;
+    for (uint8_t page = 0U; page < page_count; ++page)
+    {
+        const sample_page_load_target_t *const current = &target[page];
+        const uint32_t current_bytes = current->frame_count
+            * metadata->block_align;
+        if ((current_bytes == 0U)
+            || ((page != 0U)
+                && ((current->page_index != target[0].page_index + page)
+                    || (current->start_frame
+                        != target[0].start_frame
+                            + page * target[0].frames_per_page)
+                    || (sample_audio_key_equal(
+                            &current->key, &target[0].key) == 0U)
+                    || (current->registration_epoch
+                        != target[0].registration_epoch))))
+            return 0U;
+        source_bytes += current_bytes;
+    }
     const uint64_t audio_byte_offset =
         (uint64_t)target->start_frame * (uint64_t)metadata->block_align;
     const uint64_t file_byte_offset =
@@ -184,25 +303,47 @@ uint8_t sample_stream_backend_physical_begin(
     async->map = &metadata->physical_map;
     async->cursor = cursor;
     async->buffer = buffer;
+    async->page_count = page_count;
+    async->scatter_enabled = (page_count > 1U) ? 1U : 0U;
     async->file_byte_offset = file_byte_offset;
     async->buffer_capacity = buffer_capacity;
     async->source_bytes = source_bytes;
-    async->page_token = (sample_page_load_token_t){
-        .key = target->key,
-        .page_index = target->page_index,
-        .page_generation = target->page_generation,
-        .registration_epoch = target->registration_epoch,
-        .slot_index = target->slot_index,
-    };
+    for (uint8_t page = 0U; page < page_count; ++page)
+    {
+        async->page_buffer[page] =
+            (uint8_t *)target[page].frames_interleaved;
+        async->page_token[page] = (sample_page_load_token_t){
+            .key = target[page].key,
+            .page_index = target[page].page_index,
+            .page_generation = target[page].page_generation,
+            .registration_epoch = target[page].registration_epoch,
+            .slot_index = target[page].slot_index,
+        };
+    }
     async->progressive_enabled = (uint8_t)(
         (target->format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
         && (target->stride_floats == SAMPLE_PAGE_FRAME_STRIDE_FLOATS)
         && (target->frame_count == SAMPLE_PAGE_FRAMES)
-        && (source_bytes == SAMPLE_PAGE_BYTES)
+        && ((source_bytes % SAMPLE_PAGE_BYTES) == 0U)
         && (metadata->block_align == SAMPLE_PAGE_BYTES_PER_FRAME)
         && ((file_byte_offset % SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE) == 0U));
     async->destination_cpu_clean = destination_cpu_clean;
     async->count_multi_diag = (target->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI);
+    if (page_count > 1U)
+    {
+        sample_stream_physical_span_t span;
+        if ((async->progressive_enabled == 0U)
+            || (source_bytes != page_count * SAMPLE_PAGE_BYTES)
+            || (sample_stream_backend_physical_resolve_contiguous(
+                    async->map, file_byte_offset, source_bytes,
+                    async->cursor, &span) == 0U))
+        {
+            memset(async, 0, sizeof(*async));
+            return 0U;
+        }
+        async->current_span = span;
+        async->current_span_valid = 1U;
+    }
     async->deadline_margin_us = deadline_margin_us;
     async->deadline_started_ms = HAL_GetTick();
     async->owner_generation = g_sample_stream_physical_next_generation++;
@@ -305,8 +446,12 @@ static uint8_t sample_stream_backend_physical_read_peek(
                 && (candidate_async->completed == 0U)
                 && (candidate_async->request.queued == 0U)
                 && ((async == 0)
-                    || (candidate_async->owner_generation
-                        < async->owner_generation)))
+                    || ((candidate_async->page_count == 1U)
+                        && (async->page_count > 1U))
+                    || ((((candidate_async->page_count == 1U)
+                           == (async->page_count == 1U)))
+                        && (candidate_async->owner_generation
+                            < async->owner_generation))))
         {
             async = candidate_async;
         }
@@ -368,16 +513,23 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
         (async->progressive_enabled != 0U)
         && (async->logical_queued == 0U)
         && (span.first_sector_skip == 0U)
-        && (span.sector_count == (SAMPLE_PAGE_BYTES
+        && (span.sector_count == (async->source_bytes
                                   / SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE))
-        && (span.logical_bytes == SAMPLE_PAGE_BYTES));
-    const sd_block_device_result_t result = progressive
-        ? sd_block_device_async_read_submit_progressive_request(
+        && (span.logical_bytes == async->source_bytes));
+    const sd_block_device_result_t result = (progressive != 0U)
+        ? ((async->scatter_enabled != 0U)
+            ? sd_block_device_async_read_submit_progressive_scatter_request(
+                &async->request, span.lba, span.sector_count,
+                async->page_buffer[0], async->owner_generation,
+                async->destination_cpu_clean,
+                sample_stream_backend_physical_progress_isr, async,
+                sample_stream_backend_physical_chunk_address_isr, async)
+            : sd_block_device_async_read_submit_progressive_request(
             &async->request, span.lba, span.sector_count,
             &async->buffer[async->buffer_sectors
                             * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE],
             async->owner_generation, async->destination_cpu_clean,
-            sample_stream_backend_physical_progress_isr, async)
+            sample_stream_backend_physical_progress_isr, async))
         : sd_block_device_async_read_submit_request(
             &async->request, span.lba, span.sector_count,
             &async->buffer[async->buffer_sectors
@@ -440,9 +592,11 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
             || (completion->operation != SD_BLOCK_DEVICE_OPERATION_READ)
             || (completion->sector_count == 0U)
             || (completion->sector_count > async->buffer_sectors)
-            || (completion->buffer != &async->buffer[
-                    (async->buffer_sectors - completion->sector_count)
-                    * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE])
+            || (completion->buffer != ((async->scatter_enabled != 0U)
+                    ? async->page_buffer[0]
+                    : &async->buffer[
+                        (async->buffer_sectors - completion->sector_count)
+                        * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE]))
             || (completion->media_epoch != async->map->media_epoch))
     {
         sample_stream_backend_physical_invalidate_span(async);
@@ -517,4 +671,13 @@ uint8_t sample_stream_backend_physical_busy(void)
         }
     }
     return busy;
+}
+
+uint8_t sample_stream_backend_physical_submitted(
+    const sample_stream_backend_physical_async_t *async)
+{
+    return ((async != 0)
+        && ((async->logical_queued != 0U)
+            || (async->request.queued != 0U)
+            || (async->request.started != 0U))) ? 1U : 0U;
 }

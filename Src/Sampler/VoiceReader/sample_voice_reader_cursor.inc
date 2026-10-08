@@ -34,6 +34,7 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
                                    ? ((window_end - 1U)
                                       / state->frames_per_page)
                                    : page;
+    const uint32_t sequential_page_end = last_page + 1U;
     pages[SAMPLE_PAGE_LEASE_CURRENT] = page;
     valid_mask |= SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_CURRENT);
     if (page < last_page)
@@ -78,17 +79,33 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
                 SAMPLE_PAGE_LEASE_LOOP_START_NEXT);
         }
     }
+    const uint32_t requested_page = (state->requested_page_valid != 0U)
+        ? (state->requested_frame / state->frames_per_page) : page;
+    const uint8_t jump_pending = (uint8_t)(
+        (state->requested_page_valid != 0U)
+        && (requested_page != page)
+        && (requested_page != (page + 1U)));
+    const uint8_t sequential_forward = (uint8_t)(
+        (state->plan_valid != 0U)
+        && ((state->plan.kernel_type == SAMPLE_KERNEL_FWD_1X)
+            || (state->plan.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR))
+        && (jump_pending == 0U));
     PERF_END(PERF_CPU_READER_NEED, need_start);
     if ((state->lease_valid_mask != valid_mask)
+        || (state->lease_sequential_page_end != sequential_page_end)
+        || (state->lease_sequential_forward != sequential_forward)
+        || (state->lease_jump_pending != jump_pending)
         || (memcmp(state->lease_pages, pages, sizeof(pages)) != 0))
     {
-        (void)sample_page_lease_audio_publish(state->lease_slot,
-                                              state->key,
-                                              state->registration_epoch,
-                                              pages,
-                                              valid_mask);
+        (void)sample_page_lease_audio_publish(
+            state->lease_slot, state->key, state->registration_epoch,
+            pages, valid_mask, sequential_page_end,
+            sequential_forward, jump_pending);
         memcpy(state->lease_pages, pages, sizeof(pages));
         state->lease_valid_mask = valid_mask;
+        state->lease_sequential_page_end = sequential_page_end;
+        state->lease_sequential_forward = sequential_forward;
+        state->lease_jump_pending = jump_pending;
     }
 }
 

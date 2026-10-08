@@ -167,7 +167,7 @@ uint8_t sample_page_cache_port_complete(const sample_stream_io_result_t *result)
 {
     if (result == NULL) return 0U;
     return sample_page_cache_finish_loading(
-        &result->token,
+        &result->token[0],
         (result->load_result == SAMPLE_PAGE_LOAD_OK)
             ? SAMPLE_PAGE_FINISH_READY : SAMPLE_PAGE_FINISH_ERROR);
 }

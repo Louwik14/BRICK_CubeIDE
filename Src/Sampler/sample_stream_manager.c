@@ -6,6 +6,7 @@
 
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_io.h"
+#include "Sampler/sample_stream_backend_physical.h"
 #include "Sampler/sample_stream_scheduler.h"
 #include "Platform/stream_rec_perf.h"
 #include "Recorder/audio_recorder_ring.h"
@@ -50,6 +51,8 @@ _Static_assert(SAMPLE_STREAM_IO_MAX_READERS == 10U,
                "eight musical readers plus Recorder and Preview");
 #endif
 static uint8_t g_sample_stream_manager_initialized;
+STREAM_LOCAL_D2 volatile sample_stream_fastpath_diag_t
+    g_sample_stream_fastpath_diag;
 static uint8_t sample_stream_manager_candidate_for_slot(
     uint8_t slot,
     sample_stream_scheduler_candidate_t *out_candidate,
@@ -88,6 +91,8 @@ void sample_stream_manager_reset(void)
     sample_stream_manager_init_storage_once();
     sample_stream_io_reset();
     sample_stream_scheduler_init();
+    memset((void *)&g_sample_stream_fastpath_diag, 0,
+           sizeof(g_sample_stream_fastpath_diag));
 }
 
 void sample_stream_manager_release_sample(uint16_t sample_id)
@@ -122,15 +127,135 @@ static uint8_t sample_stream_manager_finish_io(
     const sample_page_finish_result_t finish =
         (io_result->load_result == SAMPLE_PAGE_LOAD_OK)
             ? SAMPLE_PAGE_FINISH_READY : SAMPLE_PAGE_FINISH_ERROR;
-    if (sample_page_cache_finish_loading(&io_result->token, finish) == 0U)
+    uint8_t completed = 1U;
+    for (uint8_t page = 0U; page < io_result->page_count; ++page)
     {
-        return 0U;
+        if (sample_page_cache_finish_loading(
+                &io_result->token[page], finish) == 0U)
+            completed = 0U;
     }
-    if (io_result->load_result != SAMPLE_PAGE_LOAD_OK) return 0U;
+    if ((completed == 0U)
+        || (io_result->load_result != SAMPLE_PAGE_LOAD_OK)) return 0U;
+    if (io_result->request_class
+        == SAMPLE_STREAM_REQUEST_COALESCED_SEQUENTIAL)
+        g_sample_stream_fastpath_diag.fastpath_completed++;
     if (io_result->request_cycles != 0U)
         brick_perf_wall(PERF_WALL_STREAM_REQUEST_READY,
                         brick_perf_now() - io_result->request_cycles);
     PERF_END(PERF_CPU_MANAGER_FINISH, perf_start);
+    return 1U;
+}
+
+static uint8_t sample_stream_manager_submit_fastpath(
+    const sample_page_load_target_t *first_target,
+    const sample_stream_scheduler_candidate_t *candidate,
+    const sample_page_lease_t *lease)
+{
+    if ((first_target == 0) || (candidate == 0) || (lease == 0)
+        || (candidate->page_role != SAMPLE_PAGE_LEASE_NEXT)
+        || (lease->sequential_forward == 0U)
+        || (lease->jump_pending != 0U)
+        || ((lease->valid_mask
+             & SAMPLE_PAGE_LEASE_VALID(SAMPLE_PAGE_LEASE_CURRENT)) == 0U)
+        || (lease->pages[SAMPLE_PAGE_LEASE_CURRENT] + 1U
+            != candidate->page_index)
+        || (lease->sequential_page_end <= candidate->page_index + 1U)
+        || (first_target->frame_count != first_target->frames_per_page)
+        || (sample_page_cache_get_page_state_key(
+                lease->key,
+                lease->pages[SAMPLE_PAGE_LEASE_CURRENT])
+            != SAMPLE_PAGE_READY))
+        return 0U;
+
+    sample_page_stream_load_info_t stream;
+    if ((sample_page_cache_get_stream_load_info_key(
+            candidate->key, &stream) == 0U)
+        || (stream.canonical_float == 0U)
+        || (stream.format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+        || (stream.stride_floats != SAMPLE_PAGE_FRAME_STRIDE_FLOATS)
+        || (stream.stream_safe.block_align != SAMPLE_PAGE_BYTES_PER_FRAME)
+        || (sample_stream_safe_metadata_backend(&stream.stream_safe)
+            != SAMPLE_STREAM_BACKEND_PHYSICAL))
+        return 0U;
+
+    uint32_t remaining_pages = lease->sequential_page_end
+        - candidate->page_index;
+    uint8_t desired = (remaining_pages > SAMPLE_STREAM_FASTPATH_MAX_PAGES)
+        ? SAMPLE_STREAM_FASTPATH_MAX_PAGES : (uint8_t)remaining_pages;
+    desired = sample_stream_backend_physical_contiguous_page_count(
+        &stream.stream_safe, first_target->start_frame, desired);
+    if (desired < 2U)
+    {
+        g_sample_stream_fastpath_diag.fastpath_fallback_noncontiguous++;
+        return 0U;
+    }
+
+    sample_page_load_target_t target[SAMPLE_STREAM_FASTPATH_MAX_PAGES];
+    sample_page_load_token_t token[SAMPLE_STREAM_FASTPATH_MAX_PAGES];
+    target[0] = *first_target;
+    uint8_t reserved = 1U;
+    while (reserved < desired)
+    {
+        const uint32_t page_index = candidate->page_index + reserved;
+        const sample_page_state_t state =
+            sample_page_cache_get_page_state_key(candidate->key, page_index);
+        if ((state == SAMPLE_PAGE_READY) || (state == SAMPLE_PAGE_LOADING)
+            || (state == SAMPLE_PAGE_RESERVED)) break;
+        if (sample_page_cache_reserve_page_target_key_alloc(
+                candidate->key, page_index,
+                SAMPLE_PAGE_ALLOC_VOICE_WINDOW,
+                &target[reserved]) == 0U)
+        {
+            g_sample_stream_fastpath_diag.fastpath_fallback_cache_reserve++;
+            break;
+        }
+        if (target[reserved].frame_count
+            != target[reserved].frames_per_page)
+        {
+            (void)sample_page_cache_cancel_reserved_page_key(
+                candidate->key, page_index,
+                SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
+            break;
+        }
+        ++reserved;
+    }
+    if (reserved < 2U) return 0U;
+
+    uint8_t loading = 0U;
+    while ((loading < reserved)
+        && (sample_page_cache_begin_loading(
+                &target[loading], &token[loading]) != 0U))
+        ++loading;
+    if (loading != reserved)
+    {
+        for (uint8_t page = 0U; page < loading; ++page)
+            (void)sample_page_cache_finish_loading(
+                &token[page], SAMPLE_PAGE_FINISH_ERROR);
+        for (uint8_t page = loading; page < reserved; ++page)
+            (void)sample_page_cache_cancel_reserved_page_key(
+                candidate->key, target[page].page_index,
+                SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
+        return 1U;
+    }
+
+    PERF_ACCUM(PERF_N_PAGES_REQUESTED, reserved);
+    if (sample_stream_io_begin_coalesced(
+            token, reserved, candidate->voice_id, lease->seq,
+            UINT32_MAX) == 0U)
+    {
+        for (uint8_t page = 0U; page < reserved; ++page)
+            (void)sample_page_cache_finish_loading(
+                &token[page], SAMPLE_PAGE_FINISH_ERROR);
+        return 1U;
+    }
+    g_sample_stream_fastpath_diag.fastpath_requests++;
+    g_sample_stream_fastpath_diag.fastpath_pages_requested += reserved;
+    if (reserved == 2U)
+        g_sample_stream_fastpath_diag.fastpath_2page_count++;
+    else if (reserved == 3U)
+        g_sample_stream_fastpath_diag.fastpath_3page_count++;
+    else if (reserved == SAMPLE_STREAM_FASTPATH_MAX_PAGES)
+        g_sample_stream_fastpath_diag.fastpath_4page_count++;
     return 1U;
 }
 
@@ -151,6 +276,8 @@ static uint8_t sample_stream_manager_candidate_for_slot(
     sample_page_lease_t lease;
     if (sample_page_lease_control_read(slot, &lease) == 0U) return 0U;
     uint8_t page_rank = 0U;
+    uint8_t found = 0U;
+    sample_stream_scheduler_candidate_t best;
     for (uint8_t role = 0U; role < SAMPLE_PAGE_LEASE_PAGE_COUNT; ++role)
     {
         if ((lease.valid_mask & SAMPLE_PAGE_LEASE_VALID(role)) == 0U) continue;
@@ -167,17 +294,36 @@ static uint8_t sample_stream_manager_candidate_for_slot(
         if (state == SAMPLE_PAGE_READY) { PERF_COUNT(PERF_N_CACHE_READY); ++page_rank; continue; }
 
         if (out_pending != 0) *out_pending = 1U;
-        if (state == SAMPLE_PAGE_LOADING) { PERF_COUNT(PERF_N_CACHE_LOADING); return 0U; }
-        if (out_candidate == 0) return 0U;
+        if (state == SAMPLE_PAGE_LOADING)
+        {
+            PERF_COUNT(PERF_N_CACHE_LOADING);
+            continue;
+        }
+        if (out_candidate == 0) continue;
 
-        memset(out_candidate, 0, sizeof(*out_candidate));
-        out_candidate->key = lease.key;
-        out_candidate->page_index = page_index;
-        out_candidate->registration_epoch = lease.registration_epoch;
-        out_candidate->voice_id = slot;
-        out_candidate->page_rank = page_rank;
-        out_candidate->round_robin_slot = slot;
-        out_candidate->active = 1U;
+        sample_stream_scheduler_candidate_t candidate;
+        memset(&candidate, 0, sizeof(candidate));
+        candidate.key = lease.key;
+        candidate.page_index = page_index;
+        candidate.registration_epoch = lease.registration_epoch;
+        candidate.voice_id = slot;
+        candidate.page_rank = page_rank;
+        candidate.page_role = role;
+        candidate.priority = ((lease.jump_pending != 0U)
+                && (role == SAMPLE_PAGE_LEASE_LOOP_START_NEXT))
+            ? 0U : ((role == SAMPLE_PAGE_LEASE_CURRENT)
+                ? 0U : ((role == SAMPLE_PAGE_LEASE_NEXT) ? 1U : 2U));
+        candidate.round_robin_slot = slot;
+        candidate.active = 1U;
+        if ((found == 0U) || (candidate.priority < best.priority))
+        {
+            best = candidate;
+            found = 1U;
+        }
+    }
+    if ((found != 0U) && (out_candidate != 0))
+    {
+        *out_candidate = best;
         return 1U;
     }
     return 0U;
@@ -197,10 +343,12 @@ static uint8_t sample_stream_manager_probe_candidate(
 }
 
 static uint8_t sample_stream_manager_pick_next(
-    sample_page_load_target_t *out_target)
+    sample_page_load_target_t *out_target,
+    sample_stream_scheduler_candidate_t *out_candidate,
+    sample_page_lease_t *out_lease)
 {
     PERF_START(perf_start);
-    if (out_target == 0)
+    if ((out_target == 0) || (out_candidate == 0) || (out_lease == 0))
     {
         return 0U;
     }
@@ -238,6 +386,24 @@ static uint8_t sample_stream_manager_pick_next(
         return 0U;
     }
     *out_target = target;
+    *out_candidate = candidate;
+    if (sample_page_lease_control_read(
+            candidate.voice_id, out_lease) == 0U)
+    {
+        (void)sample_page_cache_cancel_reserved_page_key(
+            candidate.key, candidate.page_index,
+            SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
+        return 0U;
+    }
+    if ((out_lease->registration_epoch != candidate.registration_epoch)
+        || (sample_audio_key_equal(
+                &out_lease->key, &candidate.key) == 0U))
+    {
+        (void)sample_page_cache_cancel_reserved_page_key(
+            candidate.key, candidate.page_index,
+            SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
+        return 0U;
+    }
     return 1U;
 }
 
@@ -274,6 +440,15 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
 
     if (sample_stream_io_active_job_count() != 0U)
     {
+        for (uint8_t slot = 0U; slot < SAMPLE_PAGE_LEASE_SLOT_COUNT; ++slot)
+        {
+            sample_page_lease_t lease;
+            const uint32_t seq = (sample_page_lease_control_read(
+                    slot, &lease) != 0U) ? lease.seq : 0U;
+            if (sample_stream_io_cancel_stale_coalesced_before_submit(
+                    slot, seq) != 0U)
+                g_sample_stream_fastpath_diag.fastpath_cancel_before_submit++;
+        }
         sample_stream_io_result_t pending_result;
         if (sample_stream_io_poll(&pending_result) != 0U)
         {
@@ -292,10 +467,17 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
     for (;;)
     {
         sample_page_load_target_t target;
-        if (sample_stream_manager_pick_next(&target) == 0U)
+        sample_stream_scheduler_candidate_t candidate;
+        sample_page_lease_t lease;
+        if (sample_stream_manager_pick_next(
+                &target, &candidate, &lease) == 0U)
         {
             break;
         }
+
+        if (sample_stream_manager_submit_fastpath(
+                &target, &candidate, &lease) != 0U)
+            return;
 
         sample_page_load_token_t load_token;
         if (sample_page_cache_begin_loading(&target, &load_token) == 0U)
@@ -306,9 +488,12 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
          * ownership and entered LOADING. Candidate scans and retries are not
          * requests. Static presocle prefill is deliberately excluded. */
         PERF_COUNT(PERF_N_PAGES_REQUESTED);
+        g_sample_stream_fastpath_diag.normal_16k_requests++;
         sample_stream_io_result_t io_result;
         memset(&io_result, 0, sizeof(io_result));
-        io_result.token = load_token;
+        io_result.token[0] = load_token;
+        io_result.page_count = 1U;
+        io_result.request_class = SAMPLE_STREAM_REQUEST_NORMAL_16K;
         io_result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
         PERF_START(submit_start);
         const uint8_t submitted = sample_stream_io_begin(
