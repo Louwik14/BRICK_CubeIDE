@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 #include "Platform/memory_layout.h"
+#include "Platform/cpu_load.h"
 #include "sdmmc.h"
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_ll_sdmmc.h"
@@ -417,8 +418,10 @@ void sdmmc_async_transport_record_irq_exit(uint32_t entry_cycles,
                                            uint8_t was_idmabtc,
                                            uint8_t audio_active)
 {
-    if(was_idmabtc == 0U) return;
     const uint32_t cycles = DWT->CYCCNT - entry_cycles;
+    if(audio_active != 0U)
+        cpu_load_exclude_nested_irq_cycles(cycles);
+    if(was_idmabtc == 0U) return;
     g_sdmmc_async_progress_diag.idmabtc_handler_cycles_sum += cycles;
     g_sdmmc_async_progress_diag.average_idmabtc_handler_cycles =
         (uint32_t)(g_sdmmc_async_progress_diag.idmabtc_handler_cycles_sum

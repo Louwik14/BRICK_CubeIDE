@@ -15,6 +15,7 @@ typedef struct
     uint32_t counter_valid;
     uint64_t irq_cycles_sum;
     uint32_t irq_cycles_max;
+    uint32_t irq_wall_cycles_max;
     uint64_t period_cycles_sum;
 } cpu_load_metrics_t;
 
@@ -36,6 +37,7 @@ extern "C" {
 void cpu_load_init(void);
 void cpu_load_irq_begin(void);
 void cpu_load_irq_end(void);
+void cpu_load_exclude_nested_irq_cycles(uint32_t cycles);
 
 uint32_t cpu_load_get_permille(void);
 uint32_t cpu_load_get_max(void);

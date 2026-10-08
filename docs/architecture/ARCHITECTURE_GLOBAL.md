@@ -1,7 +1,8 @@
 # Architecture globale BRICK6
 
 Mesure temporaire active dans le firmware Release courant :
-[benchmark Sampler STREAM end-to-end](stream_end_to_end_benchmark.md).
+[benchmark de dimensionnement du presocle STREAM](stream_presocle_benchmark.md)
+et son [historique end-to-end](stream_end_to_end_benchmark.md).
 
 Le code courant est l'autorite finale. Ce document est l'unique porte d'entree documentaire; les documents de domaine portent les contrats detailles sans les repeter ici.
 

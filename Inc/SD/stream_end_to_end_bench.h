@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define STREAM_END_TO_END_BENCH_MAGIC   UINT32_C(0x45324536)
-#define STREAM_END_TO_END_BENCH_VERSION (4U)
+#define STREAM_END_TO_END_BENCH_VERSION (5U)
 #define STREAM_END_TO_END_BENCH_MAX_BATCH (8U)
 #define STREAM_END_TO_END_BENCH_OUTLIERS  (16U)
 
@@ -102,6 +102,22 @@ typedef struct
 
 typedef struct
 {
+    uint32_t voice_index;
+    uint32_t target_page;
+    uint32_t request_publish_us;
+    uint32_t backend_submit_us;
+    uint32_t physical_start_us;
+    uint32_t first_chunk_available_us;
+    uint32_t presocle_exhausted_us;
+    int32_t continuation_margin_us;
+    uint32_t starvation_us;
+    uint8_t continuation_available_before_exhaust;
+    uint8_t starved;
+    uint16_t reserved;
+} stream_end_to_end_voice_queue_t;
+
+typedef struct
+{
     uint32_t magic;
     uint32_t version;
     uint32_t size;
@@ -118,6 +134,10 @@ typedef struct
     uint32_t sd_clock_divider;
     uint32_t num_requests;
     uint32_t simultaneous_cold_starts;
+    uint32_t presocle_bytes;
+    uint32_t presocle_frames_source;
+    uint32_t playback_rate_x;
+    uint32_t presocle_ram_per_sample_64_slices_bytes;
     uint32_t audio_block_frames;
     uint32_t audio_block_us;
     uint32_t render_deadline_us;
@@ -152,6 +172,16 @@ typedef struct
     uint64_t audio_irq_cycles_sum;
     uint32_t audio_irq_cycles_max;
     uint32_t audio_irq_load_percent;
+    uint32_t audio_wall_latency_max;
+    uint32_t audio_preempted_by_sd_count;
+    uint32_t sd_rearm_cycles_average;
+    uint32_t sd_rearm_cycles_max;
+    uint32_t sd_idmabtc_handler_cycles_average;
+    uint32_t sd_idmabtc_handler_cycles_max;
+    uint32_t sd_idmabtc_interval_cycles_min;
+    uint32_t sd_idmabtc_interval_cycles_average;
+    uint32_t sd_idmabtc_interval_cycles_max;
+    uint32_t rearm_deadline_miss_count;
     uint32_t rejected_non_cold_batches;
     uint32_t timestamp_order_errors;
     volatile uint32_t chunk_publish_count;
@@ -168,6 +198,26 @@ typedef struct
     volatile uint32_t chunk_data_mismatch_count;
     volatile uint32_t minimum_lead_frames;
     volatile uint32_t minimum_lead_bytes;
+    volatile uint32_t presocle_transition_count;
+    volatile uint32_t presocle_transition_mismatch_count;
+    volatile uint32_t presocle_bit_perfect_frame_count;
+    volatile uint32_t presocle_data_mismatch_count;
+    volatile uint32_t continuation_bit_perfect_frame_count;
+    volatile uint32_t continuation_data_mismatch_count;
+    volatile uint32_t voices_presocle_exhausted;
+    volatile uint32_t voices_continuation_ready_before_exhaust;
+    volatile uint32_t voices_starved;
+    volatile uint32_t starvation_duration_max_us;
+    volatile uint64_t starvation_duration_sum_us;
+    volatile uint32_t minimum_remaining_presocle_frames;
+    volatile uint32_t minimum_remaining_presocle_bytes;
+    uint32_t batch_zero_starvation_count;
+    uint32_t batch_with_starvation_count;
+    int32_t minimum_continuation_margin_us;
+    int32_t continuation_margin_p50_us;
+    int32_t continuation_margin_p90_us;
+    int32_t continuation_margin_p99_us;
+    int32_t continuation_margin_p999_us;
     uint32_t instrumentation_ram_bytes;
     stream_end_to_end_error_snapshot_t error_snapshot;
 
@@ -213,6 +263,7 @@ typedef struct
     uint32_t last_voice_ready_us;
     uint32_t first_voice_rendered_us;
     uint32_t last_voice_rendered_us;
+    stream_end_to_end_voice_queue_t queue[STREAM_END_TO_END_BENCH_MAX_BATCH];
     stream_end_to_end_outlier_t outliers[STREAM_END_TO_END_BENCH_OUTLIERS];
     uint32_t outlier_count;
 } stream_end_to_end_bench_result_t;

@@ -1,5 +1,9 @@
 # Benchmark Sampler STREAM end-to-end
 
+> Cette page decrit la campagne historique trigger-vers-premier-rendu. Le
+> benchmark courant et son contrat de presocle sont documentes dans
+> [stream_presocle_benchmark.md](stream_presocle_benchmark.md).
+
 Le firmware Release courant lance, trois secondes apres le boot complet, une
 campagne de verite du Sampler STREAM. AUDIO/SAI DMA reste actif. Le superloop
 neutralise alors les services UI/USB ordinaires, mais le benchmark fait avancer

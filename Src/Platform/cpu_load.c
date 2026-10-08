@@ -47,7 +47,9 @@ static volatile uint32_t cpu_block_count = 0U;
 static volatile uint32_t cpu_counter_valid = 0U;
 static volatile uint64_t cpu_irq_cycles_sum = 0U;
 static volatile uint32_t cpu_irq_cycles_max = 0U;
+static volatile uint32_t cpu_irq_wall_cycles_max = 0U;
 static volatile uint64_t cpu_period_cycles_sum = 0U;
+static volatile uint32_t cpu_nested_irq_cycles = 0U;
 
 static uint16_t recent_permille_ring[CPU_LOAD_RECENT_WINDOW];
 static uint32_t recent_permille_index = 0U;
@@ -105,6 +107,8 @@ void cpu_load_init(void)
     cpu_counter_valid = 0U;
     cpu_irq_cycles_sum = 0U;
     cpu_irq_cycles_max = 0U;
+    cpu_irq_wall_cycles_max = 0U;
+    cpu_nested_irq_cycles = 0U;
     cpu_period_cycles_sum = 0U;
     recent_permille_index = 0U;
     recent_permille_count = 0U;
@@ -151,11 +155,15 @@ void cpu_load_init(void)
 void cpu_load_irq_begin(void)
 {
     uint32_t now;
+    uint32_t primask;
 
     if(cpu_counter_valid == 0U)
         return;
 
+    primask = __get_PRIMASK();
+    __disable_irq();
     now = DWT->CYCCNT;
+    cpu_nested_irq_cycles = 0U;
 
     if(period_is_ready == 0U)
     {
@@ -163,12 +171,20 @@ void cpu_load_irq_begin(void)
         irq_start_cycles = now;
         current_period_cycles = 0U;
         period_is_ready = 1U;
+        __set_PRIMASK(primask);
         return;
     }
 
     current_period_cycles = now - last_irq_entry_cycles;
     last_irq_entry_cycles = now;
     irq_start_cycles = now;
+    __set_PRIMASK(primask);
+}
+
+void cpu_load_exclude_nested_irq_cycles(uint32_t cycles)
+{
+    if (cpu_counter_valid != 0U)
+        cpu_nested_irq_cycles += cycles;
 }
 
 /**
@@ -188,12 +204,22 @@ void cpu_load_irq_end(void)
     uint32_t raw_pm;
     uint32_t pm;
     uint32_t avg_q8;
+    uint32_t nested_cycles;
+    uint32_t primask;
 
     if(cpu_counter_valid == 0U)
         return;
 
+    primask = __get_PRIMASK();
+    __disable_irq();
     end = DWT->CYCCNT;
+    nested_cycles = cpu_nested_irq_cycles;
+    __set_PRIMASK(primask);
     elapsed = end - irq_start_cycles;
+    if (elapsed > cpu_irq_wall_cycles_max)
+        cpu_irq_wall_cycles_max = elapsed;
+    elapsed = (elapsed > nested_cycles)
+        ? (elapsed - nested_cycles) : 0U;
 
     if(current_period_cycles == 0U)
         return;
@@ -356,6 +382,7 @@ void cpu_load_get_metrics(cpu_load_metrics_t *metrics)
     metrics->counter_valid = cpu_counter_valid;
     metrics->irq_cycles_sum = cpu_irq_cycles_sum;
     metrics->irq_cycles_max = cpu_irq_cycles_max;
+    metrics->irq_wall_cycles_max = cpu_irq_wall_cycles_max;
     metrics->period_cycles_sum = cpu_period_cycles_sum;
 
     __set_PRIMASK(primask);
@@ -387,6 +414,8 @@ void cpu_load_reset_measurement(void)
     cpu_block_count = 0U;
     cpu_irq_cycles_sum = 0U;
     cpu_irq_cycles_max = 0U;
+    cpu_irq_wall_cycles_max = 0U;
+    cpu_nested_irq_cycles = 0U;
     cpu_period_cycles_sum = 0U;
     recent_permille_index = 0U;
     recent_permille_count = 0U;
