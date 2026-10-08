@@ -15,7 +15,6 @@ enum {
     PERF_CPU_AUDIO_TOTAL, PERF_CPU_AUDIO_CONVERT, PERF_CPU_AUDIO_PEAK,
     PERF_CPU_AUDIO_RING,
     PERF_CPU_READER_NEED, PERF_CPU_READER_LEASE, PERF_CPU_READER_RESOLVE,
-    PERF_CPU_PROTECTION_UPDATE_AUDIO,
     PERF_CPU_MANAGER_PICK, PERF_CPU_MANAGER_FINISH,
     PERF_CPU_CACHE_RESERVE, PERF_CPU_CACHE_RECYCLE,
     PERF_CPU_STREAM_COMMAND, PERF_CPU_STREAM_SUBMIT,
@@ -47,13 +46,6 @@ enum {
     PERF_N_REC_RING_FILL, PERF_N_REC_RING_MAX, PERF_N_REC_RING_MIN_FREE,
     PERF_N_REC_RING_NEAR_FULL, PERF_N_REC_OVERFLOW,
     PERF_N_REC_SOURCE_PAGES, PERF_N_REC_SOURCE_FRAMES,
-    PERF_N_PROTECTION_UPDATE_STORAGE,
-    PERF_N_RECYCLABLE_CANDIDATES,
-    PERF_N_RESERVE_SEARCHES,
-    PERF_N_RESERVE_CANDIDATES_TESTED,
-    PERF_N_RESERVE_CANDIDATES_TESTED_MAX,
-    PERF_N_RESERVE_REVALIDATION_FAIL,
-    PERF_N_RESERVE_NO_CANDIDATE,
     PERF_N_TEST_ELAPSED_MS,
     PERF_N_COUNT
 };
@@ -69,7 +61,7 @@ _Static_assert(sizeof(brick_perf_span_t) == 16, "perf span ABI");
 _Static_assert(offsetof(brick_stream_rec_perf_t, cpu) == 16, "perf header ABI");
 _Static_assert(offsetof(brick_stream_rec_perf_t, count) == 16 + 16 * (PERF_CPU_COUNT + PERF_WALL_COUNT), "perf count ABI");
 _Static_assert((sizeof(brick_stream_rec_perf_t) % 4) == 0, "word dump ABI");
-_Static_assert(sizeof(brick_stream_rec_perf_t) == 888, "perf v4 size ABI");
+_Static_assert(sizeof(brick_stream_rec_perf_t) == 816, "perf v3 size ABI");
 _Static_assert(_Alignof(brick_stream_rec_perf_t) >= 8, "perf 64-bit alignment ABI");
 
 #if BRICK_PERF_DIAG

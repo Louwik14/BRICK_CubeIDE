@@ -53,22 +53,6 @@ typedef struct
 
 typedef sample_page_backing_index_entry_t sample_page_index_entry_t;
 
-typedef struct
-{
-    uint16_t slot_index;
-    uint16_t reserved;
-    uint32_t generation;
-} sample_page_protection_ref_t;
-
-typedef struct
-{
-    uint32_t lease_seq;
-    sample_page_protection_ref_t role[SAMPLE_PAGE_LEASE_PAGE_COUNT];
-    uint8_t lease_slot;
-    uint8_t active;
-    uint8_t reserved[2];
-} sample_page_protection_tracker_t;
-
 static CTRL_STATE sample_page_cache_state_t g_sample_page_cache_state;
 SDRAM_PAGE_META static sample_page_sample_desc_t
     g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
@@ -76,13 +60,7 @@ static CTRL_STATE uint16_t g_sample_page_reserved_count[SAMPLE_PAGE_CACHE_MAX_SA
 static CTRL_STATE uint16_t g_sample_page_free_cursor;
 static CTRL_STATE uint16_t g_sample_page_evict_cursor;
 static CTRL_STATE uint64_t g_sample_page_runtime_free_bitmap;
-static CTRL_STATE uint64_t g_sample_page_runtime_recyclable_bitmap;
-static CTRL_STATE uint8_t
-    g_sample_page_runtime_protection_count[SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT];
-static CTRL_STATE sample_page_protection_tracker_t
-    g_sample_page_protection_tracker[SAMPLE_STREAM_ACTIVE_READER_CAPACITY];
-static CTRL_STATE uint32_t g_sample_page_protection_synced_change;
-static CTRL_STATE uint8_t g_sample_page_protection_has_unresolved;
+static CTRL_STATE uint64_t g_sample_page_runtime_ready_bitmap;
 /* Zero-initialized outside the NOLOAD page metadata.  Boot may not inspect
  * payload_cpu_clean until reset has established every descriptor. */
 static uint8_t g_sample_page_payload_clean_contract_active;

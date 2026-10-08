@@ -102,99 +102,6 @@ static uint32_t sample_page_cache_runtime_bitmap_first_from(
     return (uint32_t)__builtin_ctzll(bitmap);
 }
 
-static void sample_page_cache_protection_tracker_clear(
-    sample_page_protection_tracker_t *tracker)
-{
-    if (tracker == 0) return;
-    for (uint8_t role = 0U; role < SAMPLE_PAGE_LEASE_PAGE_COUNT; ++role)
-        sample_page_cache_protection_ref_clear(&tracker->role[role]);
-    memset(tracker, 0, sizeof(*tracker));
-    for (uint8_t role = 0U; role < SAMPLE_PAGE_LEASE_PAGE_COUNT; ++role)
-        tracker->role[role].slot_index = UINT16_MAX;
-}
-
-static sample_page_protection_tracker_t *
-sample_page_cache_protection_tracker_for_slot(uint8_t lease_slot)
-{
-    sample_page_protection_tracker_t *free_tracker = 0;
-    for (uint8_t i = 0U; i < SAMPLE_STREAM_ACTIVE_READER_CAPACITY; ++i)
-    {
-        sample_page_protection_tracker_t *const tracker =
-            &g_sample_page_protection_tracker[i];
-        if ((tracker->active != 0U) && (tracker->lease_slot == lease_slot))
-            return tracker;
-        if ((tracker->active == 0U) && (free_tracker == 0)) free_tracker = tracker;
-    }
-    return free_tracker;
-}
-
-static uint8_t sample_page_cache_sync_runtime_protections(void)
-{
-    __DMB();
-    const uint32_t change_before = g_sample_page_lease_change_counter;
-    if ((change_before == g_sample_page_protection_synced_change)
-        && (g_sample_page_protection_has_unresolved == 0U)) return 1U;
-
-    sample_page_lease_active_snapshot_t snapshot;
-    if (sample_page_lease_control_snapshot_active(&snapshot) == 0U) return 0U;
-    PERF_COUNT(PERF_N_PROTECTION_UPDATE_STORAGE);
-
-    for (uint8_t tracker_index = 0U;
-         tracker_index < SAMPLE_STREAM_ACTIVE_READER_CAPACITY;
-         ++tracker_index)
-    {
-        sample_page_protection_tracker_t *const tracker =
-            &g_sample_page_protection_tracker[tracker_index];
-        if (tracker->active == 0U) continue;
-        uint8_t still_active = 0U;
-        for (uint8_t lease_index = 0U; lease_index < snapshot.count; ++lease_index)
-        {
-            if (snapshot.slot[lease_index] == tracker->lease_slot)
-            {
-                still_active = 1U;
-                break;
-            }
-        }
-        if (still_active == 0U)
-            sample_page_cache_protection_tracker_clear(tracker);
-    }
-
-    uint8_t unresolved = 0U;
-    for (uint8_t lease_index = 0U; lease_index < snapshot.count; ++lease_index)
-    {
-        const sample_page_lease_t *const lease = &snapshot.lease[lease_index];
-        sample_page_protection_tracker_t *const tracker =
-            sample_page_cache_protection_tracker_for_slot(snapshot.slot[lease_index]);
-        if (tracker == 0) return 0U;
-        if ((tracker->active == 0U) || (tracker->lease_seq != lease->seq))
-        {
-            sample_page_cache_protection_tracker_clear(tracker);
-            tracker->active = 1U;
-            tracker->lease_slot = snapshot.slot[lease_index];
-            tracker->lease_seq = lease->seq;
-        }
-        for (uint8_t role = 0U; role < SAMPLE_PAGE_LEASE_PAGE_COUNT; ++role)
-        {
-            sample_page_protection_ref_t *const ref = &tracker->role[role];
-            if ((lease->valid_mask & SAMPLE_PAGE_LEASE_VALID(role)) == 0U)
-            {
-                sample_page_cache_protection_ref_clear(ref);
-                continue;
-            }
-            if (ref->slot_index < SAMPLE_PAGE_MAX_COUNT) continue;
-            if (sample_page_cache_protection_ref_set(
-                    ref, lease->key, lease->pages[role]) == 0U)
-                unresolved = 1U;
-        }
-    }
-    g_sample_page_protection_has_unresolved = unresolved;
-    __DMB();
-    const uint32_t change_after = g_sample_page_lease_change_counter;
-    if (change_after == change_before)
-        g_sample_page_protection_synced_change = change_before;
-    return 1U;
-}
-
 static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_key_t key,
                                                                    uint32_t page_index,
                                                                    sample_page_alloc_type_t alloc_type,
@@ -258,89 +165,50 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
         return page;
     }
 
-    const uint8_t runtime_range = (uint8_t)(
-        (range_start == SAMPLE_PAGE_VOICE_WINDOW_POOL_START)
-        && (range_count == SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT));
     sample_page_lease_active_snapshot_t lease_snapshot;
-    if (runtime_range != 0U)
+    if (sample_page_lease_control_snapshot_active(&lease_snapshot) == 0U)
+        return 0;
+
+    uint64_t ready_candidates = g_sample_page_runtime_ready_bitmap;
+    for (uint32_t scan = 0U; scan < range_count; ++scan)
     {
-        if (sample_page_cache_sync_runtime_protections() == 0U)
+        uint32_t i;
+        if ((range_start == SAMPLE_PAGE_VOICE_WINDOW_POOL_START)
+            && (range_count == SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT))
         {
-            PERF_COUNT(PERF_N_RESERVE_NO_CANDIDATE);
-            return 0;
+            const uint32_t offset = sample_page_cache_runtime_bitmap_first_from(
+                ready_candidates, g_sample_page_evict_cursor);
+            if (offset == UINT32_MAX) break;
+            ready_candidates &= ~(UINT64_C(1) << offset);
+            i = range_start + offset;
         }
-        uint64_t candidates = g_sample_page_runtime_recyclable_bitmap;
-        PERF_COUNT(PERF_N_RESERVE_SEARCHES);
-        PERF_ACCUM(PERF_N_RECYCLABLE_CANDIDATES,
-                   (uint32_t)__builtin_popcountll(candidates));
-        uint32_t candidates_tested = 0U;
-        while (candidates != 0U)
-        {
-            sample_page_desc_t *candidate_page = 0;
-            uint32_t candidate_offset = UINT32_MAX;
-            uint64_t scan_bitmap = candidates;
-            while (scan_bitmap != 0U)
-            {
-                const uint32_t offset = (uint32_t)__builtin_ctzll(scan_bitmap);
-                scan_bitmap &= scan_bitmap - 1U;
-                sample_page_desc_t *const page =
-                    &g_sample_page_desc[range_start + offset];
-                if ((page->state != SAMPLE_PAGE_READY)
-                    || (page->static_resident != 0U)
-                    || (sample_page_cache_key_slot(page->key)
-                        >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
-                    || (sample_page_cache_can_evict_for_request(
-                            key, page->key) == 0U)) continue;
-                if ((candidate_page == 0)
-                    || (page->last_touch < candidate_page->last_touch))
-                {
-                    candidate_page = page;
-                    candidate_offset = offset;
-                }
-            }
-            if (candidate_page == 0) break;
-            candidates &= ~(UINT64_C(1) << candidate_offset);
-            ++candidates_tested;
-            uint8_t revalidation_failed = 0U;
-            if (sample_page_cache_claim_for_recycle(
-                    candidate_page, &revalidation_failed) != 0U)
-            {
-                evict_page = candidate_page;
-                break;
-            }
-            if (revalidation_failed != 0U)
-                PERF_COUNT(PERF_N_RESERVE_REVALIDATION_FAIL);
-        }
-        PERF_ACCUM(PERF_N_RESERVE_CANDIDATES_TESTED, candidates_tested);
-        PERF_MAX(PERF_N_RESERVE_CANDIDATES_TESTED_MAX, candidates_tested);
-    }
-    else
-    {
-        if (sample_page_lease_control_snapshot_active(&lease_snapshot) == 0U)
-            return 0;
-        for (uint32_t scan = 0U; scan < range_count; ++scan)
+        else
         {
             const uint32_t cursor_offset = sample_page_cache_range_cursor_offset(
                 g_sample_page_evict_cursor, range_start, range_count);
-            const uint32_t i = range_start + ((cursor_offset + scan) % range_count);
-            sample_page_desc_t *const page = &g_sample_page_desc[i];
-            if ((page->state != SAMPLE_PAGE_READY)
-                || (sample_page_cache_page_is_contractual_snapshot(
-                        page, &lease_snapshot) != 0U)
-                || (sample_page_cache_key_slot(page->key)
-                    >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
-                || (sample_page_cache_can_evict_for_request(
-                        key, page->key) == 0U)) continue;
-            if ((evict_page == 0) || (page->last_touch < evict_page->last_touch))
-                evict_page = page;
+            i = range_start + ((cursor_offset + scan) % range_count);
         }
-        if ((evict_page != 0)
-            && (sample_page_cache_claim_for_recycle(evict_page, 0) == 0U))
-            evict_page = 0;
+        sample_page_desc_t *const page = &g_sample_page_desc[i];
+        if ((page->state != SAMPLE_PAGE_READY)
+            || (sample_page_cache_page_is_contractual_snapshot(
+                    page, &lease_snapshot) != 0U)
+            || (sample_page_cache_key_slot(page->key) >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+            || (sample_page_cache_can_evict_for_request(key, page->key) == 0U))
+        {
+            continue;
+        }
+
+        if ((evict_page == 0) || (page->last_touch < evict_page->last_touch))
+            evict_page = page;
     }
+
     if (evict_page == 0)
     {
-        if (runtime_range != 0U) PERF_COUNT(PERF_N_RESERVE_NO_CANDIDATE);
+        return 0;
+    }
+
+    if (sample_page_cache_claim_for_recycle(evict_page) == 0U)
+    {
         return 0;
     }
 
@@ -452,7 +320,7 @@ static void sample_page_cache_reclaim_stream_pages_for_slot_allocation(uint32_t 
             &g_sample_page_sample_desc[sample_page_cache_key_slot(page->key)];
         if (sample->valid != 0U)
         {
-            if (sample_page_cache_claim_for_recycle(page, 0) != 0U)
+            if (sample_page_cache_claim_for_recycle(page) != 0U)
             {
                 sample_page_cache_clear_desc(page, i);
             }

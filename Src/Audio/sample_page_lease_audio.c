@@ -9,14 +9,12 @@
 STREAM_LOCAL_D2 sample_page_lease_t
     g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];
 STREAM_LOCAL_D2 volatile uint32_t g_sample_page_lease_active_mask[2];
-STREAM_LOCAL_D2 volatile uint32_t g_sample_page_lease_change_counter;
 
 void sample_page_lease_audio_init(void)
 {
     memset(g_sample_page_leases, 0, sizeof(g_sample_page_leases));
     g_sample_page_lease_active_mask[0] = 0U;
     g_sample_page_lease_active_mask[1] = 0U;
-    g_sample_page_lease_change_counter = 0U;
     __DMB();
 }
 
@@ -51,10 +49,6 @@ uint8_t sample_page_lease_audio_publish(uint8_t slot,
     else
         g_sample_page_lease_active_mask[word] &= ~bit;
     __DMB();
-    PERF_START(protection_update_start);
-    ++g_sample_page_lease_change_counter;
-    __DMB();
-    PERF_END(PERF_CPU_PROTECTION_UPDATE_AUDIO, protection_update_start);
     PERF_END(PERF_CPU_READER_LEASE, lease_start);
     PERF_COUNT(PERF_N_LEASE_PUBLISH);
     return 1U;
