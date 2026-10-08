@@ -39,6 +39,7 @@
 #define STREAM_E2E_BENCH_FILE_512_MIB (UINT32_C(512) * 1024U * 1024U)
 #define STREAM_E2E_BENCH_FILE_256_MIB (UINT32_C(256) * 1024U * 1024U)
 #define STREAM_E2E_BENCH_PAGE_BYTES SAMPLE_PAGE_BYTES
+#define STREAM_E2E_BENCH_FILE_WRITE_BYTES (16U * 1024U)
 #define STREAM_E2E_BENCH_MAX_PAGES \
     (STREAM_E2E_BENCH_FILE_512_MIB / STREAM_E2E_BENCH_PAGE_BYTES)
 #define STREAM_E2E_BENCH_HIST_BIN_US (2U)
@@ -57,6 +58,9 @@
 
 _Static_assert(STREAM_E2E_BENCH_PAGE_BYTES == SAMPLE_PAGE_BYTES,
                "truth benchmark page size must equal the real Page Cache page");
+_Static_assert((STREAM_E2E_BENCH_PAGE_BYTES
+                % STREAM_E2E_BENCH_FILE_WRITE_BYTES) == 0U,
+               "file preparation chunks must divide the Page Cache page");
 _Static_assert(STREAM_E2E_BENCH_MAX_PAGES <= UINT16_MAX,
                "page permutation uses 16-bit indices");
 
@@ -480,11 +484,11 @@ static void stream_e2e_prepare_file(void)
             &g_stream_e2e_runtime.file);
         const uint8_t wrote = sink.write(
             sink.context, g_stream_e2e_file_buffer,
-            STREAM_E2E_BENCH_PAGE_BYTES);
+            STREAM_E2E_BENCH_FILE_WRITE_BYTES);
         const FRESULT fr = g_stream_e2e_runtime.file.last_result;
         if ((wrote == 0U)
             || (g_stream_e2e_runtime.file.transferred
-                != STREAM_E2E_BENCH_PAGE_BYTES))
+                != STREAM_E2E_BENCH_FILE_WRITE_BYTES))
         {
             stream_e2e_fail(STREAM_E2E_ERROR_FILE, 8U, fr,
                             SD_BLOCK_DEVICE_OK);
@@ -493,7 +497,7 @@ static void stream_e2e_prepare_file(void)
         g_stream_e2e_runtime.create_offset +=
             g_stream_e2e_runtime.file.transferred;
         if (g_stream_e2e_runtime.create_offset
-            == STREAM_E2E_BENCH_PAGE_BYTES)
+            == STREAM_E2E_BENCH_FILE_WRITE_BYTES)
             stream_e2e_fill_file_pattern();
         g_stream_end_to_end_bench.progress =
             g_stream_e2e_runtime.create_offset;
