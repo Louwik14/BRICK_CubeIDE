@@ -72,11 +72,14 @@ le debut du premier octet sur le bus et la fin electrique exacte ne sont pas
 exposes separement par le controleur. Leur ecart inclut donc la latence IRQ aux
 deux bornes, sans phase artificielle.
 
-Avant toute soustraction, les 19 timestamps sont verifies dans cet ordre. Une
-distance DWT non signee superieure a la demi-periode du compteur signale une
+Avant toute soustraction, les 19 timestamps sont verifies selon leur ordre
+causal. Une distance DWT non signee superieure a la demi-periode signale une
 borne inversee, incremente `timestamp_order_errors`, memorise l'index de
 transition dans `last_timestamp_order_error_edge`, puis arrete le benchmark en
 erreur. Une transition correcte qui traverse le wrap 32 bits reste valide.
+`perf_dma_cycles` est le retour CPU du lancement : CMDREND peut le preempter,
+donc il n'est pas contraint par rapport a `perf_data_start_cycles`. La chaine
+physique validee reste commande READ -> CMDREND/DATA -> DATAEND -> CMD12.
 
 RAM statique : les quatre histogrammes occupent 32 768 octets, contre 65 536
 octets pour les deux anciens histogrammes. Les resultats et timestamps ajoutent

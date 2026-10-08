@@ -107,8 +107,17 @@ static void sd_bench_histogram_add(uint32_t *histogram, uint32_t us)
 static uint8_t sd_bench_timestamps_valid(const uint32_t *timestamps,
                                          uint32_t count)
 {
+    enum
+    {
+        SD_BENCH_TIMESTAMP_COMMAND = 9U,
+        SD_BENCH_TIMESTAMP_DATA_START = 11U
+    };
     for (uint32_t i = 1U; i < count; ++i)
     {
+        /* CMDREND may preempt SDMMC_SendCommand/start_read before their CPU
+         * call chain returns.  dma_launch_return is diagnostic only, so it
+         * has no strict ordering relationship with data_start. */
+        if (i == SD_BENCH_TIMESTAMP_DATA_START) continue;
         /* Unsigned subtraction preserves a normal DWT wrap.  A delta larger
          * than half the 32-bit counter range denotes an impossible reversed
          * boundary for this request (the SD timeout is shorter). */
@@ -118,6 +127,14 @@ static uint8_t sd_bench_timestamps_valid(const uint32_t *timestamps,
             g_sd_random_bench.last_timestamp_order_error_edge = i;
             return 0U;
         }
+    }
+    if ((timestamps[SD_BENCH_TIMESTAMP_DATA_START]
+            - timestamps[SD_BENCH_TIMESTAMP_COMMAND]) > INT32_MAX)
+    {
+        g_sd_random_bench.timestamp_order_errors++;
+        g_sd_random_bench.last_timestamp_order_error_edge =
+            SD_BENCH_TIMESTAMP_DATA_START;
+        return 0U;
     }
     return 1U;
 }
