@@ -6,13 +6,16 @@
 #include "Sampler/multi_sample_config.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_config.h"
+#include "Sampler/sample_page_cache_port.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "Sampler/sample_voice_reader.h"
 #include "SD/sd_diskio.h"
 #include "SD/sd_block_device.h"
+#include "Storage/audio_recorder_wav.h"
 #include "Storage/brick6_stream_service_task.h"
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/wav_parser.h"
 #include "ff.h"
 #include "sdmmc.h"
 #include "stm32h7xx.h"
@@ -323,47 +326,22 @@ static void stream_e2e_fill_file_pattern(void)
     }
 }
 
-static uint8_t stream_e2e_register_stream(void)
+static uint8_t stream_e2e_file_is_canonical(void)
 {
-    sample_page_stream_info_t registration;
-    memset(&registration, 0, sizeof(registration));
-    registration.key = g_stream_e2e_runtime.key;
-    memcpy(registration.path, STREAM_E2E_BENCH_PATH,
-           sizeof(STREAM_E2E_BENCH_PATH));
-    registration.total_frames = g_stream_end_to_end_bench.file_size / 8U;
-    registration.format = SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED;
-    registration.stride_floats = 2U;
-    registration.frames_per_page = SAMPLE_PAGE_FRAMES;
-    registration.data_offset = 0U;
-    registration.physical_only = 1U;
-    registration.info.audio_format = 3U;
-    registration.info.encoding = WAV_SAMPLE_ENCODING_IEEE_FLOAT;
-    registration.info.sample_rate = STREAM_E2E_SAMPLE_RATE_HZ;
-    registration.info.byte_rate = STREAM_E2E_SAMPLE_RATE_HZ * 8U;
-    registration.info.channels = 2U;
-    registration.info.block_align = 8U;
-    registration.info.bits_per_sample = 32U;
-    registration.info.valid_bits_per_sample = 32U;
-    registration.info.fmt_chunk_size = 16U;
-    registration.info.data_offset = 0U;
-    registration.info.data_size = g_stream_end_to_end_bench.file_size;
-    registration.stream_safe = g_stream_e2e_runtime.metadata;
-    registration.stream_safe.key = registration.key;
-    registration.stream_safe.data_offset_bytes = 0U;
-    registration.stream_safe.total_frames = registration.total_frames;
-    registration.stream_safe.block_align = 8U;
-    registration.stream_safe.bytes_per_frame = 8U;
-    registration.stream_safe.channels = 2U;
-    registration.stream_safe.bits_per_sample = 32U;
-    registration.stream_safe.sample_rate = STREAM_E2E_SAMPLE_RATE_HZ;
-    registration.stream_safe.file_size = g_stream_end_to_end_bench.file_size;
-    registration.stream_safe.data_size = g_stream_end_to_end_bench.file_size;
-    registration.stream_safe.sector_size = 512U;
-    registration.stream_safe.data_sector_offset = 0U;
-    if (sample_page_cache_register_prepared_stream(&registration) == 0U)
+    wav_info_t info;
+    if (persistent_fatfs_open_read(&g_stream_e2e_runtime.file,
+                                   STREAM_E2E_BENCH_PATH) == 0U)
         return 0U;
-    return sample_page_cache_get_registration_epoch_key(
-        registration.key, &g_stream_e2e_runtime.registration_epoch);
+    g_stream_e2e_runtime.file_open = 1U;
+    const uint8_t valid = (uint8_t)(
+        wav_parser_parse_info(&g_stream_e2e_runtime.file.file, &info)
+        && (wav_parser_is_canonical_brick_float(&info) != 0U)
+        && (info.data_size == (g_stream_end_to_end_bench.file_size
+                              - AUDIO_RECORDER_WAV_HEADER_BYTES)));
+    const FRESULT close_fr = persistent_fatfs_close_result(
+        &g_stream_e2e_runtime.file);
+    g_stream_e2e_runtime.file_open = 0U;
+    return (uint8_t)((valid != 0U) && (close_fr == FR_OK));
 }
 
 static uint8_t stream_e2e_open_map_register(void)
@@ -372,18 +350,32 @@ static uint8_t stream_e2e_open_map_register(void)
                                    STREAM_E2E_BENCH_PATH) == 0U)
         return 0U;
     g_stream_e2e_runtime.file_open = 1U;
-    memset(&g_stream_e2e_runtime.metadata, 0,
-           sizeof(g_stream_e2e_runtime.metadata));
-    const uint8_t mapped = sample_stream_fatfs_map_build_from_file(
-        &g_stream_e2e_runtime.file.file, &g_stream_e2e_runtime.metadata);
+    wav_info_t info;
+    const uint8_t parsed = (uint8_t)(
+        wav_parser_parse_info(&g_stream_e2e_runtime.file.file, &info)
+        && (wav_parser_is_canonical_brick_float(&info) != 0U));
+    const uint32_t total_frames = parsed != 0U
+        ? (info.data_size / info.block_align) : 0U;
+    const uint8_t registered = (uint8_t)(
+        (parsed != 0U)
+        && (sample_page_cache_port_register_file(
+                g_stream_e2e_runtime.key, STREAM_E2E_BENCH_PATH, &info,
+                total_frames, info.data_offset,
+                &g_stream_e2e_runtime.file.file) != 0U));
+    sample_page_stream_load_info_t load_info;
+    const uint8_t loaded = (uint8_t)(
+        (registered != 0U)
+        && (sample_page_cache_get_stream_load_info_key(
+                g_stream_e2e_runtime.key, &load_info) != 0U));
     const FRESULT close_fr = persistent_fatfs_close_result(
         &g_stream_e2e_runtime.file);
     g_stream_e2e_runtime.file_open = 0U;
-    if ((mapped == 0U) || (close_fr != FR_OK)) return 0U;
+    if ((loaded == 0U) || (close_fr != FR_OK)) return 0U;
+    g_stream_e2e_runtime.metadata = load_info.stream_safe;
+    g_stream_e2e_runtime.registration_epoch = load_info.registration_epoch;
     g_stream_e2e_runtime.page_count = (uint16_t)(
-        g_stream_end_to_end_bench.file_size / STREAM_E2E_BENCH_PAGE_BYTES);
+        info.data_size / STREAM_E2E_BENCH_PAGE_BYTES);
     g_stream_end_to_end_bench.page_count = g_stream_e2e_runtime.page_count;
-    if (stream_e2e_register_stream() == 0U) return 0U;
     stream_e2e_release_gate();
     g_stream_e2e_runtime.prng = UINT32_C(0x9E3779B9);
     stream_e2e_shuffle();
@@ -424,10 +416,13 @@ static void stream_e2e_prepare_file(void)
                 || (info.fsize == STREAM_E2E_BENCH_FILE_256_MIB)))
         {
             g_stream_end_to_end_bench.file_size = (uint32_t)info.fsize;
-            if (stream_e2e_open_map_register() == 0U)
-                stream_e2e_fail(STREAM_E2E_ERROR_REGISTER, 3U, FR_INT_ERR,
-                                SD_BLOCK_DEVICE_OK);
-            return;
+            if (stream_e2e_file_is_canonical() != 0U)
+            {
+                if (stream_e2e_open_map_register() == 0U)
+                    stream_e2e_fail(STREAM_E2E_ERROR_REGISTER, 3U,
+                                    FR_INT_ERR, SD_BLOCK_DEVICE_OK);
+                return;
+            }
         }
         if ((stat_fr != FR_OK) && (stat_fr != FR_NO_FILE))
         {
@@ -469,6 +464,11 @@ static void stream_e2e_prepare_file(void)
         }
         g_stream_e2e_runtime.file_open = 1U;
         stream_e2e_fill_file_pattern();
+        (void)audio_recorder_wav_build_header(
+            g_stream_e2e_file_buffer,
+            g_stream_end_to_end_bench.file_size
+                - AUDIO_RECORDER_WAV_HEADER_BYTES,
+            STREAM_E2E_SAMPLE_RATE_HZ, 2U);
         g_stream_end_to_end_bench.progress_total =
             g_stream_end_to_end_bench.file_size;
     }
@@ -492,6 +492,9 @@ static void stream_e2e_prepare_file(void)
         }
         g_stream_e2e_runtime.create_offset +=
             g_stream_e2e_runtime.file.transferred;
+        if (g_stream_e2e_runtime.create_offset
+            == STREAM_E2E_BENCH_PAGE_BYTES)
+            stream_e2e_fill_file_pattern();
         g_stream_end_to_end_bench.progress =
             g_stream_e2e_runtime.create_offset;
         return;
@@ -528,7 +531,8 @@ static uint8_t stream_e2e_page_is_one_physical_transaction(uint32_t page)
     memset(&cursor, 0, sizeof(cursor));
     return (uint8_t)((sample_stream_physical_map_resolve(
         &g_stream_e2e_runtime.metadata.physical_map,
-        (uint64_t)page * STREAM_E2E_BENCH_PAGE_BYTES,
+        (uint64_t)g_stream_e2e_runtime.metadata.data_offset_bytes
+            + (uint64_t)page * STREAM_E2E_BENCH_PAGE_BYTES,
         STREAM_E2E_BENCH_PAGE_BYTES, &cursor, &span) != 0U)
         && (span.first_sector_skip == 0U)
         && (span.logical_bytes == STREAM_E2E_BENCH_PAGE_BYTES)
