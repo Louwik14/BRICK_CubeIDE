@@ -79,7 +79,12 @@ static void sdmmc_async_send_command(uint8_t command, uint32_t argument)
     __HAL_SD_CLEAR_FLAG(&hsd1, SDMMC_STATIC_CMD_FLAGS);
     __HAL_SD_ENABLE_IT(&hsd1, SDMMC_ASYNC_COMMAND_INTERRUPTS);
     (void)SDMMC_SendCommand(hsd1.Instance, &config);
-    g_sdmmc_async.command_cycles = DWT->CYCCNT;
+    if(g_sdmmc_async.state == SDMMC_ASYNC_STATE_CMD_START)
+    {
+        /* Keep the initial data-command boundary.  CMD12 reuses this helper
+         * after DATAEND and must not overwrite the transaction start. */
+        g_sdmmc_async.command_cycles = DWT->CYCCNT;
+    }
 }
 
 static uint32_t sdmmc_async_response_error(uint32_t status)

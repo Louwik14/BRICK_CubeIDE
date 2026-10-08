@@ -104,6 +104,59 @@ static void sd_bench_histogram_add(uint32_t *histogram, uint32_t us)
     histogram[bin]++;
 }
 
+static uint8_t sd_bench_timestamps_valid(const uint32_t *timestamps,
+                                         uint32_t count)
+{
+    for (uint32_t i = 1U; i < count; ++i)
+    {
+        /* Unsigned subtraction preserves a normal DWT wrap.  A delta larger
+         * than half the 32-bit counter range denotes an impossible reversed
+         * boundary for this request (the SD timeout is shorter). */
+        if ((timestamps[i] - timestamps[i - 1U]) > INT32_MAX)
+        {
+            g_sd_random_bench.timestamp_order_errors++;
+            g_sd_random_bench.last_timestamp_order_error_edge = i;
+            return 0U;
+        }
+    }
+    return 1U;
+}
+
+static void sd_bench_snapshot_last_timestamps(
+    const sd_block_device_async_request_t *request, uint32_t ready_cycles)
+{
+    g_sd_random_bench.last_request_cycles = g_sd_bench_runtime.request_cycles;
+    g_sd_random_bench.last_backend_accept_cycles =
+        g_sd_bench_runtime.io.perf_accept_cycles;
+    g_sd_random_bench.last_map_start_cycles =
+        g_sd_bench_runtime.io.perf_map_start_cycles;
+    g_sd_random_bench.last_map_end_cycles =
+        g_sd_bench_runtime.io.perf_map_end_cycles;
+    g_sd_random_bench.last_storage_submit_enter_cycles =
+        request->perf_submit_enter_cycles;
+    g_sd_random_bench.last_storage_accept_cycles = request->perf_submit_cycles;
+    g_sd_random_bench.last_launch_enter_cycles =
+        request->perf_launch_enter_cycles;
+    g_sd_random_bench.last_pre_cache_start_cycles =
+        request->perf_pre_cache_start_cycles;
+    g_sd_random_bench.last_pre_cache_end_cycles =
+        request->perf_pre_cache_end_cycles;
+    g_sd_random_bench.last_command_cycles = request->perf_command_cycles;
+    g_sd_random_bench.last_dma_launch_return_cycles = request->perf_dma_cycles;
+    g_sd_random_bench.last_data_start_cycles = request->perf_data_start_cycles;
+    g_sd_random_bench.last_data_end_cycles = request->perf_data_end_cycles;
+    g_sd_random_bench.last_transaction_start_cycles =
+        request->perf_command_cycles;
+    g_sd_random_bench.last_transaction_end_cycles =
+        request->perf_complete_cycles;
+    g_sd_random_bench.last_cache_start_cycles = request->perf_cache_start_cycles;
+    g_sd_random_bench.last_cache_end_cycles = request->perf_cache_end_cycles;
+    g_sd_random_bench.last_block_publish_cycles = request->perf_publish_cycles;
+    g_sd_random_bench.last_backend_complete_cycles =
+        g_sd_bench_runtime.io.perf_complete_cycles;
+    g_sd_random_bench.last_ready_cycles = ready_cycles;
+}
+
 static uint32_t sd_bench_prng(void)
 {
     uint32_t x = g_sd_bench_runtime.prng;
@@ -431,28 +484,41 @@ static void sd_bench_record_read(void)
     const uint32_t ready_cycles = sd_bench_now();
     if ((result != SAMPLE_PAGE_LOAD_OK) || (source != g_sd_bench_buffer)
         || (source_bytes != SD_BENCH_PAGE_BYTES) || (physical_reads != 1U)
-        || (request->result != SD_BLOCK_DEVICE_OK)
-        || (g_sd_bench_runtime.io.perf_accept_cycles == 0U)
-        || (g_sd_bench_runtime.io.perf_map_start_cycles == 0U)
-        || (g_sd_bench_runtime.io.perf_map_end_cycles == 0U)
-        || (g_sd_bench_runtime.io.perf_complete_cycles == 0U)
-        || (request->perf_submit_enter_cycles == 0U)
-        || (request->perf_submit_cycles == 0U)
-        || (request->perf_launch_enter_cycles == 0U)
-        || (request->perf_pre_cache_start_cycles == 0U)
-        || (request->perf_pre_cache_end_cycles == 0U)
-        || (request->perf_command_cycles == 0U)
-        || (request->perf_data_start_cycles == 0U)
-        || (request->perf_data_end_cycles == 0U)
-        || (request->perf_dma_cycles == 0U)
-        || (request->perf_complete_cycles == 0U)
-        || (request->perf_cache_start_cycles == 0U)
-        || (request->perf_cache_end_cycles == 0U)
-        || (request->perf_publish_cycles == 0U))
+        || (request->result != SD_BLOCK_DEVICE_OK))
     {
         sd_bench_fail(SD_BENCH_ERROR_READ,
                       SD_RANDOM_BENCH_FAIL_RANDOM_READ,
                       FR_DISK_ERR, request->result);
+        return;
+    }
+    sd_bench_snapshot_last_timestamps(request, ready_cycles);
+    const uint32_t timestamps[] = {
+        g_sd_bench_runtime.request_cycles,
+        g_sd_bench_runtime.io.perf_accept_cycles,
+        g_sd_bench_runtime.io.perf_map_start_cycles,
+        g_sd_bench_runtime.io.perf_map_end_cycles,
+        request->perf_submit_enter_cycles,
+        request->perf_submit_cycles,
+        request->perf_launch_enter_cycles,
+        request->perf_pre_cache_start_cycles,
+        request->perf_pre_cache_end_cycles,
+        request->perf_command_cycles,
+        request->perf_dma_cycles,
+        request->perf_data_start_cycles,
+        request->perf_data_end_cycles,
+        request->perf_complete_cycles,
+        request->perf_cache_start_cycles,
+        request->perf_cache_end_cycles,
+        request->perf_publish_cycles,
+        g_sd_bench_runtime.io.perf_complete_cycles,
+        ready_cycles,
+    };
+    if (sd_bench_timestamps_valid(
+            timestamps, sizeof(timestamps) / sizeof(timestamps[0])) == 0U)
+    {
+        sd_bench_fail(SD_BENCH_ERROR_READ,
+                      SD_RANDOM_BENCH_FAIL_RANDOM_READ,
+                      FR_INT_ERR, SD_BLOCK_DEVICE_INVALID_ARG);
         return;
     }
 
@@ -535,33 +601,6 @@ static void sd_bench_record_read(void)
         g_sd_random_bench.transaction_max_us = transaction_us;
     if (queue_us > g_sd_random_bench.queue_max_us)
         g_sd_random_bench.queue_max_us = queue_us;
-    g_sd_random_bench.last_transaction_start_cycles = request->perf_command_cycles;
-    g_sd_random_bench.last_transaction_end_cycles = request->perf_complete_cycles;
-    g_sd_random_bench.last_ready_cycles = ready_cycles;
-    g_sd_random_bench.last_backend_accept_cycles =
-        g_sd_bench_runtime.io.perf_accept_cycles;
-    g_sd_random_bench.last_map_start_cycles =
-        g_sd_bench_runtime.io.perf_map_start_cycles;
-    g_sd_random_bench.last_map_end_cycles =
-        g_sd_bench_runtime.io.perf_map_end_cycles;
-    g_sd_random_bench.last_storage_submit_enter_cycles =
-        request->perf_submit_enter_cycles;
-    g_sd_random_bench.last_storage_accept_cycles = request->perf_submit_cycles;
-    g_sd_random_bench.last_launch_enter_cycles =
-        request->perf_launch_enter_cycles;
-    g_sd_random_bench.last_pre_cache_start_cycles =
-        request->perf_pre_cache_start_cycles;
-    g_sd_random_bench.last_pre_cache_end_cycles =
-        request->perf_pre_cache_end_cycles;
-    g_sd_random_bench.last_command_cycles = request->perf_command_cycles;
-    g_sd_random_bench.last_dma_launch_return_cycles = request->perf_dma_cycles;
-    g_sd_random_bench.last_data_start_cycles = request->perf_data_start_cycles;
-    g_sd_random_bench.last_data_end_cycles = request->perf_data_end_cycles;
-    g_sd_random_bench.last_cache_start_cycles = request->perf_cache_start_cycles;
-    g_sd_random_bench.last_cache_end_cycles = request->perf_cache_end_cycles;
-    g_sd_random_bench.last_block_publish_cycles = request->perf_publish_cycles;
-    g_sd_random_bench.last_backend_complete_cycles =
-        g_sd_bench_runtime.io.perf_complete_cycles;
     g_sd_random_bench.completed_reads = index + 1U;
     g_sd_random_bench.progress = index + 1U;
     if (g_sd_random_bench.completed_reads >= SD_BENCH_READ_COUNT)

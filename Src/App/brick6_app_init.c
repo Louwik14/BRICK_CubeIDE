@@ -41,6 +41,7 @@
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/sd_access_gate.h"
 #include "Sampler/sample_stream_backend_physical.h"
+#include "usb_audio.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_calibration.h"
@@ -234,6 +235,7 @@ void brick6_app_process(void)
             && (sd_block_device_async_pending_count() == 0U)
             && (sample_stream_backend_physical_busy() == 0U))
         {
+            usb_audio_transport_reset();
             audio_stop();
             (void)HAL_TIM_Base_Stop_IT(&htim12);
             sd_access_gate_set_streaming_critical(0U);

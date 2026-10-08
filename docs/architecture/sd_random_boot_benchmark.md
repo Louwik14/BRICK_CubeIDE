@@ -8,6 +8,10 @@ de cette bascule, UI, sequenceur et services Storage normaux ne sont plus
 servis; le DMA AUDIO est arrete, TIM12 est stoppe et l'ecran reste fige sur sa
 derniere image normale. Le benchmark cree si necessaire
 `0:/BRICK/TEST/SD_RANDOM.B6T`, puis reste actif jusqu'a son etat terminal.
+Juste avant l'arret AUDIO, `usb_audio_transport_reset()` desactive les flux
+Audio USB IN et OUT et remet leurs rings a zero. Le device USB n'est pas
+arrete : les autres classes restent intactes, mais aucun callback Audio OUT ne
+peut continuer a remplir `pc_to_brick` sans consommateur.
 
 Le fichier fait 512 MiB lorsque l'espace libre le permet, avec repli sur
 256 MiB. Sa creation est volontairement sequentielle, uniquement par
@@ -42,7 +46,8 @@ Les frontieres DWT mesurees sur le vrai chemin sont :
 - `perf_launch_enter_cycles` : debut de preparation du lancement materiel ;
 - `perf_pre_cache_start_cycles` / `perf_pre_cache_end_cycles` : invalidate
   D-cache conservateur avant lecture ;
-- `perf_command_cycles` : retour immediat de l'ecriture de la commande SDMMC ;
+- `perf_command_cycles` : retour immediat de l'ecriture de la commande READ
+  SDMMC initiale ; cette valeur n'est jamais remplacee par celle de CMD12 ;
 - `perf_data_start_cycles` : reponse commande observee dans l'IRQ SDMMC et
   passage du transport en phase DATA ;
 - `perf_data_end_cycles` : drapeau SDMMC DATAEND observe dans l'IRQ ;
@@ -65,9 +70,15 @@ le debut du premier octet sur le bus et la fin electrique exacte ne sont pas
 exposes separement par le controleur. Leur ecart inclut donc la latence IRQ aux
 deux bornes, sans phase artificielle.
 
+Avant toute soustraction, les 19 timestamps sont verifies dans cet ordre. Une
+distance DWT non signee superieure a la demi-periode du compteur signale une
+borne inversee, incremente `timestamp_order_errors`, memorise l'index de
+transition dans `last_timestamp_order_error_edge`, puis arrete le benchmark en
+erreur. Une transition correcte qui traverse le wrap 32 bits reste valide.
+
 RAM statique : les quatre histogrammes occupent 32 768 octets, contre 65 536
 octets pour les deux anciens histogrammes. Les resultats et timestamps ajoutent
-1 444 octets. Le bilan net est donc une economie de 31 324 octets par rapport
+1 452 octets. Le bilan net est donc une economie de 31 316 octets par rapport
 au benchmark precedent.
 
 `fail_step` vaut 1 MOUNT, 2 MKDIR, 3 OPEN, 4 EXPAND (reserve, non utilise),
