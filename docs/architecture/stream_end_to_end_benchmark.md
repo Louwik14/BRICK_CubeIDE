@@ -37,6 +37,10 @@ bases inactives vers `page+8192` puis `page+12288`. Chaque chunk termine est
 invalide individuellement avant publication du watermark
 `available_frame_end`; AUDIO peut resoudre le prefixe d'une page encore
 `LOADING`. Les autres tailles et chemins conservent le transport single-buffer.
+Le H743 signale aussi le quatrieme buffer par `IDMABTC`: cette quatrieme IRQ
+publie le chunk 3, masque seulement `IDMABTCIE`, puis laisse IDMA, DPSM et DLEN
+atteindre naturellement `DATAEND`. DATAEND emet ensuite l'unique CMD12 et la
+completion normale effectue `LOADING -> READY`.
 
 Le binding differe ne duplique aucune logique Streamer : il initialise le meme
 VoiceReader et publie par `sample_voice_reader_publish_lease`; seule la tentative
@@ -102,7 +106,10 @@ Le resultat expose aussi les quatre timestamps de publication, les erreurs de
 generation/ordre/doublon, les starvations, la verification bit-perfect des
 quatre chunks et le compteur de rendus qui ne precedent pas READY. La structure
 `g_sdmmc_async_progress_diag` expose `IDMABTC`, CMD18/CMD12, somme/moyenne/max
-du rearmement et depassements de la fenetre 164 us.
+du rearmement et depassements de la fenetre 164 us. Son buffer `trace[8]`
+capture les huit premieres IRQ au maximum de la premiere transaction
+progressive: STA, MASK, bases, taille IDMA, DCOUNT, DLEN, chunk logiciel,
+`IDMABACT`, buffer termine selon le materiel et buffer attendu.
 
 Cette branche de mesure utilise des demi-buffers AUDIO de 32 frames, soit 667 us
 a 48 kHz. La deadline fonctionnelle reste 64 frames, soit 1333 us et donc deux
@@ -121,6 +128,10 @@ set print pretty on
 info address g_stream_end_to_end_bench
 p g_stream_end_to_end_bench
 p g_sdmmc_async_progress_diag
+p g_sdmmc_async_progress_diag.configured_idmabndt
+p g_sdmmc_async_progress_diag.configured_chunk_bytes
+p g_sdmmc_async_progress_diag.expected_idma_buffers
+p g_sdmmc_async_progress_diag.trace
 p g_stream_end_to_end_bench.trigger_to_first_chunk_available
 p g_stream_end_to_end_bench.first_chunk_available_to_audio_seen
 p g_stream_end_to_end_bench.trigger_to_first_render

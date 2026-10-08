@@ -39,6 +39,24 @@ typedef enum
     SDMMC_ASYNC_CHAIN_ERROR
 } sdmmc_async_chain_result_t;
 
+#define SDMMC_ASYNC_PROGRESS_TRACE_COUNT (8U)
+
+typedef struct
+{
+    uint32_t irq_index;
+    uint32_t sta;
+    uint32_t mask;
+    uint32_t idmabase0;
+    uint32_t idmabase1;
+    uint32_t idmabsize;
+    uint32_t dcount;
+    uint32_t dlen;
+    uint8_t progressive_chunk_index;
+    uint8_t idmabact;
+    uint8_t completed_buffer_hw;
+    uint8_t expected_completed_buffer;
+} sdmmc_async_progress_trace_t;
+
 typedef struct
 {
     volatile uint32_t idmabtc_count;
@@ -50,6 +68,13 @@ typedef struct
     volatile uint32_t max_rearm_cycles;
     volatile uint32_t max_rearm_us;
     volatile uint32_t rearm_deadline_miss_count;
+    volatile uint32_t dataend_count;
+    volatile uint32_t final_chunk_idmabtc_count;
+    volatile uint32_t configured_idmabndt;
+    volatile uint32_t configured_chunk_bytes;
+    volatile uint32_t expected_idma_buffers;
+    volatile uint32_t trace_count;
+    sdmmc_async_progress_trace_t trace[SDMMC_ASYNC_PROGRESS_TRACE_COUNT];
 } sdmmc_async_progress_diag_t;
 
 extern volatile sdmmc_async_progress_diag_t g_sdmmc_async_progress_diag;
