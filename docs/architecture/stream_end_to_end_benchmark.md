@@ -16,7 +16,7 @@ l'instrumentation. Ce binding publie la lease normale. Le chemin est ensuite :
 AUDIO VoiceReader -> lease -> STORAGE stream task -> Stream Manager
 -> lookup Page Cache -> reserve/recycle -> sample_stream_io
 -> mapping physique -> scheduler -> block device -> SDMMC/IDMA/D-cache
--> IDMA double-buffer, publication progressive par chunks de 4 KiB
+-> IDMA double-buffer, publication progressive par chunks de 512 octets
 -> reader resolve d'un prefixe LOADING -> rendu d'un bloc AUDIO de 32 frames
 -> DATAEND/CMD12 -> LOADING->READY dans le Page Cache
 ```
@@ -31,16 +31,22 @@ et resolve restent des frontieres distinctes.
 
 Cette image est un prototype materiel volontairement borne. Une lecture
 canonique FLOAT32 stereo, alignee, contigue et exactement egale a 16 KiB arme
-un unique CMD18 avec IDMA double-buffer (`IDMABSIZE=4096`). Les bases initiales
-sont `page+0` et `page+4096`; les deux premieres IRQ `IDMABTC` recyclent les
-bases inactives vers `page+8192` puis `page+12288`. Chaque chunk termine est
+un unique CMD18 avec IDMA double-buffer (`IDMABSIZE=512`, donc
+`IDMABNDT=512/32=16`). Les bases initiales sont `page+0` et `page+512`.
+Chaque IRQ `IDMABTC` rearme le buffer devenu inactif vers le chunk `n+2`,
+jusqu'aux offsets `page+15360` et `page+15872`. Chaque chunk termine est
 invalide individuellement avant publication du watermark
 `available_frame_end`; AUDIO peut resoudre le prefixe d'une page encore
 `LOADING`. Les autres tailles et chemins conservent le transport single-buffer.
-Le H743 signale aussi le quatrieme buffer par `IDMABTC`: cette quatrieme IRQ
-publie le chunk 3, masque seulement `IDMABTCIE`, puis laisse IDMA, DPSM et DLEN
+Le H743 signale aussi le dernier des 32 buffers par `IDMABTC`: cette IRQ publie
+le chunk 31, masque seulement `IDMABTCIE`, puis laisse IDMA, DPSM et DLEN
 atteindre naturellement `DATAEND`. DATAEND emet ensuite l'unique CMD12 et la
 completion normale effectue `LOADING -> READY`.
+
+Le changement NVIC est limite a SDMMC1 : priorite preemptive 5 avant
+l'experience, 1 dans cette image. SAI1, DMA1 Stream3 et DMA1 Stream4 restent a
+la priorite 2. Le rearm IDMA critique peut donc preempter AUDIO; l'invalidation
+D-cache, la barriere et la publication suivent le rearm dans la meme IRQ.
 
 Le binding differe ne duplique aucune logique Streamer : il initialise le meme
 VoiceReader et publie par `sample_voice_reader_publish_lease`; seule la tentative
@@ -102,14 +108,36 @@ completion backend. Aucun printf, UART, affichage, I/O synchrone ou calcul de
 percentile n'existe dans le chemin mesure. La finalisation lourde arrive apres
 la campagne.
 
-Le resultat expose aussi les quatre timestamps de publication, les erreurs de
-generation/ordre/doublon, les starvations, la verification bit-perfect des
-quatre chunks et le compteur de rendus qui ne precedent pas READY. La structure
-`g_sdmmc_async_progress_diag` expose `IDMABTC`, CMD18/CMD12, somme/moyenne/max
-du rearmement et depassements de la fenetre 164 us. Son buffer `trace[8]`
+Le resultat expose aussi les quatre premiers timestamps de publication, les
+erreurs de generation/ordre/doublon, les starvations, la verification
+bit-perfect des 32 chunks, ainsi que le minimum de lead en frames et octets.
+La structure `g_sdmmc_async_progress_diag` expose `IDMABTC`, CMD18/CMD12,
+somme/moyenne/max du rearmement seul, somme/moyenne/max du handler IDMABTC
+complet, preemptions AUDIO observees et intervalle min/moyen/max entre deux
+IDMABTC d'une meme page. Le deadline miss compare le rearm reel de l'IRQ
+precedente a l'intervalle materiel mesure jusqu'a l'IRQ suivante. Son buffer `trace[8]`
 capture les huit premieres IRQ au maximum de la premiere transaction
 progressive: STA, MASK, bases, taille IDMA, DCOUNT, DLEN, chunk logiciel,
 `IDMABACT`, buffer termine selon le materiel et buffer attendu.
+
+L'arret historique vers 6538 cold starts n'etait pas une panne FatFs ou SD.
+`error=7` est `STREAM_E2E_ERROR_IO`; `fail_step=11` est la validation des
+timestamps dans `stream_e2e_record_batch`; `last_fresult=2` est `FR_INT_ERR` et
+`last_block_result=4` est `SD_BLOCK_DEVICE_READ_FAIL`. Ces deux derniers champs
+etaient des sentinelles ecrites par cette branche de validation, pas les
+resultats du backend. La campagne atteint alors environ la periode de wrap du
+compteur DWT 32 bits (8,947848533 s a 480 MHz). Une valeur CYCCNT nulle valide
+etait confondue avec "timestamp absent". Les timestamps critiques ont maintenant
+des drapeaux de validite explicites et les comparaisons d'ordre utilisent des
+deltas modulo 32 bits. `error_snapshot` capture une seule fois la page, la
+generation, l'epoch, l'etat/cache watermark, les registres SDMMC, les compteurs,
+le block device, le backend et le scheduler avant le nettoyage d'erreur.
+La transaction qui precedait l'erreur avait donc deja franchi backend complete,
+`finish_loading`, READY et le rendu AUDIO; la premiere etape en defaut etait la
+validation benchmark. L'ecart historique `6576 CMD18` contre `6575 pages_ready`
+ne designait pas cette page: le diagnostic transport n'etait pas remis a zero
+au demarrage du benchmark et incluait une transaction anterieure. Il est
+desormais reinitialise dans `stream_end_to_end_bench_init`.
 
 Cette branche de mesure utilise des demi-buffers AUDIO de 32 frames, soit 667 us
 a 48 kHz. La deadline fonctionnelle reste 64 frames, soit 1333 us et donc deux
@@ -131,12 +159,31 @@ p g_sdmmc_async_progress_diag
 p g_sdmmc_async_progress_diag.configured_idmabndt
 p g_sdmmc_async_progress_diag.configured_chunk_bytes
 p g_sdmmc_async_progress_diag.expected_idma_buffers
+p g_sdmmc_async_progress_diag.idmabtc_irq_count
+p g_sdmmc_async_progress_diag.average_rearm_cycles
+p g_sdmmc_async_progress_diag.average_rearm_us
+p g_sdmmc_async_progress_diag.max_rearm_cycles
+p g_sdmmc_async_progress_diag.max_rearm_us
+p g_sdmmc_async_progress_diag.average_idmabtc_handler_cycles
+p g_sdmmc_async_progress_diag.average_idmabtc_handler_us
+p g_sdmmc_async_progress_diag.max_idmabtc_handler_cycles
+p g_sdmmc_async_progress_diag.max_idmabtc_handler_us
+p g_sdmmc_async_progress_diag.idmabtc_interval_cycles_min
+p g_sdmmc_async_progress_diag.idmabtc_interval_cycles_avg
+p g_sdmmc_async_progress_diag.idmabtc_interval_cycles_max
 p g_sdmmc_async_progress_diag.trace
+p g_stream_end_to_end_bench.error_snapshot
 p g_stream_end_to_end_bench.trigger_to_first_chunk_available
 p g_stream_end_to_end_bench.first_chunk_available_to_audio_seen
 p g_stream_end_to_end_bench.trigger_to_first_render
 p g_stream_end_to_end_bench.trigger_to_full_page_ready
 p g_stream_end_to_end_bench.chunk_data_mismatch_count
+p g_stream_end_to_end_bench.chunk_publish_count
+p g_stream_end_to_end_bench.duplicate_chunk_publish_count
+p g_stream_end_to_end_bench.out_of_order_chunk_publish_count
+p g_stream_end_to_end_bench.generation_mismatch_count
 p g_stream_end_to_end_bench.starvation_count
+p g_stream_end_to_end_bench.minimum_lead_frames
+p g_stream_end_to_end_bench.minimum_lead_bytes
 p g_stream_end_to_end_bench.first_render_not_before_ready_count
 ```

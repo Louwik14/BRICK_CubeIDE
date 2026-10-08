@@ -94,6 +94,12 @@ void brick_sd_sdmmc_irq_handler(void)
         return;
     }
 
+    const uint32_t irq_entry_cycles = DWT->CYCCNT;
+    const uint8_t was_idmabtc = (uint8_t)(
+        (hsd1.Instance->STA & SDMMC_FLAG_IDMABTC) != 0U);
+    const uint8_t audio_active = (uint8_t)(
+        (NVIC_GetActive(DMA1_Stream3_IRQn) != 0U)
+        || (NVIC_GetActive(DMA1_Stream4_IRQn) != 0U));
     switch(sdmmc_async_transport_irq_handler())
     {
         case SDMMC_ASYNC_EVENT_READ_CHUNK:
@@ -124,4 +130,6 @@ void brick_sd_sdmmc_irq_handler(void)
         default:
             break;
     }
+    sdmmc_async_transport_record_irq_exit(
+        irq_entry_cycles, was_idmabtc, audio_active);
 }

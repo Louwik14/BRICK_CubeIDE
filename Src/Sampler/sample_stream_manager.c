@@ -128,12 +128,12 @@ static uint8_t sample_stream_manager_finish_io(
             ? SAMPLE_PAGE_FINISH_READY : SAMPLE_PAGE_FINISH_ERROR;
     if (sample_page_cache_finish_loading(&io_result->token, finish) == 0U)
     {
-        stream_end_to_end_bench_probe_io_complete(io_result, 0U);
+        stream_end_to_end_bench_probe_io_complete(io_result, 0U, 0U);
         return 0U;
     }
     const uint32_t page_ready_cycles = DWT->CYCCNT;
     stream_end_to_end_bench_probe_io_complete(io_result,
-                                              page_ready_cycles);
+                                              page_ready_cycles, 1U);
     if (io_result->load_result != SAMPLE_PAGE_LOAD_OK) return 0U;
     if (io_result->request_cycles != 0U)
         brick_perf_wall(PERF_WALL_STREAM_REQUEST_READY,

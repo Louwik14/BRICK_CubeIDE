@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define STREAM_END_TO_END_BENCH_MAGIC   UINT32_C(0x45324536)
-#define STREAM_END_TO_END_BENCH_VERSION (3U)
+#define STREAM_END_TO_END_BENCH_VERSION (4U)
 #define STREAM_END_TO_END_BENCH_MAX_BATCH (8U)
 #define STREAM_END_TO_END_BENCH_OUTLIERS  (16U)
 
@@ -56,6 +56,49 @@ typedef struct
     uint32_t page_ready_to_audio_seen_us;
     uint32_t trigger_to_first_render_us;
 } stream_end_to_end_outlier_t;
+
+typedef struct
+{
+    volatile uint32_t valid;
+    uint32_t error;
+    uint32_t fail_step;
+    uint32_t page_index;
+    uint32_t sample_generation;
+    uint32_t page_generation;
+    uint32_t registration_epoch;
+    uint32_t page_state;
+    uint32_t available_frame_end;
+    uint32_t progressive_chunk_index;
+    uint32_t published_chunk_count;
+    uint32_t published_chunk_mask;
+    uint32_t sta;
+    uint32_t mask;
+    uint32_t dcount;
+    uint32_t dlen;
+    uint32_t idmactrl;
+    uint32_t idmabase0;
+    uint32_t idmabase1;
+    uint32_t idmabsize;
+    uint32_t cmd18_count;
+    uint32_t idmabtc_count;
+    uint32_t dataend_count;
+    uint32_t cmd12_count;
+    uint32_t block_state;
+    uint32_t block_result;
+    uint32_t block_pending;
+    uint32_t block_progressive_chunks;
+    uint32_t backend_active_jobs;
+    uint32_t backend_result;
+    int32_t fresult;
+    uint32_t scheduler_owner;
+    uint32_t scheduler_class;
+    uint32_t gate_owner;
+    uint32_t last_successful_stage;
+    uint32_t first_failed_stage;
+    uint16_t sample_id;
+    uint8_t sample_domain;
+    uint8_t block_owner;
+} stream_end_to_end_error_snapshot_t;
 
 typedef struct
 {
@@ -123,7 +166,10 @@ typedef struct
     volatile uint32_t first_render_not_before_ready_count;
     volatile uint32_t chunk_bit_perfect_count;
     volatile uint32_t chunk_data_mismatch_count;
+    volatile uint32_t minimum_lead_frames;
+    volatile uint32_t minimum_lead_bytes;
     uint32_t instrumentation_ram_bytes;
+    stream_end_to_end_error_snapshot_t error_snapshot;
 
     stream_end_to_end_metric_t trigger_to_need_publish;
     stream_end_to_end_metric_t need_publish_to_storage_seen;
@@ -207,7 +253,8 @@ void stream_end_to_end_bench_probe_allocation(sample_audio_key_t key,
                                               uint32_t recycle_cycles);
 void stream_end_to_end_bench_probe_io_complete(
     const sample_stream_io_result_t *result,
-    uint32_t page_ready_cycles);
+    uint32_t page_ready_cycles,
+    uint8_t page_ready_valid);
 void stream_end_to_end_bench_probe_chunk_publish(
     sample_audio_key_t key, uint32_t page_index,
     uint32_t available_frame_end, uint32_t publish_cycles,

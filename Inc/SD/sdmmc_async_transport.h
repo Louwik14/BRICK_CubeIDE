@@ -3,6 +3,11 @@
 
 #include <stdint.h>
 
+#define SDMMC_ASYNC_PROGRESS_PAGE_BYTES  (16384U)
+#define SDMMC_ASYNC_PROGRESS_CHUNK_BYTES (512U)
+#define SDMMC_ASYNC_PROGRESS_CHUNKS \
+    (SDMMC_ASYNC_PROGRESS_PAGE_BYTES / SDMMC_ASYNC_PROGRESS_CHUNK_BYTES)
+
 typedef enum
 {
     SDMMC_ASYNC_STATE_IDLE = 0,
@@ -59,15 +64,28 @@ typedef struct
 
 typedef struct
 {
+    volatile uint32_t idmabtc_irq_count;
     volatile uint32_t idmabtc_count;
     volatile uint32_t cmd18_count;
     volatile uint32_t cmd12_count;
     volatile uint32_t rearm_count;
-    volatile uint32_t rearm_cycles_sum;
+    volatile uint64_t rearm_cycles_sum;
     volatile uint32_t average_rearm_cycles;
+    volatile uint32_t average_rearm_us;
     volatile uint32_t max_rearm_cycles;
     volatile uint32_t max_rearm_us;
     volatile uint32_t rearm_deadline_miss_count;
+    volatile uint64_t idmabtc_handler_cycles_sum;
+    volatile uint32_t average_idmabtc_handler_cycles;
+    volatile uint32_t max_idmabtc_handler_cycles;
+    volatile uint32_t average_idmabtc_handler_us;
+    volatile uint32_t max_idmabtc_handler_us;
+    volatile uint64_t idmabtc_interval_cycles_sum;
+    volatile uint32_t idmabtc_interval_count;
+    volatile uint32_t idmabtc_interval_cycles_min;
+    volatile uint32_t idmabtc_interval_cycles_avg;
+    volatile uint32_t idmabtc_interval_cycles_max;
+    volatile uint32_t audio_preempted_by_sd_count;
     volatile uint32_t dataend_count;
     volatile uint32_t final_chunk_idmabtc_count;
     volatile uint32_t configured_idmabndt;
@@ -118,5 +136,10 @@ uint32_t sdmmc_async_transport_error(void);
 uint32_t sdmmc_async_transport_command_cycles(void);
 uint32_t sdmmc_async_transport_data_start_cycles(void);
 uint32_t sdmmc_async_transport_data_end_cycles(void);
+uint32_t sdmmc_async_transport_progressive_chunk_index(void);
+void sdmmc_async_transport_reset_progress_diag(void);
+void sdmmc_async_transport_record_irq_exit(uint32_t entry_cycles,
+                                           uint8_t was_idmabtc,
+                                           uint8_t audio_active);
 
 #endif

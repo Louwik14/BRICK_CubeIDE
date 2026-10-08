@@ -149,6 +149,10 @@ typedef struct
     uint8_t owner_client;
     uint8_t fault_latched;
     uint8_t irq_error;
+    uint8_t hardware_state;
+    uint8_t progressive_chunks_invalidated;
+    uint8_t reserved;
+    uint32_t result;
 } sd_block_device_debug_snapshot_t;
 void sd_block_device_debug_snapshot(sd_block_device_debug_snapshot_t *out);
 sd_block_device_result_t sd_block_device_async_abort_active(void);
