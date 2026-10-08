@@ -16,7 +16,7 @@
 #include "stm32h7xx_hal.h"
 
 #define SD_BLOCK_DEVICE_SECTOR_BYTES (512U)
-_Static_assert(sizeof(sd_block_device_async_request_t) == 60U,
+_Static_assert(sizeof(sd_block_device_async_request_t) == 68U,
                "block-device async request budget changed");
 SDRAM_STREAM_SERVICE static sd_block_device_async_request_t
     *g_sd_block_device_async_fifo[SD_BLOCK_DEVICE_ASYNC_FIFO_DEPTH];
@@ -307,7 +307,8 @@ static uint8_t sd_block_device_prepare_next(uint8_t index)
         .media_epoch = next->media_epoch,
         .owner = next->owner_client,
         .operation = 0U,
-        .flags = 0U,
+        .flags = (next->progress_isr != 0)
+            ? SDMMC_ASYNC_PREPARED_FLAG_PROGRESSIVE : 0U,
     };
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
@@ -362,8 +363,11 @@ static void sd_block_device_async_start_head(void)
                 entry->buffer,
                 (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
         g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_READ_DMA;
-        start_result = (sdmmc_async_transport_start_read(
-            entry->buffer, entry->lba, entry->sector_count) != 0U)
+        start_result = (((entry->progress_isr != 0)
+            ? sdmmc_async_transport_start_read_progressive(
+                entry->buffer, entry->lba, entry->sector_count)
+            : sdmmc_async_transport_start_read(
+                entry->buffer, entry->lba, entry->sector_count)) != 0U)
                 ? MSD_OK : MSD_ERROR;
     }
     else
@@ -426,7 +430,9 @@ static sd_block_device_result_t sd_block_device_async_read_submit_internal(
     uint32_t sector_count,
     void *dst,
     uint32_t owner_generation,
-    uint8_t destination_cpu_clean)
+    uint8_t destination_cpu_clean,
+    sd_block_device_read_progress_isr_t progress_isr,
+    void *progress_context)
 {
     if((request == 0) || (request->queued != 0U))
     {
@@ -452,6 +458,8 @@ static sd_block_device_result_t sd_block_device_async_read_submit_internal(
     entry->result = SD_BLOCK_DEVICE_BUSY;
     entry->owner_generation = owner_generation;
     entry->read_destination_cpu_clean = destination_cpu_clean;
+    entry->progress_isr = progress_isr;
+    entry->progress_context = progress_context;
     entry->token = sd_block_device_allocate_token();
     entry->queued_tick = HAL_GetTick();
     entry->perf_submit_cycles = brick_perf_now();
@@ -484,7 +492,8 @@ sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
                                                        void *dst)
 {
     return sd_block_device_async_read_submit_internal(
-        &g_sd_block_device_legacy_request, lba, sector_count, dst, 0U, 0U);
+        &g_sd_block_device_legacy_request, lba, sector_count, dst, 0U, 0U,
+        0, 0);
 }
 
 sd_block_device_result_t sd_block_device_async_read_submit(
@@ -495,7 +504,7 @@ sd_block_device_result_t sd_block_device_async_read_submit(
 {
     return sd_block_device_async_read_submit_internal(
         &g_sd_block_device_legacy_request, lba, sector_count, dst,
-        owner_generation, 0U);
+        owner_generation, 0U, 0, 0);
 }
 
 sd_block_device_result_t sd_block_device_async_read_submit_cpu_clean(
@@ -504,7 +513,7 @@ sd_block_device_result_t sd_block_device_async_read_submit_cpu_clean(
 {
     return sd_block_device_async_read_submit_internal(
         &g_sd_block_device_legacy_request, lba, sector_count, dst,
-        owner_generation, 1U);
+        owner_generation, 1U, 0, 0);
 }
 
 sd_block_device_result_t sd_block_device_async_read_submit_request(
@@ -514,7 +523,25 @@ sd_block_device_result_t sd_block_device_async_read_submit_request(
 {
     return sd_block_device_async_read_submit_internal(
         request, lba, sector_count, dst, owner_generation,
-        destination_cpu_clean);
+        destination_cpu_clean, 0, 0);
+}
+
+sd_block_device_result_t sd_block_device_async_read_submit_progressive_request(
+    sd_block_device_async_request_t *request, uint32_t lba,
+    uint32_t sector_count, void *dst, uint32_t owner_generation,
+    uint8_t destination_cpu_clean,
+    sd_block_device_read_progress_isr_t progress_isr,
+    void *progress_context)
+{
+    if((progress_isr == 0)
+        || (sector_count != (SDMMC_ASYNC_PROGRESS_PAGE_BYTES
+                             / SD_BLOCK_DEVICE_SECTOR_BYTES)))
+    {
+        return SD_BLOCK_DEVICE_INVALID_ARG;
+    }
+    return sd_block_device_async_read_submit_internal(
+        request, lba, sector_count, dst, owner_generation,
+        destination_cpu_clean, progress_isr, progress_context);
 }
 
 sd_block_device_result_t sd_block_device_async_write_submit(
@@ -678,13 +705,22 @@ void sd_block_device_async_poll(void)
             }
             return;
         }
-        if(entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
+        if((entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
+            && (entry->progress_isr == 0))
         {
             /* Always discard stale/speculative CPU lines before publishing
              * DMA data to its consumer, including the CPU-clean fast path. */
             dcache_invalidate_by_addr_aligned(
                 entry->buffer,
                 (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
+        }
+        if((entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
+            && (entry->progress_isr != 0)
+            && (entry->progressive_chunks_invalidated
+                != SDMMC_ASYNC_PROGRESS_CHUNKS))
+        {
+            sd_block_device_complete(entry, SD_BLOCK_DEVICE_READ_FAIL);
+            return;
         }
         sd_block_device_complete(entry, SD_BLOCK_DEVICE_OK);
         return;
@@ -935,6 +971,32 @@ void sd_block_device_async_read_complete_isr(void)
         g_sd_block_device_active_valid = 0U;
         g_sd_block_device_async_rx_complete = 1U;
     }
+}
+
+void sd_block_device_async_read_chunk_isr(uint32_t chunk_index)
+{
+    if((chunk_index >= SDMMC_ASYNC_PROGRESS_CHUNKS)
+        || (g_sd_block_device_hw_state != SD_BLOCK_DEVICE_HW_READ_DMA)
+        || (g_sd_block_device_active_valid == 0U))
+    {
+        return;
+    }
+    sd_block_device_async_request_t *const entry =
+        g_sd_block_device_async_fifo[g_sd_block_device_active_index];
+    if((entry == 0) || (entry->progress_isr == 0)
+        || (chunk_index != entry->progressive_chunks_invalidated))
+    {
+        return;
+    }
+    uint8_t *const chunk = entry->buffer
+        + (chunk_index * SDMMC_ASYNC_PROGRESS_CHUNK_BYTES);
+    dcache_invalidate_by_addr_aligned(
+        chunk, SDMMC_ASYNC_PROGRESS_CHUNK_BYTES);
+    __DMB();
+    entry->progressive_chunks_invalidated = (uint8_t)(chunk_index + 1U);
+    (void)entry->progress_isr(
+        entry->progress_context,
+        (chunk_index + 1U) * SDMMC_ASYNC_PROGRESS_CHUNK_BYTES);
 }
 
 void sd_block_device_async_write_complete_isr(void)

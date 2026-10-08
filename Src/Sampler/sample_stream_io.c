@@ -15,7 +15,7 @@
 #include "ff.h"
 
 #ifndef BRICK6_STREAM_READ_CHUNK_KIB
-#define BRICK6_STREAM_READ_CHUNK_KIB (32U)
+#define BRICK6_STREAM_READ_CHUNK_KIB (16U)
 #endif
 #define SAMPLE_STREAM_IO_SECTOR_BYTES (512U)
 #define SAMPLE_STREAM_IO_REC_BYTES_PER_FRAME (6U)
@@ -75,7 +75,7 @@ typedef struct
 } sample_stream_io_async_t;
 _Static_assert(sizeof(sample_page_stream_load_info_t) == 128U,
                "stream load snapshot budget changed");
-_Static_assert(sizeof(sample_stream_io_async_t) == 368U,
+_Static_assert(sizeof(sample_stream_io_async_t) == 400U,
                "stream async job budget changed");
 STREAM_LOCAL_D2 static sample_stream_io_async_t
     g_sample_stream_io_async[SAMPLE_STREAM_IO_JOB_COUNT];
@@ -99,7 +99,7 @@ void sample_stream_io_init(void)
     sd_scheduler_runtime_init();
     if (sample_stream_io_chunk_valid(g_sample_stream_io_chunk_kib) == 0U)
     {
-        g_sample_stream_io_chunk_kib = SAMPLE_STREAM_READ_CHUNK_32_KIB;
+        g_sample_stream_io_chunk_kib = SAMPLE_STREAM_READ_CHUNK_16_KIB;
     }
 }
 

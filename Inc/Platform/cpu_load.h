@@ -33,6 +33,7 @@ extern "C" {
 void cpu_load_init(void);
 void cpu_load_irq_begin(void);
 void cpu_load_irq_end(void);
+void cpu_load_exclude_nested_irq_cycles(uint32_t cycles);
 
 uint32_t cpu_load_get_permille(void);
 uint32_t cpu_load_get_max(void);

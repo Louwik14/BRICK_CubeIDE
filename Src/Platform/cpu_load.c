@@ -45,6 +45,7 @@ static volatile uint32_t cpu_over_90_count = 0U;
 static volatile uint32_t cpu_over_100_count = 0U;
 static volatile uint32_t cpu_block_count = 0U;
 static volatile uint32_t cpu_counter_valid = 0U;
+static volatile uint32_t cpu_nested_irq_cycles = 0U;
 
 static uint16_t recent_permille_ring[CPU_LOAD_RECENT_WINDOW];
 static uint32_t recent_permille_index = 0U;
@@ -100,6 +101,7 @@ void cpu_load_init(void)
     cpu_over_100_count = 0U;
     cpu_block_count = 0U;
     cpu_counter_valid = 0U;
+    cpu_nested_irq_cycles = 0U;
     recent_permille_index = 0U;
     recent_permille_count = 0U;
 
@@ -150,6 +152,7 @@ void cpu_load_irq_begin(void)
         return;
 
     now = DWT->CYCCNT;
+    cpu_nested_irq_cycles = 0U;
 
     if(period_is_ready == 0U)
     {
@@ -163,6 +166,14 @@ void cpu_load_irq_begin(void)
     current_period_cycles = now - last_irq_entry_cycles;
     last_irq_entry_cycles = now;
     irq_start_cycles = now;
+}
+
+void cpu_load_exclude_nested_irq_cycles(uint32_t cycles)
+{
+    if(cpu_counter_valid != 0U)
+    {
+        cpu_nested_irq_cycles += cycles;
+    }
 }
 
 /**
@@ -188,6 +199,8 @@ void cpu_load_irq_end(void)
 
     end = DWT->CYCCNT;
     elapsed = end - irq_start_cycles;
+    elapsed = (elapsed > cpu_nested_irq_cycles)
+        ? (elapsed - cpu_nested_irq_cycles) : 0U;
 
     if(current_period_cycles == 0U)
         return;
@@ -371,6 +384,7 @@ void cpu_load_reset_measurement(void)
     cpu_over_90_count = 0U;
     cpu_over_100_count = 0U;
     cpu_block_count = 0U;
+    cpu_nested_irq_cycles = 0U;
     recent_permille_index = 0U;
     recent_permille_count = 0U;
     for (uint32_t i = 0U; i < CPU_LOAD_RECENT_WINDOW; ++i)

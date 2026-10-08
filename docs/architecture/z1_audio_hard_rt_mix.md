@@ -90,7 +90,7 @@ Le GROUP master 7 possede le bus AUDIO, les deux kernels Audio FX A/B, MOD et le
 ## Sampler mono et stereo
 
 Le format Stream est immutable et canonique FLOAT32 stereo 48 kHz. Une page
-physique de 64 KiB contient 8192 frames stereo entrelacees. Multi applique
+physique de 16 KiB contient 2048 frames stereo entrelacees. Multi applique
 filtre et VCA par voix avant spread/pan. Les inserts recoivent le signal stereo
 apres cette projection. Reverse et ping-pong appartiennent au Sampler RAM, pas
 au streamer.

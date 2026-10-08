@@ -125,6 +125,13 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
         PERF_END(PERF_CPU_READER_RESOLVE, resolve_start);
         return 0U;
     }
+    if ((frame_pos < span.start_frame)
+        || (frame_pos >= (span.start_frame + span.frame_count)))
+    {
+        PERF_COUNT(PERF_N_AUDIO_PAGE_MISSING);
+        PERF_END(PERF_CPU_READER_RESOLVE, resolve_start);
+        return 0U;
+    }
     PERF_END(PERF_CPU_READER_RESOLVE, resolve_start);
     PERF_COUNT(PERF_N_CACHE_HIT);
 
@@ -556,7 +563,10 @@ uint8_t sample_voice_reader_frame_ready(sample_voice_reader_t *reader,
         || (reader->frames_per_page == 0U)) return 0U;
     sample_page_span_t span;
     const uint32_t page = frame_pos / reader->frames_per_page;
-    return sample_page_cache_audio_resolve_page_key(reader->key, page, &span);
+    return (sample_page_cache_audio_resolve_page_key(
+                reader->key, page, &span) != 0U)
+        && (frame_pos >= span.start_frame)
+        && (frame_pos < (span.start_frame + span.frame_count));
 }
 
 uint8_t sample_voice_reader_request_page(sample_voice_reader_t *reader,

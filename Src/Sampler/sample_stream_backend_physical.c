@@ -4,11 +4,21 @@
 #include <string.h>
 
 #include "SD/sd_block_device.h"
+#include "SD/sdmmc_async_transport.h"
 #include "stm32h7xx_hal.h"
 #include "Sampler/sample_stream_io.h"
 
 #define SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE (512U)
 #define SAMPLE_STREAM_PHYSICAL_PENDING_COUNT (2U)
+
+_Static_assert(SAMPLE_PAGE_BYTES == SDMMC_ASYNC_PROGRESS_PAGE_BYTES,
+               "page-cache and progressive transport geometry must match");
+_Static_assert((SDMMC_ASYNC_PROGRESS_CHUNK_BYTES
+                % SAMPLE_PAGE_BYTES_PER_FRAME) == 0U,
+               "a progressive chunk must contain complete stereo frames");
+_Static_assert((SDMMC_ASYNC_PROGRESS_CHUNK_BYTES
+                / SAMPLE_PAGE_BYTES_PER_FRAME) == 64U,
+               "a 512-byte stereo chunk must publish 64 frames");
 
 static sample_stream_backend_physical_async_t
     *g_sample_stream_physical_pending[SAMPLE_STREAM_PHYSICAL_PENDING_COUNT];
@@ -35,6 +45,22 @@ sample_stream_backend_physical_find_request(
         if((async != 0) && (&async->request == request)) return async;
     }
     return 0;
+}
+
+static uint8_t sample_stream_backend_physical_progress_isr(
+    void *context, uint32_t available_bytes)
+{
+    sample_stream_backend_physical_async_t *const async = context;
+    if((async == 0) || (async->active == 0U)
+        || (async->progressive_enabled == 0U)
+        || ((available_bytes % SAMPLE_PAGE_BYTES_PER_FRAME) != 0U)
+        || (available_bytes > async->source_bytes))
+    {
+        return 0U;
+    }
+    return sample_page_cache_publish_loading_progress_isr(
+        &async->page_token,
+        available_bytes / SAMPLE_PAGE_BYTES_PER_FRAME);
 }
 
 static void sample_stream_backend_physical_invalidate_span(
@@ -161,6 +187,20 @@ uint8_t sample_stream_backend_physical_begin(
     async->file_byte_offset = file_byte_offset;
     async->buffer_capacity = buffer_capacity;
     async->source_bytes = source_bytes;
+    async->page_token = (sample_page_load_token_t){
+        .key = target->key,
+        .page_index = target->page_index,
+        .page_generation = target->page_generation,
+        .registration_epoch = target->registration_epoch,
+        .slot_index = target->slot_index,
+    };
+    async->progressive_enabled = (uint8_t)(
+        (target->format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+        && (target->stride_floats == SAMPLE_PAGE_FRAME_STRIDE_FLOATS)
+        && (target->frame_count == SAMPLE_PAGE_FRAMES)
+        && (source_bytes == SAMPLE_PAGE_BYTES)
+        && (metadata->block_align == SAMPLE_PAGE_BYTES_PER_FRAME)
+        && ((file_byte_offset % SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE) == 0U));
     async->destination_cpu_clean = destination_cpu_clean;
     async->count_multi_diag = (target->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI);
     async->deadline_margin_us = deadline_margin_us;
@@ -324,8 +364,21 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
         return SD_SCHEDULER_START_ERROR;
     }
     PERF_START(read_start);
-    const sd_block_device_result_t result =
-        sd_block_device_async_read_submit_request(
+    const uint8_t progressive = (uint8_t)(
+        (async->progressive_enabled != 0U)
+        && (async->logical_queued == 0U)
+        && (span.first_sector_skip == 0U)
+        && (span.sector_count == (SAMPLE_PAGE_BYTES
+                                  / SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE))
+        && (span.logical_bytes == SAMPLE_PAGE_BYTES));
+    const sd_block_device_result_t result = progressive
+        ? sd_block_device_async_read_submit_progressive_request(
+            &async->request, span.lba, span.sector_count,
+            &async->buffer[async->buffer_sectors
+                            * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE],
+            async->owner_generation, async->destination_cpu_clean,
+            sample_stream_backend_physical_progress_isr, async)
+        : sd_block_device_async_read_submit_request(
             &async->request, span.lba, span.sector_count,
             &async->buffer[async->buffer_sectors
                             * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE],
@@ -401,6 +454,7 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
     }
     const uint32_t physical_bytes = completion->sector_count
         * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE;
+    (void)physical_bytes;
     PERF_COUNT(PERF_N_READS);
     PERF_ACCUM(PERF_N_READ_BYTES, physical_bytes);
     PERF_MIN_NONZERO(PERF_N_READ_MIN_BYTES, physical_bytes);

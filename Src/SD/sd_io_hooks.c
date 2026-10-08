@@ -2,6 +2,7 @@
 
 #include "SD/sd_block_device.h"
 #include "SD/sdmmc_async_transport.h"
+#include "Platform/cpu_load.h"
 #include "Storage/sd_access_gate.h"
 #include "sdmmc.h"
 
@@ -94,11 +95,31 @@ void brick_sd_sdmmc_irq_handler(void)
         return;
     }
 
+    const uint32_t irq_entry_cycles = DWT->CYCCNT;
+    const uint8_t audio_active = (uint8_t)(
+        (NVIC_GetActive(DMA1_Stream3_IRQn) != 0U)
+        || (NVIC_GetActive(DMA1_Stream4_IRQn) != 0U));
     switch(sdmmc_async_transport_irq_handler())
     {
+        case SDMMC_ASYNC_EVENT_READ_CHUNK:
+        {
+            uint32_t chunk_index;
+            if(sdmmc_async_transport_take_completed_chunk(&chunk_index) != 0U)
+            {
+                sd_block_device_async_read_chunk_isr(chunk_index);
+            }
+            break;
+        }
         case SDMMC_ASYNC_EVENT_READ_COMPLETE:
+        {
+            uint32_t chunk_index;
+            if(sdmmc_async_transport_take_completed_chunk(&chunk_index) != 0U)
+            {
+                sd_block_device_async_read_chunk_isr(chunk_index);
+            }
             brick_sd_async_read_complete_isr();
             break;
+        }
         case SDMMC_ASYNC_EVENT_WRITE_COMPLETE:
             brick_sd_async_write_complete_isr();
             break;
@@ -107,5 +128,9 @@ void brick_sd_sdmmc_irq_handler(void)
             break;
         default:
             break;
+    }
+    if(audio_active != 0U)
+    {
+        cpu_load_exclude_nested_irq_cycles(DWT->CYCCNT - irq_entry_cycles);
     }
 }

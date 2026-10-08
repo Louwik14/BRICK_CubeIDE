@@ -94,6 +94,7 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 - [crash_library.md](crash_library.md): capsules diagnostiques best-effort sur SD.
 - [hall_calibration_persistence.md](hall_calibration_persistence.md): calibration globale SD chargee en RAM au boot.
 - [stream_need_contract.md](stream_need_contract.md): Sampler RAM, Wavetable, Multi, streaming, page-cache et transport I/O.
+- [sample_streaming.md](sample_streaming.md): pages STREAM 16 KiB, visibilite progressive 512 B, IDMA, D-cache et contrat VoiceReader.
 - [stream_start_end_live.md](stream_start_end_live.md): START/END live des clips STREAM, throttle 12 Hz, cible froide et diagnostics.
 - [recorder_sd.md](recorder_sd.md): bus AUDIO REC unique, Recorder, REC_SOURCE A/B, export cooperatif et lecture Streamer.
 - [stream_rec_perf_baseline.md](stream_rec_perf_baseline.md): protocole et limites de la baseline CPU/DMA Streamer et Recorder H743.

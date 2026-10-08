@@ -10,7 +10,7 @@ produit legaux. Storage possede SD, fichiers, maps physiques et lecture. Les
 jobs locaux et completions de pages sont tokenises et bornes. Il n'existe plus
 de mailbox ni d'ABI de transport entre le manager Stream et l'I/O.
 
-Une page suit `FREE -> RESERVED -> LOADING -> READY`, `EVICTING`, ou `FAILED`. Une page LOADING n'est ni recyclable ni evictable. Pour recycler, STORAGE publie d'abord `EVICTING`, relit l'union des leases, restaure `READY` si la page est protegee, sinon passe `FREE`. AUDIO etend son lease avant resolution puis revalide `READY/key/registration_epoch/generation`. La completion valide key, slot, page generation, registration epoch et token; une completion tardive ne devient jamais visible.
+Une page suit `FREE -> RESERVED -> LOADING -> READY`, `EVICTING`, ou `FAILED`. Une page LOADING n'est ni recyclable ni evictable. Son prefixe peut etre lu par AUDIO jusqu'au watermark monotone `available_frame_end`; toute plage au-dela reste indisponible. Pour recycler, STORAGE publie d'abord `EVICTING`, relit l'union des leases, restaure `READY` si la page est protegee, sinon passe `FREE`. AUDIO etend son lease avant resolution puis revalide etat, key, registration epoch et generation. La completion valide key, slot, page generation, registration epoch et token; une completion tardive ne devient jamais visible.
 
 ## Lease physique et service
 
@@ -27,7 +27,7 @@ lookahead et il n'existe pas de loop cache parallele. Une page par lecteur et
 par passe; aucune horloge
 STREAM, low-water dynamique ou prediction temporelle ne conditionne le service.
 
-Le contrat produit garantit un pre-socle d'une page 0 READY, soit 8192 frames
+Le contrat produit garantit un pre-socle d'une page 0 READY, soit 2048 frames
 stereo. Au demarrage cette page est `CURRENT`: elle ne s'ajoute pas a la
 fenetre runtime. Chaque reader garantit au plus quatre pages physiques
 distinctes, pour 8 readers musicaux et un reader overdub reserve, soit 36 pages
@@ -38,10 +38,10 @@ workload est une rupture de contrat, pas une admission tardive.
 
 ## I/O et cadence
 
-Le service Storage traite une commande bornee hors IRQ. Le quantum de lecture reste 32 KiB et chaque page fait 64 KiB. Le backend physique resout des extents vers une FIFO DMA bornee et lit le payload FLOAT32 directement dans la page finale; FatFs reste le fallback cold-path vers cette meme page. Read-ahead ne change ni ordre, besoins ni lifecycle.
+Le service Storage traite une commande bornee hors IRQ. Chaque page et le quantum READ STREAM produit font 16 KiB. Une page canonique utilise un CMD18 de 16 KiB et 32 publications IDMA de 512 octets. Le backend physique resout des extents vers une FIFO DMA bornee et lit le payload FLOAT32 directement dans la page finale; FatFs reste le fallback cold-path vers cette meme page. Read-ahead ne change ni ordre, besoins ni lifecycle. Le contrat detaille est dans [sample_streaming.md](sample_streaming.md).
 
 Le job I/O local contient geometrie source, format et token. STORAGE remplit le
-payload puis publie READY; AUDIO conserve les credits de lecture. La
+payload, publie chaque prefixe valide, puis publie READY; AUDIO conserve les credits de lecture. La
 maintenance cache du block device reste la frontiere CPU/DMA et ne constitue
 pas un transport AUDIO/STORAGE.
 
@@ -58,7 +58,7 @@ ne constituent pas un second catalogue produit.
 ## Multi, Sampler RAM et Wavetable
 
 Le bulk Multi prepare uniquement la page 0 et utilise le cache, l'I/O locale et
-le scheduler communs, par lots de 64 KiB. La boucle immutable est ensuite
+le scheduler communs, par lots contenant des pages de 16 KiB. La boucle immutable est ensuite
 exprimee par les deux slots `LOOP_START`; Multi ne possede ni profondeur, ni
 cache de boucle, ni FatFs, decodeur ou arbitre SD parallele propres.
 
@@ -97,7 +97,7 @@ playheads et ses leases.
 
 ## Format audio
 
-Une page sample produit de 64 KiB porte 8192 frames FLOAT32 stereo entrelacees.
+Une page sample produit de 16 KiB porte 2048 frames FLOAT32 stereo entrelacees.
 Le Streamer est exclusivement forward; reverse et ping-pong restent limites au
 Sampler RAM. Format, stride et frames/page sont derives par
 `sample_audio_format.h` et restent immutables pendant la voix.

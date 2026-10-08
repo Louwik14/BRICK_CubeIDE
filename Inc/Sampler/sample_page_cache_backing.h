@@ -30,6 +30,7 @@ typedef struct
     uint8_t payload_cpu_clean;
     uint8_t lifecycle_reserved[2];
     uint32_t last_touch;
+    volatile uint32_t available_frame_end;
 } sample_page_backing_descriptor_t;
 
 typedef struct

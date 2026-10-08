@@ -23,6 +23,8 @@ _Static_assert((SAMPLE_PAGE_BYTES % DCACHE_LINE_SIZE_BYTES) == 0U,
 #endif
 
 typedef sample_page_backing_descriptor_t sample_page_desc_t;
+_Static_assert(sizeof(sample_page_desc_t) == 64U,
+               "page-cache descriptor budget changed");
 
 typedef struct
 {

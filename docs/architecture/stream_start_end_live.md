@@ -23,14 +23,14 @@ throttle live.
 ## Chemin START
 
 Au tick autorise, AUDIO calcule la region et la frame START cible. Si la page est
-READY, le reader est repositionne au point sur, avec le declick court existant,
+READY, ou si une page LOADING publie deja la frame cible, le reader est repositionne au point sur, avec le declick court existant,
 sans transaction SD. Sinon AUDIO publie seulement la page cible dans le lease du
 reader. CURRENT, NEXT et LOOP_START restent proteges; la cible speculative prend
 temporairement le role LOOP_START_NEXT. La lecture courante continue pendant que
 STORAGE alloue, charge par DMA asynchrone et publie la page.
 
-AUDIO teste READY aux blocs suivants et n'applique le nouveau plan et le seek
-qu'apres publication coherente. Il n'attend jamais STORAGE et n'effectue aucune
+AUDIO teste la disponibilite de la frame aux blocs suivants et n'applique le nouveau plan et le seek
+qu'apres publication coherente du prefixe requis. Il n'attend jamais STORAGE et n'effectue aucune
 lecture synchrone. La valeur echantillonnee au tick 12 Hz devient un snapshot
 accepte et reste le besoin du reader jusqu'a READY. Les valeurs de modulation
 recues pendant ce chargement sont coalescees separement pour le tick suivant;
@@ -46,7 +46,7 @@ audibles, pas seulement sur les requetes.
 
 Cette separation `apply_mask`/`dirty_mask` est une contrainte de determinisme.
 Le LFO/Matrix publie toutes les 64 frames, plus vite qu'une lecture froide de
-64 KiB. Annuler le snapshot accepte a chaque nouvelle valeur ferait dependre le
+16 KiB. Annuler le snapshot accepte a chaque nouvelle valeur ferait dependre le
 seek du hasard d'un cache hit ou d'une completion SD en moins d'un bloc. Le
 snapshot accepte termine donc son cycle, tandis que le prochain converge vers
 la derniere valeur recue.
@@ -71,4 +71,4 @@ plus un par construction: aucune FIFO de cibles obsoletes n'est entretenue.
 Le cout AUDIO ajoute un calcul de region au plus a 12 Hz par track, une
 publication de lease uniquement quand son contenu change et un test READY par
 bloc pendant une cible froide. Le moteur de modulation, le sequenceur, la taille
-de page 64 KiB, le scheduler STORAGE et le contrat D-cache ne changent pas.
+de page 16 KiB, le scheduler STORAGE et le contrat D-cache progressif ne changent pas.
