@@ -36,6 +36,7 @@
 #include "App/engine_tasklet.h"
 #include "ui_tasklet.h"
 #include "App/brick6_app_init.h"
+#include "Platform/boot_diag.h"
 #include "audio.h"
 #include "audio_float.h"
 #include "fatfs.h"
@@ -230,6 +231,10 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  boot_diag_mark(BOOT_DIAG_STAGE_MAIN_ENTER);
+  SCB->SHCSR |= SCB_SHCSR_MEMFAULTENA_Msk
+              | SCB_SHCSR_BUSFAULTENA_Msk
+              | SCB_SHCSR_USGFAULTENA_Msk;
   const uintptr_t dma_start = (uintptr_t)&__ram_d2_dma_start__;
   const uintptr_t dma_end = (uintptr_t)&__ram_d2_dma_end__;
 
@@ -256,6 +261,7 @@ int main(void)
   }
 
   MPU_Config();
+  boot_diag_mark(BOOT_DIAG_STAGE_MPU_READY);
   /* USER CODE END 1 */
 
   /* Enable the CPU Cache */
@@ -265,11 +271,13 @@ int main(void)
 
   /* Enable D-Cache---------------------------------------------------------*/
   SCB_EnableDCache();
+  boot_diag_mark(BOOT_DIAG_STAGE_CACHE_READY);
 
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
+  boot_diag_mark(BOOT_DIAG_STAGE_HAL_READY);
 
   /* USER CODE BEGIN Init */
 
@@ -280,6 +288,7 @@ int main(void)
 
   /* Configure the peripherals common clocks */
   PeriphCommonClock_Config();
+  boot_diag_mark(BOOT_DIAG_STAGE_CLOCKS_READY);
 
   /* USER CODE BEGIN SysInit */
 
@@ -290,6 +299,7 @@ int main(void)
   MX_DMA_Init();
   MX_UART4_Init();
   MX_FMC_Init();
+  boot_diag_mark(BOOT_DIAG_STAGE_FMC_CONTROLLER_READY);
   MX_SPI5_Init();
   MX_I2C1_Init();
   MX_ADC2_Init();
@@ -301,6 +311,7 @@ int main(void)
   MX_TIM5_Init();
   MX_TIM12_Init();
   MX_SDMMC1_SD_Init();
+  boot_diag_mark(BOOT_DIAG_STAGE_PERIPHERALS_READY);
   /* USER CODE BEGIN 2 */
   board_power_hold_enable_after_boot_press();
   __HAL_TIM_SET_COUNTER(&htim5, 0U);
@@ -308,7 +319,9 @@ int main(void)
   HAL_TIM_OC_Start(&htim5, TIM_CHANNEL_1);
   HAL_TIM_Base_Start_IT(&htim12);
   MX_FATFS_Init();
+  boot_diag_mark(BOOT_DIAG_STAGE_FATFS_DRIVER_READY);
   brick6_app_init();
+  boot_diag_mark(BOOT_DIAG_STAGE_APP_INIT_DONE);
   led_init();
   uint32_t last_tick = 0;
   uint32_t ui_tasklet_divider = 0U;
@@ -319,6 +332,10 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    if (g_boot_diag.stage < BOOT_DIAG_STAGE_SUPERLOOP)
+    {
+      boot_diag_mark(BOOT_DIAG_STAGE_SUPERLOOP);
+    }
 
     /* USER CODE END WHILE */
 
@@ -471,10 +488,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
+  boot_diag_error_capture((uint32_t)(uintptr_t)__builtin_return_address(0));
   /* USER CODE END Error_Handler_Debug */
 }
 #ifdef USE_FULL_ASSERT

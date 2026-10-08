@@ -8,6 +8,7 @@
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Board/board_audio.h"
 #include "Platform/cpu_load.h"
+#include "Platform/boot_diag.h"
 #include "Sampler/sample_page_cache_audio.h"
 #include "Audio/sample_page_lease_audio.h"
 #include "Audio/control_audio_fifo_audio.h"
@@ -28,10 +29,12 @@ void audio_domain_init(const brick6_audio_boot_intent_t *boot_intent)
     live_parameter_audio_runtime_init();
     (void)brick6_audio_boot_apply_drum(boot_intent);
     brick6_sampler_runtime_init();
+    boot_diag_mark(BOOT_DIAG_STAGE_SAMPLER_INIT_DONE);
     (void)brick6_audio_boot_apply_engines(boot_intent);
     brick6_audio_boot_apply_binding_io();
     audio_set_float_callback(brick6_audio_runtime_dsp);
     cpu_load_reset_peak();
+    boot_diag_mark(BOOT_DIAG_STAGE_AUDIO_INIT_DONE);
 }
 
 uint8_t audio_domain_start(void)

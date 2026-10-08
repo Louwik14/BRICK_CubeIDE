@@ -36,6 +36,7 @@
 #include "Storage/waveform_cache.h"
 #include "Storage/waveform_service.h"
 #include "Platform/brick6_sd_config.h"
+#include "Platform/boot_diag.h"
 #include "SD/stream_end_to_end_bench.h"
 #include "SD/sd_block_device.h"
 #include "SD/sd_scheduler_runtime.h"
@@ -108,10 +109,13 @@ void brick6_app_init(void)
         },
     };
     control_domain_init();
+    boot_diag_mark(BOOT_DIAG_STAGE_CONTROL_INIT_DONE);
     seq_engine_control_init();
+    boot_diag_mark(BOOT_DIAG_STAGE_SEQ_INIT_DONE);
     audio_domain_init(&audio_boot);
     brick6_boot_fx_policy_init();
     control_domain_start(audio_boot.postgain, audio_boot.output_compensation);
+    boot_diag_mark(BOOT_DIAG_STAGE_UI_INIT_DONE);
     g_boot_audio_state = BRICK6_BOOT_WAIT_MASTER;
     g_stream_bench_mode = 0U;
     g_stream_bench_delay_started = 0U;
@@ -206,6 +210,7 @@ void brick6_app_process(void)
         {
             if (audio_domain_start() != 0U)
             {
+                boot_diag_mark(BOOT_DIAG_STAGE_AUDIO_DMA_STARTED);
                 brick6_master_control_boot_publish();
                 g_boot_audio_state = BRICK6_BOOT_AUDIO_RUNNING;
             }
@@ -238,6 +243,7 @@ void brick6_app_process(void)
             /* End-to-end STREAM truth run: AUDIO/SAI DMA and its IRQ stay
              * active so STORAGE observes normal monocore preemption. */
             stream_end_to_end_bench_init();
+            boot_diag_mark(BOOT_DIAG_STAGE_BENCHMARK_STARTED);
             g_stream_bench_mode = 1U;
             return;
         }

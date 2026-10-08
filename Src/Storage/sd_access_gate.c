@@ -1,4 +1,5 @@
 #include "Storage/sd_access_gate.h"
+#include "Platform/boot_diag.h"
 
 #include "Platform/memory_layout.h"
 #include "SD/sd_block_device.h"
@@ -110,6 +111,7 @@ uint8_t sd_access_fs_mount_if_needed(void)
 
     g_sd_fs_mounted = 1U;
     g_sd_storage_status = SD_STORAGE_STATUS_READY;
+    boot_diag_mark(BOOT_DIAG_STAGE_SD_MOUNTED);
     return 1U;
 }
 

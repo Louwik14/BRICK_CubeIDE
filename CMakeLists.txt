@@ -195,6 +195,7 @@ set(DOMAIN_CONTRACT_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Seq/seq_audio_boundary.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Track/audio_fx_xfade_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Platform/crash_library.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Platform/boot_diag.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Platform/brick_fatal.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param/param_ids.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param/param_spec.h"

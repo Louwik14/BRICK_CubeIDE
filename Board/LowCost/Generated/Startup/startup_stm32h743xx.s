@@ -60,10 +60,17 @@ defined in linker script */
 Reset_Handler:
   ldr   sp, =_estack      /* set stack pointer */
 
+/* Preserve a boot stage before any C/C++ runtime initialization. */
+  bl  boot_diag_reset_entry
+
 /* Call the ExitRun0Mode function to configure the power supply */
   bl  ExitRun0Mode
+  movs r0, #2
+  bl  boot_diag_mark
 /* Call the clock system initialization function.*/
   bl  SystemInit
+  movs r0, #3
+  bl  boot_diag_mark
 
 /* Copy ITCM code from flash before any C/C++ code can call it */
   ldr r0, =__itcm_text_start__

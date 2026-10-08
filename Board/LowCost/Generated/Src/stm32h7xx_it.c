@@ -27,6 +27,7 @@
 #include "encoders_hw.h"
 #include "usb_role_manager.h"
 #include "Platform/brick_media_clock.h"
+#include "Platform/boot_diag.h"
 #include "SD/sd_io_hooks.h"
 /* USER CODE END Includes */
 
@@ -104,12 +105,13 @@ void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
   __asm volatile(
-    "ldr r0, =0xE000ED0C\n"
-    "ldr r1, =0x05FA0004\n"
-    "dsb\n"
-    "str r1, [r0]\n"
-    "dsb\n"
-    "b .\n");
+    "tst lr, #4\n"
+    "ite eq\n"
+    "mrseq r0, msp\n"
+    "mrsne r0, psp\n"
+    "mov r1, lr\n"
+    "movs r2, #1\n"
+    "b boot_diag_fault_capture\n");
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -125,12 +127,13 @@ void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
   __asm volatile(
-    "ldr r0, =0xE000ED0C\n"
-    "ldr r1, =0x05FA0004\n"
-    "dsb\n"
-    "str r1, [r0]\n"
-    "dsb\n"
-    "b .\n");
+    "tst lr, #4\n"
+    "ite eq\n"
+    "mrseq r0, msp\n"
+    "mrsne r0, psp\n"
+    "mov r1, lr\n"
+    "movs r2, #2\n"
+    "b boot_diag_fault_capture\n");
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
   {
@@ -146,12 +149,13 @@ void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
   __asm volatile(
-    "ldr r0, =0xE000ED0C\n"
-    "ldr r1, =0x05FA0004\n"
-    "dsb\n"
-    "str r1, [r0]\n"
-    "dsb\n"
-    "b .\n");
+    "tst lr, #4\n"
+    "ite eq\n"
+    "mrseq r0, msp\n"
+    "mrsne r0, psp\n"
+    "mov r1, lr\n"
+    "movs r2, #3\n"
+    "b boot_diag_fault_capture\n");
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
@@ -167,12 +171,13 @@ void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
   __asm volatile(
-    "ldr r0, =0xE000ED0C\n"
-    "ldr r1, =0x05FA0004\n"
-    "dsb\n"
-    "str r1, [r0]\n"
-    "dsb\n"
-    "b .\n");
+    "tst lr, #4\n"
+    "ite eq\n"
+    "mrseq r0, msp\n"
+    "mrsne r0, psp\n"
+    "mov r1, lr\n"
+    "movs r2, #4\n"
+    "b boot_diag_fault_capture\n");
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
   {

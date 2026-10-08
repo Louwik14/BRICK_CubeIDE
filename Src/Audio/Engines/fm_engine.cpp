@@ -80,7 +80,7 @@ struct fm_voice_t
     uint8_t dirty_pitch_envelope;
 };
 
-STREAM_BENCH_COLD_SDRAM static fm_voice_t g_fm_voice[BRICK6_FM_VOICE_COUNT];
+AUDIO_HOT static fm_voice_t g_fm_voice[BRICK6_FM_VOICE_COUNT];
 AUDIO_HOT static fm_voice_t g_fm_preview;
 AUDIO_HOT static FmCore g_fm_modern;
 

@@ -160,3 +160,82 @@ registry en D1 à `0x24027780`, l'extent pool en D1 à `0x24068520`, et l'absenc
 débordement. La validation matérielle du démarrage et de l'audio reste à effectuer
 sur la BRICK; la chaîne statique vérifiée est FMC/SDRAM puis remise à zéro de l'arène,
 puis initialisations CONTROL/SEQ/AUDIO.
+
+## Cause racine du boot pre-FMC
+
+Le diagnostic `NOLOAD` ci-dessus etait incomplet : le clear intervient dans
+`SDRAM_Init()`, donc apres `__libc_init_array`. Or `g_fm_voice` n'est pas un simple
+tableau C : ses membres C++ declenchent un constructeur statique.
+
+Dans l'ELF `d8a176c2a`, `.init_array` appelle `_sub_I_65535_0.0` avant `main()` et
+avant `MX_FMC_Init()`. Le desassemblage montre que cette fonction charge
+`0xC1E84B80`, adresse exacte de `g_fm_voice`, puis y effectue immediatement des
+ecritures. La baseline placait le meme symbole en DTCM. Le premier acces reel a
+cet objet etait donc un acces SDRAM alors que FMC n'etait pas initialise. Le clear
+manuel, execute beaucoup plus tard, ne pouvait pas corriger ce defaut.
+
+Le dernier jalon structurel atteint par l'ancienne image est `SystemInit`; `main`
+n'est pas atteint. L'instruction fautive initiale est le `strb` a `0x080DC5E2` dans
+`_sub_I_65535_0.0`, avec `r2 = 0xC1E84B80`. Sur Cortex-M7, cet acces FMC indisponible
+declenche un BusFault; avant `main`, les faults configurables ne sont pas encore
+actives, donc il est escalade en HardFault. Les anciens handlers demandaient aussitot
+un reset systeme, ce qui explique la boucle de reset et rend les anciens CFSR/HFSR
+irrecuperables apres coup.
+
+`g_fm_voice` est le seul objet expulse reference par ce constructeur pre-main. Il
+revient en DTCM. L'ELF corrige place le symbole a `0x20007500`; le constructeur
+`_sub_I_65535_0.0` ne contient plus aucune cible SDRAM. Tous les autres objets
+expulses restent en SDRAM : leur premier acces applicatif intervient apres
+`SDRAM_Init()` et son clear.
+
+| Groupe | Premier acces de boot | Classement |
+|---|---|---|
+| FM voices | constructeur `.init_array`, avant `main` | incompatible SDRAM avant FMC; remis DTCM |
+| Braids, wavetable, TB303 | `brick6_audio_boot_apply_engines` | apres FMC/clear |
+| audio FX runtime, vibe | `audio_boot_init_binding_io` | apres FMC/clear |
+| Haas, reverb, mod-FX | init mixer/FX | apres FMC/clear |
+| clip shifter | `brick6_sampler_runtime_init` | apres FMC/clear |
+| pattern slot A / locks A | `seq_engine_control_init` | apres FMC/clear |
+| wavetable pool I/O | `wavetable_pool_init` puis services storage | apres FMC/clear |
+
+### Diagnostic materiel GDB
+
+`g_boot_diag` est conserve dans la fenetre D3 non-cacheable a `0x3800CE20`. Les
+handlers HardFault, MemManage, BusFault et UsageFault capturent desormais les
+registres SCB et la frame empilee puis restent arretes, au lieu de demander un reset
+immediat. `Error_Handler` capture egalement son adresse appelante.
+
+```gdb
+p/x g_boot_diag.stage
+p/x g_boot_diag.fault_kind
+p/x g_boot_diag.cfsr
+p/x g_boot_diag.hfsr
+p/x g_boot_diag.mmfar
+p/x g_boot_diag.bfar
+p/x g_boot_diag.shcsr
+p/x g_boot_diag.stacked_pc
+p/x g_boot_diag.stacked_lr
+p/x g_boot_diag.stacked_xpsr
+p/x g_boot_diag.msp
+p/x g_boot_diag.psp
+p/x g_boot_diag.exc_return
+```
+
+Les stages couvrent Reset, SystemInit, main, MPU/cache, HAL/clocks, FMC, peripheriques,
+FatFs, sequence SDRAM, clear, CONTROL, SEQ, Sampler, AUDIO, UI, superloop, montage SD,
+demarrage DMA audio et lancement benchmark.
+
+### Occupation finale de l'image instrumentee
+
+| Region | Utilise | Libre |
+|---|---:|---:|
+| DTCM | 89 152 | 41 920 |
+| D1 | 500 128 | 24 160 |
+| D2 total | 263 424 | 31 488 |
+| D3, occupation physique linker | 52 896 | 12 640 |
+| SDRAM cacheable | 32 235 904 | 925 312 |
+
+Le cache reste a 368 pages, dont 36 pages de reserve VoiceReader. Le placement
+Streamer est inchange; seul l'objet non-Streamer `g_fm_voice` (15 040 octets) revient
+en memoire interne a cause de son constructeur pre-FMC. Aucune fonctionnalite ni
+initialisation n'est supprimee.

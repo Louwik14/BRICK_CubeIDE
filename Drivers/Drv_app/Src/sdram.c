@@ -27,6 +27,7 @@
 #include "sdram.h"
 #include "fmc.h"
 #include "w9825g6kh_conf.h"
+#include "Platform/boot_diag.h"
 
 #include <string.h>
 
@@ -57,13 +58,16 @@ static void SDRAM_Initialization_Sequence(SDRAM_HandleTypeDef *hsdram,
  */
 void SDRAM_Init(void)
 {
+    boot_diag_mark(BOOT_DIAG_STAGE_SDRAM_SEQUENCE_BEGIN);
     SDRAM_Initialization_Sequence(&hsdram1, &sdram_command);
+    boot_diag_mark(BOOT_DIAG_STAGE_SDRAM_READY);
     /* This NOLOAD arena now also contains objects which historically had BSS
      * zero-initialization semantics.  It cannot be cleared by Reset_Handler,
      * because FMC is not usable until this point in boot. */
     memset(&__sdram_audio_cold_start__, 0,
            (size_t)((uintptr_t)&__sdram_audio_cold_end__
                     - (uintptr_t)&__sdram_audio_cold_start__));
+    boot_diag_mark(BOOT_DIAG_STAGE_SDRAM_COLD_CLEAR_DONE);
 }
 
 /**
