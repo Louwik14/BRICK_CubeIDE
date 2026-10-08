@@ -65,6 +65,7 @@ typedef struct
     uint8_t velocity;
     uint8_t mode;
     uint8_t slice_count;
+    uint8_t configured_slice_count;
     uint8_t slice_index;
     float gain;
     float trigger_velocity_gain;
@@ -82,6 +83,7 @@ typedef struct
     uint16_t stride_floats;
     uint32_t frames_per_page;
     uint32_t registration_epoch;
+    uint32_t source_frames;
     float step_signed;
     uint8_t loop_mode;
     uint8_t use_slice;
@@ -154,6 +156,7 @@ typedef struct
     uint32_t cooldown_frames;
     uint32_t pending_region_begin;
     uint32_t pending_region_end;
+    uint32_t pending_loop_begin;
     uint32_t pending_target_frame;
     uint8_t dirty_mask;
     uint8_t apply_mask;
@@ -164,6 +167,7 @@ typedef struct
 
 #define BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START (1U << 0)
 #define BRICK6_SAMPLER_STREAM_LIVE_DIRTY_END   (1U << 1)
+#define BRICK6_SAMPLER_STREAM_LIVE_DIRTY_LOOP  (1U << 2)
 
 typedef struct
 {

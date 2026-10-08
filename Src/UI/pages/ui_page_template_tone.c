@@ -13,6 +13,8 @@
 #include "Param/param_prism_labels.h"
 #include "Param/param_stack_labels.h"
 #include "Sampler/sample_global_pool.h"
+#include "Sampler/sample_cache.h"
+#include "Sampler/sample_reader_contract.h"
 #include "ui_core.h"
 #include "ui_renderer_template.h"
 #include "ui_page_manager.h"

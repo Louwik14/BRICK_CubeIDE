@@ -581,6 +581,16 @@ void sample_voice_reader_set_step(sample_voice_reader_t *reader, float step)
     }
 
     reader->step = (step > 0.0f) ? step : 1.0f;
+    if (reader->plan_valid != 0U)
+    {
+        sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+        uint32_t step_q16 = (uint32_t)(reader->step * (float)SAMPLE_Q16_ONE + 0.5f);
+        if (step_q16 == 0U) step_q16 = 1U;
+        state->plan.step_q16 = step_q16;
+        if (state->plan.kernel_type != SAMPLE_KERNEL_DIRECTIONAL_LINEAR)
+            state->plan.kernel_type = (step_q16 == SAMPLE_Q16_ONE)
+                ? SAMPLE_KERNEL_FWD_1X : SAMPLE_KERNEL_PITCH_FWD_LINEAR;
+    }
 }
 
 void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos)

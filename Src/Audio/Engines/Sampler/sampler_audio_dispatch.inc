@@ -38,6 +38,7 @@ void brick6_sampler_runtime_init(void)
         g_sampler_voice[i].length = 1.0f;
         g_sampler_voice[i].loop_start = 0.0f;
         g_sampler_voice[i].slice_count = 0U;
+        g_sampler_voice[i].configured_slice_count = 0U;
         g_sampler_voice[i].loop_begin = 0U;
         g_sampler_voice[i].loop_mode = 0U;
         brick6_sampler_runtime_multi_track_reset(i);
@@ -82,6 +83,7 @@ static void brick6_sampler_runtime_reset_track_internal(uint8_t track_id,
     g_sampler_voice[track_id].loop_start = 0.0f;
     g_sampler_voice[track_id].loop_begin = 0U;
     g_sampler_voice[track_id].slice_count = 0U;
+    g_sampler_voice[track_id].configured_slice_count = 0U;
     g_sampler_voice[track_id].release_pending = 0U;
     if (renderer_replace == 0U)
     {
@@ -310,6 +312,7 @@ void brick6_sampler_runtime_set_tune(uint8_t track_id, float tune)
     }
     g_sampler_voice[track_id].tune = tune;
     brick6_sampler_runtime_set_clip_pitch(track_id, tune);
+    brick6_sampler_runtime_reproject_stream_voice_pitch_live(track_id);
 }
 
 void brick6_sampler_runtime_set_loop_start(uint8_t track_id, float loop_start)
@@ -319,6 +322,8 @@ void brick6_sampler_runtime_set_loop_start(uint8_t track_id, float loop_start)
         return;
     }
     g_sampler_voice[track_id].loop_start = loop_start;
+    brick6_sampler_runtime_stream_live_queue(
+        track_id, BRICK6_SAMPLER_STREAM_LIVE_DIRTY_LOOP);
 }
 
 void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_count)
@@ -331,12 +336,15 @@ void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_coun
     switch (slice_count)
     {
         case 0U: case 2U: case 4U: case 8U: case 16U: case 32U: case 64U:
-            g_sampler_voice[track_id].slice_count = slice_count;
+            g_sampler_voice[track_id].configured_slice_count = slice_count;
             break;
         default:
-            g_sampler_voice[track_id].slice_count = 0U;
+            g_sampler_voice[track_id].configured_slice_count = 0U;
             break;
     }
+    if (g_sampler_voice[track_id].active == 0U)
+        g_sampler_voice[track_id].slice_count =
+            g_sampler_voice[track_id].configured_slice_count;
 }
 
 void brick6_sampler_runtime_set_clip_source_bpm(uint8_t track_id, float source_bpm)

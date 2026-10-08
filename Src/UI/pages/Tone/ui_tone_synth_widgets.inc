@@ -1045,12 +1045,26 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             if ((id == UI_PARAM_LOCAL_ASSET)
                     && (out_value != NULL) && (out_value_len > 0U))
             {
-                if (isnan(value) != 0)
+                const uint16_t logical = (isnan(value) != 0)
+                    ? PROJECT_CONTROL_ASSET_NONE
+                    : (uint16_t)((value < 0.0f) ? 0U : value + 0.5f);
+                uint16_t runtime = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+                const sample_global_slot_t *asset = NULL;
+                sample_resolved_source_t source;
+                sample_resolved_source_init(&source);
+                if (project_control_resolve_sample_runtime_kind(
+                        PERSIST_ASSET_SAMPLE_STREAM, logical, &runtime) != 0U)
+                    asset = sample_global_pool_get_slot(runtime);
+                if ((asset == NULL)
+                        || (asset->kind != SAMPLE_GLOBAL_KIND_CLASSIC)
+                        || (asset->state != SAMPLE_GLOBAL_STATE_READY)
+                        || (asset->path[0] == '\0')
+                        || (sample_cache_resolve_classic_source(runtime, &source) == 0U)
+                        || (source.total_frames == 0U))
                     (void)snprintf(out_value, out_value_len, "OFF");
                 else
                     (void)snprintf(out_value, out_value_len, "S%03u",
-                                   (unsigned int)((value < 0.0f) ? 0U
-                                       : (uint16_t)(value + 0.5f)));
+                                   (unsigned int)logical);
             }
             (void)slot;
             return 1U;

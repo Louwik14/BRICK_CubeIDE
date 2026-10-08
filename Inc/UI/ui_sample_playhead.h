@@ -8,7 +8,13 @@
 typedef struct
 {
     uint8_t active;
-    float normalized_position;
+    uint32_t frame;
+    uint32_t frame_count;
+    uint32_t region_begin;
+    uint32_t region_end;
+    uint32_t loop_begin;
+    uint8_t slice_count;
+    uint8_t slice_index;
 } ui_sample_playhead_view_t;
 
 ui_sample_playhead_view_t ui_sample_playhead_view(

@@ -85,11 +85,20 @@ frame est dans le prefixe publie. Un miss conserve le comportement d'underrun
 existant. La validation de generation, epoch, cle et slot reste identique pour
 les pages partielles et completes.
 
-START/END live reste plafonne a 12 Hz et conserve sa politique latest-wins. Un
-cache hit ne lance aucune transaction SD. Une cible froide reserve une page de
-16 KiB et peut etre appliquee des que sa frame appartient au prefixe publie,
-avant `READY`. Multi et les transitions de loop reutilisent le meme transport;
-aucune plage au-dela du watermark n'est exposee au rendu.
+START et END publient immediatement leurs nouvelles bornes en frames source si
+la tete courante reste dans la region. Ils ne deplacent alors ni le cursor, ni
+les leases `CURRENT/NEXT`, et ne reinitialisent pas le shifter. Le plafond 12 Hz
+ne concerne plus que le vrai cold seek necessaire lorsque la tete devient hors
+bornes; ce seek conserve la politique latest-wins. Un cache hit ne lance aucune
+transaction SD. Une cible froide reserve une page de 16 KiB et peut etre
+appliquee des que sa frame appartient au prefixe publie, avant `READY`.
+
+LOOP START suit le meme chemin de publication de bornes, sans throttle ni
+retrig. Une tete situee entre START et END continue naturellement; le prochain
+wrap emploie le nouveau LOOP START. Si une reduction de END rend la tete
+invalide, LOOP reboucle sur LOOP START, ONE se cale sur la derniere frame et le
+ping-pong se cale sur sa borne haute, comme le moteur RAM historique. Le
+VoiceReader republie seulement les roles de lease modifies.
 
 Classic et Group exposent le parametre historique unique `Mode`, dans cet ordre:
 `ONE`, `REV.ONE`, `LOOP`, `PINGPONG`, `H.ONE`, `H.LOOP`, `H.PINGPONG`.
@@ -98,6 +107,47 @@ hold, et non un ping-pong. `PINGPONG` et `H.PINGPONG` alternent sur toute la
 region START/END; `LOOP` et `H.LOOP` jouent d'abord depuis START puis rebouclent
 depuis LOOP START. Le mode est echantillonne au NOTE_ON, reglable et P-lockable,
 mais n'est pas une destination de modulation continue.
+
+## Contrat historique RAM porte sur STREAM
+
+Le port conserve les classes de parametres observees avant `8fb6e223f`:
+
+| Parametre | Contrat voix | P-lock | Effet runtime |
+|---|---|---|---|
+| GAIN | LIVE | oui | gain de la voix courante |
+| START | LIVE | oui | borne en frame source; seek seulement si HEAD devient invalide |
+| END (`LENGTH`) | LIVE | oui | borne exclusive en frame source |
+| TUNE/PITCH | LIVE | oui | nouvel increment fractionnaire du VoiceReader, sans seek |
+| LOOP START | LIVE | oui | borne absolue en frame source, prochain wrap |
+| MODE | NOTE_ON | oui | ONE/REV/LOOP/PINGPONG et politique HOLD |
+| SLICE COUNT | NOTE_ON | oui | grille et slice de la nouvelle voix |
+| sample | NOTE_ON/changement de source | oui | un changement arrete proprement l'ancienne voix |
+
+La source canonique des positions actives est le snapshot seqlock du
+VoiceReader: `frame`, `frame_count`, `region_begin/end`, `loop_begin` et
+`slice_count/index`. La Waveview convertit ces frames en pixels; elle ne
+reconstruit plus la tete avec le temps ecoule ou une normalisation sur END.
+Hors lecture, les parametres CONTROL sont convertis une seule fois vers les
+memes frames source. En slice, les bornes publiees sont les bornes absolues de
+la slice courante dans le fichier, jamais un offset relatif a la slice.
+
+La meme Waveview est rendue sur les sous-pages PLAY et LOOP. Sa source est le
+slot Classic READY reellement resolu par le Streamer. Les min/max viennent du
+service waveform cooperatif (sidecar lorsqu'il est disponible, sinon tuiles
+construites depuis le WAV); le sample complet n'est jamais charge en RAM.
+
+L'etat UI d'un slot suit la machine d'etat existante du pool/cache:
+
+```text
+OFF     = aucune affectation jouable, source absente ou invalide
+LOADING = source reelle en preparation, progression reelle uniquement
+READY   = slot READY + metadata/index + source Streamer resolvable
+ERROR   = preparation terminale en erreur
+```
+
+Une valeur logique, y compris zero, n'est jamais suffisante pour afficher
+`S000` ou un etat charge. La suppression d'un sample efface ses consommateurs;
+une affectation stale ou non resolvable est affichee `OFF`.
 
 ## IRQ et charge CPU
 

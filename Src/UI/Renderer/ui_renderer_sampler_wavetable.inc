@@ -142,37 +142,6 @@ static int ui_renderer_template_sample_amp_to_y(int16_t value,
     return y;
 }
 
-static int ui_renderer_template_sample_marker_x(float value,
-                                                     uint32_t total_frames,
-                                                     int inner_x,
-                                                     int inner_w)
-{
-    if ((total_frames == 0U) || (inner_w <= 0))
-    {
-        return -1;
-    }
-    if (value < 0.0f)
-    {
-        value = 0.0f;
-    }
-    else if (value > 1.0f)
-    {
-        value = 1.0f;
-    }
-
-    const uint32_t max_frame = (total_frames > 1U) ? (total_frames - 1U) : 0U;
-    uint32_t frame = (uint32_t)((value * (float)max_frame) + 0.5f);
-    if (frame > max_frame)
-    {
-        frame = max_frame;
-    }
-    if (max_frame == 0U)
-    {
-        return inner_x;
-    }
-    return inner_x + (int)(((uint64_t)frame * (uint32_t)(inner_w - 1)) / max_frame);
-}
-
 static void ui_renderer_template_draw_sample_marker_label(int x, char label)
 {
     char txt[2] = { label, '\0' };
@@ -202,27 +171,6 @@ static void ui_renderer_template_draw_sample_marker_line(int x,
     }
 
     drv_display_draw_line(x, inner_y, x, inner_y + inner_h - 1);
-}
-
-static void ui_renderer_template_draw_sample_marker(float value,
-                                                         uint32_t total_frames,
-                                                         int inner_x,
-                                                         int inner_y,
-                                                         int inner_w,
-                                                         int inner_h,
-                                                         char label,
-                                                         uint8_t dotted)
-{
-    const int x = ui_renderer_template_sample_marker_x(value, total_frames, inner_x, inner_w);
-    if (x < 0)
-    {
-        return;
-    }
-
-    drv_display_set_draw_color(2U);
-    ui_renderer_template_draw_sample_marker_line(x, inner_y, inner_h, dotted);
-    drv_display_set_draw_color(1U);
-    ui_renderer_template_draw_sample_marker_label(x, label);
 }
 
 static float ui_renderer_template_wave_wavetable_sample(const wavetable_slot_t *table,
@@ -615,8 +563,8 @@ static uint16_t ui_renderer_template_sample_slice_divisions(float slice_value)
 }
 
 static void ui_renderer_template_draw_sample_slice_divisions(uint16_t divisions,
-                                                                  float start_value,
-                                                                  float end_value,
+                                                                  uint32_t region_begin,
+                                                                  uint32_t region_end,
                                                                   uint32_t frame_count,
                                                                   int inner_x,
                                                                   int inner_y,
@@ -628,42 +576,16 @@ static void ui_renderer_template_draw_sample_slice_divisions(uint16_t divisions,
         return;
     }
 
-    if (start_value < 0.0f)
+    if (frame_count == 0U)
+        return;
+    if (region_begin >= frame_count)
+        region_begin = frame_count - 1U;
+    if ((region_end == 0U) || (region_end > frame_count))
+        region_end = frame_count;
+    if (region_end <= region_begin)
     {
-        start_value = 0.0f;
-    }
-    else if (start_value > 1.0f)
-    {
-        start_value = 1.0f;
-    }
-    if (end_value < 0.0f)
-    {
-        end_value = 0.0f;
-    }
-    else if (end_value > 1.0f)
-    {
-        end_value = 1.0f;
-    }
-
-    uint32_t region_begin = 0U;
-    uint32_t region_end = frame_count;
-    if (frame_count != 0U)
-    {
-        region_begin = (uint32_t)(start_value * (float)frame_count);
-        region_end = (uint32_t)(end_value * (float)frame_count);
-        if ((region_end == 0U) || (region_end > frame_count))
-        {
-            region_end = frame_count;
-        }
-        if (region_begin >= frame_count)
-        {
-            region_begin = frame_count - 1U;
-        }
-        if (region_end <= region_begin)
-        {
-            region_begin = 0U;
-            region_end = frame_count;
-        }
+        region_begin = 0U;
+        region_end = frame_count;
     }
     const uint32_t region_frames = region_end - region_begin;
     const int bottom = inner_y + inner_h - 2;
@@ -717,9 +639,8 @@ static void ui_renderer_template_draw_sample_playhead(uint16_t global_slot,
         return;
     }
 
-    const uint32_t frame = (uint32_t)(view.normalized_position * (float)frame_count);
     const int x = ui_renderer_template_sample_frame_to_x(
-        frame, frame_count, inner_x, inner_w);
+        view.frame, frame_count, inner_x, inner_w);
     if (x < 0)
     {
         return;
@@ -732,6 +653,24 @@ static void ui_renderer_template_draw_sample_playhead(uint16_t global_slot,
         drv_display_draw_pixel(x, y, true);
     }
     drv_display_set_draw_color(1U);
+}
+
+static void ui_renderer_template_draw_sample_marker_frame(uint32_t frame,
+                                                           uint32_t total_frames,
+                                                           int inner_x,
+                                                           int inner_y,
+                                                           int inner_w,
+                                                           int inner_h,
+                                                           char label,
+                                                           uint8_t dotted)
+{
+    const int x = ui_renderer_template_sample_frame_to_x(
+        frame, total_frames, inner_x, inner_w);
+    if (x < 0) return;
+    drv_display_set_draw_color(2U);
+    ui_renderer_template_draw_sample_marker_line(x, inner_y, inner_h, dotted);
+    drv_display_set_draw_color(1U);
+    ui_renderer_template_draw_sample_marker_label(x, label);
 }
 
 static void ui_renderer_template_draw_sample_waveform(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
@@ -801,17 +740,31 @@ static void ui_renderer_template_draw_sample_waveform(const ui_param_seq_plock_f
     float slice_value = 0.0f;
     (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_START, &start_value, 0);
     (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_LENGTH, &length_value, 0);
-    float end_value = start_value + length_value;
-    if (end_value > 1.0f)
-    {
-        end_value = 1.0f;
-    }
     (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_LOOP_START, &loop_value, 0);
     (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_SLICE_COUNT, &slice_value, 0);
+    uint32_t region_begin = (uint32_t)(start_value * (float)source.frame_count);
+    uint32_t region_end = region_begin
+        + (uint32_t)(length_value * (float)source.frame_count);
+    uint32_t loop_begin = (uint32_t)(loop_value * (float)source.frame_count);
+    uint16_t divisions = ui_renderer_template_sample_slice_divisions(slice_value);
+    const ui_sample_playhead_view_t runtime = ui_sample_playhead_view(
+        ui_renderer_template_get_edit_owner_track(), global_slot);
+    if ((runtime.active != 0U) && (runtime.frame_count == source.frame_count))
+    {
+        region_begin = runtime.region_begin;
+        region_end = runtime.region_end;
+        loop_begin = runtime.loop_begin;
+        divisions = (runtime.slice_count != 0U) ? runtime.slice_count : 1U;
+    }
+    if (region_begin >= source.frame_count) region_begin = source.frame_count - 1U;
+    if ((region_end <= region_begin) || (region_end > source.frame_count))
+        region_end = source.frame_count;
+    if (loop_begin < region_begin) loop_begin = region_begin;
+    if (loop_begin >= region_end) loop_begin = region_begin;
     ui_renderer_template_draw_sample_slice_divisions(
-        ui_renderer_template_sample_slice_divisions(slice_value),
-        start_value,
-        end_value,
+        divisions,
+        region_begin,
+        region_end,
         source.frame_count,
         inner_x,
         inner_y,
@@ -823,7 +776,7 @@ static void ui_renderer_template_draw_sample_waveform(const ui_param_seq_plock_f
                                                   inner_y,
                                                   inner_w,
                                                   inner_h);
-    ui_renderer_template_draw_sample_marker(start_value,
+    ui_renderer_template_draw_sample_marker_frame(region_begin,
                                                  source.frame_count,
                                                  inner_x,
                                                  inner_y,
@@ -831,7 +784,7 @@ static void ui_renderer_template_draw_sample_waveform(const ui_param_seq_plock_f
                                                  inner_h,
                                                  'S',
                                                  0U);
-    ui_renderer_template_draw_sample_marker(end_value,
+    ui_renderer_template_draw_sample_marker_frame(region_end - 1U,
                                                  source.frame_count,
                                                  inner_x,
                                                  inner_y,
@@ -839,9 +792,9 @@ static void ui_renderer_template_draw_sample_waveform(const ui_param_seq_plock_f
                                                  inner_h,
                                                  'E',
                                                  0U);
-    if (slice_value < 0.5f)
+    if (divisions <= 1U)
     {
-        ui_renderer_template_draw_sample_marker(loop_value,
+        ui_renderer_template_draw_sample_marker_frame(loop_begin,
                                                      source.frame_count,
                                                      inner_x,
                                                      inner_y,

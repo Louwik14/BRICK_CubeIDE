@@ -7,7 +7,7 @@ ui_sample_playhead_view_t ui_sample_playhead_view(
     brick_entity_id_t entity_id,
     uint16_t global_slot)
 {
-    ui_sample_playhead_view_t view = {0U, 0.0f};
+    ui_sample_playhead_view_t view = {0};
     if (entity_id >= BRICK_ENTITY_CAPACITY)
         return view;
 
@@ -25,9 +25,12 @@ ui_sample_playhead_view_t ui_sample_playhead_view(
         return view;
 
     view.active = 1U;
-    view.normalized_position = (float)snapshot.frame
-        / (float)snapshot.frame_count;
-    if (view.normalized_position > 1.0f)
-        view.normalized_position = 1.0f;
+    view.frame = snapshot.frame;
+    view.frame_count = snapshot.frame_count;
+    view.region_begin = snapshot.region_begin;
+    view.region_end = snapshot.region_end;
+    view.loop_begin = snapshot.loop_begin;
+    view.slice_count = snapshot.slice_count;
+    view.slice_index = snapshot.slice_index;
     return view;
 }

@@ -759,6 +759,6 @@ static uint8_t ui_renderer_template_is_sample_tone(const ui_template_page_state_
 
     return (uint8_t)(((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)
                       && (ui_get_track_type(active_track) == TRACK_TYPE_STREAM)
-                      && (state->active_subpage == 1U)) ? 1U : 0U);
+                      && (state->active_subpage <= 1U)) ? 1U : 0U);
 }
 

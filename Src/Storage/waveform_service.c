@@ -727,10 +727,6 @@ waveform_result_t waveform_request(const waveform_source_t *source,
         return WAVEFORM_RESULT_INVALID;
     }
     const rec_source_waveform_summary_t *const summary = waveform_rec_summary(source);
-    if(summary == 0)
-    {
-        return WAVEFORM_RESULT_PENDING;
-    }
     /* A visible window no larger than one PCM page can straddle two pages;
        the shared loader owns misses and the existing audio contracts. */
     const uint8_t pcm_scale = (uint8_t)(frame_count <= SAMPLE_PAGE_FRAMES);
@@ -814,9 +810,13 @@ waveform_result_t waveform_request(const waveform_source_t *source,
         }
     }
 
-    waveform_render_rec_overview(summary, start_frame, frame_count,
-        pixel_width, columns);
-    return WAVEFORM_RESULT_READY;
+    if(summary != 0)
+    {
+        waveform_render_rec_overview(summary, start_frame, frame_count,
+            pixel_width, columns);
+        return WAVEFORM_RESULT_READY;
+    }
+    return WAVEFORM_RESULT_PENDING;
 }
 
 /* The local engine can compose a visible window across several PCM tiles.
