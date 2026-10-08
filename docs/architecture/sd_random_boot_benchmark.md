@@ -1,4 +1,4 @@
-# Benchmark SD aleatoire 16 KiB (temporaire)
+# Benchmark SD aleatoire 8 KiB (temporaire)
 
 Ce firmware Release demarre par le boot BRICK normal complet, AUDIO et UI
 compris. Lorsque l'ecran de boot est termine et que l'audio a demarre, il attend
@@ -15,12 +15,12 @@ peut continuer a remplir `pc_to_brick` sans consommateur.
 
 Le fichier fait 512 MiB lorsque l'espace libre le permet, avec repli sur
 256 MiB. Sa creation est volontairement sequentielle, uniquement par
-le wrapper normal `persistent_fatfs_io` et son sink de tranches de 16 KiB,
+le wrapper normal `persistent_fatfs_io` et son sink de tranches de 8 KiB,
 avant `f_sync`, fermeture et reouverture via ce meme wrapper. Le benchmark ne
 remonte pas FatFs : il exige le statut READY etabli par le boot normal. Un
 fichier existant de 512 ou 256 MiB est reutilise.
 
-Les 100 000 lectures font exactement 16 KiB. Chaque balayage utilise une
+Les 100 000 lectures font exactement 8 KiB. Chaque balayage utilise une
 permutation pseudo-aleatoire deterministe de toutes les pages du fichier. Le
 sample page cache est contourne : le chemin mesure est la map physique FatFs,
 le provider STREAM, le scheduler SD, le block device SDMMC/IDMA et sa
