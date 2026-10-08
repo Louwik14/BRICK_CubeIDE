@@ -18,13 +18,13 @@
 #define SD_BENCH_PATH              "0:/BRICK/TEST/SD_RANDOM.B6T"
 #define SD_BENCH_FILE_512_MIB      (UINT32_C(512) * 1024U * 1024U)
 #define SD_BENCH_FILE_256_MIB      (UINT32_C(256) * 1024U * 1024U)
-#define SD_BENCH_PAGE_BYTES        (8U * 1024U)
+#define SD_BENCH_PAGE_BYTES        (16U * 1024U)
 #define SD_BENCH_PAGE_SECTORS      (SD_BENCH_PAGE_BYTES / 512U)
 #define SD_BENCH_READ_COUNT        (100000U)
 #define SD_BENCH_MAX_PAGES         (SD_BENCH_FILE_512_MIB / SD_BENCH_PAGE_BYTES)
 #define SD_BENCH_HISTOGRAM_BIN_US  (10U)
 #define SD_BENCH_HISTOGRAM_BINS    (2048U)
-#define SD_BENCH_SD_CLOCK_DIVIDER  (2U)
+#define SD_BENCH_SD_CLOCK_DIVIDER  (4U)
 
 enum
 {
@@ -52,7 +52,7 @@ typedef struct
     uint32_t prng;
     uint32_t request_cycles;
     uint16_t page_order[SD_BENCH_MAX_PAGES];
-    uint32_t page_count;
+    uint16_t page_count;
     uint8_t gate_held;
     uint8_t file_open;
     uint8_t io_active;
@@ -295,15 +295,15 @@ static uint8_t sd_bench_open_and_map(void)
     g_sd_bench_runtime.metadata.block_align = 1U;
     g_sd_bench_runtime.metadata.data_offset_bytes = 0U;
     g_sd_bench_runtime.metadata.file_size = g_sd_random_bench.file_size;
-    g_sd_bench_runtime.page_count =
-        g_sd_random_bench.file_size / SD_BENCH_PAGE_BYTES;
+    g_sd_bench_runtime.page_count = (uint16_t)(
+        g_sd_random_bench.file_size / SD_BENCH_PAGE_BYTES);
     return 1U;
 }
 
 static void sd_bench_shuffle_pages(void)
 {
-    const uint32_t count = g_sd_bench_runtime.page_count;
-    for (uint32_t i = 0U; i < count; ++i)
+    const uint16_t count = g_sd_bench_runtime.page_count;
+    for (uint16_t i = 0U; i < count; ++i)
     {
         g_sd_bench_runtime.page_order[i] = i;
     }
