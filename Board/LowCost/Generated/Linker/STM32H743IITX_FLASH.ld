@@ -572,9 +572,11 @@ SECTIONS
   .sdram_audio_cold (NOLOAD) :
   {
     . = ALIGN(32);
+    __sdram_audio_cold_start__ = .;
     *(.sdram_audio_cold)
     *(.sdram_audio_cold*)
     . = ALIGN(32);
+    __sdram_audio_cold_end__ = .;
   } >SDRAM
   ASSERT(__sdram_page_pool_start__ >= __sdram_cacheable_start__,
          "Sample page pool starts outside cacheable SDRAM")

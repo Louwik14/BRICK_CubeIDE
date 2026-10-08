@@ -107,3 +107,56 @@ des moteurs et FX expulsés sont volontairement sacrifiées.
   restent 64 KiB, 25 MHz, un cold start simultané, 10 000 itérations et 36 pages de
   warm-up.
 
+## Correction de boot après déplacement SDRAM
+
+### Cause exacte
+
+Les objets expulsés de DTCM/D1 ont été placés dans `.sdram_audio_cold`, une section
+`NOLOAD`. Contrairement aux anciens emplacements `.bss`, cette section n'est pas
+remise à zéro par `Reset_Handler` : le FMC n'est pas encore utilisable à ce stade.
+Le contenu au démarrage était donc indéterminé. Plusieurs initialisations réécrivent
+leur objet intégralement, mais ce n'est pas un contrat commun : `g_pattern_slot_a`
+et son pool de locks, notamment, ne sont initialisés que partiellement, tandis que
+les buffers de délai/réverbération reposent sur leur init propre. La passe avait
+donc supprimé implicitement la garantie BSS de ces objets, ce qui pouvait injecter
+des états, compteurs et pointeurs invalides au boot.
+
+Il n'y a ni accès à ces objets avant FMC, ni alias/adresse codée en dur, ni DMA sur
+ces objets. Le défaut est la sémantique d'initialisation de la section `NOLOAD`, pas
+la cacheabilité ou l'accessibilité de la SDRAM.
+
+### Correction
+
+Le linker exporte maintenant `__sdram_audio_cold_start__` et
+`__sdram_audio_cold_end__`. `SDRAM_Init()` efface cette arène immédiatement après
+la séquence d'initialisation FMC, avant `control_domain_init()`,
+`seq_engine_control_init()` et `audio_domain_init()`. Les objets retrouvent ainsi
+exactement leur garantie historique de zéro initial sans être remis en SRAM interne.
+
+Tous les objets hors Streamer listés plus haut restent compilés, initialisés et en
+SDRAM. Aucun moteur, FX, chemin UI ou init n'est neutralisé.
+
+### Marge SDRAM et cache pages
+
+Le cache passe de 376 à 368 pages de 64 KiB, soit **524 288 octets libérés**. La
+réserve VoiceReader reste inchangée à 36 pages; seul le pool général passe de 340
+à 332 pages. Les paramètres du benchmark restent inchangés : page 64 KiB, SDCLK
+25 MHz, un cold start simultané, 10 000 requêtes et warm-up 36 pages.
+
+| Région | Utilisé | Libre |
+|---|---:|---:|
+| DTCM | 74 112 | 56 960 |
+| D1 | 500 128 | 24 160 |
+| D2 total | 263 424 | 31 488 |
+| D3, occupation physique linker | 52 768 | 12 768 |
+| SDRAM cacheable | 32 250 944 | 910 272 |
+
+Le placement Streamer reste maximal : 17 633 octets en DTCM et 353 376 octets en
+D1, soit **371 009 octets** de metadata interne. Le payload
+`g_sample_page_data` reste en SDRAM à `0xC03CCB00`, taille 24 117 248 octets.
+
+Le MAP/ELF Release final confirme l'arène froide `0xC1E4FA20..0xC1EC1C40`, le
+registry en D1 à `0x24027780`, l'extent pool en D1 à `0x24068520`, et l'absence de
+débordement. La validation matérielle du démarrage et de l'audio reste à effectuer
+sur la BRICK; la chaîne statique vérifiée est FMC/SDRAM puis remise à zéro de l'arène,
+puis initialisations CONTROL/SEQ/AUDIO.

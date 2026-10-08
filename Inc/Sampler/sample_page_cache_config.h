@@ -16,7 +16,7 @@
  */
 
 #define SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES \
-    (1504U * 16U * 1024U)
+    (1472U * 16U * 1024U)
 #define SAMPLE_PAGE_CACHE_TARGET_PAGE_COUNT \
     (SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES / SAMPLE_AUDIO_FORMAT_PAGE_BYTES)
 #define SAMPLE_PAGE_BYTES                     SAMPLE_AUDIO_FORMAT_PAGE_BYTES
@@ -136,8 +136,8 @@ static inline uint8_t sample_page_slot_is_voice_window_pool(uint32_t slot)
 #if (SAMPLE_PAGE_FRAMES != 8192U)
 #error "Streamer product contract requires 8192 stereo frames per page"
 #endif
-#if (SAMPLE_PAGE_MAX_COUNT != 376U)
-#error "Streamer product cache budget must expose 376 physical pages"
+#if (SAMPLE_PAGE_MAX_COUNT != 368U)
+#error "Streamer benchmark cache budget must expose 368 physical pages"
 #endif
 #if (SAMPLE_PAGE_MIN_READY_PAGES != 1U)
 #error "Streamer presocle must be one physical page"
@@ -157,8 +157,8 @@ static inline uint8_t sample_page_slot_is_voice_window_pool(uint32_t slot)
 #if (SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT > 64U)
 #error "Runtime FREE/READY bitmaps require at most 64 pages"
 #endif
-#if (SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES != 340U)
-#error "Global page cache must retain 340 physical pages"
+#if (SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES != 332U)
+#error "Global page cache must retain 332 physical pages"
 #endif
 #if (SAMPLE_CLASSIC_CAPACITY > SAMPLE_PAGE_CACHE_ID_CAPACITY)
 #error "sample cache hot capacity must fit in page-cache id capacity"

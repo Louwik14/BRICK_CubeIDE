@@ -28,6 +28,11 @@
 #include "fmc.h"
 #include "w9825g6kh_conf.h"
 
+#include <string.h>
+
+extern uint8_t __sdram_audio_cold_start__;
+extern uint8_t __sdram_audio_cold_end__;
+
 static FMC_SDRAM_CommandTypeDef sdram_command;
 
 /* =========================================================
@@ -53,6 +58,12 @@ static void SDRAM_Initialization_Sequence(SDRAM_HandleTypeDef *hsdram,
 void SDRAM_Init(void)
 {
     SDRAM_Initialization_Sequence(&hsdram1, &sdram_command);
+    /* This NOLOAD arena now also contains objects which historically had BSS
+     * zero-initialization semantics.  It cannot be cleared by Reset_Handler,
+     * because FMC is not usable until this point in boot. */
+    memset(&__sdram_audio_cold_start__, 0,
+           (size_t)((uintptr_t)&__sdram_audio_cold_end__
+                    - (uintptr_t)&__sdram_audio_cold_start__));
 }
 
 /**
