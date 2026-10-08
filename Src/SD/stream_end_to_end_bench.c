@@ -233,6 +233,18 @@ static uint32_t stream_e2e_now(void)
     return DWT->CYCCNT;
 }
 
+static void stream_e2e_set_state(stream_end_to_end_bench_state_t state)
+{
+    const uint32_t now = stream_e2e_now();
+    const uint32_t previous = g_stream_end_to_end_bench.state;
+    g_stream_end_to_end_bench.last_state = previous;
+    g_stream_end_to_end_bench.state = (uint32_t)state;
+    g_stream_end_to_end_bench.last_state_change_cycles = now;
+    if ((uint32_t)state < STREAM_END_TO_END_BENCH_STATE_COUNT)
+        ++g_stream_end_to_end_bench.state_enter_count[(uint32_t)state];
+    __DMB();
+}
+
 static uint32_t stream_e2e_cycles_to_us(uint32_t cycles)
 {
     const uint32_t hz = (g_stream_end_to_end_bench.cpu_hz != 0U)
@@ -501,12 +513,11 @@ static void stream_e2e_fail(uint32_t error, uint32_t step, FRESULT fr,
         g_stream_e2e_runtime.trigger_pending = 0U;
         g_stream_e2e_runtime.batch_active = 0U;
         g_stream_e2e_runtime.batch_complete = 0U;
-        g_stream_end_to_end_bench.state =
-            STREAM_END_TO_END_BENCH_FINALIZING;
+        stream_e2e_set_state(STREAM_END_TO_END_BENCH_FINALIZING);
     }
     else
     {
-        g_stream_end_to_end_bench.state = STREAM_END_TO_END_BENCH_ERROR;
+        stream_e2e_set_state(STREAM_END_TO_END_BENCH_ERROR);
         g_stream_end_to_end_bench.done = 1U;
         g_stream_presocle_sweep.done = 1U;
     }
@@ -632,10 +643,9 @@ static uint8_t stream_e2e_open_map_register(void)
     stream_e2e_release_gate();
     g_stream_e2e_runtime.prng = UINT32_C(0x9E3779B9);
     stream_e2e_shuffle();
-    g_stream_end_to_end_bench.state =
-        (STREAM_E2E_BENCH_WARMUP_PAGES != 0U)
-            ? STREAM_END_TO_END_BENCH_WARMING_CACHE
-            : STREAM_END_TO_END_BENCH_RUNNING;
+    stream_e2e_set_state((STREAM_E2E_BENCH_WARMUP_PAGES != 0U)
+        ? STREAM_END_TO_END_BENCH_WARMING_CACHE
+        : STREAM_END_TO_END_BENCH_RUNNING);
     g_stream_end_to_end_bench.progress = 0U;
     g_stream_end_to_end_bench.progress_total =
         STREAM_E2E_BENCH_NUM_REQUESTS;
@@ -644,10 +654,20 @@ static uint8_t stream_e2e_open_map_register(void)
 
 static void stream_e2e_prepare_file(void)
 {
+    ++g_stream_end_to_end_bench.state1_service_count;
     if (g_stream_e2e_runtime.gate_held == 0U)
     {
         if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
+        {
+            ++g_stream_end_to_end_bench.state1_gate_wait_count;
+            g_stream_end_to_end_bench.state1_gate_owner =
+                (uint32_t)sd_access_gate_current_owner();
+            g_stream_end_to_end_bench.state1_streaming_critical =
+                sd_access_gate_streaming_critical_active();
+            g_stream_end_to_end_bench.state1_recorder_fs_logical_active =
+                sd_access_gate_recorder_fs_logical_active();
             return;
+        }
         g_stream_e2e_runtime.gate_held = 1U;
         if (sd_access_storage_status() != SD_STORAGE_STATUS_READY)
         {
@@ -1242,8 +1262,12 @@ static void stream_e2e_reset_campaign_result(uint32_t state,
     for (stream_end_to_end_metric_t *metric = first;
          metric <= last; ++metric)
         stream_e2e_metric_init(metric);
-    g_stream_end_to_end_bench.state = state;
-    __DMB();
+    g_stream_end_to_end_bench.launcher_started = 1U;
+    g_stream_end_to_end_bench.launcher_delay_elapsed = 1U;
+    g_stream_end_to_end_bench.campaign_initialized = 1U;
+    g_stream_end_to_end_bench.campaign_start_valid = 1U;
+    g_stream_end_to_end_bench.campaign_start_cycles = stream_e2e_now();
+    stream_e2e_set_state((stream_end_to_end_bench_state_t)state);
 }
 
 static void stream_e2e_store_sweep_result(void)
@@ -1417,7 +1441,7 @@ static void stream_e2e_finalize(void)
             STREAM_END_TO_END_BENCH_WARMING_CACHE, 1U);
         return;
     }
-    g_stream_end_to_end_bench.state = STREAM_END_TO_END_BENCH_DONE;
+    stream_e2e_set_state(STREAM_END_TO_END_BENCH_DONE);
     g_stream_end_to_end_bench.done = 1U;
     g_stream_presocle_sweep.done = 1U;
     __DMB();
@@ -1425,6 +1449,8 @@ static void stream_e2e_finalize(void)
 
 void stream_end_to_end_bench_init(void)
 {
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     memset(&g_stream_e2e_runtime, 0, sizeof(g_stream_e2e_runtime));
     memset((void *)&g_stream_presocle_sweep, 0,
            sizeof(g_stream_presocle_sweep));
@@ -1443,8 +1469,6 @@ void stream_end_to_end_bench_init(void)
     stream_e2e_reset_campaign_result(
         STREAM_END_TO_END_BENCH_CREATING_FILE, 0U);
     stream_e2e_fill_file_pattern();
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     sdmmc_async_transport_reset_progress_diag();
     g_stream_e2e_runtime.key = sample_audio_key_multi(
         STREAM_E2E_BENCH_KEY_ID);
@@ -1458,8 +1482,18 @@ void stream_end_to_end_bench_init(void)
 
 void stream_end_to_end_bench_service(void)
 {
+    const uint32_t state = g_stream_end_to_end_bench.state;
+    if ((state == STREAM_END_TO_END_BENCH_CREATING_FILE)
+        && (g_stream_end_to_end_bench.campaign_start_valid != 0U))
+    {
+        const uint32_t elapsed = stream_e2e_now()
+            - g_stream_end_to_end_bench.campaign_start_cycles;
+        g_stream_end_to_end_bench.state1_elapsed_cycles = elapsed;
+        if (elapsed >= g_stream_end_to_end_bench.cpu_hz)
+            g_stream_end_to_end_bench.state1_stall_detected = 1U;
+    }
     switch ((stream_end_to_end_bench_state_t)
-            g_stream_end_to_end_bench.state)
+            state)
     {
         case STREAM_END_TO_END_BENCH_CREATING_FILE:
             stream_e2e_prepare_file();
@@ -1475,23 +1509,26 @@ void stream_end_to_end_bench_service(void)
             {
                 cpu_load_reset_measurement();
                 sdmmc_async_transport_reset_progress_diag();
-                g_stream_end_to_end_bench.state =
-                    STREAM_END_TO_END_BENCH_RUNNING;
+                stream_e2e_set_state(STREAM_END_TO_END_BENCH_RUNNING);
             }
             if ((g_stream_end_to_end_bench.state
                     == STREAM_END_TO_END_BENCH_RUNNING)
                 && (g_stream_end_to_end_bench.batches_completed
                     >= STREAM_E2E_BENCH_NUM_REQUESTS))
             {
-                g_stream_end_to_end_bench.state =
-                    STREAM_END_TO_END_BENCH_FINALIZING;
+                stream_e2e_set_state(STREAM_END_TO_END_BENCH_FINALIZING);
                 break;
             }
             if ((g_stream_e2e_runtime.batch_active == 0U)
                 && (g_stream_e2e_runtime.trigger_pending == 0U))
-                (void)stream_e2e_prepare_batch(
-                    (uint8_t)(g_stream_end_to_end_bench.state
-                        == STREAM_END_TO_END_BENCH_WARMING_CACHE));
+            {
+                const uint8_t warmup = (uint8_t)(
+                    g_stream_end_to_end_bench.state
+                    == STREAM_END_TO_END_BENCH_WARMING_CACHE);
+                if (stream_e2e_prepare_batch(warmup) != 0U
+                    && warmup != 0U)
+                    g_stream_end_to_end_bench.warmup_started = 1U;
+            }
             if ((g_stream_e2e_runtime.batch_active != 0U)
                 || (g_stream_e2e_runtime.trigger_pending != 0U))
             {

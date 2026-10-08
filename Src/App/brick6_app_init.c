@@ -236,6 +236,8 @@ void brick6_app_process(void)
         }
         else if (((HAL_GetTick() - g_stream_bench_delay_tick) >= 3000U)
             && (sd_access_gate_current_owner() == SD_ACCESS_CLIENT_NONE)
+            && (sd_access_gate_streaming_critical_active() == 0U)
+            && (sd_access_gate_recorder_fs_logical_active() == 0U)
             && (sd_scheduler_runtime_owner() == SD_SCHEDULER_OWNER_IDLE)
             && (sd_block_device_async_pending_count() == 0U)
             && (sample_stream_backend_physical_busy() == 0U))

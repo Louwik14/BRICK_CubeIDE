@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 #define STREAM_END_TO_END_BENCH_MAGIC   UINT32_C(0x45324536)
-#define STREAM_END_TO_END_BENCH_VERSION (5U)
+#define STREAM_END_TO_END_BENCH_VERSION (6U)
 #define STREAM_END_TO_END_BENCH_MAX_BATCH (8U)
 #define STREAM_END_TO_END_BENCH_OUTLIERS  (16U)
 #define STREAM_PRESOCLE_SWEEP_COUNT         (7U)
@@ -37,12 +37,14 @@ typedef struct
 
 typedef enum
 {
+    STREAM_END_TO_END_BENCH_IDLE = 0,
     STREAM_END_TO_END_BENCH_CREATING_FILE = 1,
     STREAM_END_TO_END_BENCH_WARMING_CACHE,
     STREAM_END_TO_END_BENCH_RUNNING,
     STREAM_END_TO_END_BENCH_FINALIZING,
     STREAM_END_TO_END_BENCH_DONE,
-    STREAM_END_TO_END_BENCH_ERROR
+    STREAM_END_TO_END_BENCH_ERROR,
+    STREAM_END_TO_END_BENCH_STATE_COUNT
 } stream_end_to_end_bench_state_t;
 
 typedef struct
@@ -189,6 +191,22 @@ typedef struct
     volatile uint32_t done;
     volatile uint32_t error;
     uint32_t fail_step;
+    uint32_t state_enter_count[STREAM_END_TO_END_BENCH_STATE_COUNT];
+    uint32_t last_state;
+    uint32_t last_state_change_cycles;
+    uint32_t launcher_started;
+    uint32_t launcher_delay_elapsed;
+    uint32_t campaign_initialized;
+    uint32_t warmup_started;
+    uint32_t campaign_start_valid;
+    uint32_t campaign_start_cycles;
+    uint32_t state1_stall_detected;
+    uint32_t state1_elapsed_cycles;
+    uint32_t state1_service_count;
+    uint32_t state1_gate_wait_count;
+    uint32_t state1_gate_owner;
+    uint32_t state1_streaming_critical;
+    uint32_t state1_recorder_fs_logical_active;
     int32_t last_fresult;
     uint32_t last_block_result;
     uint32_t cpu_hz;

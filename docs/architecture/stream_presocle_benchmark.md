@@ -104,6 +104,37 @@ campagne. Les champs de synthese sont
 `smallest_zero_starvation_presocle_bytes` et
 `first_failing_presocle_bytes`.
 
+## Lancement et diagnostic d'etat
+
+Le delai de trois secondes appartient exclusivement au launcher boot. Il est
+calcule par soustraction modulo de `HAL_GetTick()` puis n'est pas rejoue entre
+les campagnes. Le launcher attend aussi que les admissions STREAM critique et
+recorder logique soient retombees avant de basculer en mode benchmark. Sans
+ces gardes, l'etat de creation ne peut pas prendre le gate `SAMPLE_CACHE`,
+alors que le mode benchmark ne service plus le chemin qui remet le verrou
+STREAM a zero.
+
+Les etats exposes sont :
+
+```text
+0 IDLE / non initialise
+1 CREATING_FILE
+2 WARMING_CACHE
+3 RUNNING
+4 FINALIZING
+5 DONE
+6 ERROR
+```
+
+La transition `1 -> 2` est effectuee par `stream_e2e_open_map_register()` une
+fois le fichier canonique mappe et enregistre. Le diagnostic compact expose
+les compteurs d'entree d'etat, le dernier changement, les flags launcher /
+campagne / warm-up, ainsi que les attentes de gate en etat 1. Le watchdog
+`state1_stall_detected` devient vrai apres une seconde passee dans l'etat 1;
+il est purement diagnostique et ne force aucune transition. Les timestamps
+DWT ont des flags de validite explicites et les durees restent des
+soustractions `uint32_t` modulo 2^32.
+
 ## Validation multi-voix et lectures chainees
 
 Le premier sweep materiel s'arretait pendant la premiere batch de warm-up.
@@ -148,6 +179,28 @@ set print pretty on
 p g_stream_presocle_sweep
 p g_stream_presocle_sweep.smallest_zero_starvation_presocle_bytes
 p g_stream_presocle_sweep.first_failing_presocle_bytes
+p g_stream_end_to_end_bench.state
+p g_stream_end_to_end_bench.state_enter_count
+p g_stream_end_to_end_bench.last_state
+p/x g_stream_end_to_end_bench.last_state_change_cycles
+p g_stream_end_to_end_bench.launcher_started
+p g_stream_end_to_end_bench.launcher_delay_elapsed
+p g_stream_end_to_end_bench.campaign_initialized
+p g_stream_end_to_end_bench.warmup_started
+p g_stream_end_to_end_bench.campaign_start_valid
+p/x g_stream_end_to_end_bench.campaign_start_cycles
+p g_stream_end_to_end_bench.state1_stall_detected
+p g_stream_end_to_end_bench.state1_elapsed_cycles
+p g_stream_end_to_end_bench.state1_service_count
+p g_stream_end_to_end_bench.state1_gate_wait_count
+p g_stream_end_to_end_bench.state1_gate_owner
+p g_stream_end_to_end_bench.state1_streaming_critical
+p g_stream_end_to_end_bench.state1_recorder_fs_logical_active
+p g_stream_end_to_end_bench.warmup_target_pages
+p g_stream_end_to_end_bench.warmup_pages_ready
+p g_stream_end_to_end_bench.pages_requested
+p g_stream_end_to_end_bench.manager_calls
+p g_sdmmc_async_progress_diag.cmd18_count
 ```
 
 Aucun resultat materiel n'est deduit du build seul.
