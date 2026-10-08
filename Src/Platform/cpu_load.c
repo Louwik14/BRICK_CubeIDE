@@ -45,6 +45,9 @@ static volatile uint32_t cpu_over_90_count = 0U;
 static volatile uint32_t cpu_over_100_count = 0U;
 static volatile uint32_t cpu_block_count = 0U;
 static volatile uint32_t cpu_counter_valid = 0U;
+static volatile uint64_t cpu_irq_cycles_sum = 0U;
+static volatile uint32_t cpu_irq_cycles_max = 0U;
+static volatile uint64_t cpu_period_cycles_sum = 0U;
 
 static uint16_t recent_permille_ring[CPU_LOAD_RECENT_WINDOW];
 static uint32_t recent_permille_index = 0U;
@@ -100,6 +103,9 @@ void cpu_load_init(void)
     cpu_over_100_count = 0U;
     cpu_block_count = 0U;
     cpu_counter_valid = 0U;
+    cpu_irq_cycles_sum = 0U;
+    cpu_irq_cycles_max = 0U;
+    cpu_period_cycles_sum = 0U;
     recent_permille_index = 0U;
     recent_permille_count = 0U;
 
@@ -191,6 +197,11 @@ void cpu_load_irq_end(void)
 
     if(current_period_cycles == 0U)
         return;
+
+    cpu_irq_cycles_sum += elapsed;
+    cpu_period_cycles_sum += current_period_cycles;
+    if(elapsed > cpu_irq_cycles_max)
+        cpu_irq_cycles_max = elapsed;
 
     raw_pm = (uint32_t)(((uint64_t)elapsed * 1000ULL) /
                         (uint64_t)current_period_cycles);
@@ -343,6 +354,9 @@ void cpu_load_get_metrics(cpu_load_metrics_t *metrics)
     metrics->over_100_count = cpu_over_100_count;
     metrics->block_count = cpu_block_count;
     metrics->counter_valid = cpu_counter_valid;
+    metrics->irq_cycles_sum = cpu_irq_cycles_sum;
+    metrics->irq_cycles_max = cpu_irq_cycles_max;
+    metrics->period_cycles_sum = cpu_period_cycles_sum;
 
     __set_PRIMASK(primask);
 }
@@ -371,6 +385,9 @@ void cpu_load_reset_measurement(void)
     cpu_over_90_count = 0U;
     cpu_over_100_count = 0U;
     cpu_block_count = 0U;
+    cpu_irq_cycles_sum = 0U;
+    cpu_irq_cycles_max = 0U;
+    cpu_period_cycles_sum = 0U;
     recent_permille_index = 0U;
     recent_permille_count = 0U;
     for (uint32_t i = 0U; i < CPU_LOAD_RECENT_WINDOW; ++i)

@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define STREAM_END_TO_END_BENCH_MAGIC   UINT32_C(0x45324536)
-#define STREAM_END_TO_END_BENCH_VERSION (1U)
+#define STREAM_END_TO_END_BENCH_VERSION (2U)
 #define STREAM_END_TO_END_BENCH_MAX_BATCH (8U)
 #define STREAM_END_TO_END_BENCH_OUTLIERS  (16U)
 
@@ -76,6 +76,7 @@ typedef struct
     uint32_t simultaneous_cold_starts;
     uint32_t audio_block_frames;
     uint32_t audio_block_us;
+    uint32_t render_deadline_us;
     uint32_t file_size;
     uint32_t page_count;
     volatile uint32_t progress;
@@ -97,10 +98,16 @@ typedef struct
     uint32_t manager_calls;
     uint32_t reserve_calls;
     uint32_t recycle_calls;
-    uint32_t render_within_1_block;
-    uint32_t render_missed_1_block;
-    uint32_t batch_all_rendered_within_1_block;
-    uint32_t batch_missed_1_block;
+    uint32_t render_within_1_block_32;
+    uint32_t render_within_2_blocks_32;
+    uint32_t render_missed_2_blocks_32;
+    uint32_t batch_all_rendered_within_1_block_32;
+    uint32_t batch_all_rendered_within_2_blocks_32;
+    uint32_t batch_missed_2_blocks_32;
+    uint32_t audio_irq_count;
+    uint64_t audio_irq_cycles_sum;
+    uint32_t audio_irq_cycles_max;
+    uint32_t audio_irq_load_percent;
     uint32_t rejected_non_cold_batches;
     uint32_t timestamp_order_errors;
     uint32_t instrumentation_ram_bytes;

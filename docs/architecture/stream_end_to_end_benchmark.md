@@ -85,9 +85,13 @@ completion backend. Aucun printf, UART, affichage, I/O synchrone ou calcul de
 percentile n'existe dans le chemin mesure. La finalisation lourde arrive apres
 la campagne.
 
-La deadline exposee est 64 frames, soit 1333 us a 48 kHz. Les compteurs voix et
-batch indiquent le respect ou le depassement d'un bloc sans quantifier les
-latences elles-memes a la frontiere de bloc.
+Cette branche de mesure utilise des demi-buffers AUDIO de 32 frames, soit 667 us
+a 48 kHz. La deadline fonctionnelle reste 64 frames, soit 1333 us et donc deux
+IRQ AUDIO. Les compteurs voix exposes sont `render_within_1_block_32`,
+`render_within_2_blocks_32` et `render_missed_2_blocks_32`; leurs equivalents
+batch portent le prefixe `batch_all_rendered_` ou `batch_missed_`. Le resultat
+expose aussi le nombre d'IRQ, la somme et le maximum de leurs cycles, ainsi que
+leur charge moyenne en pourcentage sur la campagne mesuree.
 
 Dump GDB :
 

@@ -13,6 +13,9 @@ typedef struct
     uint32_t over_100_count;
     uint32_t block_count;
     uint32_t counter_valid;
+    uint64_t irq_cycles_sum;
+    uint32_t irq_cycles_max;
+    uint64_t period_cycles_sum;
 } cpu_load_metrics_t;
 
 #ifdef __cplusplus

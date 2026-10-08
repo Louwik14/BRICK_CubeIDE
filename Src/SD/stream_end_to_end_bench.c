@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "Board/board_audio_format.h"
+#include "Platform/cpu_load.h"
 #include "Platform/memory_layout.h"
 #include "Sampler/multi_sample_config.h"
 #include "Sampler/sample_page_cache.h"
@@ -46,8 +48,9 @@
 #define STREAM_E2E_BENCH_HIST_BINS (4096U)
 #define STREAM_E2E_BENCH_HIST_COUNT (6U)
 #define STREAM_E2E_BENCH_KEY_ID (MULTI_SAMPLE_MAX_SAMPLES - 1U)
-#define STREAM_E2E_AUDIO_BLOCK_FRAMES (64U)
-#define STREAM_E2E_SAMPLE_RATE_HZ (48000U)
+#define STREAM_E2E_AUDIO_BLOCK_FRAMES BOARD_AUDIO_CONTRACT_FRAMES_PER_HALF
+#define STREAM_E2E_SAMPLE_RATE_HZ BOARD_AUDIO_CONTRACT_SAMPLE_RATE_HZ
+#define STREAM_E2E_DEADLINE_BLOCKS (2U)
 
 #if ((STREAM_E2E_BENCH_SIMULTANEOUS_COLD_STARTS != 1U) \
      && (STREAM_E2E_BENCH_SIMULTANEOUS_COLD_STARTS != 2U) \
@@ -757,9 +760,11 @@ static void stream_e2e_record_batch(void)
             const uint32_t render_us = stream_e2e_cycles_to_us(
                 v->first_render - v->trigger);
             if (render_us <= g_stream_end_to_end_bench.audio_block_us)
-                ++g_stream_end_to_end_bench.render_within_1_block;
+                ++g_stream_end_to_end_bench.render_within_1_block_32;
+            if (render_us <= g_stream_end_to_end_bench.render_deadline_us)
+                ++g_stream_end_to_end_bench.render_within_2_blocks_32;
             else
-                ++g_stream_end_to_end_bench.render_missed_1_block;
+                ++g_stream_end_to_end_bench.render_missed_2_blocks_32;
         }
     }
 
@@ -795,9 +800,11 @@ static void stream_e2e_record_batch(void)
             g_stream_end_to_end_bench.voices_completed;
         const uint32_t batch_us = stream_e2e_cycles_to_us(last_render_delta);
         if (batch_us <= g_stream_end_to_end_bench.audio_block_us)
-            ++g_stream_end_to_end_bench.batch_all_rendered_within_1_block;
+            ++g_stream_end_to_end_bench.batch_all_rendered_within_1_block_32;
+        if (batch_us <= g_stream_end_to_end_bench.render_deadline_us)
+            ++g_stream_end_to_end_bench.batch_all_rendered_within_2_blocks_32;
         else
-            ++g_stream_end_to_end_bench.batch_missed_1_block;
+            ++g_stream_end_to_end_bench.batch_missed_2_blocks_32;
     }
     g_stream_e2e_runtime.batch_complete = 0U;
     g_stream_e2e_runtime.batch_active = 0U;
@@ -806,6 +813,15 @@ static void stream_e2e_record_batch(void)
 
 static void stream_e2e_finalize(void)
 {
+    cpu_load_metrics_t cpu;
+    cpu_load_get_metrics(&cpu);
+    g_stream_end_to_end_bench.audio_irq_count = cpu.block_count;
+    g_stream_end_to_end_bench.audio_irq_cycles_sum = cpu.irq_cycles_sum;
+    g_stream_end_to_end_bench.audio_irq_cycles_max = cpu.irq_cycles_max;
+    g_stream_end_to_end_bench.audio_irq_load_percent =
+        (cpu.period_cycles_sum != 0U)
+        ? (uint32_t)((cpu.irq_cycles_sum * 100U) / cpu.period_cycles_sum)
+        : 0U;
     stream_end_to_end_metric_t *const first =
         (stream_end_to_end_metric_t *)(void *)
             &g_stream_end_to_end_bench.trigger_to_need_publish;
@@ -859,7 +875,12 @@ void stream_end_to_end_bench_init(void)
     g_stream_end_to_end_bench.audio_block_frames =
         STREAM_E2E_AUDIO_BLOCK_FRAMES;
     g_stream_end_to_end_bench.audio_block_us =
-        (STREAM_E2E_AUDIO_BLOCK_FRAMES * 1000000U)
+        (STREAM_E2E_AUDIO_BLOCK_FRAMES * 1000000U
+         + (STREAM_E2E_SAMPLE_RATE_HZ / 2U))
+            / STREAM_E2E_SAMPLE_RATE_HZ;
+    g_stream_end_to_end_bench.render_deadline_us =
+        (STREAM_E2E_DEADLINE_BLOCKS * STREAM_E2E_AUDIO_BLOCK_FRAMES * 1000000U
+         + (STREAM_E2E_SAMPLE_RATE_HZ / 2U))
             / STREAM_E2E_SAMPLE_RATE_HZ;
     g_stream_end_to_end_bench.warmup_target_pages =
         STREAM_E2E_BENCH_WARMUP_PAGES;
@@ -904,8 +925,11 @@ void stream_end_to_end_bench_service(void)
                     == STREAM_END_TO_END_BENCH_WARMING_CACHE
                 && g_stream_e2e_runtime.warmup_submitted
                     >= STREAM_E2E_BENCH_WARMUP_PAGES)
+            {
+                cpu_load_reset_measurement();
                 g_stream_end_to_end_bench.state =
                     STREAM_END_TO_END_BENCH_RUNNING;
+            }
             if ((g_stream_end_to_end_bench.state
                     == STREAM_END_TO_END_BENCH_RUNNING)
                 && (g_stream_end_to_end_bench.voices_completed
