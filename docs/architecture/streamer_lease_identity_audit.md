@@ -25,7 +25,7 @@ are fixed by the domain sizes and the dedicated overdub ID.
 ## Related sentinel audit
 
 Search scope: Sampler, Streamer, page cache, Multi, Classic, REC_SOURCE,
-Sampler RAM, Wavetable, AUDIO physical voices, Storage/SD, publications and track
+Wavetable, AUDIO physical voices, Storage/SD, publications and track
 topology. A targeted `rg` search for `UINT8_MAX`, `UINT16_MAX`, `UINT32_MAX`
 and `uint8_t` casts returned 400 candidate lines in the core source/header
 directories. The relevant index and identity paths were traced from producer
@@ -38,7 +38,7 @@ to consumer; numeric saturation and data conversion matches were excluded.
 | BUG REAL, fixed | REC track IDs `14..15` and overdub | Track `14` collided with overdub reader `16`; track `15` was outside the REC domain. |
 | FRAGILE MAIS ACTUELLEMENT PROTEGE | `brick6_sampler_runtime_cache_voice_id` | It narrows `2 + track_id`, but the clip entry checks `track_id < SEQ_TRACK_COUNT`; a compile-time assertion now bounds the full domain. |
 | SAFE | Multi physical voice index | The allocator returns an element of the eight-voice array; the resulting index is checked before reader bind. |
-| SAFE | Sampler RAM and Wavetable async job slot narrowing | Slots are checked against their pool capacity before the asynchronous job stores or narrows them. |
+| SAFE | Wavetable async job slot narrowing | Slots are checked against pool capacity before the asynchronous job stores or narrows them. |
 | SAFE | Page-cache deleted-entry and empty-page sentinels | `UINT32_MAX`/`UINT16_MAX` are checked or retained as invalid values before array indexing. |
 | SAFE | SD block-device queue ownership | Queue indices are bounded and accompanied by valid-state checks before ownership access. |
 | FAUX POSITIF | Numeric `UINT32_MAX` saturation and audio value casts | These values are limits or arithmetic data, not slot identities. |

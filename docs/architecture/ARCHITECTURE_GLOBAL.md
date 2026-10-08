@@ -93,12 +93,12 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 - [internal_flash_map.md](internal_flash_map.md): partage Flash firmware et reservation de la future banque Groove.
 - [crash_library.md](crash_library.md): capsules diagnostiques best-effort sur SD.
 - [hall_calibration_persistence.md](hall_calibration_persistence.md): calibration globale SD chargee en RAM au boot.
-- [stream_need_contract.md](stream_need_contract.md): Sampler RAM, Wavetable, Multi, streaming, page-cache et transport I/O.
+- [stream_need_contract.md](stream_need_contract.md): Wavetable, Multi, streaming, page-cache et transport I/O.
+- [sampler_streamer.md](sampler_streamer.md): sampler unique STREAM, UI Classic/Group, waveform et retrait de reverse.
 - [sample_streaming.md](sample_streaming.md): pages STREAM 16 KiB, visibilite progressive 512 B, IDMA, D-cache et contrat VoiceReader.
 - [stream_start_end_live.md](stream_start_end_live.md): START/END live des clips STREAM, throttle 12 Hz, cible froide et diagnostics.
 - [recorder_sd.md](recorder_sd.md): bus AUDIO REC unique, Recorder, REC_SOURCE A/B, export cooperatif et lecture Streamer.
 - [stream_rec_perf_baseline.md](stream_rec_perf_baseline.md): protocole et limites de la baseline CPU/DMA Streamer et Recorder H743.
-- [sampler_stream_ram_unification_audit.md](sampler_stream_ram_unification_audit.md): audit de faisabilite de l'UX SAMPLE unifiee, acces aleatoires STREAM, caches et migration.
 - [control_audio_functional_contract.md](control_audio_functional_contract.md): FIFO locale unique et consumer AUDIO.
 - [monocore_data_planes.md](monocore_data_planes.md): data planes locaux, cache, DMA et recyclage.
 - [audio_service_publications.md](audio_service_publications.md): publications AUDIO vers les services cooperatifs.

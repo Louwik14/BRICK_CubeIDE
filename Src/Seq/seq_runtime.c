@@ -27,7 +27,6 @@
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/groove_bank.h"
-#include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Keyboard/keyboard_runtime.h"
@@ -329,8 +328,7 @@ void seq_runtime_make_default_track_control(
 void seq_runtime_start(void)
 {
     if (project_replacement_is_active() != 0U) return;
-    if ((sampler_ram_pool_load_async_busy() != 0U)
-        || (wavetable_pool_load_async_busy() != 0U)
+    if ((wavetable_pool_load_async_busy() != 0U)
         || (multi_sample_load_has_pending() != 0U)) return;
     uint8_t begin_running_now = 0U;
     if (g_seq_runtime_trigger_start_bypass == 0U)

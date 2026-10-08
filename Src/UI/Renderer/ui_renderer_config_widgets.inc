@@ -58,15 +58,6 @@ static const uint32_t g_cfg_stream_icon_1bpp[UI_CFG_ICON_H] = {
     0x00200006U, 0x003FFFFEU, 0x001FFFFCU, 0x00000000U,
 };
 
-static const uint32_t g_cfg_ram_icon_1bpp[UI_CFG_ICON_H] = {
-    0x00000000U, 0x00000000U, 0x00666660U, 0x00666660U, 0x01FFFFF0U,
-    0x07000010U, 0x0700001CU, 0x0100001CU, 0x01000010U, 0x07000010U,
-    0x0700001CU, 0x0100001CU, 0x01226390U, 0x07369490U, 0x072AF39CU,
-    0x0122929CU, 0x01229490U, 0x07000010U, 0x0700001CU, 0x0100001CU,
-    0x01000010U, 0x07000010U, 0x0700001CU, 0x0100001CU, 0x01FFFFF0U,
-    0x00CCCCC0U, 0x00CCCCC0U, 0x00000000U, 0x00000000U,
-};
-
 static void ui_renderer_template_draw_cfg_bitmap(int x,
                                                  int y,
                                                  int w,
@@ -202,11 +193,6 @@ static void ui_renderer_template_draw_cfg_sampler_icon(int x, int y, int w, int 
 static void ui_renderer_template_draw_cfg_stream_icon(int x, int y, int w, int h)
 {
     ui_renderer_template_draw_cfg_bitmap(x, y, w, h, 4, 0, g_cfg_stream_icon_1bpp);
-}
-
-static void ui_renderer_template_draw_cfg_ram_icon(int x, int y, int w, int h)
-{
-    ui_renderer_template_draw_cfg_bitmap(x, y, w, h, 0, 0, g_cfg_ram_icon_1bpp);
 }
 
 static uint8_t ui_renderer_template_draw_cfg_stacked_text(int x,
@@ -349,10 +335,6 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
 
             case TRACK_TYPE_NONE:
                 break;
-
-            case TRACK_TYPE_RAM:
-                ui_renderer_template_draw_cfg_ram_icon(x, y, w, h);
-                return 1U;
 
             case TRACK_TYPE_STREAM:
                 ui_renderer_template_draw_cfg_stream_icon(x, y, w, h);

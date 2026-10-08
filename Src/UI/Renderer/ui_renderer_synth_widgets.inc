@@ -57,7 +57,7 @@ static void ui_renderer_template_draw_synth_live_placeholder(
                                                        (osc == 0U) ? PARAM_WAVE_OSC1_POS : PARAM_WAVE_OSC2_POS);
     }
     for (uint8_t slot = 0U; slot < 4U; ++slot)
-        ui_renderer_template_draw_sampler_ram_slot_text(state, plock_frame_ctx, slot,
+        ui_renderer_template_draw_sample_slot_text(state, plock_frame_ctx, slot,
                                                         subpage->param_bank.params[slot]);
 }
 
@@ -150,7 +150,7 @@ static void ui_renderer_template_draw_wave_classic_common(
         plock_frame_ctx, UI_PARAM_LOCAL_WAVE_OSC2,
         PARAM_WAVE_OSC2_START, PARAM_WAVE_OSC2_LEN, 65);
     for (uint8_t slot = 0U; slot < 4U; ++slot)
-        ui_renderer_template_draw_sampler_ram_slot_text(state, plock_frame_ctx, slot,
+        ui_renderer_template_draw_sample_slot_text(state, plock_frame_ctx, slot,
                                                         subpage->param_bank.params[slot]);
 }
 

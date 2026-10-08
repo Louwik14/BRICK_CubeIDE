@@ -587,8 +587,7 @@ static uint8_t ui_track_clipboard_capture_assets(
     const track_family_t family = out->config.family;
     const track_type_t type = out->config.type;
     if ((family == TRACK_FAMILY_SAMPLER)
-            && ((type == TRACK_TYPE_STREAM) || (type == TRACK_TYPE_RAM)
-                || (type == TRACK_TYPE_MULTI)))
+            && ((type == TRACK_TYPE_STREAM) || (type == TRACK_TYPE_MULTI)))
     {
         persist_control_asset_ref_t asset;
         if (project_control_track_asset_get(
@@ -726,7 +725,6 @@ static uint8_t ui_track_clipboard_validate_assets(
         return 0U;
     const uint8_t sampler = (uint8_t)((payload->config.family == TRACK_FAMILY_SAMPLER)
         && ((payload->config.type == TRACK_TYPE_STREAM)
-            || (payload->config.type == TRACK_TYPE_RAM)
             || (payload->config.type == TRACK_TYPE_MULTI)));
     const uint8_t wave = (uint8_t)((payload->config.family == TRACK_FAMILY_SYNTH)
         && (payload->config.type == TRACK_TYPE_WAVE));
@@ -891,7 +889,7 @@ static uint8_t ui_track_clipboard_prevalidate(
         if (entity_topology_resolve(group_active, entity, &topology) == 0U) return 0U;
         if ((topology.role == ENTITY_ROLE_GROUP_CHILD)
                 && ((configs[entity].family != TRACK_FAMILY_SAMPLER)
-                    || (configs[entity].type != TRACK_TYPE_RAM)))
+                    || (configs[entity].type != TRACK_TYPE_STREAM)))
             return 0U;
         if ((topology.active != 0U) && (configs[entity].family != TRACK_FAMILY_OFF)
                 && (ui_track_catalog_type_is_available(entity,

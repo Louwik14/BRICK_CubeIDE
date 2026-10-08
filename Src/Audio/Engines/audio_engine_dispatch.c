@@ -167,40 +167,6 @@ static __attribute__((noinline)) void brick6_render_sampler_tracks(uint32_t fram
             continue;
         }
 
-        if ((brick6_sampler_runtime_track_has_active_ram_voice(ctx->program_route.entity_id) != 0U)
-                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_STREAM)
-                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_MULTI))
-        {
-            if (brick6_sampler_runtime_track_ram_is_mono(ctx->program_route.entity_id) != 0U)
-            {
-                float *direct_mono = NULL;
-                if (mixer_begin_external_mono_native(ctx->program_route.mix_track_id,
-                                                     frames,
-                                                     &direct_mono) != 0U)
-                {
-                    memset(direct_mono, 0, frames * sizeof(float));
-                    brick6_sampler_runtime_render_ram_track_mono(ctx,
-                                                                  direct_mono,
-                                                                  frames);
-                    mixer_commit_external_mono_native(ctx->program_route.mix_track_id, frames);
-                    sampler_tracks++;
-                    continue;
-                }
-            }
-
-            float *direct_l = NULL;
-            float *direct_r = NULL;
-            if (mixer_begin_external_stereo(ctx->program_route.mix_track_id, frames, &direct_l, &direct_r) != 0U)
-            {
-                memset(direct_l, 0, frames * sizeof(float));
-                memset(direct_r, 0, frames * sizeof(float));
-                brick6_sampler_runtime_render_ram_track(ctx, direct_l, direct_r, frames);
-                mixer_commit_external_stereo(ctx->program_route.mix_track_id, frames);
-                sampler_tracks++;
-                continue;
-            }
-        }
-
         if ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_MULTI)
         {
             const uint8_t multi_mono_native =

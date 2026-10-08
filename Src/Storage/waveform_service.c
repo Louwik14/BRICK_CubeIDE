@@ -2,6 +2,8 @@
 
 #include "Storage/rec_source.h"
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_cache.h"
+#include "Sampler/sample_global_pool.h"
 #include "Storage/sample_capture.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/waveform_cache.h"
@@ -68,6 +70,23 @@ static uint8_t waveform_source_equal(const waveform_source_t *a,
 static uint8_t waveform_source_current(const waveform_source_t *source,
                                        const char **out_path)
 {
+    if(source != 0 && source->key.domain == SAMPLE_AUDIO_DOMAIN_CLASSIC)
+    {
+        sample_resolved_source_t resolved;
+        const uint16_t sample_id = source->key.object_id;
+        const sample_global_slot_t *const slot =
+            sample_global_pool_get_slot(sample_id);
+        if(slot == 0 || slot->kind != SAMPLE_GLOBAL_KIND_CLASSIC
+            || slot->state != SAMPLE_GLOBAL_STATE_READY
+            || sample_cache_resolve_classic_source(sample_id, &resolved) == 0U)
+            return 0U;
+        const waveform_source_t current = {
+            resolved.key, resolved.registration_epoch, resolved.total_frames
+        };
+        if(waveform_source_equal(source, &current) == 0U) return 0U;
+        if(out_path != 0) *out_path = slot->path;
+        return 1U;
+    }
     rec_source_snapshot_t snapshot;
     const char *path;
     if(rec_source_current_path(&path, &snapshot) == 0U)
@@ -81,6 +100,19 @@ static uint8_t waveform_source_current(const waveform_source_t *source,
         return 0U;
     }
     if(out_path != 0) { *out_path = path; }
+    return 1U;
+}
+
+uint8_t waveform_sampler_source(uint16_t sample_id,
+                                waveform_source_t *out_source)
+{
+    sample_resolved_source_t resolved;
+    if(out_source == 0
+        || sample_cache_resolve_classic_source(sample_id, &resolved) == 0U)
+        return 0U;
+    *out_source = (waveform_source_t){
+        resolved.key, resolved.registration_epoch, resolved.total_frames
+    };
     return 1U;
 }
 

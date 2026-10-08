@@ -155,9 +155,6 @@ enum {
     PARAM_MIDI_CC3_4,
     PARAM_SAMPLER_CLIP_SOURCE_BPM,
     PARAM_SAMPLER_CLIP_SYNC_LENGTH,
-    PARAM_SAMPLER_CLIP_PITCH,
-    PARAM_SAMPLER_CLIP_PLAY_MODE,
-    PARAM_SAMPLER_CLIP_LOOP,
     PARAM_SAMPLER_CLIP_STRETCH_MODE,
     PARAM_SAMPLER_CLIP_GRAIN,
     PARAM_FILTER_MODE,
@@ -401,7 +398,7 @@ PARAM_ID_STATIC_ASSERT(PARAM_AUDIO_FX_P3 == (PARAM_AUDIO_FX_P1 + 2),
         "Audio FX slot A parameter block must stay contiguous");
 PARAM_ID_STATIC_ASSERT(PARAM_AUDIO_FX_B_P3 == (PARAM_AUDIO_FX_B_P1 + 2),
         "Audio FX slot B parameter block must stay contiguous");
-PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 314, "Unexpected parameter catalog size");
+PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 311, "Unexpected parameter catalog size");
 #undef PARAM_ID_STATIC_ASSERT
 
 #ifdef __cplusplus

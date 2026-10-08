@@ -8,8 +8,6 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
             return "PROJECT";
         case UI_SETTINGS_VIEW_SAMPLE:
             return "SAMPLE";
-        case UI_SETTINGS_VIEW_SAMPLE_RAM:
-            return "SAMPLE > RAM";
         case UI_SETTINGS_VIEW_WAVETABLE:
             return "SAMPLE > WAVE";
         case UI_SETTINGS_VIEW_SAMPLER:
@@ -36,8 +34,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_PROJECT:
             return (uint8_t)(g_ui_settings.project_slot_count + 1U);
         case UI_SETTINGS_VIEW_SAMPLE:
-            return 4U;
-        case UI_SETTINGS_VIEW_SAMPLE_RAM:
+            return 3U;
         case UI_SETTINGS_VIEW_WAVETABLE:
             return 0U;
         case UI_SETTINGS_VIEW_SAMPLER:
@@ -91,10 +88,6 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
                 return "MULTI";
             }
             if (index == 1U)
-            {
-                return "RAM";
-            }
-            if (index == 2U)
             {
                 return "WAVE";
             }
@@ -466,12 +459,6 @@ static void ui_page_settings_apply_action(void)
             }
             else if (level->selected_index == 1U)
             {
-                ui_page_settings_refresh_ram_slots();
-                ui_page_settings_sample_browser_enter_root();
-                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLE_RAM);
-            }
-            else if (level->selected_index == 2U)
-            {
                 ui_page_settings_refresh_wavetable_slots();
                 ui_page_settings_wavetable_browser_enter_root();
                 ui_page_settings_push(UI_SETTINGS_VIEW_WAVETABLE);
@@ -503,17 +490,6 @@ static void ui_page_settings_apply_action(void)
             else
             {
                 ui_page_settings_multi_copy_right((uint8_t)(button_down(BTN_SHIFT) != 0U));
-            }
-            break;
-
-        case UI_SETTINGS_VIEW_SAMPLE_RAM:
-            if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
-            {
-                ui_page_settings_ram_copy_left((uint8_t)(button_down(BTN_SHIFT) != 0U));
-            }
-            else
-            {
-                ui_page_settings_ram_copy_right((uint8_t)(button_down(BTN_SHIFT) != 0U));
             }
             break;
 
@@ -680,7 +656,6 @@ static ui_browser_context_t ui_page_settings_asset_context(void)
 static uint32_t ui_page_settings_asset_kind(ui_settings_view_t view)
 {
     switch (view) {
-        case UI_SETTINGS_VIEW_SAMPLE_RAM: return PERSIST_ASSET_SAMPLE_RAM;
         case UI_SETTINGS_VIEW_SAMPLER: return PERSIST_ASSET_SAMPLE_STREAM;
         case UI_SETTINGS_VIEW_MULTI_SAMPLE: return PERSIST_ASSET_MULTI;
         default: return PERSIST_ASSET_WAVETABLE;
@@ -720,7 +695,6 @@ static uint8_t ui_page_settings_asset_action_enabled(ui_settings_view_t view,
             || project_control_asset_loads_pending() != 0U
             || multi_sample_import_is_active() != 0U
             || multi_sample_load_has_pending() != 0U
-            || sampler_ram_pool_load_async_busy() != 0U
             || wavetable_pool_load_async_busy() != 0U))
         return 0U;
     if (action == UI_BROWSER_ACTION_PREVIEW)
@@ -871,7 +845,6 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
     if ((level != 0)
         && ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-            || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
             || (level->view == UI_SETTINGS_VIEW_WAVETABLE)
             || (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)))
     {
@@ -981,29 +954,6 @@ static void ui_page_settings_tick(void)
         ui_page_settings_status(project_success!=0U?"RENAME OK":"RENAME FAIL");
     }
 
-    project_control_ram_load_result_t ram_completion;
-    if (project_control_ram_load_take_result(&ram_completion) != 0U)
-    {
-        const sampler_ram_result_t ram_result =
-            (sampler_ram_result_t)ram_completion.result;
-        if (ram_completion.success != 0U)
-        {
-            g_ui_settings.sample_slot_selected = ram_completion.logical_slot;
-        }
-        else if ((ram_result == SAMPLER_RAM_RESULT_GLOBAL_SLOT_FULL)
-                 || (ram_result == SAMPLER_RAM_RESULT_POOL_FULL))
-        {
-            ui_page_settings_flash_sample_header_slots();
-        }
-        else if ((ram_result == SAMPLER_RAM_RESULT_GLOBAL_BUDGET_FULL)
-                 || (ram_result == SAMPLER_RAM_RESULT_RAM_POOL_FULL)
-                 || (ram_result == SAMPLER_RAM_RESULT_TOO_LARGE))
-        {
-            ui_page_settings_flash_sample_header_memory();
-        }
-        ui_page_settings_refresh_ram_slots();
-        ui_page_settings_status(sampler_ram_pool_result_label(ram_result));
-    }
 
     project_control_wavetable_load_result_t wavetable_completion;
     if (project_control_wavetable_load_take_result(&wavetable_completion) != 0U)
@@ -1035,9 +985,7 @@ static void ui_page_settings_tick(void)
     {
         const ui_settings_menu_level_t *const level =
             (g_ui_settings.depth != 0U) ? &g_ui_settings.levels[g_ui_settings.depth - 1U] : 0;
-        if ((level != 0)
-            && ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-                || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)))
+        if ((level != 0) && (level->view == UI_SETTINGS_VIEW_SAMPLER))
         {
             (void)ui_page_settings_sample_browser_refresh();
         }
@@ -1058,10 +1006,7 @@ static void ui_page_settings_tick(void)
             g_ui_settings.convert_slot_valid = 0U;
             g_ui_settings.convert_load_pending = 0U;
             g_ui_settings.convert_path[0] = '\0';
-            if (g_ui_settings.convert_load_kind == (uint8_t)UI_SETTINGS_CONVERT_LOAD_RAM)
-                ui_page_settings_ram_load_to_slot(slot, path);
-            else
-                ui_page_settings_sample_load_to_slot(slot, path);
+            ui_page_settings_sample_load_to_slot(slot, path);
             return;
         }
         wav_convert_service(65536U);

@@ -52,7 +52,7 @@ The IRQ preflight covers metadata/generation/transition, changed PROGRAMs,
 current renderer and held count, target voice count and required trim, total
 synth allocator budget, descriptor installability, MIDI/external endpoint
 eligibility, AUDIO command-domain values, physical modulation owners, input
-owners, temp clears, sampler/Multi/RAM/stream READY state, wavetable slot and
+owners, temp clears, sampler/Multi/stream READY state, wavetable slot and
 registration generation, and rebind capacity.  `none` resources remain valid.
 Any runtime record causes one DMB and the existing command fatal before the
 first AUDIO mutation.

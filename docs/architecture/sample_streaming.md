@@ -10,7 +10,7 @@ aux neuf readers garantis et a leurs quatre roles `CURRENT`, `NEXT`,
 SDRAM. Le passage depuis 64 KiB libere 18 481 152 octets de SDRAM sans changer
 le nombre de slots, les identifiants, les leases, les generations, l'eviction
 ou les refcounts/protections existants. Ce choix libere la SDRAM au lieu de
-porter le cache a 1504 slots: le pool general partage par STREAM, RAM, Multi et
+porter le cache a 1504 slots: le pool general partage par Classic STREAM, Multi et
 Wavetable passe mecaniquement de 22 282 240 a 5 570 560 octets. Augmenter le
 nombre de slots aurait ajoute environ 154 KiB de metadata chaude et depasse le
 budget D1 actuel; aucun placement agressif du prototype n'est repris.
@@ -91,9 +91,8 @@ cache hit ne lance aucune transaction SD. Une cible froide reserve une page de
 avant `READY`. Multi et les transitions de loop reutilisent le meme transport;
 aucune plage au-dela du watermark n'est exposee au rendu.
 
-Le Streamer produit reste forward-only. Reverse et ping-pong demeurent dans le
-Sampler RAM et ne sont pas generalises au watermark prefixe; aucun comportement
-reverse existant n'est modifie.
+Le sampler produit reste forward-only. Reverse et ping-pong sont temporairement
+retires: ils ne reviendront qu'avec un contrat natif VoiceReader/Page Cache.
 
 ## IRQ et charge CPU
 
@@ -169,8 +168,8 @@ Chaque voix Multi possede toujours son lease et son fastpath. Aucun burst ne
 melange deux voix, fichiers ou zones, meme si leurs LBA sont voisins. Classic
 garde START live et les P-locks. Pour une loop forward, la borne sequentielle
 est LOOP END et les roles `LOOP_START`/`LOOP_START_NEXT` restent prepares par
-le mecanisme existant; rien n'est lu au-dela. Reverse et ping-pong restent sur
-leur contrat READY/RAM et n'utilisent pas ce fastpath. Les writes
+le mecanisme existant; rien n'est lu au-dela. Reverse et ping-pong ne font pas
+partie du produit. Les writes
 Recorder/Looper/Overdub restent de gros blocs asynchrones et partagent sans
 changement l'admission du scheduler; ils ne sont jamais decoupes en writes de
 512 octets.
@@ -221,11 +220,10 @@ invalide au meme changement, avant le retrait de ses roles de lease. Il n'y a
 ni I/O AUDIO, ni attente, ni nouveau stockage par voix.
 
 `PARAM_SAMPLER_MULTI_LOOP` reste un `BOOL` dans le catalogue, une valeur float
-dans le codec CONTROL et la meme cle persistante. Un Patch/Project existant
-avec `LOOP ON` adopte donc cette semantique sans migration. La page TONE Multi
+dans le codec CONTROL et la meme cle persistante. La page TONE Multi
 reste `INST / GAIN / LOOP`; Preview, LOOP OFF, pitch, velocity, filtres,
 enveloppes et formats mono/stereo ne changent pas. Multi ne possede pas de
-reverse; le reverse RAM reste hors de ce contrat.
+reverse.
 
 ## Audit de la generation automatique des loops Multi
 
@@ -402,8 +400,8 @@ tail, gate relache avant LOOP START sans premier wrap, release dans la loop,
 release autour de LOOP END, retrig, voix Multi simultanees dans des etats gate/
 release differents, LOOP OFF, pitch 1x et interpole, cache hit/cold page,
 transition `LOOP_START` vers `CURRENT/NEXT`, enveloppes/velocity, steal/choke et
-Save/Load. Les chemins RAM/reverse, Classic, Stream et Recorder ne sont pas
-modifies par cette semantique Multi.
+Save/Load. Les chemins Classic, Stream et Recorder ne sont pas modifies par
+cette semantique Multi.
 
 ## Projection RT1172 (pas une mesure hardware)
 

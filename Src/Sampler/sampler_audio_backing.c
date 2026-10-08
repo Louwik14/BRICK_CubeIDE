@@ -2,8 +2,7 @@
 #include "Sampler/multi_sample_audio_projection_contract.h"
 #include "Sampler/sample_classic_audio_projection_contract.h"
 #include "Sampler/rec_source_contract.h"
-#include "Sampler/sampler_ram_audio_projection_contract.h"
-#include "Sampler/sampler_ram_playhead_contract.h"
+#include "Sampler/sample_playhead_contract.h"
 #include "Platform/memory_layout.h"
 
 /* Physical storage only.  Initialization and publication remain in the
@@ -19,13 +18,7 @@ AUDIO_M7_PRIVATE_SDRAM multi_audio_zone_t
 AUDIO_M7_PRIVATE_SDRAM multi_sample_audio_source_t
     g_multi_audio_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 
-AUDIO_M7_PRIVATE_SDRAM sampler_ram_audio_slot_t
-    g_sampler_ram_audio_slots[SAMPLER_RAM_AUDIO_SLOT_COUNT];
-AUDIO_M7_PRIVATE_SDRAM volatile uint16_t
-    g_sampler_ram_audio_global_to_slot[SAMPLER_RAM_AUDIO_SLOT_COUNT];
-
-STREAM_LOCAL_D2 sampler_ram_playhead_slot_t
-    g_sampler_ram_playhead[BRICK_ENTITY_CAPACITY];
+STREAM_LOCAL_D2 sample_playhead_slot_t g_sample_playhead[BRICK_ENTITY_CAPACITY];
 
 AUDIO_M7_PRIVATE_SDRAM audio_wavetable_registry_slot_t
     g_audio_wavetable_registry[WAVETABLE_POOL_MAX_SLOTS];
@@ -40,7 +33,5 @@ _Static_assert(sizeof(multi_audio_zone_t) == 8U,
                "Multi zone ABI changed");
 _Static_assert(sizeof(multi_sample_audio_source_t) == 40U,
                "Multi source ABI changed");
-_Static_assert(sizeof(sampler_ram_audio_slot_t) == 36U,
-               "RAM projection slot layout changed");
 _Static_assert(sizeof(audio_wavetable_registry_slot_t) == 188U,
                "Wavetable registry slot layout changed");

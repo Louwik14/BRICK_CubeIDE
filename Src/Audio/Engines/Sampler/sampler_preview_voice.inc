@@ -27,8 +27,6 @@ void brick6_sampler_preview_reset(void)
     g_sampler_preview.voice.gain = 1.0f;
     g_sampler_preview.voice.trigger_velocity_gain = 1.0f;
     g_sampler_preview.voice.length = 1.0f;
-    g_sampler_preview.voice.ram_step_q16 = BRICK6_SAMPLER_Q16_ONE;
-    g_sampler_preview.voice.ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
     g_sampler_preview.voice.multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
     g_sampler_preview.voice.multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
     g_sampler_preview.clip.gain = 1.0f;
@@ -48,13 +46,7 @@ uint8_t brick6_sampler_preview_prepare(brick6_sampler_preview_kind_t kind,
     brick6_sampler_preview_reset();
     g_sampler_preview.kind = kind;
     g_sampler_preview.runtime_id = runtime_id;
-    if (kind == BRICK6_SAMPLER_PREVIEW_RAM)
-    {
-        sampler_ram_audio_descriptor_t descriptor;
-        if (!sampler_ram_audio_projection_resolve(runtime_id, &descriptor))
-            return 0U;
-    }
-    else if (kind == BRICK6_SAMPLER_PREVIEW_STREAM)
+    if (kind == BRICK6_SAMPLER_PREVIEW_STREAM)
     {
         sample_resolved_source_t source;
         if (!sample_classic_audio_projection_resolve(runtime_id, &source))
@@ -84,8 +76,15 @@ uint8_t brick6_sampler_preview_apply_param(param_id_t id, float value)
             return 1U;
         case PARAM_SAMPLER_START: voice->start = value; return 1U;
         case PARAM_SAMPLER_LENGTH: voice->length = value; return 1U;
-        case PARAM_SAMPLER_MODE: voice->mode = (uint8_t)(value + 0.5f); return 1U;
-        case PARAM_SAMPLER_TUNE: voice->tune = value; return 1U;
+        case PARAM_SAMPLER_MODE:
+            voice->mode = (uint8_t)(value + 0.5f);
+            clip->loop_enabled = (uint8_t)(voice->mode == BRICK6_SAMPLER_MODE_LOOP
+                || voice->mode == BRICK6_SAMPLER_MODE_HOLD_LOOP);
+            return 1U;
+        case PARAM_SAMPLER_TUNE:
+            voice->tune = value;
+            clip->pitch_semitones = value;
+            return 1U;
         case PARAM_SAMPLER_LOOP_START: voice->loop_start = value; return 1U;
         case PARAM_SAMPLER_SLICE_COUNT:
         {
@@ -97,10 +96,7 @@ uint8_t brick6_sampler_preview_apply_param(param_id_t id, float value)
             return 1U;
         }
         case PARAM_SAMPLER_CLIP_SOURCE_BPM: clip->source_bpm = value; return 1U;
-        case PARAM_SAMPLER_CLIP_PLAY_MODE: clip->play_mode = (uint8_t)(value + 0.5f); return 1U;
-        case PARAM_SAMPLER_CLIP_LOOP: clip->loop_enabled = value >= 0.5f; return 1U;
         case PARAM_SAMPLER_CLIP_STRETCH_MODE: clip->stretch_mode = (uint8_t)(value + 0.5f); return 1U;
-        case PARAM_SAMPLER_CLIP_PITCH: clip->pitch_semitones = value; return 1U;
         case PARAM_SAMPLER_CLIP_SYNC_LENGTH: clip->sync_length = (uint8_t)(value + 0.5f); return 1U;
         case PARAM_SAMPLER_CLIP_GRAIN: clip->grain_size = (uint16_t)(value + 0.5f); return 1U;
         case PARAM_SAMPLER_CLIP_SOURCE: clip->source = (uint8_t)(value + 0.5f); return 1U;
@@ -110,61 +106,6 @@ uint8_t brick6_sampler_preview_apply_param(param_id_t id, float value)
         case PARAM_SAMPLER_MULTI_LOOP: g_sampler_preview.multi_loop = value >= 0.5f; return 1U;
         default: return 0U;
     }
-}
-
-static uint8_t brick6_sampler_preview_trigger_ram(uint8_t note,
-                                                   uint8_t velocity)
-{
-    brick6_sampler_voice_t *const voice = &g_sampler_preview.voice;
-    uint16_t ram_slot;
-    sampler_ram_audio_view_t ram;
-    if (!brick6_sampler_runtime_resolve_ram_source(g_sampler_preview.runtime_id,
-                                                   &ram_slot, &ram)) return 0U;
-    uint32_t begin, end, loop_begin;
-    brick6_sampler_runtime_build_effective_ram_bounds(ram.frames, voice->start,
-        voice->length, voice->loop_start, voice->mode, 1U,
-        &begin, &end, &loop_begin);
-    if (voice->slice_count != 0U)
-    {
-        uint32_t slice_count = voice->slice_count;
-        if (slice_count > 64U) slice_count = 64U;
-        const uint32_t slice_index =
-            brick6_sampler_runtime_note_to_slice_index(note, slice_count);
-        brick6_sampler_runtime_build_effective_ram_slice_region(begin, end,
-            slice_count, slice_index, &begin, &end);
-        loop_begin = begin;
-        voice->use_slice = 1U;
-        voice->slice_index = (uint8_t)slice_index;
-    }
-    const uint8_t playback = brick6_sampler_runtime_ram_mode_playback(voice->mode);
-    const uint8_t reverse = playback == BRICK6_SAMPLER_RAM_MODE_REVERSE_ONE;
-    voice->note = note;
-    voice->velocity = velocity;
-    voice->sample_id = g_sampler_preview.runtime_id;
-    voice->ram_slot = ram_slot;
-    voice->ram_generation = ram.generation;
-    voice->ram_data = ram.data;
-    voice->ram_channels = ram.channels;
-    voice->ram_format = ram.format;
-    voice->ram_frames = ram.frames;
-    voice->ram_sample_rate = ram.sample_rate;
-    voice->region_begin = begin;
-    voice->region_end = end;
-    voice->loop_begin = loop_begin;
-    voice->loop_frames = end - loop_begin;
-    voice->reverse = reverse;
-    voice->position = (float)(reverse ? end - 1U : begin);
-    voice->ram_position_q16 = (uint64_t)(reverse ? end - 1U : begin) << 16U;
-    voice->ram_step_q16 = brick6_sampler_runtime_ram_step_q16(voice, &ram);
-    voice->step_signed = (float)voice->ram_step_q16
-        / (float)BRICK6_SAMPLER_Q16_ONE;
-    voice->loop_mode = brick6_sampler_runtime_ram_mode_to_loop_mode(
-        voice->mode, begin, end, 1U);
-    voice->trigger_velocity_gain = brick6_sampler_runtime_velocity_gain(velocity);
-    voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_RAM;
-    voice->active = 1U;
-    brick6_sampler_runtime_start_declick_fade_in(voice);
-    return 1U;
 }
 
 static uint32_t brick6_sampler_preview_stream_timing(
@@ -278,8 +219,6 @@ uint8_t brick6_sampler_preview_note_on(uint8_t note, uint8_t velocity)
     if ((g_sampler_preview.prepared == 0U) || (note > 127U)
             || (velocity == 0U) || (velocity > 127U)) return 0U;
     sample_voice_reader_reset(&g_sampler_preview.voice.reader);
-    if (g_sampler_preview.kind == BRICK6_SAMPLER_PREVIEW_RAM)
-        return brick6_sampler_preview_trigger_ram(note, velocity);
     if (g_sampler_preview.kind == BRICK6_SAMPLER_PREVIEW_STREAM)
     {
         sample_resolved_source_t source;
@@ -325,9 +264,7 @@ uint8_t brick6_sampler_preview_render(float *left, float *right,
     brick6_sampler_voice_t *const voice = &g_sampler_preview.voice;
     if ((left == NULL) || (right == NULL) || (frames == 0U)
             || (voice->active == 0U)) return 0U;
-    if (voice->source_kind == BRICK6_SAMPLER_VOICE_RAM)
-        brick6_sampler_runtime_render_ram(voice, left, right, frames);
-    else if ((voice->source_kind == BRICK6_SAMPLER_VOICE_CLIP)
+    if ((voice->source_kind == BRICK6_SAMPLER_VOICE_CLIP)
             && (g_sampler_preview.clip.use_shifter_engine != 0U))
         brick6_sampler_runtime_clip_render_shifter(voice,
             &g_sampler_preview.clip, &g_sampler_preview.clip_slot,

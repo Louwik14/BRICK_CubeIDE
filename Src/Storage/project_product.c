@@ -28,7 +28,6 @@
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache_config.h"
 #include "Sampler/sample_page_cache_port.h"
-#include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "ff.h"
 #include <stdio.h>
@@ -210,7 +209,6 @@ typedef enum
     PROJECT_LOAD_INSTALL_WAIT_MULTI,
     PROJECT_LOAD_INSTALL_ASSETS,
     PROJECT_LOAD_INSTALL_WAIT_STREAM,
-    PROJECT_LOAD_INSTALL_WAIT_RAM,
     PROJECT_LOAD_INSTALL_WAIT_WAVETABLE,
     PROJECT_LOAD_INSTALL_CONTROL,
     /* Terminal safe state.  Ingress deliberately remains closed. */
@@ -533,8 +531,7 @@ static project_product_scan_status_t project_product_scan_file(
         ||prefix[24]!=0x01U||prefix[25]!=0x20U
         ||prefix[26]!=3U||prefix[27]!=0U)
     {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_HEADER_INVALID;}
-    if((prefix[4]!=PERSIST_CODEC_VERSION)
-        &&(prefix[4]!=PERSIST_CODEC_PREVIOUS_VERSION))
+    if(prefix[4]!=PERSIST_CODEC_VERSION)
     {(void)f_close(&file);return PROJECT_PRODUCT_SCAN_VERSION_INVALID;}
     if(project_le32(&prefix[20])!=
         ~persist_codec_crc32_update(0xFFFFFFFFUL,prefix,20U))
@@ -1026,8 +1023,7 @@ static void project_product_rename_service(void)
                 |((uint16_t)prefix[33]<<8U);
             g_project_rename.old_expected=project_le32(&prefix[16]);
             if(memcmp(prefix,"B6PC",4U)!=0
-                ||(prefix[4]!=PERSIST_CODEC_VERSION
-                    &&prefix[4]!=PERSIST_CODEC_PREVIOUS_VERSION)
+                ||prefix[4]!=PERSIST_CODEC_VERSION
                 ||prefix[6]!=PERSIST_CODEC_DOCUMENT_PROJECT
                 ||prefix[8]!=3U ||prefix[24]!=1U ||prefix[25]!=0x20U
                 ||prefix[26]!=3U ||prefix[27]!=0U
@@ -1769,7 +1765,7 @@ static uint8_t project_product_pattern_assets_resolved(
 static uint8_t project_product_prevalidate_candidate(
     const persistence_project_restore_workspace_t *restore)
 {
-    uint16_t classic_slots = 0U, ram_slots = 0U, wavetable_slots = 0U;
+    uint16_t classic_slots = 0U, wavetable_slots = 0U;
     uint16_t multi_instruments = 0U;
     if ((restore == NULL)
         || (project_product_pattern_assets_resolved(
@@ -1779,17 +1775,14 @@ static uint8_t project_product_prevalidate_candidate(
         const persist_control_asset_ref_t *const asset = &restore->assets[index];
         if (asset->kind == PERSIST_ASSET_SAMPLE_STREAM)
             ++classic_slots;
-        else if (asset->kind == PERSIST_ASSET_SAMPLE_RAM)
-            ++ram_slots;
         else if (asset->kind == PERSIST_ASSET_WAVETABLE)
             ++wavetable_slots;
         else if (asset->kind == PERSIST_ASSET_MULTI)
             ++multi_instruments;
         else return 0U;
     }
-    return (uint8_t)((classic_slots + ram_slots + wavetable_slots
+    return (uint8_t)((classic_slots + wavetable_slots
                            + multi_instruments <= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
-        && (ram_slots <= SAMPLER_RAM_POOL_MAX_SLOTS)
         && (wavetable_slots <= WAVETABLE_POOL_MAX_SLOTS)
         && (multi_instruments <= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS));
 }
@@ -1814,12 +1807,10 @@ static void project_product_enter_failed_forward_media(void)
         PROJECT_PRODUCT_FATAL("PROJECT_FORWARD_MEDIA_BEFORE_BOUNDARY",
                               PROJECT_FATAL_STATE);
     persist_debug_error(PERSIST_DBG_STAGE_READ,PERSIST_DBG_ERROR_FILESYSTEM);
-    sampler_ram_pool_load_async_cancel();
     wavetable_pool_load_async_cancel();
     multi_sample_cancel_all_loads();
     /* Retire any replacement payload that became READY before the media loss.
      * This is forward cleanup, never restoration of the previous Project. */
-    sampler_ram_pool_retire_all();
     wavetable_pool_retire_all();
     multi_sample_pool_retire_all();
     if (restore != NULL)
@@ -1841,7 +1832,6 @@ static void project_product_enter_failed_forward_media(void)
 static uint8_t project_product_asset_loads_pending(void)
 {
     return (uint8_t)(project_control_asset_loads_pending() != 0U
-        || sampler_ram_pool_load_async_busy() != 0U
         || wavetable_pool_load_async_busy() != 0U
         || multi_sample_load_has_pending() != 0U
         || sample_cache_has_pending_sd_work() != 0U);
@@ -1891,17 +1881,6 @@ static void project_product_load_finish_success(void)
     project_load_quiesce_end();
 }
 
-static uint8_t project_ram_result_internal(sampler_ram_result_t result)
-{
-    return (uint8_t)(result == SAMPLER_RAM_RESULT_INVALID_ARG
-        || result == SAMPLER_RAM_RESULT_POOL_FULL
-        || result == SAMPLER_RAM_RESULT_GLOBAL_SLOT_FULL
-        || result == SAMPLER_RAM_RESULT_PATH_TOO_LONG
-        || result == SAMPLER_RAM_RESULT_REGISTER_FAIL
-        || result == SAMPLER_RAM_RESULT_TRANSPORT_ACTIVE
-        || result == SAMPLER_RAM_RESULT_RECORDER_ACTIVE);
-}
-
 static uint8_t project_wavetable_result_internal(wavetable_result_t result)
 {
     return (uint8_t)(result == WAVETABLE_RESULT_INVALID_ARG
@@ -1929,8 +1908,7 @@ static uint8_t project_product_asset_needs_sample_canonicalization(
     const persist_control_asset_ref_t *asset)
 {
     return (uint8_t)((asset != NULL)
-        && ((asset->kind == PERSIST_ASSET_SAMPLE_STREAM)
-            || (asset->kind == PERSIST_ASSET_SAMPLE_RAM)));
+        && (asset->kind == PERSIST_ASSET_SAMPLE_STREAM));
 }
 
 static uint8_t project_product_wav_convert_error_is_media(
@@ -2190,27 +2168,6 @@ void project_product_load_service(void)
         sd_scheduler_runtime_exclusive_end();
         return;
     }
-    if(g_project_load.state==PROJECT_LOAD_INSTALL_WAIT_RAM)
-    {
-        sampler_ram_result_t result=SAMPLER_RAM_RESULT_INVALID_ARG;
-        uint16_t backend=SAMPLER_RAM_POOL_INVALID_SLOT;
-        uint16_t runtime=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        const char *path_value=NULL;
-        if(sampler_ram_pool_load_async_take_result(&result,&backend,&runtime,&path_value)==0U)return;
-        const project_control_asset_result_t completion =
-            project_control_complete_ram_runtime(path_value,backend,runtime,
-                (result==SAMPLER_RAM_RESULT_OK)?1U:0U);
-        if (completion == PROJECT_CONTROL_ASSET_FAILED_INTERNAL
-            || project_ram_result_internal(result) != 0U)
-        {
-            PROJECT_PRODUCT_FATAL("PROJECT_RAM_ASSET_COMPLETION_FAILED",
-                                  PROJECT_FATAL_ASSET_COMPLETION);
-        }
-        if (result!=SAMPLER_RAM_RESULT_OK) ++g_progress.asset_warning_count;
-        ++g_project_load.asset_index;
-        project_load_progress_assets(restore,0U,0U);
-        g_project_load.state=PROJECT_LOAD_INSTALL_ASSETS;
-    }
     if (g_project_load.state == PROJECT_LOAD_INSTALL_WAIT_WAVETABLE)
     {
         wavetable_result_t result = WAVETABLE_RESULT_INVALID_ARG;
@@ -2257,9 +2214,7 @@ void project_product_load_service(void)
                     ? PROJECT_LOAD_INSTALL_WAIT_STREAM
                     : (kind==PERSIST_ASSET_WAVETABLE
                         ? PROJECT_LOAD_INSTALL_WAIT_WAVETABLE
-                        : (kind==PERSIST_ASSET_MULTI
-                            ? PROJECT_LOAD_INSTALL_WAIT_MULTI
-                            : PROJECT_LOAD_INSTALL_WAIT_RAM));
+                        : PROJECT_LOAD_INSTALL_WAIT_MULTI);
                 return;
             }
             if(result==PROJECT_CONTROL_ASSET_FAILED_INTERNAL)

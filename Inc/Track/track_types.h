@@ -25,7 +25,6 @@ typedef enum
 typedef enum
 {
     TRACK_TYPE_NONE = 0,
-    TRACK_TYPE_RAM,
     TRACK_TYPE_PRISM,
     TRACK_TYPE_DRUM_MD,
     TRACK_TYPE_MIDI,
@@ -78,7 +77,6 @@ typedef enum
 typedef enum
 {
     TRACK_RUNTIME_TYPE_NONE = 0,
-    TRACK_RUNTIME_TYPE_RAM,
     TRACK_RUNTIME_TYPE_PRISM,
     TRACK_RUNTIME_TYPE_DRUM_MD,
     TRACK_RUNTIME_TYPE_MIDI,

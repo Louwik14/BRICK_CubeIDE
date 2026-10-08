@@ -173,7 +173,7 @@ partie du format ni de l'admission transactionnelle.
 
 Le Patch Load lit et decode cooperativement dans STORAGE_IO, precharge ses assets,
 puis prevalide la topologie, les capacites, la polyphonie et tous les owners pour
-l'ensemble du masque avant un unique commit structurel CONTROL. Sample RAM,
+l'ensemble du masque avant un unique commit structurel CONTROL. Classic,
 Wavetable et Multi possedent tous un resultat de preparation terminal; aucune
 target n'est mutee avant que toutes les references du masque soient READY. Les
 targets ne sont jamais appliquees une par une par l'UI. Le remplacement purge
@@ -285,10 +285,7 @@ renderers physiques et le miroir d'ownership terminal SEQ cote AUDIO. Cette
 regle vaut aussi lorsque PANIC est invoque depuis un snapshot atomique, sans
 passer par le post-traitement d'une commande FIFO autonome.
 
-Au boot, les pools reconstruisent directement leur etat vide. En particulier,
-Sampler RAM ne passe pas par le reset runtime quiesce: ses structures SDRAM et
-ses flags D3 sont en sections `NOLOAD`, donc leurs octets retenus ne constituent
-pas un etat de slot valide avant l'initialisation explicite. Le restore du
+Au boot, les pools reconstruisent directement leur etat vide. Le restore du
 dernier Project peut ensuite employer le quiesce normal; retirer un pool vide
 est alors une operation idempotente et prouvee.
 
@@ -313,7 +310,7 @@ LOAD. CLEAR dans le browser supprime le slot selectionne, y compris un document
 invalide impossible a decoder, ainsi que ses sidecars; il ne signifie pas Init
 du Track. Le cache RAM passe a EMPTY uniquement apres les unlink storage.
 
-Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Multi utilisent l'admission Background cooperative de `sd_scheduler_runtime`. Toute demande RT ou transaction active produit `NOT_NOW`; le client conserve son etat et rend la main.
+Pattern Save/Load, Project Save, browser SD, Classic, Wavetable et Clear Multi utilisent l'admission Background cooperative de `sd_scheduler_runtime`. Toute demande RT ou transaction active produit `NOT_NOW`; le client conserve son etat et rend la main.
 
 Le nom Project canonique (32 caracteres maximum, contrat `name_contract`) fait
 partie du CORE Project version 3 et est donc engage dans la meme transaction
@@ -327,7 +324,7 @@ sont refusees jusque-la. Sur Load reussi, le slot actif et le nom decode sont
 publies ensemble dans l'etat produit courant, puis seulement refletes dans le
 cache browser. Cancel ou erreur conservent le couple precedent.
 
-Pour les chargements utilisateur Sample RAM et Wavetable, la superloop consomme
+Pour les chargements utilisateur Classic et Wavetable, la superloop consomme
 la completion physique, valide le slot, le global, le chemin et la resolution
 logique, puis retient un resultat terminal par famille. Settings ne fait que
 prendre ce resultat pour rafraichir sa vue. Un echec de preparation n'est
@@ -336,7 +333,7 @@ identite globale et capacite sont valides avant la frontiere de commit; apres
 `T_safe`, le swap ne possede plus d'echec produit recuperable et les anciennes
 pages ne sont liberees qu'apres installation.
 
-Project Load ne double-bufferise pas les gros payloads RAM, Wavetable ou Multi:
+Project Load ne double-bufferise pas les gros payloads Wavetable ou Multi:
 le quiesce reste ferme, l'ancien payload est retire, puis le loader cooperatif
 canonique reutilise ses pages. Seuls le DTO Project, le Pattern actif prepare et
 un catalogue borne de references indisponibles coexistent temporairement. Le

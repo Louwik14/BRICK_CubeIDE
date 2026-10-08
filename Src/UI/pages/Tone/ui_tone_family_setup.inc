@@ -85,11 +85,6 @@ void ui_page_template_tone_register_families(void)
             {
                 family_template = &g_ui_template_tone_family_acid;
             }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == TRACK_TYPE_RAM))
-            {
-                family_template = &g_ui_template_tone_family_sampler;
-            }
-
             else if ((track_family == TRACK_FAMILY_SAMPLER) && (track_type == TRACK_TYPE_STREAM))
             {
                 family_template = &g_ui_template_tone_family_clip;

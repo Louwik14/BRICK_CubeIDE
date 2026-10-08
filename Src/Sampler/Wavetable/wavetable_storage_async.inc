@@ -93,8 +93,7 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
         wavetable_pool_set_last(WAVETABLE_RESULT_RECORDER_ACTIVE);
         return 0U;
     }
-    if ((sampler_ram_pool_load_async_busy() != 0U)
-        || (multi_sample_load_has_pending() != 0U))
+    if (multi_sample_load_has_pending() != 0U)
         return 0U;
     if ((job->state != WAVETABLE_LOAD_IDLE)
         || (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)

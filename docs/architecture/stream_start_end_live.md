@@ -3,13 +3,11 @@
 ## Contrat produit
 
 Les clips `TRACK_RUNTIME_TYPE_STREAM` exposent `PARAM_SAMPLER_START` et
-`PARAM_SAMPLER_LENGTH` (libelle UI `End`) avec les memes normalisations que le
-Sampler RAM. START designe le debut normalise; END conserve la semantique RAM
-existante de longueur normalisee de region. La region effective est toujours
+`PARAM_SAMPLER_LENGTH` (libelle UI `End`). START designe le debut normalise;
+END est la longueur normalisee de region. La region effective est toujours
 bornee et non vide.
 
-Une voix RAM garde sa reconciliation live historique, sans throttle. Une voix
-Multi n'est pas concernee: son plan est construit par zone/instrument avec
+Une voix Multi n'est pas concernee: son plan est construit par zone/instrument avec
 `start_frame = 0`, et son catalogue ne publie pas START/END.
 
 Pour une voix Clip STREAM deja active, START et END partagent une fenetre de

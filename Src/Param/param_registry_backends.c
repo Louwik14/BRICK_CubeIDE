@@ -600,29 +600,6 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             brick6_sampler_runtime_set_clip_sync_length(track,
                                                         (uint8_t)(param_backend_clamp_value(value, 0.0f, 4.0f) + 0.5f));
             return 1U;
-        case PARAM_SAMPLER_CLIP_PITCH:
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
-            {
-                return 0U;
-            }
-            brick6_sampler_runtime_set_clip_pitch(track, param_backend_clamp_value(value, -12.0f, 12.0f));
-            return 1U;
-        case PARAM_SAMPLER_CLIP_PLAY_MODE:
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
-            {
-                return 0U;
-            }
-            brick6_sampler_runtime_set_clip_play_mode(track,
-                                                      (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f));
-            return 1U;
-        case PARAM_SAMPLER_CLIP_LOOP:
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
-            {
-                return 0U;
-            }
-            brick6_sampler_runtime_set_clip_loop(track,
-                                                 (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f));
-            return 1U;
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
         {
             const uint8_t stretch_mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f);

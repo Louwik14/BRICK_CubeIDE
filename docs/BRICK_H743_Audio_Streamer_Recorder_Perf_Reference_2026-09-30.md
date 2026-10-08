@@ -993,9 +993,9 @@ La moyenne est donc plus fiable pour comparer le coût intrinsèque d'un chemin.
 
 L'audit D-cache global a confirmé que les principaux parcours gratuits du Streamer avaient déjà été retirés.
 
-## 12.1 Sampler RAM
+## 12.1 Ancien loader resident (supprime)
 
-Le loader RAM conserve encore des maintenances D-cache optimisables :
+Ce loader resident et ses maintenances D-cache ont ete supprimes du produit :
 
 ```text
 allocation

@@ -161,40 +161,6 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
     }
 }
 
-static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
-{
-    if (project_replacement_is_active() != 0U) return;
-    uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    uint16_t existing_logical = 0U;
-    if ((project_control_find_asset(PERSIST_ASSET_SAMPLE_RAM,path,&existing_logical) != 0U)
-        && (project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_RAM,
-                existing_logical,&global_slot) != 0U))
-    {
-        g_ui_settings.sample_slot_selected = existing_logical;
-        ui_page_settings_status("ALREADY LOADED");
-        return;
-    }
-    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-    if (wav_convert_path_needs_canonical(path, 0) != 0U)
-    {
-        ui_page_settings_sample_confirm_convert(slot, path,
-                                                UI_SETTINGS_CONVERT_LOAD_RAM);
-        return;
-    }
-    const uint8_t started=project_control_ram_load_begin(slot,path);
-    if (started != 0U)
-    {
-        ui_page_settings_status("LOADING");
-    }
-    else
-    {
-        const sampler_ram_result_t result = sampler_ram_pool_get_last_result();
-        ui_page_settings_status(
-            ((result == SAMPLER_RAM_RESULT_TRANSPORT_ACTIVE)
-             || (result == SAMPLER_RAM_RESULT_RECORDER_ACTIVE))
-                ? sampler_ram_pool_result_label(result) : "LOAD BUSY");
-    }
-}
 
 static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *path)
 {
@@ -499,111 +465,8 @@ static void ui_page_settings_sample_copy_right(uint8_t shift_down)
     ui_page_settings_sample_confirm_clear(g_ui_settings.sample_slot_selected);
 }
 
-static void ui_page_settings_ram_request_replace(uint16_t global_slot, const char *path)
-{
-    uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if ((path == 0) || (path[0] == '\0'))
-    {
-        return;
-    }
-    if (ui_page_settings_ram_backend_from_global(global_slot, &backend_slot) == 0U)
-    {
-        ui_page_settings_status("SELECT RAM");
-        return;
-    }
-    ui_page_settings_ram_load_to_slot(backend_slot, path);
-}
 
-static void ui_page_settings_ram_copy_left(uint8_t shift_down)
-{
-    const ui_settings_sample_entry_t *const entry = ui_page_settings_sample_selected_entry();
-    if (entry == 0)
-    {
-        ui_page_settings_status("NO WAV");
-        return;
-    }
 
-    if (entry->type == UI_SETTINGS_SAMPLE_ENTRY_PARENT)
-    {
-        ui_page_settings_sample_browser_parent_or_exit();
-        return;
-    }
-
-    if (entry->type == UI_SETTINGS_SAMPLE_ENTRY_DIR)
-    {
-        ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-        const uint16_t old_parent_id = g_ui_settings.sample_parent_id;
-        char old_dir[WAV_LOADER_CATALOG_PATH_MAX];
-        (void)snprintf(old_dir, sizeof(old_dir), "%s", g_ui_settings.sample_dir);
-        (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", entry->path);
-        g_ui_settings.sample_parent_id = entry->catalog_index;
-        g_ui_settings.sample_selected = 0U;
-        g_ui_settings.sample_entry_count = 0U;
-        g_ui_settings.sample_child_count = 0U;
-        if ((ui_page_settings_sample_browser_refresh() == 0U)
-            && (wav_loader_catalog_view_busy() == 0U))
-        {
-            g_ui_settings.sample_parent_id = old_parent_id;
-            (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", old_dir);
-        }
-        return;
-    }
-
-    if (shift_down != 0U)
-    {
-        ui_page_settings_ram_request_replace(g_ui_settings.sample_slot_selected, entry->path);
-        return;
-    }
-
-    if (sample_global_pool_get_used_entries() >= sample_global_pool_get_entry_capacity())
-    {
-        ui_page_settings_flash_sample_header_slots();
-        ui_page_settings_status("POOL FULL");
-        return;
-    }
-
-    const int16_t free_slot = ui_page_settings_ram_find_free_backend_slot();
-    if (free_slot < 0)
-    {
-        ui_page_settings_status("RAM FULL");
-        return;
-    }
-
-    ui_page_settings_ram_load_to_slot((uint16_t)free_slot, entry->path);
-}
-
-static void ui_page_settings_ram_copy_right(uint8_t shift_down)
-{
-    if (shift_down != 0U)
-    {
-        const ui_settings_sample_entry_t *const entry = ui_page_settings_sample_selected_entry();
-        if ((entry == 0) || (entry->type != UI_SETTINGS_SAMPLE_ENTRY_FILE))
-        {
-            ui_page_settings_status("SELECT WAV");
-            return;
-        }
-        ui_page_settings_ram_request_replace(g_ui_settings.sample_slot_selected, entry->path);
-        return;
-    }
-
-    uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if (ui_page_settings_ram_backend_from_global(g_ui_settings.sample_slot_selected,
-                                                 &backend_slot) == 0U)
-    {
-        ui_page_settings_status("SELECT RAM");
-        return;
-    }
-    const uint16_t deleted_logical = g_ui_settings.sample_slot_selected;
-    ui_page_settings_select_neighbor_before_delete();
-    if (project_control_remove_sample(deleted_logical) == 0U)
-    {
-        ui_page_settings_status("CLEAR BUSY");
-        return;
-    }
-    sampler_ram_pool_clear(backend_slot);
-    ui_page_settings_refresh_ram_slots();
-    ui_page_settings_status("CLEAR OK");
-}
 
 static void ui_page_settings_wavetable_request_replace(uint16_t global_slot, const char *path)
 {

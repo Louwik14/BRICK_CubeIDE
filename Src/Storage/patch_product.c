@@ -8,7 +8,6 @@
 #include "Import/dx7_sysex.h"
 #include "Platform/memory_layout.h"
 #include "SD/sd_scheduler_runtime.h"
-#include "Sampler/sampler_ram_pool.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/wavetable_pool.h"
 #include "Storage/persistent_fatfs_io.h"
@@ -807,7 +806,6 @@ patch_product_result_t patch_product_load_begin(uint16_t slot, uint16_t target_m
     if (g_invalid[slot] != 0U) return PATCH_PRODUCT_INVALID;
     if (patch_io_common_available() == 0U) return PATCH_PRODUCT_IO_BUSY;
     if ((project_control_asset_loads_pending() != 0U)
-            || (sampler_ram_pool_load_async_busy() != 0U)
             || (wavetable_pool_load_async_busy() != 0U)
             || (multi_sample_load_has_pending() != 0U))
         return PATCH_PRODUCT_IO_BUSY;

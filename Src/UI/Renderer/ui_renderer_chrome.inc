@@ -470,7 +470,7 @@ typedef enum
 typedef enum
 {
     UI_TEMPLATE_BODY_SLOTS = 0,
-    UI_TEMPLATE_BODY_SAMPLER_RAM,
+    UI_TEMPLATE_BODY_SAMPLER,
     UI_TEMPLATE_BODY_SYNTH_LIVE,
     UI_TEMPLATE_BODY_WAVE_WAVETABLE,
     UI_TEMPLATE_BODY_WAVE_CLASSIC
@@ -581,9 +581,9 @@ static void ui_renderer_template_job_prepare(ui_renderer_template_job_t *job)
     const uint8_t wave_classic_page = (uint8_t)((wave_wavetable_subpage != 0U)
         && (family->set_page_count == 2U)
         && (family->set_page_index == 1U));
-    if (ui_renderer_template_is_sampler_ram_tone(state, family) != 0U)
+    if (ui_renderer_template_is_sample_tone(state, family) != 0U)
     {
-        job->body = UI_TEMPLATE_BODY_SAMPLER_RAM;
+        job->body = UI_TEMPLATE_BODY_SAMPLER;
         return;
     }
     if ((wave_wavetable_subpage != 0U) && (wave_classic_page == 0U))
@@ -668,8 +668,8 @@ static void ui_renderer_template_job_draw_special(ui_renderer_template_job_t *jo
 
     switch (job->body)
     {
-        case UI_TEMPLATE_BODY_SAMPLER_RAM:
-            ui_renderer_template_draw_sampler_ram_wave_placeholder(state, &job->plock_frame, subpage);
+        case UI_TEMPLATE_BODY_SAMPLER:
+            ui_renderer_template_draw_sample_wave_placeholder(state, &job->plock_frame, subpage);
             break;
         case UI_TEMPLATE_BODY_SYNTH_LIVE:
             ui_renderer_template_draw_synth_live_placeholder(state, &job->plock_frame,

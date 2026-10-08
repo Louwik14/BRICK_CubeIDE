@@ -77,7 +77,7 @@ bool track_structure_validate_entity_bulk_with_polyphony(
         const track_type_t ui_type = configs[entity].type;
         if ((topology.role == ENTITY_ROLE_GROUP_CHILD)
                 && ((ui_family != TRACK_FAMILY_SAMPLER)
-                    || (ui_type != TRACK_TYPE_RAM)))
+                    || (ui_type != TRACK_TYPE_STREAM)))
             return false;
         if (((uint8_t)ui_family >= TRACK_FAMILY_COUNT)
                 || ((uint8_t)ui_type >= TRACK_TYPE_COUNT)
@@ -123,7 +123,7 @@ void track_state_make_initial_config(uint8_t track, track_config_t *out_config)
     {
         *out_config = (track_config_t){
             .family = TRACK_FAMILY_SAMPLER,
-            .type = TRACK_TYPE_RAM,
+            .type = TRACK_TYPE_STREAM,
         };
         return;
     }
@@ -401,7 +401,7 @@ static bool track_state_apply_entity_bulk_with_inputs(
             if (next_configs[child].family == TRACK_FAMILY_OFF)
             {
                 next_configs[child].family = TRACK_FAMILY_SAMPLER;
-                next_configs[child].type = TRACK_TYPE_RAM;
+                next_configs[child].type = TRACK_TYPE_STREAM;
             }
         }
     }
@@ -418,7 +418,7 @@ static bool track_state_apply_entity_bulk_with_inputs(
 
         if ((entity.role == ENTITY_ROLE_GROUP_CHILD)
                 && ((fam != TRACK_FAMILY_SAMPLER)
-                    || (typ != TRACK_TYPE_RAM)))
+                    || (typ != TRACK_TYPE_STREAM)))
             return false;
 
         if ((fam != TRACK_FAMILY_OFF)

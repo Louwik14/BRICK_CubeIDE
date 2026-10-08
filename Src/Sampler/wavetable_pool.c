@@ -23,7 +23,6 @@
 #include "Platform/brick_fatal.h"
 #include "Storage/project_load_quiesce.h"
 #include "Sampler/multi_sample_loader.h"
-#include "Sampler/sampler_ram_pool.h"
 #include "Sampler/sample_stream_manager.h"
 
 #define WAVETABLE_POOL_IO_BYTES (SD_SCHEDULER_HEAVY_MAX_DATA_BYTES)

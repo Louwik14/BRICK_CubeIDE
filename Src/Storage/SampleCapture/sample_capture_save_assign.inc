@@ -393,7 +393,7 @@ uint8_t sample_capture_model_assign_refresh(void)
                 || (topology.role == ENTITY_ROLE_GROUP_MASTER))
             continue;
         const track_type_t type = track_state_get_type(entity);
-        if((type == TRACK_TYPE_RAM) || (type == TRACK_TYPE_STREAM))
+        if(type == TRACK_TYPE_STREAM)
             g_sample_capture.assign_tracks[g_sample_capture.assign_count++] = entity;
     }
     return g_sample_capture.assign_count;
@@ -441,9 +441,8 @@ uint8_t sample_capture_model_assign_selected_take(void)
             || (sample_capture_model_assign_selected(&track) == 0U)
             || (g_sample_capture.assign_loading != 0U)) return 0U;
     const track_type_t type = track_state_get_type(track);
-    if ((type != TRACK_TYPE_STREAM) && (type != TRACK_TYPE_RAM)) return 0U;
-    const uint32_t kind = (type == TRACK_TYPE_RAM)
-        ? PERSIST_ASSET_SAMPLE_RAM : PERSIST_ASSET_SAMPLE_STREAM;
+    if (type != TRACK_TYPE_STREAM) return 0U;
+    const uint32_t kind = PERSIST_ASSET_SAMPLE_STREAM;
     if(project_control_find_asset(kind, g_sample_capture.state.final_path,
                                   &logical) != 0U
             && project_control_resolve_sample_runtime_kind(kind, logical,
@@ -459,28 +458,10 @@ uint8_t sample_capture_model_assign_selected_take(void)
         }
         return sample_capture_assign_commit(track, kind, logical);
     }
-    if(type == TRACK_TYPE_STREAM)
-    {
-        g_sample_capture.assign_loading = 2U;
-        g_sample_capture.assign_target = track;
-        g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
-        return 2U;
-    }
-    if(type == TRACK_TYPE_RAM)
-    {
-        const uint16_t slot = sampler_ram_pool_find_free_slot();
-        if((slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
-                || (project_control_ram_load_begin(
-                    slot, g_sample_capture.state.final_path) == 0U))
-        {
-            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
-            return 0U;
-        }
-        g_sample_capture.assign_loading = 1U;
-        g_sample_capture.assign_target = track;
-        return 2U;
-    }
-    return 0U;
+    g_sample_capture.assign_loading = 2U;
+    g_sample_capture.assign_target = track;
+    g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
+    return 2U;
 }
 
 void sample_capture_model_assign_service(void)
@@ -540,15 +521,6 @@ void sample_capture_model_assign_service(void)
             g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
         return;
     }
-    project_control_ram_load_result_t result;
-    if(project_control_ram_load_take_result(&result) == 0U) return;
-    g_sample_capture.assign_loading = 0U;
-    if((result.success == 0U)
-            || (sample_capture_assign_commit(g_sample_capture.assign_target,
-                PERSIST_ASSET_SAMPLE_RAM, result.logical_slot) == 0U))
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
-    else
-        g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
 }
 
 uint8_t sample_capture_model_assign_pending(void)
@@ -565,12 +537,9 @@ uint8_t sample_capture_model_assign_waiting_for_transport(void)
 
 void sample_capture_model_assign_cancel(void)
 {
-    if(g_sample_capture.assign_loading != 1U)
-    {
-        g_sample_capture.assign_loading = 0U;
-        g_sample_capture.assign_count = 0U;
-        g_sample_capture.assign_index = 0U;
-    }
+    g_sample_capture.assign_loading = 0U;
+    g_sample_capture.assign_count = 0U;
+    g_sample_capture.assign_index = 0U;
 }
 
 uint8_t sample_capture_model_assign_saved_take_to_pool(void)

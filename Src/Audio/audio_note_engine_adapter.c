@@ -430,9 +430,10 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         program->type == TRACK_RUNTIME_TYPE_EXTERNAL);
     const uint8_t output_was_active = (uint8_t)(
         audio_note_engine_find_output(entity_id, output_id) >= 0);
-    const uint8_t ram_hold = (uint8_t)((engine == TRACK_RUNTIME_ENGINE_SAMPLER)
-        && (program->type == TRACK_RUNTIME_TYPE_RAM)
-        && (brick6_sampler_runtime_ram_mode_is_hold(entity_id) != 0U));
+    const uint8_t sampler_hold = (uint8_t)(
+        (engine == TRACK_RUNTIME_ENGINE_SAMPLER)
+        && (program->type == TRACK_RUNTIME_TYPE_STREAM)
+        && (brick6_sampler_runtime_mode_is_hold(entity_id) != 0U));
 
     /* STOP is idempotent for every renderer.  CONTROL normally filters stale
      * deaths, but an already-stolen or recovery-era STOP must not ask a voice
@@ -539,7 +540,7 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             if ((is_note_on != 0U) && ((is_external == 0U)
                     || (output_was_active == 0U)))
                 mixer_track_vca_note_on(program->mix_track_id, note, velocity);
-            else if ((is_note_on == 0U) && (ram_hold == 0U)
+            else if ((is_note_on == 0U) && (sampler_hold == 0U)
                     && ((is_external == 0U) || (output_was_active != 0U)))
                 mixer_track_vca_note_off(program->mix_track_id, note);
         }

@@ -114,8 +114,6 @@ static void ui_page_settings_refresh_global_kind_slots(sample_global_kind_t kind
     const uint16_t capacity = SAMPLE_GLOBAL_POOL_FINAL_SLOTS;
     if (kind == SAMPLE_GLOBAL_KIND_CLASSIC)
         count = project_control_list_samples(PERSIST_ASSET_SAMPLE_STREAM,g_ui_settings.sampler_slots,capacity);
-    else if (kind == SAMPLE_GLOBAL_KIND_RAM)
-        count = project_control_list_samples(PERSIST_ASSET_SAMPLE_RAM,g_ui_settings.sampler_slots,capacity);
     else if (kind == SAMPLE_GLOBAL_KIND_WAVETABLE)
         count = project_control_list_wavetables(g_ui_settings.sampler_slots,capacity);
     else if (kind == SAMPLE_GLOBAL_KIND_MULTI)
@@ -163,10 +161,6 @@ static void ui_page_settings_refresh_sampler_slots(void)
     ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_CLASSIC);
 }
 
-static void ui_page_settings_refresh_ram_slots(void)
-{
-    ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_RAM);
-}
 
 static void ui_page_settings_refresh_wavetable_slots(void)
 {
@@ -240,35 +234,6 @@ static uint8_t ui_page_settings_multi_backend_from_global(uint16_t global_slot,
     return 1U;
 }
 
-static uint8_t ui_page_settings_ram_backend_from_global(uint16_t global_slot,
-                                                        uint16_t *out_backend_slot)
-{
-    uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if (out_backend_slot != 0)
-    {
-        *out_backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    }
-
-    uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if(project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_RAM,
-            global_slot,&runtime_global)==0U)return 0U;
-    const sample_global_slot_t *const slot = sample_global_pool_get_slot(runtime_global);
-    if ((slot == 0)
-        || (slot->kind != SAMPLE_GLOBAL_KIND_RAM)
-        || (sample_global_pool_resolve_backend(runtime_global,
-                                               SAMPLE_GLOBAL_KIND_RAM,
-                                               &backend_slot) == 0U)
-        || (backend_slot >= SAMPLER_RAM_POOL_MAX_SLOTS))
-    {
-        return 0U;
-    }
-
-    if (out_backend_slot != 0)
-    {
-        *out_backend_slot = backend_slot;
-    }
-    return 1U;
-}
 
 static uint8_t ui_page_settings_wavetable_backend_from_global(uint16_t global_slot,
                                                               uint16_t *out_backend_slot)
@@ -305,11 +270,6 @@ static int16_t ui_page_settings_stream_find_free_backend_slot(void)
     return (slot == SAMPLE_GLOBAL_POOL_INVALID_INDEX) ? -1 : (int16_t)slot;
 }
 
-static int16_t ui_page_settings_ram_find_free_backend_slot(void)
-{
-    const uint16_t slot = sampler_ram_pool_find_free_slot();
-    return (slot < SAMPLER_RAM_POOL_MAX_SLOTS) ? (int16_t)slot : -1;
-}
 
 static int16_t ui_page_settings_wavetable_find_free_backend_slot(void)
 {

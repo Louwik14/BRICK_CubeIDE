@@ -5,7 +5,6 @@
 uint8_t asset_ref_kind_valid(persist_control_asset_kind_key_t kind)
 {
     return (uint8_t)((kind == PERSIST_ASSET_SAMPLE_STREAM)
-        || (kind == PERSIST_ASSET_SAMPLE_RAM)
         || (kind == PERSIST_ASSET_WAVETABLE)
         || (kind == PERSIST_ASSET_MULTI));
 }

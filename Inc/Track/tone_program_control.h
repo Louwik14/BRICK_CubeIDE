@@ -25,8 +25,11 @@ typedef struct {
 typedef struct { float wave,tune,cut,res,env_mod,decay,accent,slide,vcf_rate; } tb303_program_control_t;
 typedef tb303_program_control_t acid_program_control_t;
 
-typedef struct { float gain, start, length, mode, tune, loop_start, slice_count; } ram_program_control_t;
-typedef struct { float gain, start, length, source_bpm, play_mode, loop, stretch_mode, pitch, sync_length, grain, source, heads, window, dispersion; } stream_program_control_t;
+typedef struct {
+    float gain, start, length, mode, tune, loop_start, slice_count;
+    float source_bpm, stretch_mode, sync_length;
+    float grain, source, heads, window, dispersion;
+} stream_program_control_t;
 typedef struct { float gain, loop; } multi_program_control_t;
 typedef struct { float program; float cc[3][4]; } midi_program_control_t;
 typedef struct { midi_program_control_t midi; float gate; } external_program_control_t;
@@ -40,7 +43,6 @@ typedef struct {
         wave_program_control_t wave;
         tb303_program_control_t tb303;
         acid_program_control_t acid;
-        ram_program_control_t ram;
         stream_program_control_t stream;
         multi_program_control_t multi;
         midi_program_control_t midi;

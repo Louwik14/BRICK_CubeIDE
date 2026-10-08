@@ -177,9 +177,7 @@ static uint8_t ui_param_local_control_apply(param_id_t id, uint8_t track,
             count = project_control_list_multis(list,
                 SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
         else
-            count = project_control_list_samples(
-                (ui_get_track_type(track) == TRACK_TYPE_STREAM)
-                    ? PERSIST_ASSET_SAMPLE_STREAM : PERSIST_ASSET_SAMPLE_RAM,
+            count = project_control_list_samples(PERSIST_ASSET_SAMPLE_STREAM,
                 list, SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
         uint16_t pos = 0U; /* Position zero is always the explicit OFF choice. */
         if (isnan(current) == 0)

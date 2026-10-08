@@ -50,16 +50,14 @@ static uint8_t patch_preview_validate(const persist_control_patch_t *patch)
         || (type == TRACK_TYPE_PRISM) || (type == TRACK_TYPE_STACK)
         || (type == TRACK_TYPE_TB303) || (type == TRACK_TYPE_ACID)
         || (type == TRACK_TYPE_WAVE));
-    const uint8_t sampler = (uint8_t)((type == TRACK_TYPE_RAM)
-        || (type == TRACK_TYPE_STREAM) || (type == TRACK_TYPE_MULTI));
+    const uint8_t sampler = (uint8_t)((type == TRACK_TYPE_STREAM)
+        || (type == TRACK_TYPE_MULTI));
     const uint8_t supported = (uint8_t)(synth || sampler);
     const uint8_t expect_fm = (uint8_t)(type == TRACK_TYPE_FM);
     uint8_t assets_valid = 0U;
     if ((type == TRACK_TYPE_WAVE) && (patch->asset_count == 2U))
         assets_valid = (uint8_t)((patch->assets[0].kind == PERSIST_ASSET_WAVETABLE)
             && (patch->assets[1].kind == PERSIST_ASSET_WAVETABLE));
-    else if ((type == TRACK_TYPE_RAM) && (patch->asset_count == 1U))
-        assets_valid = (uint8_t)(patch->assets[0].kind == PERSIST_ASSET_SAMPLE_RAM);
     else if ((type == TRACK_TYPE_STREAM) && (patch->asset_count == 1U))
         assets_valid = (uint8_t)(patch->assets[0].kind == PERSIST_ASSET_SAMPLE_STREAM);
     else if ((type == TRACK_TYPE_MULTI) && (patch->asset_count == 1U))
@@ -93,7 +91,6 @@ static patch_preview_engine_t patch_preview_engine_from_type(track_type_t type)
         case TRACK_TYPE_TB303: return PATCH_PREVIEW_ENGINE_TB303;
         case TRACK_TYPE_ACID: return PATCH_PREVIEW_ENGINE_ACID;
         case TRACK_TYPE_WAVE: return PATCH_PREVIEW_ENGINE_WAVE;
-        case TRACK_TYPE_RAM: return PATCH_PREVIEW_ENGINE_RAM;
         case TRACK_TYPE_STREAM: return PATCH_PREVIEW_ENGINE_STREAM;
         case TRACK_TYPE_MULTI: return PATCH_PREVIEW_ENGINE_MULTI;
         default: return PATCH_PREVIEW_ENGINE_NONE;

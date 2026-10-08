@@ -167,8 +167,7 @@ const char *ui_track_catalog_type_display_name(track_family_t family, track_type
     switch (type)
     {
         case TRACK_TYPE_NONE: return "-";
-        case TRACK_TYPE_RAM: return (family == TRACK_FAMILY_SAMPLER) ? "RAM" : "Sampler";
-        case TRACK_TYPE_STREAM: return "Stream";
+        case TRACK_TYPE_STREAM: return "Classic";
         case TRACK_TYPE_MULTI: return "Multi";
         case TRACK_TYPE_GROUP: return "Group";
         case TRACK_TYPE_PRISM: return "Prism";
@@ -190,8 +189,7 @@ const char *ui_track_catalog_type_short_name(track_family_t family, track_type_t
     switch (type)
     {
         case TRACK_TYPE_NONE: return "---";
-        case TRACK_TYPE_RAM: return (family == TRACK_FAMILY_SAMPLER) ? "RAM" : "Smp";
-        case TRACK_TYPE_STREAM: return "STRM";
+        case TRACK_TYPE_STREAM: return "SAMP";
         case TRACK_TYPE_MULTI: return "Mult";
         case TRACK_TYPE_GROUP: return "GRP";
         case TRACK_TYPE_PRISM: return "PRSM";

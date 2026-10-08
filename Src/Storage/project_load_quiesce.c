@@ -15,7 +15,6 @@
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/multi_sample_loader.h"
-#include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/multi_sample_pool.h"
 #include "midi.h"
@@ -45,7 +44,6 @@ uint8_t project_load_allowed(void)
         && (pattern_control_bank_async_busy() == 0U)
         && (pattern_load_is_pending() == 0U)
         && (project_load_recorder_busy() == 0U)
-        && (sampler_ram_pool_load_async_busy() == 0U)
         && (wavetable_pool_load_async_busy() == 0U)
         && (multi_sample_load_has_pending() == 0U)
         && (multi_sample_pool_clear_is_active() == 0U)
@@ -79,7 +77,6 @@ void project_load_quiesce_request(void)
             SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U);
         (void)sample_page_cache_cancel_reserved_domain(
             SAMPLE_AUDIO_DOMAIN_MULTI, 0U);
-        sampler_ram_pool_retire_all();
         wavetable_pool_retire_all();
         multi_sample_pool_retire_all();
         g_project_load_retire_started = 1U;
@@ -96,7 +93,6 @@ uint8_t project_load_quiesce_safe(void)
         && (control_rt_publication_horizon_active() == 0U)
         && (sample_page_lease_control_all_released() != 0U)
         && (sample_cache_has_pending_sd_work() == 0U)
-        && (sampler_ram_pool_retire_idle() != 0U)
         && (wavetable_pool_retire_idle() != 0U)
         && (multi_sample_pool_retire_idle() != 0U));
 }
@@ -105,7 +101,6 @@ uint8_t project_load_quiesce_failed(void)
 {
     if (g_project_load_requested == 0U) return 0U;
     return (uint8_t)((g_project_load_panic_committed == 0U)
-        || (sampler_ram_pool_retire_failed() != 0U)
         || (wavetable_pool_retire_failed() != 0U)
         || (multi_sample_pool_retire_failed() != 0U));
 }

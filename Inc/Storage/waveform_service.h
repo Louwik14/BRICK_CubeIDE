@@ -33,6 +33,8 @@ typedef enum
 /* REC overview remains READY; finer min/max tiles are built cooperatively. */
 void waveform_service_init(void);
 uint8_t waveform_rec_current_source(waveform_source_t *out_source);
+uint8_t waveform_sampler_source(uint16_t sample_id,
+                                waveform_source_t *out_source);
 uint16_t waveform_rec_peak(const waveform_source_t *source);
 void waveform_service_storage_service(void);
 uint8_t waveform_service_local_pending(void);

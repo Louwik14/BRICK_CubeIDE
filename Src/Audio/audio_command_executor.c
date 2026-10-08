@@ -28,7 +28,6 @@
 #include "Audio/live_parameter_audio_runtime.h"
 #include "Audio/audio_waveform_capture_audio.h"
 #include "Audio/synth_waveform_audio.h"
-#include "Sampler/sampler_ram_audio_projection.h"
 #include "Track/synth_polyphony.h"
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
@@ -37,7 +36,6 @@
 #include "Audio/audio_wavetable_registry.h"
 #include "Audio/multi_sample_audio_projection_audio.h"
 #include "Audio/sample_classic_audio_projection_audio.h"
-#include "Audio/sampler_ram_audio_projection_audio.h"
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
 #include "Param/param_global_control.h"
@@ -439,12 +437,6 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
     {
         if (command->entity >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS) return 0U;
         brick6_sampler_runtime_stop_multi_instrument(command->entity);
-        return 1U;
-    }
-    if (command->id == CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP)
-    {
-        if (command->entity >= SAMPLER_RAM_AUDIO_MAX_SLOTS) return 0U;
-        brick6_sampler_runtime_stop_ram_slot(command->entity, command->value);
         return 1U;
     }
     if (command->id == CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP)
@@ -1225,12 +1217,6 @@ static uint8_t audio_pattern_diag_runtime_preflight(
             {
                 if (program->type == TRACK_RUNTIME_TYPE_MULTI)
                     ready = multi_sample_audio_projection_is_ready(id);
-                else if (program->type == TRACK_RUNTIME_TYPE_RAM)
-                {
-                    sampler_ram_audio_descriptor_t descriptor;
-                    ready = sampler_ram_audio_projection_resolve(
-                        id, &descriptor);
-                }
                 else if (program->type == TRACK_RUNTIME_TYPE_STREAM)
                     ready = sample_classic_audio_projection_is_ready(id);
             }

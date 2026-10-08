@@ -18,7 +18,6 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_import.h"
 #include "Sampler/multi_sample_pool.h"
-#include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "App/brick6_master_control.h"
 #include "Storage/brick6_stream_service_task.h"
@@ -130,12 +129,9 @@ static void brick6_app_service_storage(void)
     else
     {
         multi_sample_pool_service_retire();
-        sampler_ram_pool_service_retire();
         wavetable_pool_service_retire();
-        sampler_ram_pool_load_async_service();
         wavetable_pool_load_async_service();
         project_control_asset_load_service();
-        sampler_ram_pool_waveform_service(BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES);
         multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
         pattern_load_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES / 2U);
         const uint8_t editor_storage_busy =

@@ -1,29 +1,3 @@
-uint8_t brick6_sampler_runtime_ram_slice_mode_active(uint8_t track_id)
-{
-    track_audio_runtime_ctx_t ctx_value;
-    const track_audio_runtime_ctx_t *const ctx =
-        (audio_note_engine_adapter_current_ctx(track_id, &ctx_value) != 0U)
-            ? &ctx_value : NULL;
-    if ((ctx == NULL)
-        || (ctx->program_route.active == 0U)
-        || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-        || (ctx->program_route.engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER))
-    {
-        return 0U;
-    }
-
-    return ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_RAM)
-            && (brick6_sampler_runtime_audio_slice_count(track_id) != 0U))
-               ? 1U
-               : 0U;
-}
-
-uint8_t brick6_sampler_runtime_audio_slice_count(uint8_t track_id)
-{
-    return (track_id < SEQ_TRACK_COUNT)
-        ? g_sampler_voice[track_id].slice_count : 0U;
-}
-
 static void brick6_sampler_runtime_voice_note_output(brick6_sampler_voice_t *voice,
                                                      float out_l,
                                                      float out_r)

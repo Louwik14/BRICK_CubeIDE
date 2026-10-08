@@ -743,7 +743,7 @@ static uint8_t ui_renderer_template_draw_fm_pitch_eg_group(const ui_param_seq_pl
     return 1U;
 }
 
-static uint8_t ui_renderer_template_is_sampler_ram_tone(const ui_template_page_state_t *state,
+static uint8_t ui_renderer_template_is_sample_tone(const ui_template_page_state_t *state,
                                                         const ui_template_family_t *family)
 {
     const uint8_t active_track = ui_renderer_template_get_edit_owner_track();
@@ -758,6 +758,7 @@ static uint8_t ui_renderer_template_is_sampler_ram_tone(const ui_template_page_s
     }
 
     return (uint8_t)(((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)
-                      && (ui_get_track_type(active_track) == TRACK_TYPE_RAM)) ? 1U : 0U);
+                      && (ui_get_track_type(active_track) == TRACK_TYPE_STREAM)
+                      && (state->active_subpage == 1U)) ? 1U : 0U);
 }
 

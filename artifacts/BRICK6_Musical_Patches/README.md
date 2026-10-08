@@ -4,7 +4,7 @@
 
 The filename carries the slot only; B6P payloads contain no slot number, so files may be renamed to another valid Pxxxx.B6P slot.
 
-Wave is intentionally excluded: the current Patch payload stores Wave table indices but patch_v1_capture_sampler_asset() captures portable asset paths only for Sampler RAM/STREAM/MULTI. A Wave patch would therefore depend on an arbitrary preloaded wavetable slot.
+Wave is intentionally excluded: the current Patch payload stores Wave table indices but patch_v1_capture_sampler_asset() captures portable asset paths only for STREAM/MULTI. A Wave patch would therefore depend on an arbitrary preloaded wavetable slot.
 
 ## Patch list
 

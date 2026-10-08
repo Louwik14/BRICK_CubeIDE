@@ -18,7 +18,7 @@ static const char *ui_renderer_template_path_basename(const char *path)
     return base;
 }
 
-static uint16_t ui_renderer_template_sampler_ram_selected_global_slot(void)
+static uint16_t ui_renderer_template_sample_selected_global_slot(void)
 {
     const float sample_value = ui_renderer_template_get_param_display_value(UI_PARAM_LOCAL_ASSET);
     if (isnan(sample_value) != 0)
@@ -29,7 +29,7 @@ static uint16_t ui_renderer_template_sampler_ram_selected_global_slot(void)
         logical_slot = (uint16_t)(sample_value + 0.5f);
     }
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if (project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_RAM,
+    if (project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_STREAM,
                                                     logical_slot,
                                                     &global_slot) == 0U)
     {
@@ -38,7 +38,7 @@ static uint16_t ui_renderer_template_sampler_ram_selected_global_slot(void)
     return global_slot;
 }
 
-static void ui_renderer_template_sampler_ram_sample_label(char *out, uint32_t out_len)
+static void ui_renderer_template_sample_sample_label(char *out, uint32_t out_len)
 {
     if ((out == NULL) || (out_len == 0U))
     {
@@ -47,10 +47,10 @@ static void ui_renderer_template_sampler_ram_sample_label(char *out, uint32_t ou
 
     (void)snprintf(out, out_len, "OFF");
 
-    const uint16_t sample_index = ui_renderer_template_sampler_ram_selected_global_slot();
+    const uint16_t sample_index = ui_renderer_template_sample_selected_global_slot();
     const sample_global_slot_t *const sample_slot = sample_global_pool_get_slot(sample_index);
     if ((sample_slot == NULL)
-            || (sample_slot->kind != SAMPLE_GLOBAL_KIND_RAM)
+            || (sample_slot->kind != SAMPLE_GLOBAL_KIND_CLASSIC)
             || (sample_slot->state != SAMPLE_GLOBAL_STATE_READY)
             || (sample_slot->path[0] == '\0'))
     {
@@ -117,7 +117,7 @@ static uint8_t ui_renderer_template_is_prism_tone_subpage(
         || (first == PARAM_PRISM_PITCH_MOD1));
 }
 
-static int ui_renderer_template_sampler_ram_amp_to_y(int16_t value,
+static int ui_renderer_template_sample_amp_to_y(int16_t value,
                                                      uint16_t peak,
                                                      int top,
                                                      int inner_h)
@@ -142,7 +142,7 @@ static int ui_renderer_template_sampler_ram_amp_to_y(int16_t value,
     return y;
 }
 
-static int ui_renderer_template_sampler_ram_marker_x(float value,
+static int ui_renderer_template_sample_marker_x(float value,
                                                      uint32_t total_frames,
                                                      int inner_x,
                                                      int inner_w)
@@ -173,7 +173,7 @@ static int ui_renderer_template_sampler_ram_marker_x(float value,
     return inner_x + (int)(((uint64_t)frame * (uint32_t)(inner_w - 1)) / max_frame);
 }
 
-static void ui_renderer_template_draw_sampler_ram_marker_label(int x, char label)
+static void ui_renderer_template_draw_sample_marker_label(int x, char label)
 {
     char txt[2] = { label, '\0' };
     const uint8_t text_w = drv_display_text_width(txt);
@@ -185,7 +185,7 @@ static void ui_renderer_template_draw_sampler_ram_marker_label(int x, char label
     drv_display_draw_text((uint8_t)label_x, (uint8_t)label_y, txt);
 }
 
-static void ui_renderer_template_draw_sampler_ram_marker_line(int x,
+static void ui_renderer_template_draw_sample_marker_line(int x,
                                                               int inner_y,
                                                               int inner_h,
                                                               uint8_t dotted)
@@ -204,7 +204,7 @@ static void ui_renderer_template_draw_sampler_ram_marker_line(int x,
     drv_display_draw_line(x, inner_y, x, inner_y + inner_h - 1);
 }
 
-static void ui_renderer_template_draw_sampler_ram_marker(float value,
+static void ui_renderer_template_draw_sample_marker(float value,
                                                          uint32_t total_frames,
                                                          int inner_x,
                                                          int inner_y,
@@ -213,16 +213,16 @@ static void ui_renderer_template_draw_sampler_ram_marker(float value,
                                                          char label,
                                                          uint8_t dotted)
 {
-    const int x = ui_renderer_template_sampler_ram_marker_x(value, total_frames, inner_x, inner_w);
+    const int x = ui_renderer_template_sample_marker_x(value, total_frames, inner_x, inner_w);
     if (x < 0)
     {
         return;
     }
 
     drv_display_set_draw_color(2U);
-    ui_renderer_template_draw_sampler_ram_marker_line(x, inner_y, inner_h, dotted);
+    ui_renderer_template_draw_sample_marker_line(x, inner_y, inner_h, dotted);
     drv_display_set_draw_color(1U);
-    ui_renderer_template_draw_sampler_ram_marker_label(x, label);
+    ui_renderer_template_draw_sample_marker_label(x, label);
 }
 
 static float ui_renderer_template_wave_wavetable_sample(const wavetable_slot_t *table,
@@ -599,7 +599,7 @@ static void ui_renderer_template_draw_wave_cycle_window_projected(
     drv_display_set_draw_color(1U);
 }
 
-static uint16_t ui_renderer_template_sampler_ram_slice_divisions(float slice_value)
+static uint16_t ui_renderer_template_sample_slice_divisions(float slice_value)
 {
     static const uint16_t k_slice_counts[] = {1U, 2U, 4U, 8U, 16U, 32U, 64U};
     int32_t index = (int32_t)(slice_value + 0.5f);
@@ -614,7 +614,7 @@ static uint16_t ui_renderer_template_sampler_ram_slice_divisions(float slice_val
     return k_slice_counts[index];
 }
 
-static void ui_renderer_template_draw_sampler_ram_slice_divisions(uint16_t divisions,
+static void ui_renderer_template_draw_sample_slice_divisions(uint16_t divisions,
                                                                   float start_value,
                                                                   float end_value,
                                                                   uint32_t frame_count,
@@ -687,7 +687,7 @@ static void ui_renderer_template_draw_sampler_ram_slice_divisions(uint16_t divis
     drv_display_set_draw_color(1U);
 }
 
-static int ui_renderer_template_sampler_ram_frame_to_x(uint32_t frame,
+static int ui_renderer_template_sample_frame_to_x(uint32_t frame,
                                                        uint32_t frame_count,
                                                        int inner_x,
                                                        int inner_w)
@@ -703,14 +703,14 @@ static int ui_renderer_template_sampler_ram_frame_to_x(uint32_t frame,
     return inner_x + (int)(((uint64_t)frame * (uint32_t)(inner_w - 1)) / frame_count);
 }
 
-static void ui_renderer_template_draw_sampler_ram_playhead(uint16_t global_slot,
+static void ui_renderer_template_draw_sample_playhead(uint16_t global_slot,
                                                            uint32_t frame_count,
                                                            int inner_x,
                                                            int inner_y,
                                                            int inner_w,
                                                            int inner_h)
 {
-    const ui_sampler_playhead_view_t view = ui_sampler_playhead_view(
+    const ui_sample_playhead_view_t view = ui_sample_playhead_view(
         ui_renderer_template_get_edit_owner_track(), global_slot);
     if (view.active == 0U)
     {
@@ -718,7 +718,7 @@ static void ui_renderer_template_draw_sampler_ram_playhead(uint16_t global_slot,
     }
 
     const uint32_t frame = (uint32_t)(view.normalized_position * (float)frame_count);
-    const int x = ui_renderer_template_sampler_ram_frame_to_x(
+    const int x = ui_renderer_template_sample_frame_to_x(
         frame, frame_count, inner_x, inner_w);
     if (x < 0)
     {
@@ -734,7 +734,7 @@ static void ui_renderer_template_draw_sampler_ram_playhead(uint16_t global_slot,
     drv_display_set_draw_color(1U);
 }
 
-static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
+static void ui_renderer_template_draw_sample_waveform(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
 {
     const int wave_x = UI_TEMPLATE_SAMPLER_WAVE_X;
     const int wave_y = UI_TEMPLATE_SAMPLER_WAVE_Y;
@@ -745,9 +745,11 @@ static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_pl
     const int inner_w = UI_TEMPLATE_SAMPLER_WAVE_INNER_W;
     const int inner_h = UI_TEMPLATE_SAMPLER_WAVE_INNER_H;
     const int center_y = inner_y + (inner_h / 2);
-    const uint16_t global_slot = ui_renderer_template_sampler_ram_selected_global_slot();
-    const sample_ram_waveform_overview_t *const overview =
-        sampler_ram_pool_get_waveform_for_global(global_slot);
+    const uint16_t global_slot = ui_renderer_template_sample_selected_global_slot();
+    waveform_source_t source;
+    waveform_column_t columns[UI_TEMPLATE_SAMPLER_WAVE_INNER_W];
+    memset(columns, 0, sizeof(columns));
+    const uint8_t source_ready = waveform_sampler_source(global_slot, &source);
 
     drv_display_draw_rect(wave_x, wave_y, wave_w, wave_h);
 
@@ -756,35 +758,36 @@ static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_pl
         drv_display_draw_pixel(x, center_y, true);
     }
 
-    if (overview == NULL)
+    if (source_ready == 0U)
     {
         return;
     }
-    if (!((overview->state == SAMPLE_RAM_WAVEFORM_READY)
-          || (overview->state == SAMPLE_RAM_WAVEFORM_BUILDING))
-        || (overview->columns == 0U)
-        || (overview->frame_count == 0U))
+    const waveform_result_t waveform = waveform_request(&source, 0U,
+        source.frame_count, (uint8_t)inner_w, columns);
+    if (waveform == WAVEFORM_RESULT_INVALID || source.frame_count == 0U)
     {
         return;
     }
 
-    const uint16_t peak = overview->global_peak;
+    uint16_t peak = 0U;
+    for (uint16_t col = 0U; col < (uint16_t)inner_w; ++col)
+    {
+        const int32_t min_abs = columns[col].min < 0
+            ? -(int32_t)columns[col].min : columns[col].min;
+        const int32_t max_abs = columns[col].max < 0
+            ? -(int32_t)columns[col].max : columns[col].max;
+        const uint16_t value = (uint16_t)((min_abs > max_abs) ? min_abs : max_abs);
+        if (value > peak) peak = value;
+    }
     if (peak > 1U)
     {
-        uint16_t columns = (overview->state == SAMPLE_RAM_WAVEFORM_READY)
-                               ? overview->columns
-                               : overview->ready_columns;
-        if (columns > (uint16_t)inner_w)
+        for (uint16_t col = 0U; col < (uint16_t)inner_w; ++col)
         {
-            columns = (uint16_t)inner_w;
-        }
-        for (uint16_t col = 0U; col < columns; ++col)
-        {
-            const int y_top = ui_renderer_template_sampler_ram_amp_to_y(overview->max[col],
+            const int y_top = ui_renderer_template_sample_amp_to_y(columns[col].max,
                                                                         peak,
                                                                         inner_y,
                                                                         inner_h);
-            const int y_bottom = ui_renderer_template_sampler_ram_amp_to_y(overview->min[col],
+            const int y_bottom = ui_renderer_template_sample_amp_to_y(columns[col].min,
                                                                            peak,
                                                                            inner_y,
                                                                            inner_h);
@@ -805,31 +808,31 @@ static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_pl
     }
     (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_LOOP_START, &loop_value, 0);
     (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_SLICE_COUNT, &slice_value, 0);
-    ui_renderer_template_draw_sampler_ram_slice_divisions(
-        ui_renderer_template_sampler_ram_slice_divisions(slice_value),
+    ui_renderer_template_draw_sample_slice_divisions(
+        ui_renderer_template_sample_slice_divisions(slice_value),
         start_value,
         end_value,
-        overview->frame_count,
+        source.frame_count,
         inner_x,
         inner_y,
         inner_w,
         inner_h);
-    ui_renderer_template_draw_sampler_ram_playhead(global_slot,
-                                                  overview->frame_count,
+    ui_renderer_template_draw_sample_playhead(global_slot,
+                                                  source.frame_count,
                                                   inner_x,
                                                   inner_y,
                                                   inner_w,
                                                   inner_h);
-    ui_renderer_template_draw_sampler_ram_marker(start_value,
-                                                 overview->frame_count,
+    ui_renderer_template_draw_sample_marker(start_value,
+                                                 source.frame_count,
                                                  inner_x,
                                                  inner_y,
                                                  inner_w,
                                                  inner_h,
                                                  'S',
                                                  0U);
-    ui_renderer_template_draw_sampler_ram_marker(end_value,
-                                                 overview->frame_count,
+    ui_renderer_template_draw_sample_marker(end_value,
+                                                 source.frame_count,
                                                  inner_x,
                                                  inner_y,
                                                  inner_w,
@@ -838,8 +841,8 @@ static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_pl
                                                  0U);
     if (slice_value < 0.5f)
     {
-        ui_renderer_template_draw_sampler_ram_marker(loop_value,
-                                                     overview->frame_count,
+        ui_renderer_template_draw_sample_marker(loop_value,
+                                                     source.frame_count,
                                                      inner_x,
                                                      inner_y,
                                                      inner_w,
@@ -954,7 +957,7 @@ static void ui_renderer_template_draw_wave_wavetable_preview(const ui_param_seq_
         UI_TEMPLATE_WAVE_WT_Y + UI_TEMPLATE_WAVE_WT_H - 2);
 }
 
-static void ui_renderer_template_draw_sampler_ram_slot_text(const ui_template_page_state_t *state,
+static void ui_renderer_template_draw_sample_slot_text(const ui_template_page_state_t *state,
                                                            const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
                                                            uint8_t slot,
                                                            param_id_t id)
@@ -1003,19 +1006,19 @@ static void ui_renderer_template_draw_sampler_ram_slot_text(const ui_template_pa
     }
 }
 
-static void ui_renderer_template_draw_sampler_ram_wave_placeholder(const ui_template_page_state_t *state,
+static void ui_renderer_template_draw_sample_wave_placeholder(const ui_template_page_state_t *state,
                                                                    const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
                                                                    const ui_template_subpage_t *subpage)
 {
     char sample_label[40];
-    ui_renderer_template_sampler_ram_sample_label(sample_label, (uint32_t)sizeof(sample_label));
+    ui_renderer_template_sample_sample_label(sample_label, (uint32_t)sizeof(sample_label));
 
     drv_display_set_font(&FONT_4X6);
     ui_renderer_template_fit_text(sample_label, UI_TEMPLATE_SAMPLER_NAME_MAX_PX);
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, sample_label),
                           UI_TEMPLATE_SAMPLER_NAME_Y,
                           sample_label);
-    ui_renderer_template_draw_sampler_ram_waveform(plock_frame_ctx);
+    ui_renderer_template_draw_sample_waveform(plock_frame_ctx);
 
     if (subpage == NULL)
     {
@@ -1024,7 +1027,7 @@ static void ui_renderer_template_draw_sampler_ram_wave_placeholder(const ui_temp
 
     for (uint8_t slot = 0U; slot < 4U; ++slot)
     {
-        ui_renderer_template_draw_sampler_ram_slot_text(state,
+        ui_renderer_template_draw_sample_slot_text(state,
                                                         plock_frame_ctx,
                                                         slot,
                                                         subpage->param_bank.params[slot]);
@@ -1044,7 +1047,7 @@ static void ui_renderer_template_draw_wave_wavetable_placeholder(const ui_templa
 
     for (uint8_t slot = 0U; slot < 4U; ++slot)
     {
-        ui_renderer_template_draw_sampler_ram_slot_text(state,
+        ui_renderer_template_draw_sample_slot_text(state,
                                                         plock_frame_ctx,
                                                         slot,
                                                         subpage->param_bank.params[slot]);

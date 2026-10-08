@@ -13,7 +13,7 @@ extern "C" {
 #define SAMPLE_GLOBAL_POOL_FINAL_SLOTS    (256U)
 #define SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS   SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS
 #define SAMPLE_GLOBAL_POOL_MAX_SLOTS      SAMPLE_GLOBAL_POOL_FINAL_SLOTS
-/* Product-wide content entries: Classic, RAM, Multi samples and wavetables. */
+/* Product-wide content entries: Classic, Multi samples and wavetables. */
 #define SAMPLE_GLOBAL_POOL_ENTRY_CAPACITY \
     (SAMPLE_PAGE_SLOT_POOL_COUNT / SAMPLE_PAGE_MIN_READY_PAGES)
 #define SAMPLE_GLOBAL_POOL_BUDGET_BYTES \
@@ -29,7 +29,6 @@ typedef enum
     SAMPLE_GLOBAL_KIND_EMPTY = 0,
     SAMPLE_GLOBAL_KIND_CLASSIC,
     SAMPLE_GLOBAL_KIND_MULTI,
-    SAMPLE_GLOBAL_KIND_RAM,
     SAMPLE_GLOBAL_KIND_WAVETABLE
 } sample_global_kind_t;
 
@@ -128,18 +127,6 @@ uint8_t sample_global_pool_register_multi_loading_at(uint16_t global_index,
                                                      uint16_t instrument_id,
                                                      const char *path,
                                                      uint16_t entry_count);
-uint8_t sample_global_pool_reserve_ram(uint16_t ram_slot,
-                                       const char *path,
-                                       uint32_t cost_bytes,
-                                       uint16_t *out_global_index);
-uint8_t sample_global_pool_register_ram(uint16_t ram_slot,
-                                        const char *path,
-                                        uint32_t cost_bytes,
-                                        uint16_t *out_global_index);
-uint8_t sample_global_pool_register_ram_at(uint16_t global_index,
-                                           uint16_t ram_slot,
-                                           const char *path,
-                                           uint32_t cost_bytes);
 uint8_t sample_global_pool_reserve_wavetable(uint16_t wavetable_slot,
                                              const char *path,
                                              uint32_t cost_bytes,

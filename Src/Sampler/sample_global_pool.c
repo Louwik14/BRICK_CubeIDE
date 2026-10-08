@@ -16,7 +16,6 @@ static uint8_t sample_global_kind_valid(sample_global_kind_t kind)
 {
     return ((kind == SAMPLE_GLOBAL_KIND_CLASSIC)
             || (kind == SAMPLE_GLOBAL_KIND_MULTI)
-            || (kind == SAMPLE_GLOBAL_KIND_RAM)
             || (kind == SAMPLE_GLOBAL_KIND_WAVETABLE)) ? 1U : 0U;
 }
 
@@ -550,48 +549,6 @@ uint8_t sample_global_pool_register_multi_loading_at(uint16_t global_index,
                                            path,
                                            0U,
                                            entry_count);
-}
-
-uint8_t sample_global_pool_reserve_ram(uint16_t ram_slot,
-                                       const char *path,
-                                       uint32_t cost_bytes,
-                                       uint16_t *out_global_index)
-{
-    return sample_global_pool_register(SAMPLE_GLOBAL_KIND_RAM,
-                                       SAMPLE_GLOBAL_STATE_RESERVED,
-                                       ram_slot,
-                                       path,
-                                       cost_bytes,
-                                       1U,
-                                       out_global_index);
-}
-
-uint8_t sample_global_pool_register_ram(uint16_t ram_slot,
-                                        const char *path,
-                                        uint32_t cost_bytes,
-                                        uint16_t *out_global_index)
-{
-    return sample_global_pool_register(SAMPLE_GLOBAL_KIND_RAM,
-                                       SAMPLE_GLOBAL_STATE_READY,
-                                       ram_slot,
-                                       path,
-                                       cost_bytes,
-                                       1U,
-                                       out_global_index);
-}
-
-uint8_t sample_global_pool_register_ram_at(uint16_t global_index,
-                                           uint16_t ram_slot,
-                                           const char *path,
-                                           uint32_t cost_bytes)
-{
-    return sample_global_pool_register_at(SAMPLE_GLOBAL_KIND_RAM,
-                                          SAMPLE_GLOBAL_STATE_READY,
-                                          global_index,
-                                           ram_slot,
-                                           path,
-                                           cost_bytes,
-                                           1U);
 }
 
 uint8_t sample_global_pool_reserve_wavetable(uint16_t wavetable_slot,

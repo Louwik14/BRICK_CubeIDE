@@ -319,7 +319,6 @@ static uint8_t persistent_pattern_diag_validate_static(
         const uint8_t expected_resource =
             (family == TRACK_RUNTIME_FAMILY_SAMPLER
                 && (type == TRACK_RUNTIME_TYPE_STREAM
-                    || type == TRACK_RUNTIME_TYPE_RAM
                     || type == TRACK_RUNTIME_TYPE_MULTI))
             ? PREPARED_AUDIO_RESOURCE_SAMPLER
             : ((family == TRACK_RUNTIME_FAMILY_SYNTH
@@ -434,7 +433,7 @@ static uint8_t capture_product_state(uint8_t entity,persist_control_entity_t*out
 {
     const track_family_t family=track_state_get_family(entity);
     const track_type_t type=track_state_get_type(entity);
-    if(family==TRACK_FAMILY_SAMPLER&&(type==TRACK_TYPE_STREAM||type==TRACK_TYPE_RAM||type==TRACK_TYPE_MULTI))
+    if(family==TRACK_FAMILY_SAMPLER&&(type==TRACK_TYPE_STREAM||type==TRACK_TYPE_MULTI))
     {
         persist_control_asset_ref_t asset;
         if(project_control_track_asset_get(entity,PROJECT_CONTROL_ASSET_SAMPLER,&asset)!=0U)out->assets[out->asset_count++]=asset;
@@ -476,8 +475,7 @@ static uint8_t build_default_product_state(track_family_t family,
                                            persist_control_entity_t *out)
 {
     if ((family == TRACK_FAMILY_SAMPLER)
-            && ((type == TRACK_TYPE_STREAM) || (type == TRACK_TYPE_RAM)
-                || (type == TRACK_TYPE_MULTI)))
+            && ((type == TRACK_TYPE_STREAM) || (type == TRACK_TYPE_MULTI)))
     {
         /* A blank sampler has no asset reference. */
     }
@@ -733,7 +731,7 @@ persist_codec_result_t persistent_pattern_control_validate_decoded(
         const uint8_t type_ok=(uint8_t)(
             (topology_ok!=0U)
             && !((caps.role==PERSIST_ENTITY_ROLE_GROUP_CHILD)
-                &&((cfg[e].family!=TRACK_FAMILY_SAMPLER)||(cfg[e].type!=TRACK_TYPE_RAM)))
+                &&(cfg[e].family!=TRACK_FAMILY_SAMPLER))
             && !((cfg[e].family==TRACK_FAMILY_OFF)&&(cfg[e].type!=TRACK_TYPE_NONE))
             && !((cfg[e].family!=TRACK_FAMILY_OFF)
                 &&(track_catalog_type_is_valid_for_family(cfg[e].family,cfg[e].type)==false))
@@ -872,7 +870,7 @@ static uint8_t apply_product_state(uint8_t entity,const persist_control_entity_t
     /* A Pattern is a full target.  In particular, an empty asset list means
      * unbound, not "keep the previous Pattern binding". */
     if(project_control_track_assets_clear(entity)==0U)return 0U;
-    if(family==TRACK_FAMILY_SAMPLER&&(type==TRACK_TYPE_STREAM||type==TRACK_TYPE_RAM||type==TRACK_TYPE_MULTI))
+    if(family==TRACK_FAMILY_SAMPLER&&(type==TRACK_TYPE_STREAM||type==TRACK_TYPE_MULTI))
     {
         if(x->asset_count==0U)return 1U;
         if (x->asset_count != 1U) return 0U;
@@ -1109,7 +1107,6 @@ static uint8_t persistent_pattern_prepare_audio(
         }
         if ((family == TRACK_RUNTIME_FAMILY_SAMPLER)
                 && ((type == TRACK_RUNTIME_TYPE_STREAM)
-                    || (type == TRACK_RUNTIME_TYPE_RAM)
                     || (type == TRACK_RUNTIME_TYPE_MULTI)))
         {
             target->resource.kind = PREPARED_AUDIO_RESOURCE_SAMPLER;
@@ -1253,7 +1250,6 @@ static uint8_t persistent_pattern_finalize_audio_from_control(
             }
             if ((final.program.family == TRACK_RUNTIME_FAMILY_SAMPLER)
                     && ((final.program.type == TRACK_RUNTIME_TYPE_STREAM)
-                        || (final.program.type == TRACK_RUNTIME_TYPE_RAM)
                         || (final.program.type == TRACK_RUNTIME_TYPE_MULTI)))
             {
                 final.resource.kind = PREPARED_AUDIO_RESOURCE_SAMPLER;
@@ -1291,11 +1287,8 @@ static uint8_t persistent_pattern_finalize_audio_from_control(
                     ok = project_control_resolve_multi_runtime(logical, &runtime);
                 else
                 {
-                    const uint32_t kind = (final.program.type
-                        == TRACK_RUNTIME_TYPE_STREAM)
-                        ? PERSIST_ASSET_SAMPLE_STREAM : PERSIST_ASSET_SAMPLE_RAM;
                     ok = project_control_resolve_sample_runtime_kind(
-                        kind, logical, &runtime);
+                        PERSIST_ASSET_SAMPLE_STREAM, logical, &runtime);
                 }
                 if (ok != 0U) final.resource.present = 1U;
             }

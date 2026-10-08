@@ -23,7 +23,6 @@
 #include "Storage/project_control.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_global_pool.h"
-#include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_page_cache_config.h"
@@ -50,7 +49,6 @@ typedef enum
     UI_SETTINGS_VIEW_ROOT = 0,
     UI_SETTINGS_VIEW_PROJECT,
     UI_SETTINGS_VIEW_SAMPLE,
-    UI_SETTINGS_VIEW_SAMPLE_RAM,
     UI_SETTINGS_VIEW_WAVETABLE,
     UI_SETTINGS_VIEW_SAMPLER,
     UI_SETTINGS_VIEW_MULTI_SAMPLE,
@@ -110,8 +108,7 @@ typedef enum
 
 typedef enum
 {
-    UI_SETTINGS_CONVERT_LOAD_CLASSIC = 0,
-    UI_SETTINGS_CONVERT_LOAD_RAM
+    UI_SETTINGS_CONVERT_LOAD_CLASSIC = 0
 } ui_settings_convert_load_t;
 
 typedef enum
@@ -273,11 +270,8 @@ static const char *ui_page_settings_preview_error_label(sd_preview_error_t error
 static void ui_page_settings_back(void);
 static void ui_page_settings_project_name_begin(uint8_t mode,uint8_t slot);
 static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path);
-static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path);
 static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *path);
 static void ui_page_settings_sample_copy_left(uint8_t shift_down);
-static void ui_page_settings_ram_copy_left(uint8_t shift_down);
-static void ui_page_settings_ram_copy_right(uint8_t shift_down);
 static void ui_page_settings_wavetable_copy_left(uint8_t shift_down);
 static void ui_page_settings_wavetable_copy_right(uint8_t shift_down);
 static const ui_settings_sample_entry_t *ui_page_settings_sample_selected_entry(void);

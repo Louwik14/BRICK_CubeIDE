@@ -44,19 +44,14 @@ typedef struct
 extern brick6_sampler_stream_live_diag_t g_sampler_stream_live_diag;
 void brick6_sampler_runtime_stream_live_diag_reset(void);
 
-/* Values 0..3 are disk-compatible with the existing Sample RAM contract.
- * HOLD variants are appended so current projects retain their meaning. */
 typedef enum
 {
-    BRICK6_SAMPLER_RAM_MODE_ONE = 0,
-    BRICK6_SAMPLER_RAM_MODE_REVERSE_ONE = 1,
-    BRICK6_SAMPLER_RAM_MODE_LOOP = 2,
-    BRICK6_SAMPLER_RAM_MODE_PINGPONG = 3,
-    BRICK6_SAMPLER_RAM_MODE_HOLD_ONE = 4,
-    BRICK6_SAMPLER_RAM_MODE_HOLD_LOOP = 5,
-    BRICK6_SAMPLER_RAM_MODE_HOLD_PINGPONG = 6,
-    BRICK6_SAMPLER_RAM_MODE_COUNT
-} brick6_sampler_ram_mode_t;
+    BRICK6_SAMPLER_MODE_ONE = 0,
+    BRICK6_SAMPLER_MODE_LOOP,
+    BRICK6_SAMPLER_MODE_HOLD_ONE,
+    BRICK6_SAMPLER_MODE_HOLD_LOOP,
+    BRICK6_SAMPLER_MODE_COUNT
+} brick6_sampler_mode_t;
 
 typedef enum
 {
@@ -80,8 +75,7 @@ typedef enum
 
 typedef enum
 {
-    BRICK6_SAMPLER_PREVIEW_RAM = 0U,
-    BRICK6_SAMPLER_PREVIEW_STREAM,
+    BRICK6_SAMPLER_PREVIEW_STREAM = 0U,
     BRICK6_SAMPLER_PREVIEW_MULTI
 } brick6_sampler_preview_kind_t;
 
@@ -94,7 +88,6 @@ uint8_t brick6_sampler_runtime_get_sample(uint8_t track_id,
 void brick6_sampler_runtime_set_gain(uint8_t track_id, float gain);
 void brick6_sampler_runtime_set_multi_instrument(uint8_t track_id, uint16_t instrument_id);
 void brick6_sampler_runtime_stop_multi_instrument(uint16_t instrument_id);
-void brick6_sampler_runtime_stop_ram_slot(uint16_t ram_slot, uint32_t generation);
 uint8_t brick6_sampler_runtime_get_multi_instrument(uint8_t track_id, uint16_t *out_instrument_id);
 void brick6_sampler_runtime_set_multi_gain(uint8_t track_id, float gain);
 float brick6_sampler_runtime_get_multi_gain(uint8_t track_id);
@@ -103,7 +96,7 @@ uint8_t brick6_sampler_runtime_multi_instrument_is_ready(uint8_t track_id);
 void brick6_sampler_runtime_set_start(uint8_t track_id, float start);
 void brick6_sampler_runtime_set_length(uint8_t track_id, float length);
 void brick6_sampler_runtime_set_mode(uint8_t track_id, uint8_t mode);
-uint8_t brick6_sampler_runtime_ram_mode_is_hold(uint8_t track_id);
+uint8_t brick6_sampler_runtime_mode_is_hold(uint8_t track_id);
 void brick6_sampler_runtime_set_tune(uint8_t track_id, float tune);
 void brick6_sampler_runtime_set_loop_start(uint8_t track_id, float loop_start);
 void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_count);
@@ -112,7 +105,6 @@ void brick6_sampler_runtime_set_clip_source(uint8_t track_id, uint8_t source);
 uint8_t brick6_sampler_runtime_clip_source_is_rec(uint8_t track_id);
 void brick6_sampler_runtime_set_clip_sync_length(uint8_t track_id, uint8_t sync_length);
 void brick6_sampler_runtime_set_clip_pitch(uint8_t track_id, float semitones);
-void brick6_sampler_runtime_set_clip_play_mode(uint8_t track_id, uint8_t play_mode);
 void brick6_sampler_runtime_set_clip_loop(uint8_t track_id, uint8_t loop_enabled);
 void brick6_sampler_runtime_set_clip_stretch_mode(uint8_t track_id, uint8_t stretch_mode);
 void brick6_sampler_runtime_set_clip_grain_size(uint8_t track_id, uint16_t grain_size);
@@ -164,10 +156,6 @@ void brick6_sampler_runtime_render_track(const track_audio_runtime_ctx_t *ctx,
                                          float *out_l,
                                          float *out_r,
                                          uint32_t frames);
-void brick6_sampler_runtime_render_ram_track(const track_audio_runtime_ctx_t *ctx,
-                                             float *out_l,
-                                             float *out_r,
-                                             uint32_t frames);
 void brick6_sampler_runtime_render_stream_track(const track_audio_runtime_ctx_t *ctx,
                                                 float *out_l,
                                                 float *out_r,
@@ -183,17 +171,10 @@ void brick6_sampler_runtime_render_multi_track_mono(const track_audio_runtime_ct
                                                     float *out_mono,
                                                     uint32_t frames);
 struct multi_voice_dsp_slot_t *brick6_sampler_runtime_get_multi_voice_dsp(uint8_t voice_index);
-uint8_t brick6_sampler_runtime_track_has_active_ram_voice(uint8_t track_id);
 uint32_t brick6_sampler_runtime_render_track_mask(void);
-uint8_t brick6_sampler_runtime_track_ram_is_mono(uint8_t track_id);
 uint8_t brick6_sampler_runtime_track_is_mono_native_ctx(const track_audio_runtime_ctx_t *ctx);
 uint8_t brick6_sampler_runtime_track_is_mono_native(uint8_t track_id);
-void brick6_sampler_runtime_render_ram_track_mono(const track_audio_runtime_ctx_t *ctx,
-                                                  float *out_mono,
-                                                  uint32_t frames);
 void brick6_sampler_runtime_diag_reset(void);
-uint8_t brick6_sampler_runtime_ram_slice_mode_active(uint8_t track_id);
-uint8_t brick6_sampler_runtime_audio_slice_count(uint8_t track_id);
 void brick6_sampler_preview_reset(void);
 uint8_t brick6_sampler_preview_prepare(brick6_sampler_preview_kind_t kind,
                                        uint16_t runtime_id);

@@ -228,46 +228,6 @@ static void ui_page_settings_multi_slot_label(uint16_t global_slot, char *out, u
     ui_page_settings_fit_label(out, out_size, raw, max_px);
 }
 
-static void ui_page_settings_ram_slot_label(uint16_t global_slot, char *out, uint32_t out_size, uint8_t max_px)
-{
-    char raw[48];
-    char name_buf[24];
-    uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    const sampler_ram_slot_t *ram = 0;
-    if ((out == 0) || (out_size == 0U))
-    {
-        return;
-    }
-
-    if (ui_page_settings_ram_backend_from_global(global_slot, &backend_slot) != 0U)
-    {
-        ram = sampler_ram_pool_get_slot(backend_slot);
-    }
-
-    if (ram == 0)
-    {
-        (void)snprintf(raw, sizeof(raw), "%03u BADREF", (unsigned)global_slot);
-    }
-    else if (ram->state == SAMPLER_RAM_SLOT_READY)
-    {
-        const char *name = strrchr(ram->path, '/');
-        name = (name != 0) ? (name + 1) : ram->path;
-        ui_page_settings_make_sample_label(name_buf, sizeof(name_buf), name, 0U);
-        (void)snprintf(raw,
-                       sizeof(raw),
-                       "%03u %s",
-                       (unsigned)global_slot,
-                       (name_buf[0] != '\0') ? name_buf : "READY");
-    }
-    else
-    {
-        const char *state = (ram->state == SAMPLER_RAM_SLOT_LOADING) ? "LOAD"
-                          : (ram->state == SAMPLER_RAM_SLOT_ERROR) ? "ERROR"
-                          : "EMPTY";
-        (void)snprintf(raw, sizeof(raw), "%03u %s", (unsigned)global_slot, state);
-    }
-    ui_page_settings_fit_label(out, out_size, raw, max_px);
-}
 
 static void ui_page_settings_wavetable_slot_label(uint16_t global_slot,
                                                   char *out,
@@ -313,43 +273,6 @@ static void ui_page_settings_wavetable_slot_label(uint16_t global_slot,
     ui_page_settings_fit_label(out, out_size, raw, max_px);
 }
 
-static void ui_page_settings_draw_ram_name_label(void)
-{
-    char label_buf[24];
-    const char *label = ui_page_settings_basename(g_ui_settings.sample_dir);
-    const char *tag = "DIR";
-    const ui_settings_sample_entry_t *const entry = ui_page_settings_sample_selected_entry();
-
-    if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS)
-    {
-        uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        const sampler_ram_slot_t *const ram =
-            (ui_page_settings_ram_backend_from_global(g_ui_settings.sample_slot_selected,
-                                                      &backend_slot) != 0U)
-                ? sampler_ram_pool_get_slot(backend_slot)
-                : 0;
-        if ((ram != 0) && (ram->path[0] != '\0'))
-        {
-            const char *name = strrchr(ram->path, '/');
-            name = (name != 0) ? (name + 1) : ram->path;
-            ui_page_settings_make_sample_label(label_buf, sizeof(label_buf), name, 0U);
-            label = (label_buf[0] != '\0') ? label_buf : "READY";
-        }
-        else
-        {
-            label = "EMPTY";
-        }
-        ui_page_settings_draw_browser_context_label("SLOT", label);
-        return;
-    }
-
-    if (entry != 0)
-    {
-        label = entry->label;
-        tag = (entry->type == UI_SETTINGS_SAMPLE_ENTRY_FILE) ? "WAV" : "DIR";
-    }
-    ui_page_settings_draw_browser_context_label(tag, label);
-}
 
 static void ui_page_settings_draw_wavetable_name_label(void)
 {
@@ -922,90 +845,6 @@ static void ui_page_settings_render_sample_browser(void)
     drv_display_set_font(&FONT_5X7);
 }
 
-static void ui_page_settings_render_ram_browser(void)
-{
-    enum
-    {
-        UI_SETTINGS_SAMPLE_LEFT_TEXT_X = 1,
-        UI_SETTINGS_SAMPLE_LEFT_TEXT_W = 58,
-        UI_SETTINGS_SAMPLE_RIGHT_TEXT_X = 64
-    };
-
-    ui_page_settings_draw_global_sample_header("RAM");
-    drv_display_draw_line(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y, 127, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y);
-    ui_page_settings_draw_ram_name_label();
-    ui_page_settings_draw_sample_split_position(g_ui_settings.sample_child_count,
-                                                g_ui_settings.sampler_slot_count);
-    drv_display_set_font(&FONT_4X6);
-
-    const uint8_t visible_lines = UI_SETTINGS_SAMPLE_BROWSER_VISIBLE_LINES;
-    const uint16_t selected_right_index =
-        ui_page_settings_filtered_index_for_global(g_ui_settings.sample_slot_selected);
-    g_ui_settings.sample_left_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_left_scroll,
-                                                                     g_ui_settings.sample_selected,
-                                                                     g_ui_settings.sample_child_count,
-                                                                     visible_lines);
-    g_ui_settings.sample_right_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_right_scroll,
-                                                                      selected_right_index,
-                                                                      g_ui_settings.sampler_slot_count,
-                                                                      visible_lines);
-    for (uint8_t line = 0U; line < visible_lines; ++line)
-    {
-        const uint8_t y = (uint8_t)(UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0
-                                    + (line * UI_SETTINGS_SAMPLE_BROWSER_TEXT_PITCH));
-        const uint16_t left_index = (uint16_t)(g_ui_settings.sample_left_scroll + line);
-        const uint16_t right_index = (uint16_t)(g_ui_settings.sample_right_scroll + line);
-
-        if ((left_index >= g_ui_settings.sample_page_start)
-            && (left_index < (uint16_t)(g_ui_settings.sample_page_start
-                                        + g_ui_settings.sample_entry_count)))
-        {
-            char left[32];
-            const ui_settings_sample_entry_t *const entry =
-                &g_ui_settings.sample_entries[left_index - g_ui_settings.sample_page_start];
-            ui_page_settings_fit_label(left,
-                                       sizeof(left),
-                                       entry->label,
-                                       (uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_W);
-            if ((left_index == g_ui_settings.sample_selected)
-                && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY))
-            {
-                ui_theme_draw_focus_at(0, y - 1U, 58, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H,
-                                       left, (uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y);
-            }
-            else
-            {
-                drv_display_draw_text((uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y, left);
-            }
-        }
-
-        if (right_index >= g_ui_settings.sampler_slot_count)
-        {
-            continue;
-        }
-        const uint16_t global_slot = g_ui_settings.sampler_slots[right_index];
-        char right[24];
-        ui_page_settings_ram_slot_label(global_slot, right, sizeof(right), 62U);
-        if ((global_slot == g_ui_settings.sample_slot_selected)
-            && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS))
-        {
-            ui_theme_draw_focus_at(62, y - 1U, 66, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H,
-                                   right, (uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y);
-        }
-        else
-        {
-            drv_display_draw_text((uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y, right);
-        }
-    }
-
-    if (g_ui_settings.status_line[0] != '\0')
-    {
-        drv_display_draw_text(0U, UI_SETTINGS_STATUS_Y, g_ui_settings.status_line);
-    }
-
-    ui_page_settings_draw_sample_footer();
-    drv_display_set_font(&FONT_5X7);
-}
 
 static void ui_page_settings_render_wavetable_browser(void)
 {
@@ -1109,11 +948,6 @@ static void ui_page_settings_render(void)
     if (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
     {
         ui_page_settings_render_multi_browser();
-        return;
-    }
-    if (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
-    {
-        ui_page_settings_render_ram_browser();
         return;
     }
     if (level->view == UI_SETTINGS_VIEW_WAVETABLE)

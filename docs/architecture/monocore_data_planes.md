@@ -8,7 +8,6 @@ inter-coeur, ni image secondaire, ni protocole de coherence entre caches CPU.
 | Data plane | Writer | Reader | Contrat |
 |---|---|---|---|
 | FIFO fonctionnelle | CONTROL/SEQ | AUDIO IRQ | SPSC, timestamps, `DMB`, commit de transaction |
-| Sample RAM | STORAGE superloop | AUDIO IRQ | registry local, `ready`, generation, STOP et grace de 192 frames |
 | Wavetable | STORAGE superloop | AUDIO IRQ | registry local, pointeurs M7, generation, STOP et grace |
 | Multi | STORAGE superloop | AUDIO IRQ | registry local, `ready`, `registration_epoch`, STOP et leases |
 | Classic / REC_SOURCE | STORAGE superloop | AUDIO IRQ | publication locale, cles et leases avant recyclage |
@@ -32,7 +31,7 @@ non-cacheable conservent ce placement.
 ## Retrait
 
 Une ressource n'est recyclee qu'apres fermeture de l'ingress, STOP AUDIO et
-preuve d'extinction des lecteurs: grace bornee pour RAM/Wavetable, leases pour
+preuve d'extinction des lecteurs: grace bornee pour Wavetable, leases pour
 Multi/Classic/REC_SOURCE, ou consumer tail pour les rings. Les generations,
 epochs et tokens restants identifient des ressources ou operations I/O; ils ne
 sont pas des handshakes de processeurs.

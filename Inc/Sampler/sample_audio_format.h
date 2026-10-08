@@ -8,7 +8,7 @@ extern "C" {
 
 /*
  * Stream/Multi internal FLOAT32 contract.  This is deliberately separate
- * from the Sampler RAM format: the two pools have different ownership and
+ * from resident decoded buffers: the two stores have different ownership and
  * lifetime rules even when their sample representations match.
  */
 typedef enum

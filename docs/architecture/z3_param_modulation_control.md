@@ -62,14 +62,12 @@ moteur; les selecteurs d'asset locaux ne sont pas des Param.
 
 | Moteur | Parametres exposes | Type reel | Normal | SHIFT | Resolution terminale | Verdict |
 |---|---|---|---:|---:|---|---|
-| Sampler RAM | Gain, Start, Len, Loop Start | float normalise | 1 % | 0,01 % | FLOAT32, puis index d'echantillon pour les bornes | continu OK |
-| Sampler RAM | Tune | float, demi-tons | 1 st | 0,01 st | FLOAT32 jusqu'au ratio de lecture | continu OK |
-| Sampler RAM | Mode, Slice Count, Multi Loop | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
-| Streamer | Gain | float normalise | 1 % | 0,01 % | FLOAT32 | continu OK |
+| Streamer | Gain, Start, End, Loop Start | float normalise | 1 % | 0,01 % | FLOAT32, puis index d'echantillon pour les bornes | continu OK |
+| Streamer | Tune | float, demi-tons | 1 st | 0,01 st | FLOAT32 jusqu'au ratio de lecture | continu OK |
+| Streamer | Mode, Slice Count, Multi Loop | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
 | Streamer | Source BPM | float, BPM | 1 BPM | 0,01 BPM | FLOAT32 jusqu'au ratio de lecture | continu OK |
-| Streamer | Pitch | float, demi-tons | 1 st | 0,01 st | FLOAT32 jusqu'au pitch shifter | continu OK |
 | Streamer | DISP | float normalise | 1 % | 0,01 % | FLOAT32 | continu OK |
-| Streamer | Source, PlayMode, Loop, Stretch, Sync Len, Grain, Heads, Window | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
+| Streamer | Source, Stretch, Sync Len, Grain, Heads, Window | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
 | Prism/Braids | Param1/2 | float normalise ou domaine du modele | 1 % ou 1 cran | 0,01 % ou 1 cran | Q15; quantification explicite pour les modeles a domaine discret | continu/discret selon modele, OK |
 | Prism/Braids | AMOD, Volume, Balance, Pitch Mod 1/2, Drift | float normalise/bipolaire | 1 % | 0,01 % | FLOAT32, projection DSP native | continu OK |
 | Prism/Braids | Tune, Detune | float, demi-tons | 1 st | 0,01 st | FLOAT32 puis pitch Q7, soit 1/128 st | continu OK |

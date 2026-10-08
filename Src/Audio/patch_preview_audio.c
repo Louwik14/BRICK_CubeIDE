@@ -51,7 +51,6 @@ static void patch_preview_engine_reset(patch_preview_engine_t engine)
             brick6_acid_runtime_reset_instance(BRICK6_ACID_PREVIEW_INSTANCE_ID); break;
         case PATCH_PREVIEW_ENGINE_WAVE:
             brick6_wave_runtime_reset_instance(BRICK6_WAVE_PREVIEW_INSTANCE_ID); break;
-        case PATCH_PREVIEW_ENGINE_RAM:
         case PATCH_PREVIEW_ENGINE_STREAM:
         case PATCH_PREVIEW_ENGINE_MULTI:
             brick6_sampler_preview_reset(); break;
@@ -191,7 +190,6 @@ static uint8_t patch_preview_engine_apply(patch_preview_engine_t engine,
             return patch_preview_303_apply(engine, id, value);
         case PATCH_PREVIEW_ENGINE_WAVE:
             return patch_preview_wave_apply(id, value);
-        case PATCH_PREVIEW_ENGINE_RAM:
         case PATCH_PREVIEW_ENGINE_STREAM:
         case PATCH_PREVIEW_ENGINE_MULTI:
             return brick6_sampler_preview_apply_param(id, value);
@@ -222,15 +220,13 @@ static uint8_t patch_preview_engine_prepare(const patch_preview_publication_t *p
                 publication->asset.wavetable_slot[osc],
                 publication->asset.wavetable_generation[osc]);
     }
-    else if (publication->engine >= PATCH_PREVIEW_ENGINE_RAM)
+    else if (publication->engine >= PATCH_PREVIEW_ENGINE_STREAM)
     {
         if (publication->asset.present == 0U) return 0U;
         const brick6_sampler_preview_kind_t kind =
-            (publication->engine == PATCH_PREVIEW_ENGINE_RAM)
-                ? BRICK6_SAMPLER_PREVIEW_RAM
-                : (publication->engine == PATCH_PREVIEW_ENGINE_STREAM)
-                    ? BRICK6_SAMPLER_PREVIEW_STREAM
-                    : BRICK6_SAMPLER_PREVIEW_MULTI;
+            (publication->engine == PATCH_PREVIEW_ENGINE_STREAM)
+                ? BRICK6_SAMPLER_PREVIEW_STREAM
+                : BRICK6_SAMPLER_PREVIEW_MULTI;
         if (!brick6_sampler_preview_prepare(kind,
                 publication->asset.runtime_id)) return 0U;
     }
@@ -303,7 +299,6 @@ uint8_t patch_preview_audio_note_on(uint8_t note, uint8_t velocity)
             BRICK6_ACID_PREVIEW_INSTANCE_ID, note, velocity); break;
         case PATCH_PREVIEW_ENGINE_WAVE: brick6_wave_runtime_note_on(
             BRICK6_WAVE_PREVIEW_INSTANCE_ID, note, velocity); break;
-        case PATCH_PREVIEW_ENGINE_RAM:
         case PATCH_PREVIEW_ENGINE_STREAM:
         case PATCH_PREVIEW_ENGINE_MULTI:
             if (!brick6_sampler_preview_note_on(note, velocity)) return 0U;
@@ -334,7 +329,6 @@ uint8_t patch_preview_audio_note_off(uint8_t note)
             BRICK6_ACID_PREVIEW_INSTANCE_ID, note); break;
         case PATCH_PREVIEW_ENGINE_WAVE: brick6_wave_runtime_note_off(
             BRICK6_WAVE_PREVIEW_INSTANCE_ID, note); break;
-        case PATCH_PREVIEW_ENGINE_RAM:
         case PATCH_PREVIEW_ENGINE_STREAM:
         case PATCH_PREVIEW_ENGINE_MULTI:
             brick6_sampler_preview_note_off(note); break;
@@ -397,7 +391,7 @@ uint8_t patch_preview_audio_render_main(float *out_main_l, float *out_main_r,
     memset(g_patch_preview_render, 0, frames * sizeof(*g_patch_preview_render));
     memset(g_patch_preview_render_right, 0,
            frames * sizeof(*g_patch_preview_render_right));
-    if (g_patch_preview_audio.engine >= PATCH_PREVIEW_ENGINE_RAM)
+    if (g_patch_preview_audio.engine >= PATCH_PREVIEW_ENGINE_STREAM)
         (void)brick6_sampler_preview_render(g_patch_preview_render,
             g_patch_preview_render_right, frames);
     else

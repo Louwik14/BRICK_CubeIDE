@@ -242,7 +242,7 @@ static uint8_t ui_page_patch_assign_type_matches(track_type_t type)
         case PATCH_ASSIGN_TYPE_ACID:
             return (type == TRACK_TYPE_ACID) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_RAM:
-            return (type == TRACK_TYPE_RAM) ? 1U : 0U;
+            return (type == TRACK_TYPE_STREAM) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_STREAM:
             return (type == TRACK_TYPE_STREAM) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_MULTI:

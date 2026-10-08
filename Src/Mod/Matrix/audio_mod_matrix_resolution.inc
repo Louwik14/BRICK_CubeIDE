@@ -72,8 +72,6 @@ static track_type_t mod_matrix_ui_type_from_ctx(const track_audio_runtime_ctx_t 
 
     switch ((track_runtime_type_t)ctx->type)
     {
-        case TRACK_RUNTIME_TYPE_RAM:
-            return TRACK_TYPE_RAM;
         case TRACK_RUNTIME_TYPE_PRISM:
             return TRACK_TYPE_PRISM;
         case TRACK_RUNTIME_TYPE_WAVE:

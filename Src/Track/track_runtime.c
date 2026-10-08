@@ -247,8 +247,6 @@ track_runtime_type_t track_runtime_type_from_ui(track_type_t type)
         case TRACK_TYPE_NONE:
             return TRACK_RUNTIME_TYPE_NONE;
 
-        case TRACK_TYPE_RAM:
-            return TRACK_RUNTIME_TYPE_RAM;
         case TRACK_TYPE_STREAM:
             return TRACK_RUNTIME_TYPE_STREAM;
         case TRACK_TYPE_PRISM:
@@ -291,8 +289,7 @@ track_runtime_engine_t track_runtime_choose_engine(
             ? TRACK_RUNTIME_ENGINE_DRUM : TRACK_RUNTIME_ENGINE_NONE;
     if (family == TRACK_RUNTIME_FAMILY_SAMPLER)
     {
-        if ((type == TRACK_RUNTIME_TYPE_RAM) || (type == TRACK_RUNTIME_TYPE_STREAM)
-                || (type == TRACK_RUNTIME_TYPE_MULTI))
+        if ((type == TRACK_RUNTIME_TYPE_STREAM) || (type == TRACK_RUNTIME_TYPE_MULTI))
             return TRACK_RUNTIME_ENGINE_SAMPLER;
     }
     if (family == TRACK_RUNTIME_FAMILY_SYNTH)
@@ -328,7 +325,7 @@ uint8_t track_runtime_program_is_canonical(track_runtime_engine_t engine,
             && (engine == TRACK_RUNTIME_ENGINE_NONE));
     if (group_child != 0U)
         return (uint8_t)((family == TRACK_RUNTIME_FAMILY_SAMPLER)
-            && (type == TRACK_RUNTIME_TYPE_RAM)
+            && (type == TRACK_RUNTIME_TYPE_STREAM)
             && (engine == TRACK_RUNTIME_ENGINE_SAMPLER));
 
     if ((family == TRACK_RUNTIME_FAMILY_OTHER)
@@ -430,8 +427,7 @@ uint8_t track_runtime_compute_flags(track_runtime_family_t family,
         flags |= TRACK_RUNTIME_FLAG_CAN_PLAY;
     }
 
-    if ((family == TRACK_RUNTIME_FAMILY_SAMPLER)
-            || (type == TRACK_RUNTIME_TYPE_RAM))
+    if (family == TRACK_RUNTIME_FAMILY_SAMPLER)
     {
         flags |= TRACK_RUNTIME_FLAG_CAN_PLAY;
     }
@@ -479,9 +475,6 @@ static uint8_t track_runtime_param_is_clip_only(param_id_t param)
 {
     return (uint8_t)((param == PARAM_SAMPLER_CLIP_SOURCE_BPM)
                      || (param == PARAM_SAMPLER_CLIP_SYNC_LENGTH)
-                     || (param == PARAM_SAMPLER_CLIP_PITCH)
-                     || (param == PARAM_SAMPLER_CLIP_PLAY_MODE)
-                     || (param == PARAM_SAMPLER_CLIP_LOOP)
                      || (param == PARAM_SAMPLER_CLIP_STRETCH_MODE)
                      || (param == PARAM_SAMPLER_CLIP_GRAIN)
                      || (param == PARAM_SAMPLER_CLIP_SOURCE));
@@ -749,7 +742,6 @@ uint8_t track_runtime_audio_projection_param_is_current(
         return descriptor.engine == TRACK_RUNTIME_ENGINE_FM;
     if (parameter_id == CONTROL_AUDIO_SAMPLER_ASSET)
         return (uint8_t)((descriptor.type == TRACK_RUNTIME_TYPE_STREAM)
-            || (descriptor.type == TRACK_RUNTIME_TYPE_RAM)
             || (descriptor.type == TRACK_RUNTIME_TYPE_MULTI));
     return 1U;
 }
@@ -1270,9 +1262,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_SAMPLER_LOOP_START:
         case PARAM_SAMPLER_CLIP_SOURCE_BPM:
         case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
-        case PARAM_SAMPLER_CLIP_PITCH:
-        case PARAM_SAMPLER_CLIP_PLAY_MODE:
-        case PARAM_SAMPLER_CLIP_LOOP:
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
         case PARAM_SAMPLER_CLIP_GRAIN:
         case PARAM_SAMPLER_CLIP_SOURCE:

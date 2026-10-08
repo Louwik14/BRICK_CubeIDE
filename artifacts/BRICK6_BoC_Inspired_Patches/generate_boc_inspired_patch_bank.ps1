@@ -712,7 +712,7 @@ $readmeTitle = if ($Bank -eq "BoC") { "# BRICK6 BoC-Inspired Patch Bank" } else 
 [void]$readme.AppendLine()
 [void]$readme.AppendLine("The filename carries the slot only; B6P payloads contain no slot number, so files may be renamed to another valid `Pxxxx.B6P` slot.")
 [void]$readme.AppendLine()
-[void]$readme.AppendLine("Wave is intentionally excluded: the current Patch payload stores Wave table indices but `patch_v1_capture_sampler_asset()` captures portable asset paths only for Sampler RAM/STREAM/MULTI. A Wave patch would therefore depend on an arbitrary preloaded wavetable slot.")
+[void]$readme.AppendLine("Wave is intentionally excluded: the current Patch payload stores Wave table indices but `patch_v1_capture_sampler_asset()` captures portable asset paths only for STREAM/MULTI. A Wave patch would therefore depend on an arbitrary preloaded wavetable slot.")
 [void]$readme.AppendLine()
 [void]$readme.AppendLine("## Patch list")
 [void]$readme.AppendLine()

@@ -8,7 +8,7 @@ static const track_type_t k_synth_types[] = {
     TRACK_TYPE_TB303, TRACK_TYPE_ACID
 };
 static const track_type_t k_sampler_types[] = {
-    TRACK_TYPE_RAM, TRACK_TYPE_STREAM, TRACK_TYPE_MULTI, TRACK_TYPE_GROUP
+    TRACK_TYPE_STREAM, TRACK_TYPE_MULTI, TRACK_TYPE_GROUP
 };
 static const track_type_t k_midi_types[] = { TRACK_TYPE_MIDI };
 static const track_type_t k_external_types[] = { TRACK_TYPE_EXTERNAL };
@@ -142,7 +142,7 @@ bool track_catalog_type_is_available(
         return false;
     }
     if ((entity.role == ENTITY_ROLE_GROUP_CHILD)
-            && ((family != TRACK_FAMILY_SAMPLER) || (type != TRACK_TYPE_RAM)))
+            && ((family != TRACK_FAMILY_SAMPLER) || (type != TRACK_TYPE_STREAM)))
     {
         return false;
     }

@@ -84,7 +84,6 @@ typedef enum
     PERSIST_TYPE_FM             = 0x464D2020UL, /* FM   */
     PERSIST_TYPE_DRUM_MD        = 0x4D444D20UL, /* MDM  */
     PERSIST_TYPE_MIDI           = 0x4D494449UL, /* MIDI */
-    PERSIST_TYPE_RAM_SAMPLE     = 0x52414D20UL, /* RAM  */
     PERSIST_TYPE_STREAM_SAMPLE  = 0x5354524DUL, /* STRM */
     PERSIST_TYPE_MULTI_SAMPLE   = 0x4D554C54UL, /* MULT */
     PERSIST_TYPE_EXTERNAL       = 0x45585420UL, /* EXT  */
@@ -96,7 +95,6 @@ typedef enum
 typedef enum
 {
     PERSIST_ASSET_SAMPLE_STREAM = 0x5354524DUL, /* STRM */
-    PERSIST_ASSET_SAMPLE_RAM    = 0x52414D20UL, /* RAM  */
     PERSIST_ASSET_MULTI         = 0x4D554C54UL, /* MULT */
     PERSIST_ASSET_WAVETABLE     = 0x57415645UL  /* WAVE */
 } persist_control_asset_kind_key_value_t;

@@ -29,7 +29,7 @@ static uint8_t ui_asset_loaded_or_selected(const char *source, uint8_t folder)
             && ui_asset_path_matches(desc->path, source, folder) != 0U)
             return 1U;
     }
-    const uint32_t kinds[] = {PERSIST_ASSET_SAMPLE_STREAM, PERSIST_ASSET_SAMPLE_RAM,
+    const uint32_t kinds[] = {PERSIST_ASSET_SAMPLE_STREAM,
                               PERSIST_ASSET_MULTI, PERSIST_ASSET_WAVETABLE};
     uint16_t slots[SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS];
     for (uint8_t k = 0U; k < 4U; ++k)
@@ -159,7 +159,6 @@ static uint8_t ui_asset_mutation_allowed(const char *source, uint8_t folder)
         || sample_cache_has_pending_sd_work() != 0U
         || multi_sample_import_is_active() != 0U
         || multi_sample_load_has_pending() != 0U
-        || sampler_ram_pool_load_async_busy() != 0U
         || wavetable_pool_load_async_busy() != 0U)
     {
         ui_page_settings_status("STOP AUDIO / BUSY");

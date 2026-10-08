@@ -1004,7 +1004,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
     }
 
     if ((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)
-            && (ui_get_track_type(active_track) == TRACK_TYPE_RAM))
+            && (ui_get_track_type(active_track) == TRACK_TYPE_STREAM))
     {
         const char *name = NULL;
         switch (id)

@@ -25,7 +25,7 @@ uint8_t ui_page_settings_is_open(void)
     return (ui_page_get_id() == UI_PAGE_SETTINGS) ? 1U : 0U;
 }
 
-static const char *ui_page_settings_preview_sample_path(ui_settings_view_t view)
+static const char *ui_page_settings_preview_sample_path(void)
 {
     if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
     {
@@ -36,16 +36,6 @@ static const char *ui_page_settings_preview_sample_path(ui_settings_view_t view)
     }
 
     uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if (view == UI_SETTINGS_VIEW_SAMPLE_RAM)
-    {
-        if (ui_page_settings_ram_backend_from_global(
-                g_ui_settings.sample_slot_selected, &backend_slot) == 0U)
-            return 0;
-        const sampler_ram_slot_t *const slot =
-            sampler_ram_pool_get_slot(backend_slot);
-        return ((slot != 0) && (slot->state == SAMPLER_RAM_SLOT_READY)
-                && (slot->path[0] != '\0')) ? slot->path : 0;
-    }
     if (ui_page_settings_stream_backend_from_global(
             g_ui_settings.sample_slot_selected, &backend_slot) == 0U)
         return 0;
@@ -106,10 +96,9 @@ static void ui_page_settings_preview_current(void)
     uint8_t started = 0U;
     if (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
         started = ui_page_settings_preview_multi_begin();
-    else if (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM
-             || level->view == UI_SETTINGS_VIEW_SAMPLER)
+    else if (level->view == UI_SETTINGS_VIEW_SAMPLER)
     {
-        const char *const path = ui_page_settings_preview_sample_path(level->view);
+        const char *const path = ui_page_settings_preview_sample_path();
         if (path != 0) started = sd_preview_begin(path);
     }
     if (started != 0U)
@@ -142,7 +131,6 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
         return;
 
     if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-        || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
         || (level->view == UI_SETTINGS_VIEW_WAVETABLE)
         || (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE))
     {
@@ -187,7 +175,6 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
             if ((uint16_t)index != old_selected)
             {
                 if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-                    || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
                     || (level->view == UI_SETTINGS_VIEW_WAVETABLE)
                     || (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE))
                 {
@@ -195,11 +182,10 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
                 }
             }
             g_ui_settings.sample_selected = (uint16_t)index;
-            if (((level->view == UI_SETTINGS_VIEW_SAMPLER)
-                 || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM))
-                && ((g_ui_settings.sample_selected < g_ui_settings.sample_page_start)
-                    || (g_ui_settings.sample_selected >= (uint16_t)(g_ui_settings.sample_page_start
-                                                                    + g_ui_settings.sample_entry_count))))
+            if (level->view == UI_SETTINGS_VIEW_SAMPLER
+                && (g_ui_settings.sample_selected < g_ui_settings.sample_page_start
+                    || g_ui_settings.sample_selected >= (uint16_t)(g_ui_settings.sample_page_start
+                                                                    + g_ui_settings.sample_entry_count)))
             {
                 if ((ui_page_settings_sample_browser_refresh() == 0U)
                     && (wav_loader_catalog_view_busy() == 0U))
@@ -236,7 +222,6 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
             if (new_global != g_ui_settings.sample_slot_selected)
             {
                 if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-                    || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
                     || (level->view == UI_SETTINGS_VIEW_WAVETABLE)
                     || (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE))
                 {

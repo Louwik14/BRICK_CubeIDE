@@ -14,7 +14,6 @@
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache.h"
-#include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Seq/seq_runtime.h"
 #include "Storage/audio_recorder.h"
@@ -68,7 +67,6 @@ void control_domain_init(void)
     sd_preview_init();
     sample_page_cache_init();
     sample_global_pool_init();
-    sampler_ram_pool_init();
     wavetable_pool_init();
     multi_sample_pool_init();
     multi_sample_loader_init();

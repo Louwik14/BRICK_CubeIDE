@@ -526,11 +526,6 @@ brick6_sampler_runtime_start_multi_renderer(uint8_t track_id,
         voice->active = 0U;
         voice->position = 0.0f;
         voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
-        voice->ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
-        voice->ram_generation = 0U;
-        voice->ram_data = NULL;
-        voice->ram_channels = 0U;
-        voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
     }
 
     brick6_sampler_voice_t *const multi_voice =
@@ -611,7 +606,7 @@ brick6_sampler_runtime_start_multi_renderer(uint8_t track_id,
     }
     if (multi_voice_dsp_acquire(multi_handle,
                                 dsp_format,
-                                (float)BRICK6_SAMPLER_RAM_OUTPUT_SAMPLE_RATE_HZ,
+                                (float)BOARD_AUDIO_SAMPLE_RATE_HZ,
                                 &dsp_slot) == 0U)
     {
         sample_voice_reader_reset(&multi_voice->reader);
@@ -650,7 +645,6 @@ brick6_sampler_runtime_start_multi_renderer(uint8_t track_id,
     multi_voice->fade_in_frames = common_plan.fade_in_frames;
     multi_voice->fade_out_frames = common_plan.fade_out_frames;
     multi_voice->step_signed = (float)common_plan.step_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
-    multi_voice->reverse = 0U;
     multi_voice->loop_mode = common_plan.loop_mode;
     multi_voice->use_slice = 0U;
     multi_voice->use_segment_cursor = 1U;
@@ -843,11 +837,6 @@ void brick6_sampler_runtime_note_off_note(uint8_t track_id, uint8_t note)
         return;
     }
 
-    if (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
-    {
-        return;
-    }
-
     brick6_sampler_runtime_stop(track_id);
 }
 
@@ -873,11 +862,6 @@ void brick6_sampler_runtime_stop(uint8_t track_id)
     voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
     voice->multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
     voice->multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-    voice->ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
-    voice->ram_generation = 0U;
-    voice->ram_data = NULL;
-    voice->ram_channels = 0U;
-    voice->ram_format = SAMPLER_RAM_FORMAT_NONE;
     sample_voice_reader_stop(&voice->reader);
     brick6_sampler_runtime_multi_stop_track(track_id);
     brick6_sampler_runtime_refresh_track_activity(track_id);
