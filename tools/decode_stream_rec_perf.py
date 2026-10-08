@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decode `x/Nwx &g_stream_rec_perf` output from GDB (ABI v3)."""
+"""Decode `x/Nwx &g_stream_rec_perf` output from GDB (ABI v4)."""
 import argparse
 import re
 import struct
@@ -9,7 +9,8 @@ from pathlib import Path
 CPU = (
     "audio_total", "audio_float_to_pcm24", "audio_peak_meter",
     "audio_ring_copy", "reader_need", "reader_lease",
-    "reader_resolve", "manager_pick", "manager_finish", "cache_reserve",
+    "reader_resolve", "protection_update_audio",
+    "manager_pick", "manager_finish", "cache_reserve",
     "cache_recycle", "stream_command", "stream_submit", "stream_io_begin",
     "stream_io_finalize", "stream_read_start", "stream_read_complete",
     "stream_dma_launch", "rec_dma_launch",
@@ -30,10 +31,14 @@ COUNT = (
     "rec_write_bytes", "rec_writes", "rec_write_min_bytes",
     "rec_write_max_bytes", "rec_ring_fill", "rec_ring_max",
     "rec_ring_min_free", "rec_ring_near_full", "rec_overflow",
-    "rec_source_pages", "rec_source_frames", "test_elapsed_ms",
+    "rec_source_pages", "rec_source_frames",
+    "protection_update_storage", "recyclable_candidates",
+    "reserve_searches", "reserve_candidates_tested",
+    "reserve_candidates_tested_max", "reserve_revalidation_fail",
+    "reserve_no_candidate", "test_elapsed_ms",
 )
 MAGIC = 0x46505242
-VERSION = 3
+VERSION = 4
 SIZE = 16 + 16 * (len(CPU) + len(WALL)) + 8 * len(COUNT)
 
 
@@ -89,7 +94,8 @@ def main():
         return (f"count={calls} avg_us={total * 1e6 / hz / calls if calls else 0:.2f} "
                 f"max_us={maximum * 1e6 / hz:.2f}")
 
-    stream_cpu = ["reader_need", "reader_lease", "reader_resolve", "manager_pick",
+    stream_cpu = ["reader_need", "reader_lease", "reader_resolve",
+                  "protection_update_audio", "manager_pick",
                   "manager_finish", "cache_reserve", "cache_recycle", "stream_command",
                   "stream_submit", "stream_io_begin", "stream_io_finalize",
                   "stream_read_start", "stream_read_complete", "stream_dma_launch"]
@@ -100,7 +106,8 @@ def main():
     print("\nSTREAMER\n--------")
     for name in COUNT[:21]:
         print(f"{name}: {counts[name]}")
-    total = sum(cpu[n][1] for n in stream_cpu if n != "stream_dma_launch")
+    total = sum(cpu[n][1] for n in stream_cpu
+                if n not in ("stream_dma_launch", "protection_update_audio"))
     ready = counts["pages_ready"]
     print(f"sampled_cpu_cycles_excl_nested_dma_launch: {total}; cycles/ready_page: {total / ready if ready else 0:.1f}")
     print(f"physical_bytes/read: {counts['read_bytes'] / counts['reads'] if counts['reads'] else 0:.1f}")
@@ -109,6 +116,12 @@ def main():
         print(f"pages/s: {ready / seconds:.2f}; physical_MB/s: {counts['read_bytes'] / 1e6 / seconds:.3f}")
     for name in stream_cpu:
         if cpu[name][0]: print(f"CPU {name}: {cycles(name)}")
+    searches = counts["reserve_searches"]
+    tested = counts["reserve_candidates_tested"]
+    print(f"reserve_candidates/search: {tested / searches if searches else 0:.2f}; "
+          f"max={counts['reserve_candidates_tested_max']}; "
+          f"revalidation_fail={counts['reserve_revalidation_fail']}; "
+          f"no_candidate={counts['reserve_no_candidate']}")
     for name in WALL[:4]: print(f"wall {name}: {latency(name)}")
     print("\nRECORDER AUDIO\n--------------")
     for name in ("rec_frames", "audio_converted_frames", "rec_pcm_bytes"):

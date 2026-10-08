@@ -51,6 +51,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     BRICK_PATTERN_RECALL_DIAG=$<BOOL:${BRICK_PATTERN_RECALL_DIAG}>)
 option(BRICK_PERF_DIAG "Instrument the H743 Streamer/Recorder baseline" ON)
 if(BRICK_PERF_DIAG)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BRICK_PERF_DIAG=1)
     target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
         "LINKER:--undefined=brick_perf_diag_reset"
         "LINKER:--undefined=brick_perf_diag_snapshot")

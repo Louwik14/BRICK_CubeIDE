@@ -15,6 +15,7 @@ uint8_t sample_page_cache_mark_static_page_key_alloc(sample_audio_key_t key,
 
     page->static_resident = 1U;
     page->last_touch = ++g_sample_page_cache_state.touch_counter;
+    sample_page_cache_refresh_runtime_recyclable(page);
     return 1U;
 }
 

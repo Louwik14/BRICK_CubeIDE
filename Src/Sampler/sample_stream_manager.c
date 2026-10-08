@@ -17,8 +17,9 @@
 
 #if BRICK_PERF_DIAG
 static uint32_t g_perf_reset_tick;
-/* DTCM is CPU-only and debugger-visible without D-cache writeback. */
-AUDIO_HOT volatile brick_stream_rec_perf_t g_stream_rec_perf
+/* The non-cacheable D3 diagnostics window is coherent for AUDIO/STORAGE/GDB
+ * and avoids consuming the nearly full DTCM audio arena. */
+IRQ_SHARED_D3 volatile brick_stream_rec_perf_t g_stream_rec_perf
     __attribute__((used, externally_visible));
 void __attribute__((used, externally_visible)) brick_perf_diag_reset(void)
 {
@@ -28,7 +29,7 @@ void __attribute__((used, externally_visible)) brick_perf_diag_reset(void)
     g_perf_reset_tick = HAL_GetTick();
     memset((void *)&g_stream_rec_perf, 0, sizeof(g_stream_rec_perf));
     g_stream_rec_perf.magic = 0x46505242U;
-    g_stream_rec_perf.version = 3U;
+    g_stream_rec_perf.version = 4U;
     g_stream_rec_perf.size = sizeof(g_stream_rec_perf);
     g_stream_rec_perf.cpu_hz = SystemCoreClock;
 }

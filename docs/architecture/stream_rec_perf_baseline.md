@@ -1,6 +1,6 @@
 # Streamer / Recorder performance baseline (H743)
 
-Format DTCM `g_stream_rec_perf`: magic `0x46505242` (`BRPF` little endian), version 3, fixed size in the header. DTCM avoids stale GDB reads of dirty D-cache lines; call reset before reading because this section is NOLOAD. The one object contains a clock frequency, CPU spans (`calls`, `max`, `total` cycles), wall spans with the same fields, and 64 bit counters. `BRICK_PERF_DIAG=1` is the reference build default. The decoder is `tools/decode_stream_rec_perf.py`.
+Format non-cacheable D3 `g_stream_rec_perf`: magic `0x46505242` (`BRPF` little endian), version 4, fixed size in the header. La fenetre IRQ-shared D3 evite les lectures GDB de lignes D-cache sales; appeler reset avant lecture car cette section est NOLOAD. The one object contains a clock frequency, CPU spans (`calls`, `max`, `total` cycles), wall spans with the same fields, and 64 bit counters. `BRICK_PERF_DIAG=1` est explicitement defini par le preset lorsque l'option CMake homonyme est active. The decoder is `tools/decode_stream_rec_perf.py`.
 
 ## Procedure
 
@@ -37,3 +37,12 @@ echantillonnes lors des pushes AUDIO reussis; near-full signifie moins d'un
 huitieme de capacite libre.
 
 The main baseline omits a unique per reader breakdown, exact AUDIO need-to-I/O delay, late page classification, and exact attribution of scheduler CPU outside the measured functions. Zero-valued spans indicate no probe for that stage or no occurrence. The decoder does not claim a total CPU percentage; nested spans and unmeasured paths prevent that inference. There is no allocation, logging, SD diagnostic write or event ring in this instrumentation.
+
+La version 4 ajoute le span `protection_update_audio`, limite a la publication
+du compteur de changement des leases, et les compteurs
+`protection_update_storage`, `recyclable_candidates`, `reserve_searches`,
+`reserve_candidates_tested`, `reserve_candidates_tested_max`,
+`reserve_revalidation_fail` et `reserve_no_candidate`. La moyenne des
+candidates soumises a la revalidation finale vaut
+`reserve_candidates_tested / reserve_searches`; `recyclable_candidates`
+accumule la population du bitmap filtre au debut de chaque recherche.
