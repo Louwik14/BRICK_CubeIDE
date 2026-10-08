@@ -11,7 +11,7 @@ namespace
 constexpr float kDefaultSampleRate = 48000.0f;
 constexpr uint32_t kEngineBufferSize = 32768U;
 
-AUDIO_WARM ALIGN32 static float g_revb_engine_buffer[kEngineBufferSize];
+STREAM_BENCH_COLD_SDRAM static float g_revb_engine_buffer[kEngineBufferSize];
 
 struct revb_global_state_t
 {

@@ -76,7 +76,7 @@ typedef struct
     uint8_t vcf_primed;
 } tb303_runtime_t;
 
-AUDIO_HOT static tb303_runtime_t g_tb303[BRICK6_TB303_INSTANCE_COUNT];
+STREAM_BENCH_COLD_SDRAM static tb303_runtime_t g_tb303[BRICK6_TB303_INSTANCE_COUNT];
 AUDIO_HOT static tb303_runtime_t g_tb303_preview;
 #include "tb303_tables.inc"
 

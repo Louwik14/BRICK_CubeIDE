@@ -59,7 +59,7 @@ STORAGE_STATE_SDRAM static wavetable_slot_t g_wavetable_old_commit_snapshot;
 STORAGE_STATE_SDRAM static FIL g_wavetable_transaction_files[2];
 STORAGE_STATE_SDRAM static char
     g_wavetable_transaction_paths[2][WAVETABLE_POOL_PATH_MAX];
-AUDIO_WARM ALIGN32 static uint8_t g_wavetable_pool_io[WAVETABLE_POOL_IO_BYTES];
+STREAM_BENCH_COLD_SDRAM static uint8_t g_wavetable_pool_io[WAVETABLE_POOL_IO_BYTES];
 STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_real[WAVETABLE_SOURCE_2048_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float

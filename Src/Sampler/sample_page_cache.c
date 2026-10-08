@@ -54,17 +54,17 @@ typedef struct
 
 typedef sample_page_backing_index_entry_t sample_page_index_entry_t;
 
-static CTRL_STATE sample_page_cache_state_t g_sample_page_cache_state;
-SDRAM_PAGE_META static sample_page_sample_desc_t
+static STREAM_BENCH_HOT_DTCM sample_page_cache_state_t g_sample_page_cache_state;
+STREAM_BENCH_HOT_D1 static sample_page_sample_desc_t
     g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
-static CTRL_STATE uint16_t g_sample_page_reserved_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
-static CTRL_STATE uint16_t g_sample_page_free_cursor;
-static CTRL_STATE uint16_t g_sample_page_evict_cursor;
-static CTRL_STATE uint64_t g_sample_page_runtime_free_bitmap;
-static CTRL_STATE uint64_t g_sample_page_runtime_ready_bitmap;
+static STREAM_BENCH_HOT_DTCM uint16_t g_sample_page_reserved_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
+static STREAM_BENCH_HOT_DTCM uint16_t g_sample_page_free_cursor;
+static STREAM_BENCH_HOT_DTCM uint16_t g_sample_page_evict_cursor;
+static STREAM_BENCH_HOT_DTCM uint64_t g_sample_page_runtime_free_bitmap;
+static STREAM_BENCH_HOT_DTCM uint64_t g_sample_page_runtime_ready_bitmap;
 /* Zero-initialized outside the NOLOAD page metadata.  Boot may not inspect
  * payload_cpu_clean until reset has established every descriptor. */
-static uint8_t g_sample_page_payload_clean_contract_active;
+static STREAM_BENCH_HOT_DTCM uint8_t g_sample_page_payload_clean_contract_active;
 
 #define g_sample_page_desc g_sample_page_descriptor
 

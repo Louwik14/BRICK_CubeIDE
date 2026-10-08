@@ -77,9 +77,9 @@ _Static_assert(sizeof(sample_page_stream_load_info_t) == 128U,
                "stream load snapshot budget changed");
 _Static_assert(sizeof(sample_stream_io_async_t) == 424U,
                "stream async job budget changed");
-STREAM_LOCAL_D2 static sample_stream_io_async_t
+STREAM_BENCH_HOT_D1 static sample_stream_io_async_t
     g_sample_stream_io_async[SAMPLE_STREAM_IO_JOB_COUNT];
-static uint32_t g_sample_stream_io_next_order;
+STREAM_BENCH_HOT_DTCM static uint32_t g_sample_stream_io_next_order;
 static sample_stream_read_chunk_kib_t g_sample_stream_io_chunk_kib =
     (sample_stream_read_chunk_kib_t)BRICK6_STREAM_READ_CHUNK_KIB;
 

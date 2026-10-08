@@ -15,9 +15,10 @@
 #include <string.h>
 
 /* Single CONTROL writer. Published slots are never modified while SEQ reads. */
-static seq_pattern_t g_pattern_slot_a;
+static STREAM_BENCH_COLD_SDRAM seq_pattern_t g_pattern_slot_a;
 static SEQ_STATE_D2 seq_pattern_t g_pattern_slot_b;
-static seq_lock_pattern_t g_locks_a_d1[4][SEQ_ENGINE_LOCK_POOL_CAPACITY];
+static STREAM_BENCH_COLD_SDRAM seq_lock_pattern_t
+    g_locks_a_d1[4][SEQ_ENGINE_LOCK_POOL_CAPACITY];
 static CONTROL_STATE_SRAM2 seq_lock_pattern_t g_locks_a_sram2[7][SEQ_ENGINE_LOCK_POOL_CAPACITY];
 static IRQ_SHARED_D3 seq_lock_pattern_t g_locks_a_d3[5][SEQ_ENGINE_LOCK_POOL_CAPACITY];
 static SEQ_STATE_D2 seq_lock_pattern_t g_locks_b[SEQ_LANE_CAPACITY][SEQ_ENGINE_LOCK_POOL_CAPACITY];

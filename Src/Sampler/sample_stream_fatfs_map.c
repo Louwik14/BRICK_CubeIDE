@@ -19,10 +19,10 @@ typedef struct
     sample_stream_physical_extent_t extents[SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK];
 } sample_stream_physical_pool_block_t;
 
-SDRAM_STREAM_SERVICE static sample_stream_physical_pool_block_t
+STREAM_BENCH_HOT_D1 static sample_stream_physical_pool_block_t
     g_sample_stream_physical_pool[SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS];
 SDRAM_STREAM_SCRATCH static DWORD g_sample_stream_clmt_scratch[SAMPLE_STREAM_FATFS_CLMT_ITEMS];
-static uint32_t g_sample_stream_physical_generation;
+STREAM_BENCH_HOT_DTCM static uint32_t g_sample_stream_physical_generation;
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(sizeof(sample_stream_physical_extent_t) == 12U,

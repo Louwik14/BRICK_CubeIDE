@@ -73,7 +73,7 @@ struct audio_fx_runtime_plan
     audio_fx_plan_sample_fn after_filter_sample;
 };
 
-AUDIO_HOT static audio_fx_runtime_slot_t
+STREAM_BENCH_COLD_SDRAM static audio_fx_runtime_slot_t
     g_audio_fx_runtime[AUDIO_FX_OWNER_COUNT][AUDIO_FX_SLOT_COUNT];
 _Static_assert(sizeof(g_audio_fx_runtime) == 6144U,
                "Audio FX runtime bank size changed");
@@ -81,7 +81,7 @@ AUDIO_HOT static audio_fx_runtime_plan_t g_audio_fx_plan[AUDIO_FX_OWNER_COUNT];
 _Static_assert(sizeof(g_audio_fx_plan) == 544U,
                "Audio FX structural-plan bank size changed");
 
-AUDIO_WARM static fx_audio_vibe_history_t
+STREAM_BENCH_COLD_SDRAM static fx_audio_vibe_history_t
     g_audio_fx_vibe_history[AUDIO_FX_OWNER_COUNT];
 AUDIO_HISTORY_SDRAM static fx_audio_drift_history_t
     g_audio_fx_drift_history[AUDIO_FX_OWNER_COUNT][2];

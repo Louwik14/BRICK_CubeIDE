@@ -1,9 +1,10 @@
 #include "Sampler/sample_stream_scheduler.h"
+#include "Platform/memory_layout.h"
 
-static uint8_t g_sample_stream_scheduler_round_robin_cursor;
-static uint8_t g_sample_stream_scheduler_round_active;
-static uint8_t g_sample_stream_scheduler_slots_left;
-static uint32_t g_sample_stream_scheduler_passes_left;
+STREAM_BENCH_HOT_DTCM static uint8_t g_sample_stream_scheduler_round_robin_cursor;
+STREAM_BENCH_HOT_DTCM static uint8_t g_sample_stream_scheduler_round_active;
+STREAM_BENCH_HOT_DTCM static uint8_t g_sample_stream_scheduler_slots_left;
+STREAM_BENCH_HOT_DTCM static uint32_t g_sample_stream_scheduler_passes_left;
 
 void sample_stream_scheduler_init(void)
 {

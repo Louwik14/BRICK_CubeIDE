@@ -10,7 +10,7 @@ typedef struct
     uint8_t prepared;
 } brick6_sampler_preview_runtime_t;
 
-AUDIO_WARM static brick6_sampler_preview_runtime_t g_sampler_preview;
+STREAM_BENCH_HOT_DTCM static brick6_sampler_preview_runtime_t g_sampler_preview;
 AUDIO_HISTORY_SDRAM static float
     g_sampler_preview_shifter_delay[2U][BRICK6_CLIP_SHIFTER_DELAY_FRAMES];
 

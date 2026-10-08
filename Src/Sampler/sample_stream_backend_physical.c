@@ -6,13 +6,14 @@
 #include "SD/sd_block_device.h"
 #include "stm32h7xx_hal.h"
 #include "Sampler/sample_stream_io.h"
+#include "Platform/memory_layout.h"
 
 #define SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE (512U)
 #define SAMPLE_STREAM_PHYSICAL_PENDING_COUNT (2U)
 
-static sample_stream_backend_physical_async_t
+STREAM_BENCH_HOT_DTCM static sample_stream_backend_physical_async_t
     *g_sample_stream_physical_pending[SAMPLE_STREAM_PHYSICAL_PENDING_COUNT];
-static uint32_t g_sample_stream_physical_next_generation = 1U;
+STREAM_BENCH_HOT_DTCM static uint32_t g_sample_stream_physical_next_generation = 1U;
 
 static int32_t sample_stream_backend_physical_find(
     const sample_stream_backend_physical_async_t *async)

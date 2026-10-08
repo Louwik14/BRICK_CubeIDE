@@ -18,8 +18,8 @@
 
 #if BRICK_PERF_DIAG
 static uint32_t g_perf_reset_tick;
-/* DTCM is CPU-only and debugger-visible without D-cache writeback. */
-AUDIO_HOT volatile brick_stream_rec_perf_t g_stream_rec_perf
+/* Benchmark diagnostics stay uncached/debugger-visible without consuming DTCM. */
+IRQ_SHARED_D3 volatile brick_stream_rec_perf_t g_stream_rec_perf
     __attribute__((used, externally_visible));
 void __attribute__((used, externally_visible)) brick_perf_diag_reset(void)
 {
@@ -50,7 +50,7 @@ _Static_assert(SAMPLE_CLASSIC_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
 _Static_assert(SAMPLE_STREAM_IO_MAX_READERS == 10U,
                "eight musical readers plus Recorder and Preview");
 #endif
-static uint8_t g_sample_stream_manager_initialized;
+STREAM_BENCH_HOT_DTCM static uint8_t g_sample_stream_manager_initialized;
 static uint8_t sample_stream_manager_candidate_for_slot(
     uint8_t slot,
     sample_stream_scheduler_candidate_t *out_candidate,

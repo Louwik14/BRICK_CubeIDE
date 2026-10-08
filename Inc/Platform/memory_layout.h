@@ -30,6 +30,11 @@
 /* WARM: block DSP state not directly DMA-owned */
 #define AUDIO_WARM SEC_ATTR(".ram_d1_audio")
 
+/* STREAM E2E ceiling experiment: placement-only, not a product layout. */
+#define STREAM_BENCH_HOT_DTCM SEC_ATTR(".dtcm_audio")
+#define STREAM_BENCH_HOT_D1 SEC_ATTR(".ram_d1_audio")
+#define STREAM_BENCH_COLD_SDRAM SEC_ATTR(".sdram_audio_cold") ALIGN32
+
 /* DMA/shared buffers: hardware-proven non-cacheable D2 contract. */
 #define DMA_BUFFER SEC_ATTR(".ram_d2_dma") ALIGN32
 

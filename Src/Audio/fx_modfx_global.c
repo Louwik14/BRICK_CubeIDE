@@ -46,7 +46,7 @@ typedef struct {
     uint8_t model;
 } modfx_state_t;
 
-AUDIO_WARM static modfx_history_t history;
+STREAM_BENCH_COLD_SDRAM static modfx_history_t history;
 AUDIO_WARM static modfx_state_t state;
 
 static inline __attribute__((always_inline)) float lerp(float a, float b, float fraction)

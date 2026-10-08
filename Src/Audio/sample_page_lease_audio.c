@@ -6,9 +6,9 @@
 #include "Platform/memory_layout.h"
 #include "Platform/stream_rec_perf.h"
 
-STREAM_LOCAL_D2 sample_page_lease_t
+STREAM_BENCH_HOT_DTCM sample_page_lease_t
     g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];
-STREAM_LOCAL_D2 volatile uint32_t g_sample_page_lease_active_mask[2];
+STREAM_BENCH_HOT_DTCM volatile uint32_t g_sample_page_lease_active_mask[2];
 
 void sample_page_lease_audio_init(void)
 {

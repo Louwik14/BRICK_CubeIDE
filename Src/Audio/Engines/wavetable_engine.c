@@ -74,8 +74,8 @@ struct wave_osc_block_ctx_t
     uint8_t frame_interp;
 };
 
-AUDIO_HOT static brick6_wave_runtime_instance_t g_wave_runtime[BRICK6_WAVE_MAX_INSTANCES];
-AUDIO_HOT static brick6_wave_runtime_instance_t
+STREAM_BENCH_COLD_SDRAM static brick6_wave_runtime_instance_t g_wave_runtime[BRICK6_WAVE_MAX_INSTANCES];
+STREAM_BENCH_COLD_SDRAM static brick6_wave_runtime_instance_t
     g_wave_poly_runtime[BRICK6_WAVE_VOICE_INSTANCE_COUNT - BRICK6_WAVE_MAX_INSTANCES];
 AUDIO_WARM static brick6_wave_runtime_instance_t g_wave_preview;
 static uint32_t g_wave_continuous_version;

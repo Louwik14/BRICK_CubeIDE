@@ -137,9 +137,9 @@ typedef struct
     uint32_t continuous_version[BRAIDS_CONT_COUNT];
 } brick6_braids_runtime_instance_t;
 
-AUDIO_HOT static brick6_braids_runtime_instance_t
+STREAM_BENCH_COLD_SDRAM static brick6_braids_runtime_instance_t
     g_braids_runtime[BRICK6_BRAIDS_MAX_INSTANCES];
-AUDIO_HOT static brick6_braids_runtime_instance_t
+STREAM_BENCH_COLD_SDRAM static brick6_braids_runtime_instance_t
     g_braids_poly_d2[BRICK6_BRAIDS_VOICE_INSTANCE_COUNT - BRICK6_BRAIDS_MAX_INSTANCES];
 AUDIO_HOT static brick6_braids_runtime_instance_t g_braids_preview;
 AUDIO_HOT static braids::MacroOscillatorScratch g_braids_render_scratch;

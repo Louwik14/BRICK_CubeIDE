@@ -5,9 +5,10 @@
 #include "Sampler/sample_page_lease.h"
 #include "Sampler/sample_play_plan.h"
 #include "Sampler/sample_voice_reader.h"
+#include "Platform/memory_layout.h"
 #include "Storage/rec_sd_trace.h"
 
-static sample_voice_reader_t g_audio_rec_overdub_reader;
+static STREAM_BENCH_HOT_DTCM sample_voice_reader_t g_audio_rec_overdub_reader;
 static uint8_t g_audio_rec_overdub_active;
 static uint8_t g_audio_rec_overdub_bind_failure;
 

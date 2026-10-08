@@ -20,8 +20,8 @@ constexpr float kNeutralEpsilon = 1.0e-6f;
 constexpr float kTwoPi = 6.28318530717958647692f;
 constexpr float kInvSqrt2 = 0.70710678118f;
 
-AUDIO_HOT ALIGN32 static float g_haas_l[kHaasBufferSize];
-AUDIO_HOT ALIGN32 static float g_haas_r[kHaasBufferSize];
+STREAM_BENCH_COLD_SDRAM static float g_haas_l[kHaasBufferSize];
+STREAM_BENCH_COLD_SDRAM static float g_haas_r[kHaasBufferSize];
 
 static inline float clampf_local(float v, float lo, float hi)
 {
