@@ -119,6 +119,22 @@ static void sample_voice_reader_release_audio_cursor(sample_voice_reader_state_t
     memset(&state->audio_cursor, 0, sizeof(state->audio_cursor));
 }
 
+static void sample_voice_reader_release_neighbor_cursor(sample_voice_reader_state_t *state)
+{
+    if (state == 0)
+    {
+        return;
+    }
+
+    memset(&state->audio_cursor.neighbor_page_ref,
+           0,
+           sizeof(state->audio_cursor.neighbor_page_ref));
+    state->audio_cursor.neighbor_base = 0;
+    state->audio_cursor.neighbor_start_frame = 0U;
+    state->audio_cursor.neighbor_frame_count = 0U;
+    state->audio_cursor.neighbor_acquired = 0U;
+}
+
 
 static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_t *state,
                                                       uint32_t frame_pos)
@@ -195,10 +211,7 @@ static uint8_t sample_voice_reader_acquire_neighbor_page(sample_voice_reader_sta
 
     if (state->audio_cursor.neighbor_acquired != 0U)
     {
-        state->audio_cursor.neighbor_acquired = 0U;
-        state->audio_cursor.neighbor_base = 0;
-        state->audio_cursor.neighbor_start_frame = 0U;
-        state->audio_cursor.neighbor_frame_count = 0U;
+        sample_voice_reader_release_neighbor_cursor(state);
     }
 
     sample_page_span_t span;
@@ -626,13 +639,23 @@ void sample_voice_reader_update_bounds(sample_voice_reader_t *reader,
 {
     if ((reader == 0) || (reader->plan_valid == 0U)
         || (region_end <= region_begin)) return;
-    reader->plan.region_begin = region_begin;
-    reader->plan.region_end = region_end;
-    reader->plan.loop_begin = loop_begin;
-    reader->plan.loop_end = loop_end;
-    reader->plan.loop_mode = loop_mode;
-    sample_voice_reader_publish_lease(sample_voice_reader_state(reader),
-                                      reader->frame_pos);
+    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    if ((state->plan.region_begin != region_begin)
+        || (state->plan.region_end != region_end)
+        || (state->plan.loop_begin != loop_begin)
+        || (state->plan.loop_end != loop_end)
+        || (state->plan.loop_mode != loop_mode))
+    {
+        /* A cached interpolation neighbor may describe LOOP_START.  It must
+         * not outlive the lease roles removed by a loop/bounds transition. */
+        sample_voice_reader_release_neighbor_cursor(state);
+    }
+    state->plan.region_begin = region_begin;
+    state->plan.region_end = region_end;
+    state->plan.loop_begin = loop_begin;
+    state->plan.loop_end = loop_end;
+    state->plan.loop_mode = loop_mode;
+    sample_voice_reader_publish_lease(state, state->frame_pos);
 }
 
 void sample_voice_reader_update_frame_pos(sample_voice_reader_t *reader, uint32_t frame_pos)

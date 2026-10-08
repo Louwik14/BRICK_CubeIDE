@@ -610,6 +610,23 @@ static void brick6_sampler_runtime_multi_release_voice_vca(
         return;
     }
 
+    if ((voice->active != 0U)
+        && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_MULTI)
+        && (voice->loop_mode == (uint8_t)SAMPLE_PLAY_LOOP_FORWARD))
+    {
+        /* NOTE_OFF is serialized on the AUDIO boundary.  Retire the loop from
+         * this voice's plan before the next wrap decision, but preserve its
+         * current position so the reader crosses LOOP_END into the real tail. */
+        voice->loop_mode = (uint8_t)SAMPLE_PLAY_LOOP_NONE;
+        voice->play_plan.loop_mode = (uint8_t)SAMPLE_PLAY_LOOP_NONE;
+        sample_voice_reader_update_bounds(&voice->reader,
+                                          voice->play_plan.region_begin,
+                                          voice->play_plan.region_end,
+                                          voice->play_plan.loop_begin,
+                                          voice->play_plan.loop_end,
+                                          (uint8_t)SAMPLE_PLAY_LOOP_NONE);
+    }
+
     mixer_multi_filter_note_off(multi_voice_dsp_get(voice->dsp_slot));
     voice->vca_note_released = 1U;
 }
