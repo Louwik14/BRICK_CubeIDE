@@ -15,17 +15,16 @@
  * use the reserved reader range.
  */
 
+#define SAMPLE_PAGE_CACHE_TARGET_PAGE_COUNT    (368U)
 #define SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES \
-    (1472U * 16U * 1024U)
-#define SAMPLE_PAGE_CACHE_TARGET_PAGE_COUNT \
-    (SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES / SAMPLE_AUDIO_FORMAT_PAGE_BYTES)
+    (SAMPLE_PAGE_CACHE_TARGET_PAGE_COUNT * SAMPLE_AUDIO_FORMAT_PAGE_BYTES)
 #define SAMPLE_PAGE_BYTES                     SAMPLE_AUDIO_FORMAT_PAGE_BYTES
 #define SAMPLE_PAGE_FRAMES                    SAMPLE_AUDIO_FORMAT_STEREO_FRAMES_PER_PAGE
 #define SAMPLE_PAGE_CHANNELS                  (2U)
 #define SAMPLE_PAGE_SAMPLE_BYTES              SAMPLE_AUDIO_FORMAT_FLOAT_BYTES
 #define SAMPLE_PAGE_FRAME_STRIDE_FLOATS       SAMPLE_AUDIO_FORMAT_STEREO_STRIDE_FLOATS
 #define SAMPLE_PAGE_BYTES_PER_FRAME           (SAMPLE_PAGE_FRAME_STRIDE_FLOATS * SAMPLE_PAGE_SAMPLE_BYTES)
-#define SAMPLE_PAGE_MAX_COUNT                 (SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES / SAMPLE_PAGE_BYTES)
+#define SAMPLE_PAGE_MAX_COUNT                 SAMPLE_PAGE_CACHE_TARGET_PAGE_COUNT
 #define SAMPLE_PAGE_CACHE_PATH_MAX            SAMPLE_CLASSIC_PATH_MAX
 #define SAMPLE_PREP_MIN_READY_FRAMES          SAMPLE_AUDIO_FORMAT_STREAM_PRESOCLE_FRAMES
 #define SAMPLE_PAGE_MIN_READY_FRAMES          SAMPLE_PREP_MIN_READY_FRAMES
@@ -130,11 +129,11 @@ static inline uint8_t sample_page_slot_is_voice_window_pool(uint32_t slot)
 #error "sample voice window pool range must match product voice reserve pages"
 #endif
 
-#if (SAMPLE_PAGE_BYTES != (64U * 1024U))
-#error "Streamer product contract requires 64 KiB pages"
+#if (SAMPLE_PAGE_BYTES != (16U * 1024U))
+#error "Streamer experiment requires 16 KiB pages"
 #endif
-#if (SAMPLE_PAGE_FRAMES != 8192U)
-#error "Streamer product contract requires 8192 stereo frames per page"
+#if (SAMPLE_PAGE_FRAMES != 2048U)
+#error "Streamer experiment requires 2048 stereo frames per page"
 #endif
 #if (SAMPLE_PAGE_MAX_COUNT != 368U)
 #error "Streamer benchmark cache budget must expose 368 physical pages"

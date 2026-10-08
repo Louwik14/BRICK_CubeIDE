@@ -34,13 +34,15 @@ start mesure.
 
 ## Workload et cache
 
-`STREAM_E2E_BENCH_PAGE_BYTES` est strictement egal a `SAMPLE_PAGE_BYTES` (64 KiB
+`STREAM_E2E_BENCH_PAGE_BYTES` est strictement egal a `SAMPLE_PAGE_BYTES` (16 KiB
 dans cette image). Le fichier brut FLOAT32 stereo fait 512 MiB, ou 256 MiB si
 l'espace libre impose le repli. Une permutation xorshift deterministe couvre
 toutes ses pages, alignees sur la page produit. La selection ecarte les rares
 pages qui croisent une frontiere d'extent FAT : chaque sample conserve ainsi la
-semantique historique d'une transaction physique de 64 KiB, tout en laissant
+semantique d'une transaction physique de 16 KiB, tout en laissant
 le mapping normal refaire et mesurer sa propre resolution apres le trigger.
+Le SDMMC de la campagne est force au reglage physique valide CLKDIV 2, soit
+50 MHz avec son horloge kernel de 200 MHz.
 
 Avant chaque trigger, STORAGE choisit N pages distinctes dont le lookup vaut
 `FREE`; AUDIO refait atomiquement ce lookup avant publication. Une batch devenue
