@@ -29,6 +29,9 @@ typedef struct
     volatile sdmmc_async_state_t state;
     sdmmc_async_operation_t operation;
     uint32_t sector_count;
+    uint32_t command_cycles;
+    uint32_t data_start_cycles;
+    uint32_t data_end_cycles;
     uint8_t command;
     uint8_t multi_block;
 } sdmmc_async_context_t;
@@ -76,6 +79,7 @@ static void sdmmc_async_send_command(uint8_t command, uint32_t argument)
     __HAL_SD_CLEAR_FLAG(&hsd1, SDMMC_STATIC_CMD_FLAGS);
     __HAL_SD_ENABLE_IT(&hsd1, SDMMC_ASYNC_COMMAND_INTERRUPTS);
     (void)SDMMC_SendCommand(hsd1.Instance, &config);
+    g_sdmmc_async.command_cycles = DWT->CYCCNT;
 }
 
 static uint32_t sdmmc_async_response_error(uint32_t status)
@@ -369,6 +373,7 @@ sdmmc_async_event_t sdmmc_async_transport_irq_handler(void)
     {
         if((status & SDMMC_FLAG_CMDREND) != 0U)
         {
+            g_sdmmc_async.data_start_cycles = DWT->CYCCNT;
             const uint32_t error = sdmmc_async_response_error(status);
             __HAL_SD_CLEAR_FLAG(&hsd1, SDMMC_STATIC_CMD_FLAGS);
             __HAL_SD_DISABLE_IT(&hsd1, SDMMC_ASYNC_COMMAND_INTERRUPTS);
@@ -387,6 +392,7 @@ sdmmc_async_event_t sdmmc_async_transport_irq_handler(void)
     {
         if((status & SDMMC_FLAG_DATAEND) != 0U)
         {
+            g_sdmmc_async.data_end_cycles = DWT->CYCCNT;
             __HAL_SD_CLEAR_FLAG(&hsd1, SDMMC_STATIC_DATA_FLAGS);
             __HAL_SD_DISABLE_IT(&hsd1, SDMMC_ASYNC_DATA_INTERRUPTS);
             hsd1.Instance->IDMACTRL = SDMMC_DISABLE_IDMA;
@@ -481,4 +487,19 @@ sdmmc_async_state_t sdmmc_async_transport_state(void)
 uint32_t sdmmc_async_transport_error(void)
 {
     return hsd1.ErrorCode;
+}
+
+uint32_t sdmmc_async_transport_command_cycles(void)
+{
+    return g_sdmmc_async.command_cycles;
+}
+
+uint32_t sdmmc_async_transport_data_start_cycles(void)
+{
+    return g_sdmmc_async.data_start_cycles;
+}
+
+uint32_t sdmmc_async_transport_data_end_cycles(void)
+{
+    return g_sdmmc_async.data_end_cycles;
 }

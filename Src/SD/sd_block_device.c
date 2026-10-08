@@ -16,7 +16,7 @@
 #include "stm32h7xx_hal.h"
 
 #define SD_BLOCK_DEVICE_SECTOR_BYTES (512U)
-_Static_assert(sizeof(sd_block_device_async_request_t) == 60U,
+_Static_assert(sizeof(sd_block_device_async_request_t) == 100U,
                "block-device async request budget changed");
 SDRAM_STREAM_SERVICE static sd_block_device_async_request_t
     *g_sd_block_device_async_fifo[SD_BLOCK_DEVICE_ASYNC_FIFO_DEPTH];
@@ -137,6 +137,7 @@ static void sd_block_device_complete(sd_block_device_async_request_t *entry,
                 .block_result = (uint8_t)result,
                 .fatfs_result = 0xFFU });
     entry->result = result;
+    entry->perf_publish_cycles = sd_block_device_timestamp_cycles();
     entry->completed = 1U;
     if(g_sd_block_device_active_valid == 0U)
     {
@@ -356,15 +357,22 @@ static void sd_block_device_async_start_head(void)
     g_sd_block_device_active_index = g_sd_block_device_async_head;
     g_sd_block_device_active_valid = 1U;
 
+    entry->perf_launch_enter_cycles = sd_block_device_timestamp_cycles();
     PERF_START(dma_launch_start);
     uint8_t start_result;
     if(entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
     {
         /* Generic clients retain the conservative pre-DMA invalidate. */
         if (entry->read_destination_cpu_clean == 0U)
+        {
+            entry->perf_pre_cache_start_cycles =
+                sd_block_device_timestamp_cycles();
             dcache_invalidate_by_addr_aligned(
                 entry->buffer,
                 (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
+            entry->perf_pre_cache_end_cycles =
+                sd_block_device_timestamp_cycles();
+        }
         g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_READ_DMA;
         start_result = (sdmmc_async_transport_start_read(
             entry->buffer, entry->lba, entry->sector_count) != 0U)
@@ -385,6 +393,8 @@ static void sd_block_device_async_start_head(void)
         dma_launch_start);
     if (start_result == MSD_OK)
     {
+        entry->perf_command_cycles =
+            sdmmc_async_transport_command_cycles();
         entry->perf_dma_cycles = sd_block_device_timestamp_cycles();
         brick_perf_wall((entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
             ? PERF_WALL_STREAM_SUBMIT_DMA : PERF_WALL_REC_SUBMIT_DMA,
@@ -432,6 +442,7 @@ static sd_block_device_result_t sd_block_device_async_read_submit_internal(
     uint32_t owner_generation,
     uint8_t destination_cpu_clean)
 {
+    const uint32_t submit_enter_cycles = sd_block_device_timestamp_cycles();
     if((request == 0) || (request->queued != 0U))
     {
         return SD_BLOCK_DEVICE_BUSY;
@@ -449,6 +460,7 @@ static sd_block_device_result_t sd_block_device_async_read_submit_internal(
 
     sd_block_device_async_request_t *const entry = request;
     memset(entry, 0, sizeof(*entry));
+    entry->perf_submit_enter_cycles = submit_enter_cycles;
     entry->lba = lba;
     entry->sector_count = sector_count;
     entry->buffer = (uint8_t *)dst;
@@ -527,6 +539,7 @@ sd_block_device_result_t sd_block_device_async_write_submit(
     const void *src,
     uint32_t owner_generation)
 {
+    const uint32_t submit_enter_cycles = sd_block_device_timestamp_cycles();
     const sd_block_device_result_t valid =
         sd_block_device_validate_submit(sector_count, src);
     if(valid != SD_BLOCK_DEVICE_OK)
@@ -568,6 +581,7 @@ sd_block_device_result_t sd_block_device_async_write_submit(
         return SD_BLOCK_DEVICE_BUSY;
     }
     memset(entry, 0, sizeof(*entry));
+    entry->perf_submit_enter_cycles = submit_enter_cycles;
     entry->lba = lba;
     entry->sector_count = sector_count;
     entry->buffer = (uint8_t *)(uintptr_t)src;
@@ -686,9 +700,13 @@ void sd_block_device_async_poll(void)
         {
             /* Always discard stale/speculative CPU lines before publishing
              * DMA data to its consumer, including the CPU-clean fast path. */
+            entry->perf_cache_start_cycles =
+                sd_block_device_timestamp_cycles();
             dcache_invalidate_by_addr_aligned(
                 entry->buffer,
                 (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
+            entry->perf_cache_end_cycles =
+                sd_block_device_timestamp_cycles();
         }
         sd_block_device_complete(entry, SD_BLOCK_DEVICE_OK);
         return;
@@ -907,6 +925,12 @@ void sd_block_device_async_read_complete_isr(void)
         sd_block_device_async_request_t *const entry =
             g_sd_block_device_async_fifo[g_sd_block_device_active_index];
         entry->irq_complete = 1U;
+        entry->perf_command_cycles =
+            sdmmc_async_transport_command_cycles();
+        entry->perf_data_start_cycles =
+            sdmmc_async_transport_data_start_cycles();
+        entry->perf_data_end_cycles =
+            sdmmc_async_transport_data_end_cycles();
         entry->perf_complete_cycles = sd_block_device_timestamp_cycles();
         if(g_sd_block_device_prepared_valid != 0U)
         {
@@ -920,6 +944,8 @@ void sd_block_device_async_read_complete_isr(void)
                 entry->chained_next = 1U;
                 next->prepared = 0U;
                 next->started = 1U;
+                next->perf_command_cycles =
+                    sdmmc_async_transport_command_cycles();
                 next->perf_dma_cycles = sd_block_device_timestamp_cycles();
                 brick_perf_wall(PERF_WALL_STREAM_SUBMIT_DMA,
                                 next->perf_dma_cycles - next->perf_submit_cycles);

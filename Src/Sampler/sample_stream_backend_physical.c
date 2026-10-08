@@ -72,12 +72,15 @@ static uint8_t sample_stream_backend_physical_next_span_impl(
             async->file_byte_offset + async->logical_queued;
         const uint32_t requested_bytes =
             async->source_bytes - async->logical_queued;
+        async->perf_map_start_cycles = DWT->CYCCNT;
         if (sample_stream_physical_map_resolve(
                 async->map, file_byte_offset, requested_bytes,
                 async->cursor, span) == 0U)
         {
+            async->perf_map_end_cycles = DWT->CYCCNT;
             return 0U;
         }
+        async->perf_map_end_cycles = DWT->CYCCNT;
     }
 
     const uint64_t buffer_end =
@@ -171,6 +174,7 @@ uint8_t sample_stream_backend_physical_begin(
         async->owner_generation = g_sample_stream_physical_next_generation++;
     }
     async->active = 1U;
+    async->perf_accept_cycles = DWT->CYCCNT;
     g_sample_stream_physical_pending[(uint32_t)pending_slot] = async;
     return 1U;
 }
@@ -427,6 +431,7 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
         return (sd_block_device_async_pending_count() != 0U)
             ? SD_SCHEDULER_POLL_ACTIVE : SD_SCHEDULER_POLL_COMPLETED;
     }
+    async->perf_complete_cycles = DWT->CYCCNT;
     async->completed = 1U;
     PERF_END(PERF_CPU_STREAM_READ_COMPLETE, read_complete);
     return (sd_block_device_async_pending_count() != 0U)

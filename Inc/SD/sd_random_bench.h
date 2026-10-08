@@ -7,7 +7,20 @@ extern "C" {
 #endif
 
 #define SD_RANDOM_BENCH_MAGIC   UINT32_C(0x53444236)
-#define SD_RANDOM_BENCH_VERSION (1U)
+#define SD_RANDOM_BENCH_VERSION (2U)
+
+typedef struct
+{
+    uint32_t count;
+    uint64_t sum_us;
+    uint32_t average_us;
+    uint32_t min_us;
+    uint32_t max_us;
+    uint32_t p50_us;
+    uint32_t p90_us;
+    uint32_t p99_us;
+    uint32_t p999_us;
+} sd_random_bench_metric_t;
 
 typedef enum
 {
@@ -84,6 +97,45 @@ typedef struct
     uint32_t last_transaction_start_cycles;
     uint32_t last_transaction_end_cycles;
     uint32_t last_ready_cycles;
+    sd_random_bench_metric_t request_to_ready;
+    sd_random_bench_metric_t before_transaction;
+    sd_random_bench_metric_t physical_transaction;
+    sd_random_bench_metric_t after_transaction;
+    sd_random_bench_metric_t request_to_backend_accept;
+    sd_random_bench_metric_t backend_accept_to_map_start;
+    sd_random_bench_metric_t physical_mapping;
+    sd_random_bench_metric_t map_to_storage_submit;
+    sd_random_bench_metric_t storage_submit;
+    sd_random_bench_metric_t map_to_storage_accept;
+    sd_random_bench_metric_t storage_accept_to_launch;
+    sd_random_bench_metric_t launch_to_command;
+    sd_random_bench_metric_t storage_accept_to_command;
+    sd_random_bench_metric_t pre_cache_maintenance;
+    sd_random_bench_metric_t command_response;
+    sd_random_bench_metric_t data_transfer;
+    sd_random_bench_metric_t stop_command;
+    sd_random_bench_metric_t completion_processing;
+    sd_random_bench_metric_t physical_complete_to_cache;
+    sd_random_bench_metric_t cache_maintenance;
+    sd_random_bench_metric_t cache_to_block_publish;
+    sd_random_bench_metric_t block_publish_to_backend_complete;
+    sd_random_bench_metric_t backend_complete_to_ready;
+    uint32_t last_backend_accept_cycles;
+    uint32_t last_map_start_cycles;
+    uint32_t last_map_end_cycles;
+    uint32_t last_storage_submit_enter_cycles;
+    uint32_t last_storage_accept_cycles;
+    uint32_t last_launch_enter_cycles;
+    uint32_t last_pre_cache_start_cycles;
+    uint32_t last_pre_cache_end_cycles;
+    uint32_t last_command_cycles;
+    uint32_t last_dma_launch_return_cycles;
+    uint32_t last_data_start_cycles;
+    uint32_t last_data_end_cycles;
+    uint32_t last_cache_start_cycles;
+    uint32_t last_cache_end_cycles;
+    uint32_t last_block_publish_cycles;
+    uint32_t last_backend_complete_cycles;
 } sd_random_bench_result_t;
 
 extern volatile sd_random_bench_result_t g_sd_random_bench;

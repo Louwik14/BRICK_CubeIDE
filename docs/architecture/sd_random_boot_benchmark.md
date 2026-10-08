@@ -24,12 +24,56 @@ maintenance D-cache, dans un buffer benchmark unique.
 
 `g_sd_random_bench` contient la progression, l'etape d'echec, l'offset
 d'ecriture, le dernier nombre d'octets ecrits, les etats disque/carte et les
-resultats en microsecondes. Les percentiles proviennent de deux histogrammes
-RAM a pas de 100 us; moyenne, minimum et maximum restent mesures directement.
+resultats en microsecondes. Quatre histogrammes de 2 048 buckets a pas de
+10 us donnent P50/P90/P99/P99.9 pour `request_to_ready`,
+`before_transaction`, `physical_transaction` et `after_transaction`.
+Chaque metrique contient aussi `count`, `sum_us`, `average_us`, `min_us` et
+`max_us` mesures directement.
+
+Les frontieres DWT mesurees sur le vrai chemin sont :
+
+- `request_cycles` : juste avant l'inscription de la requete dans le backend
+  physique ;
+- `perf_accept_cycles` : requete acceptee par ce backend ;
+- `perf_map_start_cycles` / `perf_map_end_cycles` : resolution de la map
+  physique par le provider STREAM ;
+- `perf_submit_enter_cycles` : entree dans la soumission block device ;
+- `perf_submit_cycles` : requete acceptee dans la FIFO du block device ;
+- `perf_launch_enter_cycles` : debut de preparation du lancement materiel ;
+- `perf_pre_cache_start_cycles` / `perf_pre_cache_end_cycles` : invalidate
+  D-cache conservateur avant lecture ;
+- `perf_command_cycles` : retour immediat de l'ecriture de la commande SDMMC ;
+- `perf_data_start_cycles` : reponse commande observee dans l'IRQ SDMMC et
+  passage du transport en phase DATA ;
+- `perf_data_end_cycles` : drapeau SDMMC DATAEND observe dans l'IRQ ;
+- `perf_complete_cycles` : fin du transport apres CMD12 pour la lecture
+  multi-blocs ;
+- `perf_cache_start_cycles` / `perf_cache_end_cycles` : invalidate D-cache
+  post-DMA obligatoire ;
+- `perf_publish_cycles` : completion publiee par le block device ;
+- `io.perf_complete_cycles` : completion consommee par le backend physique ;
+- `ready_cycles` : resultat vu READY par le benchmark.
+
+Les quatre decompositions principales sont exactement : request -> READY,
+request -> commande SDMMC, commande SDMMC -> completion physique, puis
+completion physique -> READY. Les sous-metriques exposent en plus acceptation
+backend, attente avant map, map, soumission et admission block device,
+attente de lancement, preparation materielle, maintenance cache, reponse
+commande, transfert DATA, CMD12, publication block device et remontee backend.
+`data_start` et `data_end` sont necessairement des observations IRQ :
+le debut du premier octet sur le bus et la fin electrique exacte ne sont pas
+exposes separement par le controleur. Leur ecart inclut donc la latence IRQ aux
+deux bornes, sans phase artificielle.
+
+RAM statique : les quatre histogrammes occupent 32 768 octets, contre 65 536
+octets pour les deux anciens histogrammes. Les resultats et timestamps ajoutent
+1 444 octets. Le bilan net est donc une economie de 31 324 octets par rapport
+au benchmark precedent.
 
 `fail_step` vaut 1 MOUNT, 2 MKDIR, 3 OPEN, 4 EXPAND (reserve, non utilise),
 5 WRITE, 6 SYNC, 7 CLOSE, 8 REOPEN, 9 MAP ou 10 RANDOM_READ.
-Les percentiles sont exacts sur les 100 000 echantillons. `total_time_us` est
+Les percentiles couvrent les 100 000 echantillons avec une quantification de
+10 us. `total_time_us` est
 la somme des latences request-to-ready; les debits en derivent. Les timestamps
 DWT de la derniere lecture permettent de verifier request, debut SD, fin DMA et
 READY.

@@ -75,7 +75,7 @@ typedef struct
 } sample_stream_io_async_t;
 _Static_assert(sizeof(sample_page_stream_load_info_t) == 128U,
                "stream load snapshot budget changed");
-_Static_assert(sizeof(sample_stream_io_async_t) == 368U,
+_Static_assert(sizeof(sample_stream_io_async_t) == 424U,
                "stream async job budget changed");
 STREAM_LOCAL_D2 static sample_stream_io_async_t
     g_sample_stream_io_async[SAMPLE_STREAM_IO_JOB_COUNT];

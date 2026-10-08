@@ -70,5 +70,8 @@ uint8_t sdmmc_async_transport_release_complete(void);
 uint8_t sdmmc_async_transport_abort(void);
 sdmmc_async_state_t sdmmc_async_transport_state(void);
 uint32_t sdmmc_async_transport_error(void);
+uint32_t sdmmc_async_transport_command_cycles(void);
+uint32_t sdmmc_async_transport_data_start_cycles(void);
+uint32_t sdmmc_async_transport_data_end_cycles(void);
 
 #endif

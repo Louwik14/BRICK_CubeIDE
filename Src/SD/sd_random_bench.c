@@ -21,8 +21,8 @@
 #define SD_BENCH_PAGE_SECTORS      (SD_BENCH_PAGE_BYTES / 512U)
 #define SD_BENCH_READ_COUNT        (100000U)
 #define SD_BENCH_MAX_PAGES         (SD_BENCH_FILE_512_MIB / SD_BENCH_PAGE_BYTES)
-#define SD_BENCH_HISTOGRAM_BIN_US  (100U)
-#define SD_BENCH_HISTOGRAM_BINS    (8192U)
+#define SD_BENCH_HISTOGRAM_BIN_US  (10U)
+#define SD_BENCH_HISTOGRAM_BINS    (2048U)
 
 enum
 {
@@ -63,6 +63,10 @@ SDRAM_STREAM_SCRATCH static uint32_t
     g_sd_bench_latency_histogram[SD_BENCH_HISTOGRAM_BINS];
 SDRAM_STREAM_SCRATCH static uint32_t
     g_sd_bench_transaction_histogram[SD_BENCH_HISTOGRAM_BINS];
+SDRAM_STREAM_SCRATCH static uint32_t
+    g_sd_bench_before_histogram[SD_BENCH_HISTOGRAM_BINS];
+SDRAM_STREAM_SCRATCH static uint32_t
+    g_sd_bench_after_histogram[SD_BENCH_HISTOGRAM_BINS];
 
 static uint32_t sd_bench_now(void)
 {
@@ -74,6 +78,30 @@ static uint32_t sd_bench_cycles_to_us(uint32_t cycles)
     const uint32_t hz = (g_sd_random_bench.cpu_hz != 0U)
         ? g_sd_random_bench.cpu_hz : 1U;
     return (uint32_t)(((uint64_t)cycles * UINT64_C(1000000) + (hz / 2U)) / hz);
+}
+
+static void sd_bench_metric_init(volatile sd_random_bench_metric_t *metric)
+{
+    memset((void *)metric, 0, sizeof(*metric));
+    metric->min_us = UINT32_MAX;
+}
+
+static void sd_bench_metric_add(volatile sd_random_bench_metric_t *metric,
+                                uint32_t cycles)
+{
+    const uint32_t us = sd_bench_cycles_to_us(cycles);
+    metric->count++;
+    metric->sum_us += us;
+    if (us < metric->min_us) metric->min_us = us;
+    if (us > metric->max_us) metric->max_us = us;
+}
+
+static void sd_bench_histogram_add(uint32_t *histogram, uint32_t us)
+{
+    uint32_t bin = us / SD_BENCH_HISTOGRAM_BIN_US;
+    if (bin >= SD_BENCH_HISTOGRAM_BINS)
+        bin = SD_BENCH_HISTOGRAM_BINS - 1U;
+    histogram[bin]++;
 }
 
 static uint32_t sd_bench_prng(void)
@@ -404,8 +432,23 @@ static void sd_bench_record_read(void)
     if ((result != SAMPLE_PAGE_LOAD_OK) || (source != g_sd_bench_buffer)
         || (source_bytes != SD_BENCH_PAGE_BYTES) || (physical_reads != 1U)
         || (request->result != SD_BLOCK_DEVICE_OK)
+        || (g_sd_bench_runtime.io.perf_accept_cycles == 0U)
+        || (g_sd_bench_runtime.io.perf_map_start_cycles == 0U)
+        || (g_sd_bench_runtime.io.perf_map_end_cycles == 0U)
+        || (g_sd_bench_runtime.io.perf_complete_cycles == 0U)
+        || (request->perf_submit_enter_cycles == 0U)
+        || (request->perf_submit_cycles == 0U)
+        || (request->perf_launch_enter_cycles == 0U)
+        || (request->perf_pre_cache_start_cycles == 0U)
+        || (request->perf_pre_cache_end_cycles == 0U)
+        || (request->perf_command_cycles == 0U)
+        || (request->perf_data_start_cycles == 0U)
+        || (request->perf_data_end_cycles == 0U)
         || (request->perf_dma_cycles == 0U)
-        || (request->perf_complete_cycles == 0U))
+        || (request->perf_complete_cycles == 0U)
+        || (request->perf_cache_start_cycles == 0U)
+        || (request->perf_cache_end_cycles == 0U)
+        || (request->perf_publish_cycles == 0U))
     {
         sd_bench_fail(SD_BENCH_ERROR_READ,
                       SD_RANDOM_BENCH_FAIL_RANDOM_READ,
@@ -417,17 +460,68 @@ static void sd_bench_record_read(void)
     const uint32_t latency_us = sd_bench_cycles_to_us(
         ready_cycles - g_sd_bench_runtime.request_cycles);
     const uint32_t transaction_us = sd_bench_cycles_to_us(
-        request->perf_complete_cycles - request->perf_dma_cycles);
+        request->perf_complete_cycles - request->perf_command_cycles);
     const uint32_t queue_us = sd_bench_cycles_to_us(
-        request->perf_dma_cycles - g_sd_bench_runtime.request_cycles);
-    uint32_t latency_bin = latency_us / SD_BENCH_HISTOGRAM_BIN_US;
-    uint32_t transaction_bin = transaction_us / SD_BENCH_HISTOGRAM_BIN_US;
-    if (latency_bin >= SD_BENCH_HISTOGRAM_BINS)
-        latency_bin = SD_BENCH_HISTOGRAM_BINS - 1U;
-    if (transaction_bin >= SD_BENCH_HISTOGRAM_BINS)
-        transaction_bin = SD_BENCH_HISTOGRAM_BINS - 1U;
-    g_sd_bench_latency_histogram[latency_bin]++;
-    g_sd_bench_transaction_histogram[transaction_bin]++;
+        request->perf_command_cycles - g_sd_bench_runtime.request_cycles);
+    const uint32_t after_us = sd_bench_cycles_to_us(
+        ready_cycles - request->perf_complete_cycles);
+    sd_bench_histogram_add(g_sd_bench_latency_histogram, latency_us);
+    sd_bench_histogram_add(g_sd_bench_transaction_histogram, transaction_us);
+    sd_bench_histogram_add(g_sd_bench_before_histogram, queue_us);
+    sd_bench_histogram_add(g_sd_bench_after_histogram, after_us);
+    sd_bench_metric_add(&g_sd_random_bench.request_to_ready,
+        ready_cycles - g_sd_bench_runtime.request_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.before_transaction,
+        request->perf_command_cycles - g_sd_bench_runtime.request_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.physical_transaction,
+        request->perf_complete_cycles - request->perf_command_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.after_transaction,
+        ready_cycles - request->perf_complete_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.request_to_backend_accept,
+        g_sd_bench_runtime.io.perf_accept_cycles
+            - g_sd_bench_runtime.request_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.backend_accept_to_map_start,
+        g_sd_bench_runtime.io.perf_map_start_cycles
+            - g_sd_bench_runtime.io.perf_accept_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.physical_mapping,
+        g_sd_bench_runtime.io.perf_map_end_cycles
+            - g_sd_bench_runtime.io.perf_map_start_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.map_to_storage_submit,
+        request->perf_submit_enter_cycles
+            - g_sd_bench_runtime.io.perf_map_end_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.storage_submit,
+        request->perf_submit_cycles - request->perf_submit_enter_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.map_to_storage_accept,
+        request->perf_submit_cycles - g_sd_bench_runtime.io.perf_map_end_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.storage_accept_to_launch,
+        request->perf_launch_enter_cycles - request->perf_submit_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.launch_to_command,
+        request->perf_command_cycles - request->perf_launch_enter_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.storage_accept_to_command,
+        request->perf_command_cycles - request->perf_submit_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.pre_cache_maintenance,
+        request->perf_pre_cache_end_cycles
+            - request->perf_pre_cache_start_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.command_response,
+        request->perf_data_start_cycles - request->perf_command_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.data_transfer,
+        request->perf_data_end_cycles - request->perf_data_start_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.stop_command,
+        request->perf_complete_cycles - request->perf_data_end_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.completion_processing,
+        request->perf_publish_cycles - request->perf_complete_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.physical_complete_to_cache,
+        request->perf_cache_start_cycles - request->perf_complete_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.cache_maintenance,
+        request->perf_cache_end_cycles - request->perf_cache_start_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.cache_to_block_publish,
+        request->perf_publish_cycles - request->perf_cache_end_cycles);
+    sd_bench_metric_add(
+        &g_sd_random_bench.block_publish_to_backend_complete,
+        g_sd_bench_runtime.io.perf_complete_cycles
+            - request->perf_publish_cycles);
+    sd_bench_metric_add(&g_sd_random_bench.backend_complete_to_ready,
+        ready_cycles - g_sd_bench_runtime.io.perf_complete_cycles);
     g_sd_random_bench.latency_sum_us += latency_us;
     g_sd_random_bench.transaction_sum_us += transaction_us;
     g_sd_random_bench.queue_sum_us += queue_us;
@@ -441,9 +535,33 @@ static void sd_bench_record_read(void)
         g_sd_random_bench.transaction_max_us = transaction_us;
     if (queue_us > g_sd_random_bench.queue_max_us)
         g_sd_random_bench.queue_max_us = queue_us;
-    g_sd_random_bench.last_transaction_start_cycles = request->perf_dma_cycles;
+    g_sd_random_bench.last_transaction_start_cycles = request->perf_command_cycles;
     g_sd_random_bench.last_transaction_end_cycles = request->perf_complete_cycles;
     g_sd_random_bench.last_ready_cycles = ready_cycles;
+    g_sd_random_bench.last_backend_accept_cycles =
+        g_sd_bench_runtime.io.perf_accept_cycles;
+    g_sd_random_bench.last_map_start_cycles =
+        g_sd_bench_runtime.io.perf_map_start_cycles;
+    g_sd_random_bench.last_map_end_cycles =
+        g_sd_bench_runtime.io.perf_map_end_cycles;
+    g_sd_random_bench.last_storage_submit_enter_cycles =
+        request->perf_submit_enter_cycles;
+    g_sd_random_bench.last_storage_accept_cycles = request->perf_submit_cycles;
+    g_sd_random_bench.last_launch_enter_cycles =
+        request->perf_launch_enter_cycles;
+    g_sd_random_bench.last_pre_cache_start_cycles =
+        request->perf_pre_cache_start_cycles;
+    g_sd_random_bench.last_pre_cache_end_cycles =
+        request->perf_pre_cache_end_cycles;
+    g_sd_random_bench.last_command_cycles = request->perf_command_cycles;
+    g_sd_random_bench.last_dma_launch_return_cycles = request->perf_dma_cycles;
+    g_sd_random_bench.last_data_start_cycles = request->perf_data_start_cycles;
+    g_sd_random_bench.last_data_end_cycles = request->perf_data_end_cycles;
+    g_sd_random_bench.last_cache_start_cycles = request->perf_cache_start_cycles;
+    g_sd_random_bench.last_cache_end_cycles = request->perf_cache_end_cycles;
+    g_sd_random_bench.last_block_publish_cycles = request->perf_publish_cycles;
+    g_sd_random_bench.last_backend_complete_cycles =
+        g_sd_bench_runtime.io.perf_complete_cycles;
     g_sd_random_bench.completed_reads = index + 1U;
     g_sd_random_bench.progress = index + 1U;
     if (g_sd_random_bench.completed_reads >= SD_BENCH_READ_COUNT)
@@ -464,6 +582,18 @@ static uint32_t sd_bench_percentile(const uint32_t *histogram, uint32_t count,
         if (cumulative >= rank) return bin * SD_BENCH_HISTOGRAM_BIN_US;
     }
     return (SD_BENCH_HISTOGRAM_BINS - 1U) * SD_BENCH_HISTOGRAM_BIN_US;
+}
+
+static void sd_bench_metric_finalize(
+    volatile sd_random_bench_metric_t *metric, const uint32_t *histogram)
+{
+    if (metric->count == 0U) return;
+    metric->average_us = (uint32_t)(metric->sum_us / metric->count);
+    if (histogram == 0) return;
+    metric->p50_us = sd_bench_percentile(histogram, metric->count, 500U);
+    metric->p90_us = sd_bench_percentile(histogram, metric->count, 900U);
+    metric->p99_us = sd_bench_percentile(histogram, metric->count, 990U);
+    metric->p999_us = sd_bench_percentile(histogram, metric->count, 999U);
 }
 
 static void sd_bench_finalize(void)
@@ -490,6 +620,34 @@ static void sd_bench_finalize(void)
         g_sd_bench_transaction_histogram, count, 990U);
     g_sd_random_bench.queue_avg_us = (uint32_t)(
         g_sd_random_bench.queue_sum_us / count);
+    sd_bench_metric_finalize(&g_sd_random_bench.request_to_ready,
+        g_sd_bench_latency_histogram);
+    sd_bench_metric_finalize(&g_sd_random_bench.before_transaction,
+        g_sd_bench_before_histogram);
+    sd_bench_metric_finalize(&g_sd_random_bench.physical_transaction,
+        g_sd_bench_transaction_histogram);
+    sd_bench_metric_finalize(&g_sd_random_bench.after_transaction,
+        g_sd_bench_after_histogram);
+    sd_bench_metric_finalize(&g_sd_random_bench.request_to_backend_accept, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.backend_accept_to_map_start, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.physical_mapping, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.map_to_storage_submit, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.storage_submit, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.map_to_storage_accept, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.storage_accept_to_launch, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.launch_to_command, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.storage_accept_to_command, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.pre_cache_maintenance, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.command_response, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.data_transfer, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.stop_command, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.completion_processing, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.physical_complete_to_cache, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.cache_maintenance, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.cache_to_block_publish, 0);
+    sd_bench_metric_finalize(
+        &g_sd_random_bench.block_publish_to_backend_complete, 0);
+    sd_bench_metric_finalize(&g_sd_random_bench.backend_complete_to_ready, 0);
     if (g_sd_random_bench.total_time_us != 0U)
     {
         g_sd_random_bench.pages_per_second_x1000 = (uint32_t)(
@@ -513,6 +671,10 @@ void sd_random_bench_init(void)
            sizeof(g_sd_bench_latency_histogram));
     memset(g_sd_bench_transaction_histogram, 0,
            sizeof(g_sd_bench_transaction_histogram));
+    memset(g_sd_bench_before_histogram, 0,
+           sizeof(g_sd_bench_before_histogram));
+    memset(g_sd_bench_after_histogram, 0,
+           sizeof(g_sd_bench_after_histogram));
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0U;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
@@ -524,6 +686,30 @@ void sd_random_bench_init(void)
     g_sd_random_bench.num_reads = SD_BENCH_READ_COUNT;
     g_sd_random_bench.latency_min_us = UINT32_MAX;
     g_sd_random_bench.transaction_min_us = UINT32_MAX;
+    sd_bench_metric_init(&g_sd_random_bench.request_to_ready);
+    sd_bench_metric_init(&g_sd_random_bench.before_transaction);
+    sd_bench_metric_init(&g_sd_random_bench.physical_transaction);
+    sd_bench_metric_init(&g_sd_random_bench.after_transaction);
+    sd_bench_metric_init(&g_sd_random_bench.request_to_backend_accept);
+    sd_bench_metric_init(&g_sd_random_bench.backend_accept_to_map_start);
+    sd_bench_metric_init(&g_sd_random_bench.physical_mapping);
+    sd_bench_metric_init(&g_sd_random_bench.map_to_storage_submit);
+    sd_bench_metric_init(&g_sd_random_bench.storage_submit);
+    sd_bench_metric_init(&g_sd_random_bench.map_to_storage_accept);
+    sd_bench_metric_init(&g_sd_random_bench.storage_accept_to_launch);
+    sd_bench_metric_init(&g_sd_random_bench.launch_to_command);
+    sd_bench_metric_init(&g_sd_random_bench.storage_accept_to_command);
+    sd_bench_metric_init(&g_sd_random_bench.pre_cache_maintenance);
+    sd_bench_metric_init(&g_sd_random_bench.command_response);
+    sd_bench_metric_init(&g_sd_random_bench.data_transfer);
+    sd_bench_metric_init(&g_sd_random_bench.stop_command);
+    sd_bench_metric_init(&g_sd_random_bench.completion_processing);
+    sd_bench_metric_init(&g_sd_random_bench.physical_complete_to_cache);
+    sd_bench_metric_init(&g_sd_random_bench.cache_maintenance);
+    sd_bench_metric_init(&g_sd_random_bench.cache_to_block_publish);
+    sd_bench_metric_init(
+        &g_sd_random_bench.block_publish_to_backend_complete);
+    sd_bench_metric_init(&g_sd_random_bench.backend_complete_to_ready);
     g_sd_random_bench.state = SD_RANDOM_BENCH_CREATING_FILE;
     sd_bench_snapshot_media();
 }

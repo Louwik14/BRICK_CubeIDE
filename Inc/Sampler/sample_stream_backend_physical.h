@@ -28,6 +28,10 @@ typedef struct
     uint32_t deadline_margin_us;
     uint32_t deadline_started_ms;
     uint32_t owner_generation;
+    uint32_t perf_accept_cycles;
+    uint32_t perf_map_start_cycles;
+    uint32_t perf_map_end_cycles;
+    uint32_t perf_complete_cycles;
     sample_stream_physical_span_t current_span;
     sd_block_device_async_request_t request;
     uint8_t current_span_valid;
