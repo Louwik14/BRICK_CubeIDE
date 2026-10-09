@@ -12,6 +12,7 @@
 #include "Storage/audio_recorder_wav.h"
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/sampler_waveform_store.h"
 #include "Storage/storage_shared_io.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/recorder_file_reservation.h"
@@ -149,6 +150,7 @@ typedef struct
     sample_stream_physical_extent_t destination_extents[RECORDER_FILE_RESERVATION_MAX_EXTENTS];
     recorder_file_reservation_map_snapshot_t destination_map;
     wav_convert_fast_write_t fast_write;
+    sampler_waveform_accumulator_t waveform_accumulator;
     ALIGN32 uint8_t wav_header[WAV_CONVERT_WAV_DATA_OFFSET_BYTES];
 } wav_convert_ctx_t;
 
@@ -875,6 +877,8 @@ static uint8_t wav_convert_open_phase(void)
     g_wav_convert.target_frames = (uint32_t)target_frames;
     g_wav_convert.target_data_bytes =
         g_wav_convert.target_frames * WAV_CONVERT_TARGET_BYTES_PER_FRAME;
+    sampler_waveform_accumulator_init(&g_wav_convert.waveform_accumulator,
+                                      g_wav_convert.target_frames);
 
     sample_stream_safe_metadata_init_fatfs(
         (sample_audio_key_t){0}, &g_wav_convert.source_info,
@@ -997,6 +1001,8 @@ static uint8_t wav_convert_write_output(uint32_t frame_count)
         wav_convert_fail(WAV_CONVERT_ERROR_WRITE_FAIL);
         return 0U;
     }
+    sampler_waveform_accumulator_push_float(&g_wav_convert.waveform_accumulator,
+        (const float *)(const void *)g_storage_shared_io, frame_count);
     if (dma_bytes > bytes)
     {
         memset(&g_storage_shared_io[bytes], 0, dma_bytes - bytes);
@@ -1347,6 +1353,30 @@ static uint8_t wav_convert_replace_phase(void)
         return 0U;
     }
     g_wav_convert.bak_created = 0U;
+    if(sampler_waveform_accumulator_finish(
+            &g_wav_convert.waveform_accumulator,
+            g_wav_convert.waveform_accumulator.bins) != 0U)
+    {
+        const wav_info_t final_info = {
+            .audio_format = 3U,
+            .encoding = WAV_SAMPLE_ENCODING_IEEE_FLOAT,
+            .sample_rate = WAV_CONVERT_TARGET_RATE,
+            .byte_rate = WAV_CONVERT_TARGET_RATE
+                * WAV_CONVERT_TARGET_BYTES_PER_FRAME,
+            .channels = WAV_CONVERT_TARGET_CHANNELS,
+            .block_align = WAV_CONVERT_TARGET_BYTES_PER_FRAME,
+            .bits_per_sample = WAV_CONVERT_TARGET_BITS,
+            .valid_bits_per_sample = WAV_CONVERT_TARGET_BITS,
+            .fmt_chunk_size = 16U,
+            .data_offset = WAV_CONVERT_WAV_DATA_OFFSET_BYTES,
+            .data_size = g_wav_convert.target_data_bytes,
+            .fact_sample_length = g_wav_convert.target_frames,
+            .has_fact = 1U,
+        };
+        (void)sampler_waveform_store_commit_converted(
+            g_wav_convert.source_path, &final_info,
+            g_wav_convert.waveform_accumulator.bins);
+    }
     wav_convert_release_gate();
     g_wav_convert.phase = WAV_CONVERT_PHASE_IDLE;
     g_wav_convert.state = WAV_CONVERT_STATE_DONE;

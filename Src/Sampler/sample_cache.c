@@ -10,7 +10,7 @@
 #include "Sampler/sample_page_cache_port.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_classic_audio_projection_control.h"
-#include "Storage/waveform_cache.h"
+#include "Storage/sampler_waveform_store.h"
 #include "ff.h"
 
 #define SAMPLE_CACHE_MAX_VOICES (16U)
@@ -88,6 +88,7 @@ static void sample_cache_release_slot(uint16_t sample_id)
 
     sample_stream_manager_release_sample(sample_id);
     sample_page_cache_port_clear(sample_audio_key_classic(sample_id));
+    sampler_waveform_store_unregister_classic(sample_id);
 }
 
 static uint8_t sample_cache_prepare_via_page_cache(uint16_t sample_id,
@@ -428,6 +429,14 @@ static uint8_t sample_cache_prepare_internal(uint16_t sample_id,
         goto done;
     }
 
+    if (sampler_waveform_store_register_classic(sample_id, prepared_path,
+                                                 &desc->info, &fp) == 0U)
+    {
+        desc->last_error = 16U;
+        g_sample_cache_last_fresult[sample_id] = FR_INVALID_OBJECT;
+        goto done;
+    }
+
     ok = 1U;
 
 done:
@@ -447,12 +456,6 @@ done:
             ok = 0U;
             desc->last_error = 8U;
             g_sample_cache_last_fresult[sample_id] = FR_DENIED;
-        }
-        else
-        {
-            (void)waveform_cache_request_for_wav_known_duration(
-                prepared_path, WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
-                desc->total_frames, desc->info.sample_rate);
         }
     }
     if (ok == 0U)

@@ -26,6 +26,7 @@
 #include "Storage/project_product.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
+#include "Storage/sampler_waveform_store.h"
 #include "Storage/undo_v2.h"
 #include "Storage/wav_convert.h"
 #include "Storage/wav_loader.h"
@@ -60,6 +61,7 @@ void control_domain_init(void)
     wav_convert_init();
     multi_sample_import_init();
     waveform_cache_init();
+    sampler_waveform_store_init();
     waveform_service_init();
     (void)waveform_cache_ensure_dirs();
     crash_library_init();

@@ -175,8 +175,72 @@ source.
 
 La meme Waveview est rendue sur les sous-pages PLAY et LOOP. Sa source est le
 slot Classic READY reellement resolu par le Streamer. Les min/max viennent du
-service waveform cooperatif (sidecar lorsqu'il est disponible, sinon tuiles
-construites depuis le WAV); le sample complet n'est jamais charge en RAM.
+record sampler persistant de la source; PLAY et LOOP partagent la meme overview
+et ne possedent aucune copie propre.
+
+### Overview Waveform sampler
+
+Chaque source Classic/Group possede une unique overview globale de 128 bins.
+Un bin est un couple `int16_t min/max`; la reduction stereo conserve le contrat
+historique en prenant, pour chaque frame, le minimum et le maximum de L/R. Le
+renderer fusionne directement les 128 bins vers les 124 colonnes OLED, puis
+normalise sur le peak visible comme auparavant. START, LENGTH/END, LOOP START,
+SLICE, pitch et playhead restent des overlays en frames source et ne peuvent
+ni invalider ni reconstruire cette metadata.
+
+La persistence sampler est le blob packed `0:/BRICK/SAMPLE.WFM`, distinct du
+sidecar multi-resolution Recorder. Son format v1 contient un header de 64
+octets, une table de 4096 offsets de 32 bits, puis des records append-only de
+576 octets:
+
+```text
+record header/identity/version/CRC   64 octets
+128 * (int16 min + int16 max)       512 octets
+                                      -----------
+                                      576 octets/sample
+```
+
+Le blob occupe donc 592448 octets (578.6 KiB) pour 1000 records et 2320448
+octets (2.21 MiB) pour 4000 records, table et header inclus. Une reimportation
+append une nouvelle generation; les anciennes generations restent
+inaccessibles par la nouvelle identite.
+
+L'identite combine le hash du chemin canonique, taille et date FAT, nombre de
+frames, format, offset audio et une signature CRC des frames de bord. Le CRC32
+du record couvre l'identite, le lien de bucket et les 512 octets de waveform.
+Un record est d'abord ajoute et synchronise; son offset n'est publie dans la
+table de hash qu'apres un second `f_sync`. Une ecriture interrompue reste donc
+un orphan invisible. Le format n'a aucun lecteur legacy: un header/version
+invalide reconstruit le blob.
+
+La conversion canonique accumule les 128 extrema dans `wav_convert_write_output`
+sur les frames float stereo deja produites. Elle ne relit pas l'audio. Une
+source deja canonique est enregistree pendant `sample_cache_prepare`; si aucun
+record valide n'existe, le service STORAGE effectue une seule ouverture, un
+seul parse et un scan sequentiel par quanta de 4096 octets, puis persiste le
+resultat. Ce fallback utilise l'admission background du scheduler et cede donc
+aux urgences Streamer/Recorder; aucune operation FatFs, parse, CRC ou reduction
+n'entre dans AUDIO.
+
+Le runtime resout l'offset pendant la preparation du slot. A la premiere
+demande froide, il lit et valide directement un record de 576 octets. Un LRU
+de quatre records conserve les overviews chaudes; A -> B -> A est donc servi
+en RAM tant qu'A n'a pas ete evince. La suppression/republication d'un slot
+retire son descripteur; toute modification d'identite force un nouveau lookup
+et interdit une waveform stale. Il n'existe aucun seuil de duree sampler et
+aucun scan lazy multi-resolution Classic sur le chemin normal.
+
+`g_waveform_diag` expose `persistent_read_calls/bytes`, hits persistants et
+RAM, builds, open/parse/read du WAV et latences request -> premier pixel/
+complete. Le contrat d'un hit froid indexe est: un read record de 576 octets,
+zero open/parse/read audio et zero build. Un hit chaud est integralement RAM.
+Les temps H743/RT1172 restent a relever sur cible; le build hote ne pretend pas
+valider la borne produit de 50 ms.
+
+Le Recorder conserve ses niveaux 16384/4096/1024/256/64 frames par bin, ses
+besoins de zoom et son propre cache. Seuls les primitives min/max et le rendu
+sont conceptuellement communs; un handle Recorder n'est jamais propose a une
+source Classic.
 
 L'etat UI d'un slot suit la machine d'etat existante du pool/cache:
 

@@ -33,6 +33,7 @@
 #include "Storage/undo_v2.h"
 #include "Storage/waveform_cache.h"
 #include "Storage/waveform_service.h"
+#include "Storage/sampler_waveform_store.h"
 #include "Platform/brick6_sd_config.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
@@ -144,6 +145,7 @@ static void brick6_app_service_storage(void)
                 && waveform_service_local_pending() == 0U)
         {
             waveform_cache_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+            sampler_waveform_store_service();
         }
         sd_preview_process();
     }
