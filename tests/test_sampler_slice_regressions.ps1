@@ -176,9 +176,9 @@ $holdSource = Get-Content -Raw (Join-Path $PSScriptRoot `
     '../Src/Audio/Engines/Sampler/sampler_multi_voice.inc')
 Assert-True ($holdSource.Contains('brick6_sampler_mode_is_hold_value(')) `
     'HOLD policy guard missing'
-Assert-True ($holdSource.Contains('g_sampler_voice[track_id].mode) == 0U')) `
-    'non-HOLD release guard missing'
+Assert-True ($holdSource.Contains('g_sampler_voice[track_id].mode) != 0U')) `
+    'HOLD release guard missing'
 Assert-True ($holdSource.Contains('g_sampler_voice[track_id].release_pending = 1U')) `
-    'non-HOLD release action missing'
+    'HOLD release action missing'
 
 Write-Output 'sampler slice regressions: PASS'

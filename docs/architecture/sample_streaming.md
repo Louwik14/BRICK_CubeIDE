@@ -102,8 +102,10 @@ VoiceReader republie seulement les roles de lease modifies.
 
 Classic et Group exposent le parametre historique unique `Mode`, dans cet ordre:
 `ONE`, `REV.ONE`, `LOOP`, `PINGPONG`, `H.ONE`, `H.LOOP`, `H.PINGPONG`.
-`H` signifie hold: le NOTE_OFF est ignore. `H.LOOP` est donc une loop forward
-hold, et non un ping-pong. `PINGPONG` et `H.PINGPONG` alternent sur toute la
+Sans `H`, le mode est TOGGLE: un NOTE_ON lance la voix, le suivant la libere,
+et NOTE_OFF ne pilote pas ce cycle. Les modes `H.*` suivent le gate: NOTE_ON
+lance/redeclenche et NOTE_OFF libere la voix. `H.LOOP` est donc une loop
+forward hold, et non un ping-pong. `PINGPONG` et `H.PINGPONG` alternent sur toute la
 region `[START, START + LENGTH[`; `LOOP` et `H.LOOP` jouent d'abord depuis START puis rebouclent
 depuis LOOP START. Le mode est echantillonne au NOTE_ON, reglable et P-lockable,
 mais n'est pas une destination de modulation continue.

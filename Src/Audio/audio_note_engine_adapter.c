@@ -426,13 +426,14 @@ static uint8_t audio_note_engine_adapter_apply_physical(
     const uint8_t is_multi_sampler = (uint8_t)((engine
             == TRACK_RUNTIME_ENGINE_SAMPLER)
         && (program->type == TRACK_RUNTIME_TYPE_MULTI));
+    const uint8_t is_stream_sampler = (uint8_t)((engine
+            == TRACK_RUNTIME_ENGINE_SAMPLER)
+        && (program->type == TRACK_RUNTIME_TYPE_STREAM));
     const uint8_t is_external = (uint8_t)(
         program->type == TRACK_RUNTIME_TYPE_EXTERNAL);
     const uint8_t output_was_active = (uint8_t)(
         audio_note_engine_find_output(entity_id, output_id) >= 0);
-    const uint8_t sampler_hold = (uint8_t)(
-        (engine == TRACK_RUNTIME_ENGINE_SAMPLER)
-        && (program->type == TRACK_RUNTIME_TYPE_STREAM)
+    const uint8_t sampler_hold = (uint8_t)((is_stream_sampler != 0U)
         && (brick6_sampler_runtime_mode_is_hold(entity_id) != 0U));
 
     /* STOP is idempotent for every renderer.  CONTROL normally filters stale
@@ -520,7 +521,8 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         else
             mixer_track_poly_note_off(entity_id, voice, note);
     }
-    else if (program->has_filter_target != 0U)
+    else if ((program->has_filter_target != 0U)
+            && (is_stream_sampler == 0U))
     {
         if (is_note_on != 0U)
             mixer_track_filter_note_on(program->filter_track_id, note, velocity);
@@ -529,7 +531,8 @@ static uint8_t audio_note_engine_adapter_apply_physical(
     }
     if ((uses_voice_vca == 0U) && (program->supports_vca_gate != 0U)
             && (program->has_mix_target != 0U)
-            && (is_multi_sampler == 0U))
+            && (is_multi_sampler == 0U)
+            && (is_stream_sampler == 0U))
     {
         const uint8_t drive_vca = (uint8_t)((is_external == 0U)
             || (g_audio_external_gate_triggered[entity_id] != 0U));
@@ -540,7 +543,7 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             if ((is_note_on != 0U) && ((is_external == 0U)
                     || (output_was_active == 0U)))
                 mixer_track_vca_note_on(program->mix_track_id, note, velocity);
-            else if ((is_note_on == 0U) && (sampler_hold == 0U)
+            else if ((is_note_on == 0U)
                     && ((is_external == 0U) || (output_was_active != 0U)))
                 mixer_track_vca_note_off(program->mix_track_id, note);
         }
@@ -652,10 +655,42 @@ static uint8_t audio_note_engine_adapter_apply_physical(
                 && (sampler_result != BRICK6_SAMPLER_NOTE_INVARIANT));
         }
         if (is_note_on != 0U)
-            brick6_sampler_runtime_trigger_note_velocity(entity_id, note,
-                                                          velocity);
+        {
+            const uint8_t started =
+                brick6_sampler_runtime_trigger_note_velocity(
+                    entity_id, note, velocity);
+            if (program->has_filter_target != 0U)
+            {
+                if (started != 0U)
+                    mixer_track_filter_note_on(
+                        program->filter_track_id, note, velocity);
+                else
+                    mixer_track_filter_note_off(
+                        program->filter_track_id, note);
+            }
+            if ((program->supports_vca_gate != 0U)
+                    && (program->has_mix_target != 0U))
+            {
+                if (started != 0U)
+                    mixer_track_vca_note_on(
+                        program->mix_track_id, note, velocity);
+                else
+                    mixer_track_vca_note_off(program->mix_track_id, note);
+            }
+        }
         else
+        {
             brick6_sampler_runtime_note_off_note(entity_id, note);
+            if (sampler_hold != 0U)
+            {
+                if (program->has_filter_target != 0U)
+                    mixer_track_filter_note_off(
+                        program->filter_track_id, note);
+                if ((program->supports_vca_gate != 0U)
+                        && (program->has_mix_target != 0U))
+                    mixer_track_vca_note_off(program->mix_track_id, note);
+            }
+        }
     }
 
     return audio_note_engine_commit_output(entity_id, output_id,

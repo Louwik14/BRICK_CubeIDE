@@ -33,7 +33,9 @@ cree pas de moteur distinct.
 
 Classic et Group retrouvent l'unique parametre historique `Mode`, avec les
 labels et l'ordre exacts `ONE`, `REV.ONE`, `LOOP`, `PINGPONG`, `H.ONE`,
-`H.LOOP`, `H.PINGPONG`. `H` signifie hold (NOTE_OFF ignore): `H.LOOP` est une
+`H.LOOP`, `H.PINGPONG`. Les modes sans `H` sont TOGGLE: le NOTE_ON suivant
+arrete la voix et NOTE_OFF ne pilote pas leur cycle. Les modes `H.*` suivent le
+gate: NOTE_ON lance/redeclenche et NOTE_OFF libere la voix. `H.LOOP` est une
 loop forward hold. Le ping-pong est porte par `PINGPONG`/`H.PINGPONG` et alterne
 entre START et la borne derivee `START + LENGTH`; la loop forward reprend a LOOP START. Le mode est capture
 au NOTE_ON, P-lockable, et exclu de la Matrix/modulation continue.

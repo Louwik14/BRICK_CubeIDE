@@ -736,8 +736,9 @@ brick6_sampler_note_result_t brick6_sampler_runtime_initialize_held_note(uint8_t
     if (multi != 0U)
         return brick6_sampler_runtime_start_multi_renderer(track_id,
             MULTI_SAMPLE_POOL_INVALID_ID, note, velocity, 1.0f, output_id, 1U);
-    brick6_sampler_runtime_trigger_note_velocity(track_id, note, velocity);
-    return BRICK6_SAMPLER_NOTE_RENDERED;
+    return (brick6_sampler_runtime_trigger_note_velocity(
+                track_id, note, velocity) != 0U)
+        ? BRICK6_SAMPLER_NOTE_RENDERED : BRICK6_SAMPLER_NOTE_SILENT;
 }
 
 void brick6_sampler_runtime_note_off_multi_track_note_output(uint8_t track_id,
@@ -801,12 +802,12 @@ void brick6_sampler_runtime_note_off(uint8_t track_id)
 
     if (brick6_sampler_runtime_track_is_clip(track_id) != 0U)
     {
-        /* Source launch mode does not own note amplitude. Every Note-Off lets
-         * the mixer VCA finish its release before this source is reclaimed. */
+        /* H.* follows the physical gate. TOGGLE modes are released by their
+         * next NOTE_ON and deliberately ignore the matching NOTE_OFF. */
         if ((g_sampler_voice[track_id].active != 0U)
                 && (g_sampler_voice[track_id].source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
                 && (brick6_sampler_mode_is_hold_value(
-                        g_sampler_voice[track_id].mode) == 0U))
+                        g_sampler_voice[track_id].mode) != 0U))
         {
             g_sampler_voice[track_id].release_pending = 1U;
         }

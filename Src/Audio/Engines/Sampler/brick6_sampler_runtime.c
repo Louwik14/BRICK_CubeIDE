@@ -205,9 +205,8 @@ enum
 
 static uint8_t brick6_sampler_mode_is_hold_value(uint8_t mode)
 {
-    return (uint8_t)((mode == BRICK6_SAMPLER_MODE_HOLD_ONE)
-        || (mode == BRICK6_SAMPLER_MODE_HOLD_LOOP)
-        || (mode == BRICK6_SAMPLER_MODE_HOLD_PINGPONG));
+    return (uint8_t)((mode >= BRICK6_SAMPLER_MODE_HOLD_ONE)
+        && (mode < BRICK6_SAMPLER_MODE_COUNT));
 }
 
 static uint8_t brick6_sampler_mode_loop(uint8_t mode)

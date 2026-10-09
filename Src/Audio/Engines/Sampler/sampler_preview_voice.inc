@@ -247,6 +247,15 @@ uint8_t brick6_sampler_preview_note_on(uint8_t note, uint8_t velocity)
 {
     if ((g_sampler_preview.prepared == 0U) || (note > 127U)
             || (velocity == 0U) || (velocity > 127U)) return 0U;
+    if ((g_sampler_preview.kind == BRICK6_SAMPLER_PREVIEW_STREAM)
+            && (brick6_sampler_mode_is_hold_value(
+                    g_sampler_preview.clip.mode) == 0U)
+            && (g_sampler_preview.voice.active != 0U))
+    {
+        sample_voice_reader_stop(&g_sampler_preview.voice.reader);
+        g_sampler_preview.voice.active = 0U;
+        return 1U;
+    }
     sample_voice_reader_reset(&g_sampler_preview.voice.reader);
     if (g_sampler_preview.kind == BRICK6_SAMPLER_PREVIEW_STREAM)
     {
@@ -285,7 +294,13 @@ uint8_t brick6_sampler_preview_note_on(uint8_t note, uint8_t velocity)
 
 void brick6_sampler_preview_note_off(uint8_t note)
 {
-    (void)note;
+    brick6_sampler_voice_t *const voice = &g_sampler_preview.voice;
+    if ((g_sampler_preview.kind != BRICK6_SAMPLER_PREVIEW_STREAM)
+            || (voice->active == 0U) || (voice->note != note)
+            || (brick6_sampler_mode_is_hold_value(
+                    g_sampler_preview.clip.mode) == 0U)) return;
+    sample_voice_reader_stop(&voice->reader);
+    voice->active = 0U;
 }
 
 uint8_t brick6_sampler_preview_render(float *left, float *right,
