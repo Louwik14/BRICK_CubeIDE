@@ -65,6 +65,28 @@ foreach ($identity in @('A', 'B', 'A')) {
     while ($lru.Count -gt 4) { $lru.RemoveAt($lru.Count - 1) }
 }
 Assert-True (($lru[0] -eq 'A') -and ($lru -contains 'B')) 'A -> B -> A LRU miss'
+
+# A READY source owns only the resident LRU copy. Eviction demotes it to the
+# indexed on-disk state, so the next request is PENDING only until record reload.
+$states = @{}
+$resident = [System.Collections.Generic.List[string]]::new()
+foreach ($identity in @('S0', 'S1', 'S2', 'S3', 'S4')) {
+    if ($resident.Count -eq 4) {
+        $evicted = $resident[$resident.Count - 1]
+        $resident.RemoveAt($resident.Count - 1)
+        $states[$evicted] = 'ON_DISK'
+    }
+    $resident.Insert(0, $identity)
+    $states[$identity] = 'READY'
+}
+Assert-True ($states['S0'] -eq 'ON_DISK') 'LRU eviction left S0 falsely READY'
+$states['S0'] = 'LOADING'
+[void]$resident.Remove('S1')
+$states['S1'] = 'ON_DISK'
+$resident.Insert(0, 'S0')
+$states['S0'] = 'READY'
+Assert-True (($states['S0'] -eq 'READY') -and ($resident -contains 'S0')) `
+    'evicted sample did not return READY after indexed reload'
 $identityBefore = 'path|size|date|frames|format|edge-crc'
 foreach ($overlay in @('START', 'END', 'LOOP', 'SLICE', 'PITCH', 'PLAYHEAD')) {
     Assert-True ($identityBefore -eq 'path|size|date|frames|format|edge-crc') `
@@ -82,6 +104,8 @@ Assert-True ($store.Contains('#define SAMPLER_WAVEFORM_READ_BYTES 4096U')) `
     'fallback quantum changed'
 Assert-True ($service.Contains('source->key.domain == SAMPLE_AUDIO_DOMAIN_CLASSIC')) `
     'Classic persistent branch missing'
+Assert-True ($store.Contains('source->state = SAMPLER_WAVEFORM_SOURCE_ON_DISK;')) `
+    'LRU eviction cannot queue a persistent reload'
 Assert-True (-not $service.Contains('sample_capture_model_waveform_cache_get_handle(&sidecar);`r`n    if(source->key.domain')) `
     'Classic may reach Recorder sidecar'
 

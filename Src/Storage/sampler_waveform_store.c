@@ -556,6 +556,18 @@ static uint8_t sampler_waveform_ram_put(
     const sampler_waveform_identity_t *identity,
     const sampler_waveform_bin_t *bins)
 {
+    for(uint8_t i = 0U; i < SAMPLER_WAVEFORM_RAM_RECORD_COUNT; ++i)
+    {
+        if(g_sampler_waveform_ram[i].valid != 0U
+                && sampler_waveform_identity_equal(
+                    &g_sampler_waveform_ram[i].identity, identity) != 0U)
+        {
+            memcpy(g_sampler_waveform_ram[i].bins, bins,
+                   sizeof(g_sampler_waveform_ram[i].bins));
+            g_sampler_waveform_ram[i].age = ++g_sampler_waveform_age;
+            return i;
+        }
+    }
     uint8_t slot = 0U;
     uint32_t oldest = UINT32_MAX;
     for(uint8_t i = 0U; i < SAMPLER_WAVEFORM_RAM_RECORD_COUNT; ++i)
@@ -565,6 +577,23 @@ static uint8_t sampler_waveform_ram_put(
         {
             oldest = g_sampler_waveform_ram[i].age;
             slot = i;
+        }
+    }
+    if(g_sampler_waveform_ram[slot].valid != 0U)
+    {
+        const sampler_waveform_identity_t evicted =
+            g_sampler_waveform_ram[slot].identity;
+        for(uint16_t i = 0U; i < SAMPLE_CLASSIC_CAPACITY; ++i)
+        {
+            sampler_waveform_source_t *const source =
+                &g_sampler_waveform_sources[i];
+            if(source->registered != 0U
+                    && source->state == SAMPLER_WAVEFORM_SOURCE_READY
+                    && sampler_waveform_identity_equal(
+                        &source->identity, &evicted) != 0U)
+            {
+                source->state = SAMPLER_WAVEFORM_SOURCE_ON_DISK;
+            }
         }
     }
     g_sampler_waveform_ram[slot].identity = *identity;
@@ -627,7 +656,17 @@ sampler_waveform_result_t sampler_waveform_store_request_classic(
     if(source->state == SAMPLER_WAVEFORM_SOURCE_ERROR)
         source->state = SAMPLER_WAVEFORM_SOURCE_MISSING;
     const int8_t slot = sampler_waveform_ram_find(&source->identity);
-    if(slot < 0) return SAMPLER_WAVEFORM_RESULT_PENDING;
+    if(slot < 0)
+    {
+        /* READY describes the resident LRU copy.  If it disappeared, keep the
+         * indexed SAMPLE.WFM record authoritative and queue a cold reload. */
+        if(source->state == SAMPLER_WAVEFORM_SOURCE_READY)
+            source->state = SAMPLER_WAVEFORM_SOURCE_ON_DISK;
+        return SAMPLER_WAVEFORM_RESULT_PENDING;
+    }
+    if(source->state == SAMPLER_WAVEFORM_SOURCE_ON_DISK
+            && source->record_offset >= SAMPLER_WAVEFORM_RECORD_BASE)
+        source->state = SAMPLER_WAVEFORM_SOURCE_READY;
     memcpy(out_bins, g_sampler_waveform_ram[(uint8_t)slot].bins,
            sizeof(g_sampler_waveform_ram[(uint8_t)slot].bins));
     if(source->fresh_persistent != 0U)

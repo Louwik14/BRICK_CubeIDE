@@ -225,7 +225,10 @@ n'entre dans AUDIO.
 Le runtime resout l'offset pendant la preparation du slot. A la premiere
 demande froide, il lit et valide directement un record de 576 octets. Un LRU
 de quatre records conserve les overviews chaudes; A -> B -> A est donc servi
-en RAM tant qu'A n'a pas ete evince. La suppression/republication d'un slot
+en RAM tant qu'A n'a pas ete evince. Une eviction retrograde toutes les sources
+READY portant cette identite vers ON_DISK; la prochaine demande reste PENDING
+uniquement jusqu'a la relecture indexee du record, sans rescanner le WAV. La
+suppression/republication d'un slot
 retire son descripteur; toute modification d'identite force un nouveau lookup
 et interdit une waveform stale. Il n'existe aucun seuil de duree sampler et
 aucun scan lazy multi-resolution Classic sur le chemin normal.
