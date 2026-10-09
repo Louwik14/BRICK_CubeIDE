@@ -410,11 +410,6 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         }
         else
         {
-            uint16_t current_sample = 0U;
-            if ((brick6_sampler_runtime_get_sample(
-                    command->entity, &current_sample) != 0U)
-                    && (current_sample == (uint16_t)command->value))
-                return 1U;
             brick6_sampler_runtime_set_sample(command->entity,
                                               (uint16_t)command->value);
         }
@@ -903,8 +898,6 @@ static uint8_t audio_prepared_apply_resource(
         }
         else
         {
-            if ((brick6_sampler_runtime_get_sample(entity, &current) != 0U)
-                    && (current == resource->sampler_runtime)) return 1U;
             brick6_sampler_runtime_set_sample(entity, resource->sampler_runtime);
         }
         g_audio_state_rebind_mask |= (uint16_t)(1U << entity);

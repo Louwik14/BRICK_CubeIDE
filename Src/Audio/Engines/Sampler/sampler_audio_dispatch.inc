@@ -111,10 +111,13 @@ void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id)
     }
 
     brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
-    if ((clip->sample_id != sample_id)
-            && ((g_sampler_voice[track_id].active != 0U)
-                || (g_sampler_voice[track_id].reader.active != 0U)))
+    if (clip->sample_id != sample_id)
+    {
+        /* A source transition owns the complete reader lifetime, including
+         * cold/pending and partially torn-down states.  Always retire its
+         * lease before publishing the next selector. */
         brick6_sampler_runtime_clip_stop_playback(track_id);
+    }
     clip->sample_id = sample_id;
 }
 

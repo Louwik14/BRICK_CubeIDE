@@ -213,7 +213,10 @@ static void brick6_sampler_runtime_clip_reset(uint8_t track_id)
     }
 
     brick6_sampler_runtime_clip_release_slot(track_id);
-    g_sampler_clip_runtime[track_id].sample_id = 0U;
+    /* No source is not sample 0.  Keep the AUDIO selector aligned with the
+     * CONTROL/PERSIST asset sentinel so a reset cannot masquerade as a
+     * successfully installed first sample. */
+    g_sampler_clip_runtime[track_id].sample_id = UINT16_MAX;
     g_sampler_clip_runtime[track_id].source = 0U;
     g_sampler_clip_runtime[track_id].gain = 1.0f;
     g_sampler_clip_runtime[track_id].source_bpm = 120.0f;

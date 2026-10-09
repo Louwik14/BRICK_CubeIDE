@@ -572,6 +572,15 @@ transition `LOOP_START` vers `CURRENT/NEXT`, enveloppes/velocity, steal/choke et
 Save/Load. Les chemins Classic, Stream et Recorder ne sont pas modifies par
 cette semantique Multi.
 
+### Changement de source Stream
+
+Le selecteur AUDIO vide vaut `UINT16_MAX`; `0` reste donc un identifiant de
+sample normal. Une transition de source arrete toujours la voix Stream,
+reinitialise son `VoiceReader` et retire son lease avant d'installer le nouvel
+identifiant. La publication de ressource reste reparatrice meme si le selecteur
+numerique est deja egal: les sorties maintenues sont rebindees et ne deduisent
+jamais l'etat du reader de cette seule egalite.
+
 ## Projection RT1172 (pas une mesure hardware)
 
 Pour 16 voix, 48 kHz, stereo FLOAT32 et pitch x8, le debit utile projete est
