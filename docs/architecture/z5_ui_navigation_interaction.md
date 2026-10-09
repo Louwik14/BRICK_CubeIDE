@@ -79,7 +79,7 @@ bit d'inversion proviennent ensemble du p-lock du step tenu, puis le formatter
 MIDI FX ne fait que nommer et mettre en forme cette valeur effective.
 
 La troisieme sous-page TONE d'une track STREAM est `RANGE`: P1 adresse
-`PARAM_SAMPLER_START`, P2 adresse `PARAM_SAMPLER_LENGTH` affiche comme `End`,
+`PARAM_SAMPLER_START`, P2 adresse `PARAM_SAMPLER_LENGTH` affiche comme `Length`,
 P3 et P4 restent libres. Ces deux controles utilisent le catalogue Param commun
 (edition, p-lock et Matrix); ils ne constituent pas des controles UI speciaux.
 

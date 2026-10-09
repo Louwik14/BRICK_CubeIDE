@@ -62,7 +62,7 @@ moteur; les selecteurs d'asset locaux ne sont pas des Param.
 
 | Moteur | Parametres exposes | Type reel | Normal | SHIFT | Resolution terminale | Verdict |
 |---|---|---|---:|---:|---|---|
-| Streamer | Gain, Start, End, Loop Start | float normalise | 1 % | 0,01 % | FLOAT32, puis index d'echantillon pour les bornes | continu OK |
+| Streamer | Gain, Start, Length, Loop Start | float normalise | 1 % | 0,01 % | FLOAT32, puis index d'echantillon pour les bornes | continu OK |
 | Streamer | Tune | float, demi-tons | 1 st | 0,01 st | FLOAT32 jusqu'au ratio de lecture | continu OK |
 | Streamer | Mode, Slice Count, Multi Loop | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
 | Streamer | Source BPM | float, BPM | 1 BPM | 0,01 BPM | FLOAT32 jusqu'au ratio de lecture | continu OK |

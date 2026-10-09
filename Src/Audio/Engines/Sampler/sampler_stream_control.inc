@@ -57,6 +57,26 @@ static uint32_t brick6_sampler_runtime_clamp_region_length(
     return (resolved > available) ? available : resolved;
 }
 
+static void brick6_sampler_runtime_resolve_slice_bounds(
+    uint32_t sample_frames, uint32_t slice_count, uint32_t slice_index,
+    uint32_t *out_begin, uint32_t *out_end)
+{
+    if ((out_begin == NULL) || (out_end == NULL)) return;
+    if ((sample_frames == 0U) || (slice_count == 0U))
+    {
+        *out_begin = 0U;
+        *out_end = sample_frames;
+        return;
+    }
+    if (slice_index >= slice_count) slice_index = slice_count - 1U;
+    *out_begin = (uint32_t)(((uint64_t)sample_frames * slice_index)
+                            / slice_count);
+    *out_end = (uint32_t)(((uint64_t)sample_frames * (slice_index + 1U))
+                          / slice_count);
+    if ((*out_end <= *out_begin) && (*out_begin < sample_frames))
+        *out_end = *out_begin + 1U;
+}
+
 static float brick6_sampler_runtime_fade_gain(uint32_t frame_index,
                                                uint32_t loop_frames,
                                                uint32_t fade_in_frames,

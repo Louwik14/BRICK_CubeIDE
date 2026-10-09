@@ -85,7 +85,7 @@ frame est dans le prefixe publie. Un miss conserve le comportement d'underrun
 existant. La validation de generation, epoch, cle et slot reste identique pour
 les pages partielles et completes.
 
-START et END publient immediatement leurs nouvelles bornes en frames source si
+START et LENGTH publient immediatement leurs nouvelles bornes en frames source si
 la tete courante reste dans la region. Ils ne deplacent alors ni le cursor, ni
 les leases `CURRENT/NEXT`, et ne reinitialisent pas le shifter. Le plafond 12 Hz
 ne concerne plus que le vrai cold seek necessaire lorsque la tete devient hors
@@ -94,8 +94,8 @@ transaction SD. Une cible froide reserve une page de 16 KiB et peut etre
 appliquee des que sa frame appartient au prefixe publie, avant `READY`.
 
 LOOP START suit le meme chemin de publication de bornes, sans throttle ni
-retrig. Une tete situee entre START et END continue naturellement; le prochain
-wrap emploie le nouveau LOOP START. Si une reduction de END rend la tete
+retrig. Une tete situee entre START et `START + LENGTH` continue naturellement;
+le prochain wrap emploie le nouveau LOOP START. Si une reduction de LENGTH rend la tete
 invalide, LOOP reboucle sur LOOP START, ONE se cale sur la derniere frame et le
 ping-pong se cale sur sa borne haute, comme le moteur RAM historique. Le
 VoiceReader republie seulement les roles de lease modifies.
@@ -104,7 +104,7 @@ Classic et Group exposent le parametre historique unique `Mode`, dans cet ordre:
 `ONE`, `REV.ONE`, `LOOP`, `PINGPONG`, `H.ONE`, `H.LOOP`, `H.PINGPONG`.
 `H` signifie hold: le NOTE_OFF est ignore. `H.LOOP` est donc une loop forward
 hold, et non un ping-pong. `PINGPONG` et `H.PINGPONG` alternent sur toute la
-region START/END; `LOOP` et `H.LOOP` jouent d'abord depuis START puis rebouclent
+region `[START, START + LENGTH[`; `LOOP` et `H.LOOP` jouent d'abord depuis START puis rebouclent
 depuis LOOP START. Le mode est echantillonne au NOTE_ON, reglable et P-lockable,
 mais n'est pas une destination de modulation continue.
 
@@ -116,7 +116,7 @@ Le port conserve les classes de parametres observees avant `8fb6e223f`:
 |---|---|---|---|
 | GAIN | LIVE | oui | gain de la voix courante |
 | START | LIVE | oui | borne en frame source; seek seulement si HEAD devient invalide |
-| END (`LENGTH`) | LIVE | oui | borne exclusive en frame source |
+| LENGTH | LIVE | oui | duree en frames source; borne exclusive derivee `min(sample_frames, START + LENGTH)` |
 | TUNE/PITCH | LIVE | oui | nouvel increment fractionnaire du VoiceReader, sans seek |
 | LOOP START | LIVE | oui | borne absolue en frame source, prochain wrap |
 | MODE | NOTE_ON | oui | ONE/REV/LOOP/PINGPONG et politique HOLD |
@@ -124,15 +124,44 @@ Le port conserve les classes de parametres observees avant `8fb6e223f`:
 | sample | NOTE_ON/changement de source | oui | un changement arrete proprement l'ancienne voix |
 
 La source canonique des positions actives est le snapshot seqlock du
-VoiceReader: `frame`, `frame_count`, la region START/END globale,
+VoiceReader: `frame`, `frame_count`, la region `[START, START + LENGTH[` globale,
 `loop_begin`, `slice_count/index`, `sample_id` et `registration_epoch`. La
 Waveview n'accepte ce snapshot que s'il correspond exactement a la generation
 et au nombre de frames de la waveform affichee. Elle convertit ces frames en
 pixels; elle ne reconstruit plus la tete avec le temps ecoule ou une
-normalisation sur END. Hors lecture, les parametres CONTROL sont convertis une
+normalisation sur une ancienne borne END. Hors lecture, les parametres CONTROL sont convertis une
 seule fois vers les memes frames source. En mode slice, la waveform reste
-globale et les `N-1` separations sont les bornes absolues des `N` slices de la
-region START/END; la tete reste la frame source courante du VoiceReader.
+globale et les `N-1` separations sont les bornes absolues des `N` slices du
+sample complet; la tete reste la frame source courante du VoiceReader.
+
+Le slicer et la range de lecture sont deux contrats independants. Pour un
+sample de `sample_frames` et `N` slices, les bornes exclusives sont calculees
+directement, sans accumulation d'arrondi:
+
+```text
+slice_start(i) = floor(i * sample_frames / N)
+slice_end(i)   = floor((i + 1) * sample_frames / N)
+```
+
+Elles ne dependent que de l'identite/generation du sample, de son nombre de
+frames, de `N` et de l'index. START, LENGTH, LOOP START, pitch, mode, playhead,
+P-locks et modulation ne peuvent ni les recalculer ni les deplacer. Une
+modulation rapide de START ou LENGTH ne publie donc aucune nouvelle grille et
+ne modifie aucun trigger SLICE. Un changement de sample resout au contraire le
+nouveau `frame_count`, clampe l'index et reconstruit les bornes; une premiere
+page froide reste PENDING avec son lease conserve jusqu'a publication.
+
+La range PLAY/LOOP canonique ne conserve que `start_frame` et `length_frames`.
+Sa borne droite est toujours locale et derivee:
+
+```text
+effective_length = min(requested_length, sample_frames - start_frame)
+effective_end    = start_frame + effective_length
+```
+
+START garde donc la priorite pres de la fin du sample: il ne recule jamais
+pour conserver LENGTH. Deplacer START translate la fenetre a LENGTH constante,
+sous reserve du clamp final. Les overlays utilisent cette meme borne derivee.
 
 Le NOTE_ON resout la source Classic une seule fois. Key, generation, format,
 nombre de frames, bornes de slice et VoiceReader sont construits depuis ce
@@ -227,7 +256,8 @@ la voix change; le nouveau seek peut alors lancer son 16 KiB urgent. Une
 transaction deja active finit normalement: cette version n'ajoute pas de
 preemption `CMD12`.
 
-Un P-lock START, SLICE ou sample publie une nouvelle key/cible. La demande
+Un P-lock START, LENGTH, SLICE ou sample publie sa valeur/cible selon son
+contrat. START/LENGTH ne touchent jamais aux bornes SLICE. La demande
 froide correspondante passe par le chemin normal 16 KiB. Des que le nouveau
 lease redevient forward et stable, sa continuation redevient eligible. Un
 START live qui reste dans la page utile courante ne retire pas cette
@@ -239,7 +269,7 @@ melange deux voix, fichiers ou zones, meme si leurs LBA sont voisins. Classic
 garde START live et les P-locks. Pour une loop forward, la borne sequentielle
 est LOOP END et les roles `LOOP_START`/`LOOP_START_NEXT` restent prepares par
 le mecanisme existant; rien n'est lu au-dela. Le ping-pong inverse uniquement
-le cursor aux bornes START/END et reutilise le meme cache. Les writes
+le cursor aux bornes derivees de START/LENGTH et reutilise le meme cache. Les writes
 Recorder/Looper/Overdub restent de gros blocs asynchrones et partagent sans
 changement l'admission du scheduler; ils ne sont jamais decoupes en writes de
 512 octets.

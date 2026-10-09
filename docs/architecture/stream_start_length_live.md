@@ -1,16 +1,17 @@
-# START et END live pour STREAM
+# START et LENGTH live pour STREAM
 
 ## Contrat produit
 
 Les clips `TRACK_RUNTIME_TYPE_STREAM` exposent `PARAM_SAMPLER_START` et
-`PARAM_SAMPLER_LENGTH` (libelle UI `End`). START designe le debut normalise;
-END est la longueur normalisee de region. La region effective est toujours
-bornee et non vide.
+`PARAM_SAMPLER_LENGTH` (libelle UI `Length`). START designe le debut normalise;
+LENGTH est la longueur normalisee de region. La borne exclusive END est derivee
+localement par `min(sample_frames, start_frame + length_frames)`; elle n'est ni
+un parametre ni un etat persistant independant.
 
 Une voix Multi n'est pas concernee: son plan est construit par zone/instrument avec
-`start_frame = 0`, et son catalogue ne publie pas START/END.
+`start_frame = 0`, et son catalogue ne publie pas START/LENGTH.
 
-Pour une voix Clip STREAM deja active, START et END partagent une fenetre de
+Pour une voix Clip STREAM deja active, START et LENGTH partagent une fenetre de
 publication de 4000 frames AUDIO, soit 83,333 ms a 48 kHz et au plus 12
 applications par seconde. Le premier changement apres expiration de la fenetre
 est traite immediatement. Les valeurs suivantes sont coalescees; seule la plus
@@ -49,18 +50,18 @@ seek du hasard d'un cache hit ou d'une completion SD en moins d'un bloc. Le
 snapshot accepte termine donc son cycle, tandis que le prochain converge vers
 la derniere valeur recue.
 
-## Chemin END
+## Chemin LENGTH
 
-END met a jour `region_end`, `loop_end` et les besoins du reader sans demander de
-page si la position reste dans la nouvelle region. Si END passe derriere la
+LENGTH derive puis met a jour `region_end`, `loop_end` et les besoins du reader sans demander de
+page si la position reste dans la nouvelle region. Si la borne derivee passe derriere la
 position courante, la reconciliation suit RAM: une loop revient au debut de
-region; un one-shot se place sur la derniere frame. START et END recus ensemble
+region; un one-shot se place sur la derniere frame. START et LENGTH recus ensemble
 sont resolus atomiquement dans une seule region, ce qui preserve `START < END`.
 
 ## Diagnostic hardware
 
 `g_sampler_stream_live_diag` expose les compteurs `start_requested`,
-`start_applied`, `end_applied`, `start_coalesced`, `start_cache_hits`,
+`start_applied`, `length_applied`, `start_coalesced`, `start_cache_hits`,
 `start_cold_loads`, `start_target_ready`, `start_obsolete`,
 `start_pending_max` et `audio_miss`. La remise a zero se fait par
 `brick6_sampler_runtime_stream_live_diag_reset()`. `start_pending_max` vaut au

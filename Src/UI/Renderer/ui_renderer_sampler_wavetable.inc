@@ -563,8 +563,6 @@ static uint16_t ui_renderer_template_sample_slice_divisions(float slice_value)
 }
 
 static void ui_renderer_template_draw_sample_slice_divisions(uint16_t divisions,
-                                                                  uint32_t region_begin,
-                                                                  uint32_t region_end,
                                                                   uint32_t frame_count,
                                                                   int inner_x,
                                                                   int inner_y,
@@ -578,23 +576,12 @@ static void ui_renderer_template_draw_sample_slice_divisions(uint16_t divisions,
 
     if (frame_count == 0U)
         return;
-    if (region_begin >= frame_count)
-        region_begin = frame_count - 1U;
-    if ((region_end == 0U) || (region_end > frame_count))
-        region_end = frame_count;
-    if (region_end <= region_begin)
-    {
-        region_begin = 0U;
-        region_end = frame_count;
-    }
-    const uint32_t region_frames = region_end - region_begin;
     const int bottom = inner_y + inner_h - 2;
     drv_display_set_draw_color(2U);
     for (uint16_t i = 1U; i < divisions; ++i)
     {
-        const uint32_t frame =
-            region_begin + (uint32_t)(((uint64_t)region_frames * (uint64_t)i)
-                                      / (uint64_t)divisions);
+        const uint32_t frame = (uint32_t)(
+            ((uint64_t)frame_count * (uint64_t)i) / (uint64_t)divisions);
         const int x = inner_x + (int)(((uint64_t)frame * (uint32_t)(inner_w - 1))
                                       / (uint64_t)frame_count);
         if ((x <= inner_x) || (x >= (inner_x + inner_w)))
@@ -766,8 +753,6 @@ static void ui_renderer_template_draw_sample_waveform(const ui_param_seq_plock_f
     if (loop_begin >= region_end) loop_begin = region_begin;
     ui_renderer_template_draw_sample_slice_divisions(
         divisions,
-        region_begin,
-        region_end,
         source.frame_count,
         inner_x,
         inner_y,
@@ -780,24 +765,24 @@ static void ui_renderer_template_draw_sample_waveform(const ui_param_seq_plock_f
                                                   inner_y,
                                                   inner_w,
                                                   inner_h);
-    ui_renderer_template_draw_sample_marker_frame(region_begin,
-                                                 source.frame_count,
-                                                 inner_x,
-                                                 inner_y,
-                                                 inner_w,
-                                                 inner_h,
-                                                 'S',
-                                                 0U);
-    ui_renderer_template_draw_sample_marker_frame(region_end - 1U,
-                                                 source.frame_count,
-                                                 inner_x,
-                                                 inner_y,
-                                                 inner_w,
-                                                 inner_h,
-                                                 'E',
-                                                 0U);
     if (divisions <= 1U)
     {
+        ui_renderer_template_draw_sample_marker_frame(region_begin,
+                                                     source.frame_count,
+                                                     inner_x,
+                                                     inner_y,
+                                                     inner_w,
+                                                     inner_h,
+                                                     'S',
+                                                     0U);
+        ui_renderer_template_draw_sample_marker_frame(region_end - 1U,
+                                                     source.frame_count,
+                                                     inner_x,
+                                                     inner_y,
+                                                     inner_w,
+                                                     inner_h,
+                                                     'E',
+                                                     0U);
         ui_renderer_template_draw_sample_marker_frame(loop_begin,
                                                      source.frame_count,
                                                      inner_x,

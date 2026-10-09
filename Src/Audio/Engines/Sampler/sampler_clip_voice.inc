@@ -300,37 +300,30 @@ static void brick6_sampler_runtime_resolve_live_bounds(
     uint32_t total_frames, const brick6_sampler_voice_t *voice,
     uint32_t *out_begin, uint32_t *out_end, uint32_t *out_loop_begin)
 {
-    uint32_t begin = brick6_sampler_runtime_clamp_region_begin(
-        total_frames, voice->start);
-    uint32_t end = begin + brick6_sampler_runtime_clamp_region_length(
-        total_frames, begin, voice->length);
-    if (end <= begin) end = begin + 1U;
-    uint32_t loop_begin = begin;
-
+    uint32_t begin = 0U;
+    uint32_t end = total_frames;
+    uint32_t loop_begin = 0U;
     if (voice->slice_count != 0U)
     {
-        const uint32_t count = voice->slice_count;
-        const uint32_t index = (voice->slice_index < count)
-            ? voice->slice_index : 0U;
-        const uint32_t frames = end - begin;
-        const uint32_t base = begin;
-        begin = base + (uint32_t)(((uint64_t)frames * index) / count);
-        end = (index + 1U == count) ? (base + frames)
-            : base + (uint32_t)(((uint64_t)frames * (index + 1U)) / count);
-        if (end <= begin) end = begin + 1U;
+        brick6_sampler_runtime_resolve_slice_bounds(
+            total_frames, voice->slice_count, voice->slice_index,
+            &begin, &end);
         loop_begin = begin;
     }
-    else if (brick6_sampler_mode_loop(voice->mode)
-             == (uint8_t)SAMPLE_PLAY_LOOP_FORWARD)
+    else
     {
-        loop_begin = brick6_sampler_runtime_clamp_region_begin(
-            total_frames, voice->loop_start);
-        if (loop_begin < begin) loop_begin = begin;
-        if (loop_begin >= end)
+        begin = brick6_sampler_runtime_clamp_region_begin(
+            total_frames, voice->start);
+        end = begin + brick6_sampler_runtime_clamp_region_length(
+            total_frames, begin, voice->length);
+        if (end <= begin) end = begin + 1U;
+        loop_begin = begin;
+        if (brick6_sampler_mode_loop(voice->mode)
+            == (uint8_t)SAMPLE_PLAY_LOOP_FORWARD)
         {
-            end = loop_begin + 1U;
-            if (end > total_frames) end = total_frames;
-            if (loop_begin >= end) loop_begin = begin;
+            const uint32_t marker = brick6_sampler_runtime_clamp_region_begin(
+                total_frames, voice->loop_start);
+            if ((marker >= begin) && (marker < end)) loop_begin = marker;
         }
     }
     *out_begin = begin;
@@ -384,8 +377,8 @@ static void brick6_sampler_runtime_stream_live_apply(
     sample_voice_reader_cancel_requested_page(&voice->reader);
     if ((live->apply_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START) != 0U)
         ++g_sampler_stream_live_diag.start_applied;
-    if ((live->apply_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_END) != 0U)
-        ++g_sampler_stream_live_diag.end_applied;
+    if ((live->apply_mask & BRICK6_SAMPLER_STREAM_LIVE_DIRTY_LENGTH) != 0U)
+        ++g_sampler_stream_live_diag.length_applied;
     live->apply_mask = 0U;
     live->pending = 0U;
     live->pending_seek = 0U;
@@ -549,11 +542,24 @@ static uint32_t brick6_sampler_runtime_clip_resolve_timing_ratio_q16(uint8_t tra
         return ratio_q16;
     }
 
-    region_begin = brick6_sampler_runtime_clamp_region_begin(desc->total_frames, g_sampler_voice[track_id].start);
-    region_end = region_begin
-                 + brick6_sampler_runtime_clamp_region_length(desc->total_frames,
-                                                              region_begin,
-                                                              g_sampler_voice[track_id].length);
+    const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    if (voice->slice_count != 0U)
+    {
+        uint32_t index = (voice->note > STREAM_SAMPLER_ROOT_NOTE)
+            ? (uint32_t)(voice->note - STREAM_SAMPLER_ROOT_NOTE) : 0U;
+        if (index >= voice->slice_count) index = voice->slice_count - 1U;
+        brick6_sampler_runtime_resolve_slice_bounds(
+            desc->total_frames, voice->slice_count, index,
+            &region_begin, &region_end);
+    }
+    else
+    {
+        region_begin = brick6_sampler_runtime_clamp_region_begin(
+            desc->total_frames, voice->start);
+        region_end = region_begin
+            + brick6_sampler_runtime_clamp_region_length(
+                desc->total_frames, region_begin, voice->length);
+    }
     if (region_begin >= region_end)
     {
         region_begin = 0U;
@@ -791,12 +797,8 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
         uint32_t index = (voice->note > STREAM_SAMPLER_ROOT_NOTE)
             ? (uint32_t)(voice->note - STREAM_SAMPLER_ROOT_NOTE) : 0U;
         if (index >= count) index = count - 1U;
-        const uint32_t frames = region_end - region_begin;
-        const uint32_t base = region_begin;
-        region_begin = base + (uint32_t)(((uint64_t)frames * index) / count);
-        region_end = (index + 1U == count) ? (base + frames)
-            : base + (uint32_t)(((uint64_t)frames * (index + 1U)) / count);
-        if (region_end <= region_begin) region_end = region_begin + 1U;
+        brick6_sampler_runtime_resolve_slice_bounds(
+            source.total_frames, count, index, &region_begin, &region_end);
         voice->slice_index = (uint8_t)index;
     }
 
@@ -819,12 +821,8 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     {
         const uint32_t marker = brick6_sampler_runtime_clamp_region_begin(
             source.total_frames, voice->loop_start);
-        if (marker >= region_begin)
-        {
-            if (marker >= region_end)
-                region_end = marker + 1U;
+        if ((marker >= region_begin) && (marker < region_end))
             loop_begin = marker;
-        }
     }
     play_plan.region_begin = region_begin;
     play_plan.region_end = region_end;

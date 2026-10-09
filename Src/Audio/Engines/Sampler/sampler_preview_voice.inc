@@ -144,11 +144,25 @@ static uint8_t brick6_sampler_preview_bind_source(
     float timing = 1.0f;
     if (source_kind == BRICK6_SAMPLER_VOICE_CLIP)
     {
-        const uint32_t begin = brick6_sampler_runtime_clamp_region_begin(
-            source->total_frames, voice->start);
-        source->region_begin = begin;
-        source->region_end = begin + brick6_sampler_runtime_clamp_region_length(
-            source->total_frames, begin, voice->length);
+        if (voice->slice_count != 0U)
+        {
+            uint32_t index = (note > STREAM_SAMPLER_ROOT_NOTE)
+                ? (uint32_t)(note - STREAM_SAMPLER_ROOT_NOTE) : 0U;
+            if (index >= voice->slice_count) index = voice->slice_count - 1U;
+            brick6_sampler_runtime_resolve_slice_bounds(
+                source->total_frames, voice->slice_count, index,
+                &source->region_begin, &source->region_end);
+            voice->slice_index = (uint8_t)index;
+        }
+        else
+        {
+            const uint32_t begin = brick6_sampler_runtime_clamp_region_begin(
+                source->total_frames, voice->start);
+            source->region_begin = begin;
+            source->region_end = begin
+                + brick6_sampler_runtime_clamp_region_length(
+                    source->total_frames, begin, voice->length);
+        }
         if (source->region_end <= source->region_begin)
         {
             source->region_begin = 0U;

@@ -167,7 +167,7 @@ typedef struct
 } brick6_sampler_stream_live_t;
 
 #define BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START (1U << 0)
-#define BRICK6_SAMPLER_STREAM_LIVE_DIRTY_END   (1U << 1)
+#define BRICK6_SAMPLER_STREAM_LIVE_DIRTY_LENGTH (1U << 1)
 #define BRICK6_SAMPLER_STREAM_LIVE_DIRTY_LOOP  (1U << 2)
 
 typedef struct
@@ -312,6 +312,11 @@ static uint32_t brick6_sampler_runtime_clamp_region_begin(uint32_t length_frames
 static uint32_t brick6_sampler_runtime_clamp_region_length(uint32_t length_frames,
                                                            uint32_t region_begin,
                                                            float length);
+static void brick6_sampler_runtime_resolve_slice_bounds(uint32_t sample_frames,
+                                                        uint32_t slice_count,
+                                                        uint32_t slice_index,
+                                                        uint32_t *out_begin,
+                                                        uint32_t *out_end);
 static void brick6_sampler_runtime_stream_live_queue(uint8_t track_id,
                                                      uint8_t dirty_mask);
 static void brick6_sampler_runtime_stream_live_service(uint8_t track_id,

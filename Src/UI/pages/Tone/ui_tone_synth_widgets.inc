@@ -1019,7 +1019,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                 name = "START";
                 break;
             case PARAM_SAMPLER_LENGTH:
-                name = "END";
+                name = "LENGTH";
                 break;
             case PARAM_SAMPLER_GAIN:
                 name = "GAIN";

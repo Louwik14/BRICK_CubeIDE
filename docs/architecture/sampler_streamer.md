@@ -13,7 +13,7 @@ Classic / Group / Multi
 Classic et les children du Group partagent le meme runtime STREAM, le meme
 cache, le meme DSP et les memes quatre pages TONE:
 
-1. `PLAY`: Sample, Mode, Start, End.
+1. `PLAY`: Sample, Mode, Start, Length.
 2. `LOOP`: Gain, Tune, Loop Start, Slice Count, avec waveform, markers et
    playhead communs.
 3. `SOURCE`: Source, Src BPM, Stretch, emplacement libre.
@@ -35,7 +35,7 @@ Classic et Group retrouvent l'unique parametre historique `Mode`, avec les
 labels et l'ordre exacts `ONE`, `REV.ONE`, `LOOP`, `PINGPONG`, `H.ONE`,
 `H.LOOP`, `H.PINGPONG`. `H` signifie hold (NOTE_OFF ignore): `H.LOOP` est une
 loop forward hold. Le ping-pong est porte par `PINGPONG`/`H.PINGPONG` et alterne
-entre START et END; la loop forward reprend a LOOP START. Le mode est capture
+entre START et la borne derivee `START + LENGTH`; la loop forward reprend a LOOP START. Le mode est capture
 au NOTE_ON, P-lockable, et exclu de la Matrix/modulation continue.
 
 Reverse et ping-pong tournent dans le VoiceReader canonique. Reverse consomme

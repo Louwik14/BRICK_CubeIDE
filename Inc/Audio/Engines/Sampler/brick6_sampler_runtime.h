@@ -31,7 +31,7 @@ typedef struct
 {
     volatile uint32_t start_requested;
     volatile uint32_t start_applied;
-    volatile uint32_t end_applied;
+    volatile uint32_t length_applied;
     volatile uint32_t start_coalesced;
     volatile uint32_t start_cache_hits;
     volatile uint32_t start_cold_loads;

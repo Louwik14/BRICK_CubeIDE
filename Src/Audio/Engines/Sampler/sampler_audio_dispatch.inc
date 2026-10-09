@@ -264,7 +264,8 @@ void brick6_sampler_runtime_set_start(uint8_t track_id, float start)
     const float previous = voice->start;
     voice->start = start;
     if ((previous != start)
-        && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP))
+        && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
+        && (voice->slice_count == 0U))
         brick6_sampler_runtime_stream_live_queue(
             track_id, BRICK6_SAMPLER_STREAM_LIVE_DIRTY_START);
 }
@@ -279,9 +280,10 @@ void brick6_sampler_runtime_set_length(uint8_t track_id, float length)
     const float previous = voice->length;
     voice->length = length;
     if ((previous != length)
-        && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP))
+        && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
+        && (voice->slice_count == 0U))
         brick6_sampler_runtime_stream_live_queue(
-            track_id, BRICK6_SAMPLER_STREAM_LIVE_DIRTY_END);
+            track_id, BRICK6_SAMPLER_STREAM_LIVE_DIRTY_LENGTH);
 }
 
 void brick6_sampler_runtime_set_mode(uint8_t track_id, uint8_t mode)
@@ -322,8 +324,9 @@ void brick6_sampler_runtime_set_loop_start(uint8_t track_id, float loop_start)
         return;
     }
     g_sampler_voice[track_id].loop_start = loop_start;
-    brick6_sampler_runtime_stream_live_queue(
-        track_id, BRICK6_SAMPLER_STREAM_LIVE_DIRTY_LOOP);
+    if (g_sampler_voice[track_id].slice_count == 0U)
+        brick6_sampler_runtime_stream_live_queue(
+            track_id, BRICK6_SAMPLER_STREAM_LIVE_DIRTY_LOOP);
 }
 
 void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_count)
