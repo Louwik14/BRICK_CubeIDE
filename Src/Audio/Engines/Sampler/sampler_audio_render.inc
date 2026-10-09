@@ -49,6 +49,19 @@ void brick6_sampler_runtime_render_stream_track(const track_audio_runtime_ctx_t 
         return;
     }
 
+    if (voice->waiting_for_start_page != 0U)
+    {
+        if (sample_voice_reader_frame_ready(&voice->reader,
+                                            voice->play_plan.start_frame) == 0U)
+        {
+            ++g_sampler_stream_live_diag.audio_miss;
+            brick6_sampler_runtime_mix_declick_tails(
+                ctx->program_route.entity_id, out_l, out_r, frames);
+            return;
+        }
+        voice->waiting_for_start_page = 0U;
+    }
+
     brick6_sampler_runtime_stream_live_service(
         ctx->program_route.entity_id, frames);
 
@@ -125,6 +138,19 @@ void brick6_sampler_runtime_render_stream_track_mono(const track_audio_runtime_c
         brick6_sampler_runtime_clip_stop_playback_silent(track_id);
         brick6_sampler_runtime_mix_declick_tails_mono(track_id, out_mono, frames);
         return;
+    }
+
+    if (voice->waiting_for_start_page != 0U)
+    {
+        if (sample_voice_reader_frame_ready(&voice->reader,
+                                            voice->play_plan.start_frame) == 0U)
+        {
+            ++g_sampler_stream_live_diag.audio_miss;
+            brick6_sampler_runtime_mix_declick_tails_mono(
+                track_id, out_mono, frames);
+            return;
+        }
+        voice->waiting_for_start_page = 0U;
     }
 
     brick6_sampler_runtime_stream_live_service(track_id, frames);

@@ -19,6 +19,8 @@ typedef struct
 
 ui_sample_playhead_view_t ui_sample_playhead_view(
     brick_entity_id_t entity_id,
-    uint16_t global_slot);
+    uint16_t global_slot,
+    uint32_t generation,
+    uint32_t frame_count);
 
 #endif /* UI_SAMPLE_PLAYHEAD_H */

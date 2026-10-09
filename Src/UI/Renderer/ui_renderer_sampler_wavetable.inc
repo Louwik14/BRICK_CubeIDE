@@ -626,6 +626,7 @@ static int ui_renderer_template_sample_frame_to_x(uint32_t frame,
 }
 
 static void ui_renderer_template_draw_sample_playhead(uint16_t global_slot,
+                                                           uint32_t generation,
                                                            uint32_t frame_count,
                                                            int inner_x,
                                                            int inner_y,
@@ -633,7 +634,8 @@ static void ui_renderer_template_draw_sample_playhead(uint16_t global_slot,
                                                            int inner_h)
 {
     const ui_sample_playhead_view_t view = ui_sample_playhead_view(
-        ui_renderer_template_get_edit_owner_track(), global_slot);
+        ui_renderer_template_get_edit_owner_track(), global_slot,
+        generation, frame_count);
     if (view.active == 0U)
     {
         return;
@@ -748,8 +750,9 @@ static void ui_renderer_template_draw_sample_waveform(const ui_param_seq_plock_f
     uint32_t loop_begin = (uint32_t)(loop_value * (float)source.frame_count);
     uint16_t divisions = ui_renderer_template_sample_slice_divisions(slice_value);
     const ui_sample_playhead_view_t runtime = ui_sample_playhead_view(
-        ui_renderer_template_get_edit_owner_track(), global_slot);
-    if ((runtime.active != 0U) && (runtime.frame_count == source.frame_count))
+        ui_renderer_template_get_edit_owner_track(), global_slot,
+        source.registration_epoch, source.frame_count);
+    if (runtime.active != 0U)
     {
         region_begin = runtime.region_begin;
         region_end = runtime.region_end;
@@ -771,6 +774,7 @@ static void ui_renderer_template_draw_sample_waveform(const ui_param_seq_plock_f
         inner_w,
         inner_h);
     ui_renderer_template_draw_sample_playhead(global_slot,
+                                                  source.registration_epoch,
                                                   source.frame_count,
                                                   inner_x,
                                                   inner_y,

@@ -124,12 +124,25 @@ Le port conserve les classes de parametres observees avant `8fb6e223f`:
 | sample | NOTE_ON/changement de source | oui | un changement arrete proprement l'ancienne voix |
 
 La source canonique des positions actives est le snapshot seqlock du
-VoiceReader: `frame`, `frame_count`, `region_begin/end`, `loop_begin` et
-`slice_count/index`. La Waveview convertit ces frames en pixels; elle ne
-reconstruit plus la tete avec le temps ecoule ou une normalisation sur END.
-Hors lecture, les parametres CONTROL sont convertis une seule fois vers les
-memes frames source. En slice, les bornes publiees sont les bornes absolues de
-la slice courante dans le fichier, jamais un offset relatif a la slice.
+VoiceReader: `frame`, `frame_count`, la region START/END globale,
+`loop_begin`, `slice_count/index`, `sample_id` et `registration_epoch`. La
+Waveview n'accepte ce snapshot que s'il correspond exactement a la generation
+et au nombre de frames de la waveform affichee. Elle convertit ces frames en
+pixels; elle ne reconstruit plus la tete avec le temps ecoule ou une
+normalisation sur END. Hors lecture, les parametres CONTROL sont convertis une
+seule fois vers les memes frames source. En mode slice, la waveform reste
+globale et les `N-1` separations sont les bornes absolues des `N` slices de la
+region START/END; la tete reste la frame source courante du VoiceReader.
+
+Le NOTE_ON resout la source Classic une seule fois. Key, generation, format,
+nombre de frames, bornes de slice et VoiceReader sont construits depuis ce
+meme snapshot: une republication concurrente d'un slot ne peut donc pas
+assembler les bornes d'une generation avec la key d'une autre. Une slice dont
+la page de depart n'est pas encore residente conserve son lease generationne
+et attend cette page en silence; elle n'est plus abandonnee au premier cache
+miss. Le changement de sample arrete proprement la voix latchee precedente;
+les trigs suivants recalculent et clampent l'index de slice sur la nouvelle
+source.
 
 La meme Waveview est rendue sur les sous-pages PLAY et LOOP. Sa source est le
 slot Classic READY reellement resolu par le Streamer. Les min/max viennent du

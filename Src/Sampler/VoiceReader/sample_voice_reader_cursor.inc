@@ -530,11 +530,14 @@ static uint8_t sample_voice_reader_bind_play_plan_slot(
     state->plan_valid = 1U;
     sample_voice_reader_publish_lease(state, plan->start_frame);
 
-    if (sample_voice_reader_acquire_audio_page(state, plan->start_frame) == 0U)
+    if (sample_voice_reader_acquire_audio_page(state, plan->start_frame) == 0U
+        && plan->stop_on_underrun != 0U)
     {
         sample_voice_reader_reset(reader);
         return 0U;
     }
+    /* A non-stopping plan keeps its generation-keyed lease alive until
+     * STORAGE satisfies a cold start page. */
 
     return 1U;
 }

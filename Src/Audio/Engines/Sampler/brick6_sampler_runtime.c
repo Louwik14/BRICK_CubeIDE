@@ -102,6 +102,7 @@ typedef struct
     float last_out_r;
     uint8_t last_out_valid;
     uint8_t start_fade_remaining;
+    uint8_t waiting_for_start_page;
 } brick6_sampler_voice_t;
 
 typedef enum

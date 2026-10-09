@@ -257,11 +257,17 @@ static void brick6_sampler_runtime_publish_playhead(uint8_t track_id)
     if ((voice->active != 0U)
         && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP))
     {
+        uint32_t base_begin = brick6_sampler_runtime_clamp_region_begin(
+            voice->source_frames, voice->start);
+        uint32_t base_end = base_begin
+            + brick6_sampler_runtime_clamp_region_length(
+                voice->source_frames, base_begin, voice->length);
+        if (base_end <= base_begin) base_end = base_begin + 1U;
         snapshot.generation = voice->registration_epoch;
         snapshot.frame = voice->reader.frame_pos;
         snapshot.frame_count = voice->source_frames;
-        snapshot.region_begin = voice->region_begin;
-        snapshot.region_end = voice->region_end;
+        snapshot.region_begin = base_begin;
+        snapshot.region_end = base_end;
         snapshot.loop_begin = voice->loop_begin;
         snapshot.slice_count = voice->slice_count;
         snapshot.slice_index = voice->slice_index;
@@ -795,22 +801,12 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     }
 
     memset(&play_plan, 0, sizeof(play_plan));
-    sample_resolved_source_t stream_source;
-    sample_resolved_source_init(&stream_source);
-    if (brick6_sampler_runtime_clip_resolve_source(clip, &stream_source) == 0U)
-    {
-        if (use_shifter != 0U)
-        {
-            brick6_sampler_runtime_clip_release_slot(track_id);
-        }
-        return 0U;
-    }
     play_plan.sample_id = clip->sample_id;
-    play_plan.key = stream_source.key;
-    play_plan.format = stream_source.format;
-    play_plan.stride_floats = stream_source.stride_floats;
-    play_plan.frames_per_page = stream_source.frames_per_page;
-    play_plan.registration_epoch = stream_source.registration_epoch;
+    play_plan.key = source.key;
+    play_plan.format = source.format;
+    play_plan.stride_floats = source.stride_floats;
+    play_plan.frames_per_page = source.frames_per_page;
+    play_plan.registration_epoch = source.registration_epoch;
     const uint8_t mode = (clip->mode < BRICK6_SAMPLER_MODE_COUNT)
         ? clip->mode : BRICK6_SAMPLER_MODE_ONE;
     const uint8_t loop_mode = brick6_sampler_mode_loop(mode);
@@ -822,7 +818,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     if ((loop_mode == SAMPLE_PLAY_LOOP_FORWARD) && (voice->slice_count == 0U))
     {
         const uint32_t marker = brick6_sampler_runtime_clamp_region_begin(
-            stream_source.total_frames, voice->loop_start);
+            source.total_frames, voice->loop_start);
         if (marker >= region_begin)
         {
             if (marker >= region_end)
@@ -839,7 +835,9 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     play_plan.step_q16 = pitch_plan.step_q16;
     play_plan.loop_mode = loop_mode;
     play_plan.initial_reverse = (mode == BRICK6_SAMPLER_MODE_REVERSE_ONE) ? 1U : 0U;
-    play_plan.stop_on_underrun = 1U;
+    /* Cold slice pages are scheduled by the lease and start silently once
+     * READY; established playback still treats later misses as terminal. */
+    play_plan.stop_on_underrun = 0U;
     play_plan.kernel_type = ((mode == BRICK6_SAMPLER_MODE_REVERSE_ONE)
         || (loop_mode == SAMPLE_PLAY_LOOP_PINGPONG))
             ? SAMPLE_KERNEL_DIRECTIONAL_LINEAR
@@ -888,12 +886,15 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     voice->stride_floats = play_plan.stride_floats;
     voice->frames_per_page = play_plan.frames_per_page;
     voice->registration_epoch = play_plan.registration_epoch;
-    voice->source_frames = stream_source.total_frames;
+    voice->source_frames = source.total_frames;
     voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
     voice->last_out_l = 0.0f;
     voice->last_out_r = 0.0f;
     voice->last_out_valid = 0U;
     voice->start_fade_remaining = 0U;
+    voice->waiting_for_start_page = (uint8_t)(
+        sample_voice_reader_frame_ready(&voice->reader,
+                                        play_plan.start_frame) == 0U);
     voice->release_pending = 0U;
     if (start_fade != 0U)
     {

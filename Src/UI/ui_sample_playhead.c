@@ -5,7 +5,9 @@
 
 ui_sample_playhead_view_t ui_sample_playhead_view(
     brick_entity_id_t entity_id,
-    uint16_t global_slot)
+    uint16_t global_slot,
+    uint32_t generation,
+    uint32_t frame_count)
 {
     ui_sample_playhead_view_t view = {0};
     if (entity_id >= BRICK_ENTITY_CAPACITY)
@@ -21,6 +23,8 @@ ui_sample_playhead_view_t ui_sample_playhead_view(
     if ((before != slot->sequence) || ((before & 1U) != 0U)
         || (snapshot.active == 0U)
         || (snapshot.global_slot != global_slot)
+        || (snapshot.generation != generation)
+        || (snapshot.frame_count != frame_count)
         || (snapshot.frame_count == 0U))
         return view;
 
