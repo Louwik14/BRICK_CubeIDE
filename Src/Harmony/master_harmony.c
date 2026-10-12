@@ -17,9 +17,13 @@ uint16_t master_harmony_chord_mask(uint8_t chord_type)
 }
 
 typedef struct {
-    volatile uint32_t sequence;
     master_harmony_state_t state[12];
     uint8_t count;
+} master_harmony_snapshot_t;
+
+typedef struct {
+    master_harmony_snapshot_t snapshot[2];
+    volatile uint32_t active_index;
 } master_harmony_publication_t;
 
 static SEC_ATTR(".ram_seq_state_sram3") master_harmony_publication_t
@@ -33,24 +37,31 @@ static uint16_t rotate_mask(uint16_t mask, uint8_t root)
 
 static void publish(const master_harmony_state_t *state)
 {
-    ++g_master_harmony.sequence;
-    __DMB();
-    if (g_master_harmony.count >= 12U) {
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    const uint32_t active = g_master_harmony.active_index & 1U;
+    const uint32_t inactive = active ^ 1U;
+    master_harmony_snapshot_t *const next =
+        &g_master_harmony.snapshot[inactive];
+    *next = g_master_harmony.snapshot[active];
+    if (next->count >= 12U) {
         for (uint8_t i=1U;i<12U;++i)
-            g_master_harmony.state[i-1U]=g_master_harmony.state[i];
-        g_master_harmony.count=11U;
+            next->state[i-1U]=next->state[i];
+        next->count=11U;
     }
-    uint8_t insert=g_master_harmony.count;
+    uint8_t insert=next->count;
     while(insert!=0U
-            &&g_master_harmony.state[insert-1U].effective_sample
+            &&next->state[insert-1U].effective_sample
                 >state->effective_sample){
-        g_master_harmony.state[insert]=g_master_harmony.state[insert-1U];
+        next->state[insert]=next->state[insert-1U];
         --insert;
     }
-    g_master_harmony.state[insert]=*state;
-    ++g_master_harmony.count;
+    next->state[insert]=*state;
+    ++next->count;
     __DMB();
-    ++g_master_harmony.sequence;
+    g_master_harmony.active_index=inactive;
+    __DMB();
+    __set_PRIMASK(primask);
 }
 
 void master_harmony_reset(uint32_t generation, uint64_t sample)
@@ -58,9 +69,13 @@ void master_harmony_reset(uint32_t generation, uint64_t sample)
     const master_harmony_state_t state = {
         .effective_sample=sample,.pattern_generation=generation,
         .root=0U,.type=MASTER_CHORD_MAJOR,.bass=0U,.valid=0U};
-    ++g_master_harmony.sequence;__DMB();
-    g_master_harmony.count=1U;g_master_harmony.state[0]=state;
-    __DMB();++g_master_harmony.sequence;
+    const uint32_t primask=__get_PRIMASK();__disable_irq();
+    const uint32_t inactive=(g_master_harmony.active_index&1U)^1U;
+    master_harmony_snapshot_t *const next=
+        &g_master_harmony.snapshot[inactive];
+    next->count=1U;next->state[0]=state;
+    __DMB();g_master_harmony.active_index=inactive;__DMB();
+    __set_PRIMASK(primask);
 }
 
 uint8_t master_harmony_publish_notes(const uint8_t *notes, uint8_t count,
@@ -68,9 +83,7 @@ uint8_t master_harmony_publish_notes(const uint8_t *notes, uint8_t count,
 {
     if (notes == NULL || count == 0U) return 0U;
     master_harmony_state_t previous={0};
-    for(uint8_t i=0U;i<g_master_harmony.count;++i)
-        if(g_master_harmony.state[i].effective_sample<=sample)
-            previous=g_master_harmony.state[i];
+    (void)master_harmony_resolve_at(sample,&previous);
     master_harmony_state_t next = {.effective_sample=sample,
         .pattern_generation=generation,.root=(uint8_t)(notes[0]%12U),
         .type=previous.valid ? previous.type : MASTER_CHORD_MAJOR,
@@ -105,26 +118,28 @@ uint8_t master_harmony_publish_notes(const uint8_t *notes, uint8_t count,
 uint8_t master_harmony_get_current(master_harmony_state_t *out)
 {
     if(out==NULL)return 0U;
-    uint32_t before,after;uint8_t count;
-    do{before=g_master_harmony.sequence;if((before&1U)!=0U)continue;__DMB();
-       count=g_master_harmony.count;
-       *out=(count!=0U)?g_master_harmony.state[count-1U]
-                       :(master_harmony_state_t){0};
-       __DMB();after=g_master_harmony.sequence;
-    }while(before!=after||(after&1U)!=0U);
+    const uint32_t primask=__get_PRIMASK();__disable_irq();
+    const uint32_t active=g_master_harmony.active_index&1U;__DMB();
+    const master_harmony_snapshot_t *const snapshot=
+        &g_master_harmony.snapshot[active];
+    const uint8_t count=snapshot->count;
+    *out=(count!=0U)?snapshot->state[count-1U]
+                   :(master_harmony_state_t){0};
+    __DMB();__set_PRIMASK(primask);
     return out->valid;
 }
 
 uint8_t master_harmony_resolve_at(uint64_t sample, master_harmony_state_t *out)
 {
     if (out==NULL) return 0U;
-    uint32_t before,after;uint8_t count;
-    do{before=g_master_harmony.sequence;if((before&1U)!=0U)continue;__DMB();
-       count=g_master_harmony.count;*out=(master_harmony_state_t){0};
-       for(uint8_t i=0U;i<count;++i)
-           if(g_master_harmony.state[i].effective_sample<=sample)
-               *out=g_master_harmony.state[i];
-       __DMB();after=g_master_harmony.sequence;
-    }while(before!=after||(after&1U)!=0U);
+    const uint32_t primask=__get_PRIMASK();__disable_irq();
+    const uint32_t active=g_master_harmony.active_index&1U;__DMB();
+    const master_harmony_snapshot_t *const snapshot=
+        &g_master_harmony.snapshot[active];
+    const uint8_t count=snapshot->count;*out=(master_harmony_state_t){0};
+    for(uint8_t i=0U;i<count;++i)
+        if(snapshot->state[i].effective_sample<=sample)
+            *out=snapshot->state[i];
+    __DMB();__set_PRIMASK(primask);
     return out->valid;
 }
