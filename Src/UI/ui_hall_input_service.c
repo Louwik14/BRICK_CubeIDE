@@ -101,7 +101,8 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
             && (entity_topology_get((brick_entity_id_t)hall, &entity) != 0U)
             && (entity.active != 0U))
     {
-        if (entity.role == ENTITY_ROLE_GROUP_CHILD)
+        if ((entity.role == ENTITY_ROLE_GROUP_CHILD)
+                || (entity.role == ENTITY_ROLE_MASTER))
         {
             hall_note_suppressed[hall] = 1U;
             if (set_active_track != 0)
