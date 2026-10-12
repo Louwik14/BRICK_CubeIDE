@@ -10,6 +10,8 @@
 #include "Track/track_mute.h"
 #include "Track/track_runtime.h"
 #include "Keyboard/keyboard_params.h"
+#include "Harmony/harmony_analysis.h"
+#include "Harmony/harmony_engine.h"
 #include "main.h"
 #include "stm32h7xx.h"
 #include <string.h>
@@ -17,6 +19,8 @@
 /* Single CONTROL writer. Published slots are never modified while SEQ reads. */
 static seq_pattern_t g_pattern_slot_a;
 static SEQ_STATE_D2 seq_pattern_t g_pattern_slot_b;
+static IRQ_SHARED_D3 harmony_track_plan_t
+    g_harmony_plan[SEQ_ENGINE_SNAPSHOT_SLOTS][SEQ_LANE_CAPACITY];
 static seq_lock_pattern_t g_locks_a_d1[4][SEQ_ENGINE_LOCK_POOL_CAPACITY];
 static CONTROL_STATE_SRAM2 seq_lock_pattern_t g_locks_a_sram2[7][SEQ_ENGINE_LOCK_POOL_CAPACITY];
 static IRQ_SHARED_D3 seq_lock_pattern_t g_locks_a_d3[5][SEQ_ENGINE_LOCK_POOL_CAPACITY];
@@ -115,6 +119,8 @@ void seq_engine_control_init(void)
         else if (track < 11U) g_pattern_slot_a.lock_pool[track] = g_locks_a_sram2[track - 4U];
         else g_pattern_slot_a.lock_pool[track] = g_locks_a_d3[track - 11U];
     }
+    g_pattern_slot_a.harmony_plan = g_harmony_plan[0];
+    g_pattern_slot_b.harmony_plan = g_harmony_plan[1];
     g_edit_generation = 1U;
     g_published_generation = 0U;
     g_published_slot = 0U;
@@ -154,6 +160,10 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
     if (track >= SEQ_LANE_CAPACITY || step >= SEQ_MAX_STEPS) return;
     if (step == 0U)
     {
+        (void)harmony_analysis_get_plan(track,
+            &pattern->harmony_plan[track]);
+        pattern->harmony_mode[track] =
+            (uint8_t)harmony_engine_resolve_mode(track);
         memset(&g_build_fx_state[track], 0, sizeof(g_build_fx_state[track]));
         uint8_t div = 1U;
         uint8_t direction = (uint8_t)SEQ_DIRECTION_FWD;
@@ -512,9 +522,11 @@ uint8_t seq_engine_control_prepare_begin(
     g_prepared_slot = (uint8_t)(g_published_slot ^ 1U);
     seq_pattern_t *const pattern = g_pattern[g_prepared_slot];
     seq_lock_pattern_t *lock_pool[SEQ_LANE_CAPACITY];
+    harmony_track_plan_t *const harmony_plan = pattern->harmony_plan;
     memcpy(lock_pool, pattern->lock_pool, sizeof(lock_pool));
     memset(pattern, 0, sizeof(*pattern));
     memcpy(pattern->lock_pool, lock_pool, sizeof(lock_pool));
+    pattern->harmony_plan = harmony_plan;
     g_prepared_track_mask = 0U;
     memset(g_prepared_step_mask, 0, sizeof(g_prepared_step_mask));
     g_prepared_active = 1U;
@@ -552,6 +564,9 @@ uint8_t seq_engine_control_prepare_track(
         .active = prepared->active
     };
     pattern->play_base[track] = prepared->play_base;
+    (void)harmony_analysis_get_plan(track, &pattern->harmony_plan[track]);
+    pattern->harmony_mode[track] =
+        (uint8_t)harmony_engine_resolve_mode(track);
     g_build_fx_state[track] = prepared->note_fx;
     if (note_fx_chain_state_make_effective(&prepared->note_fx,
             &pattern->fx_base_plan[track]) == 0U) return 0U;

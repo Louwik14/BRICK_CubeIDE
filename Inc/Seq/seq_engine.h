@@ -10,6 +10,7 @@
 #include "Seq/seq_capacity_contract.h"
 #include "Seq/seq_timing.h"
 #include "Seq/seq_audio_boundary.h"
+#include "Harmony/harmony_engine.h"
 
 #define SEQ_ENGINE_H743_PERIOD_SAMPLES 64U
 #define SEQ_ENGINE_TERMINAL_CAPACITY 3136U
@@ -87,7 +88,7 @@ typedef struct {
     uint8_t next_ordinal;
     uint8_t ordinal_count;
     uint8_t active;
-    uint8_t reserved;
+    uint8_t origin_step;
 } seq_source_cursor_t;
 
 _Static_assert(sizeof(seq_source_cursor_t) == 40U,
@@ -119,6 +120,7 @@ typedef struct {
     uint32_t dropped_events;
     uint16_t emitter_tracks;
     uint16_t plock_fault_tracks;
+    uint16_t harmony_pending_tracks;
     uint8_t running;
     uint8_t initialized;
     uint8_t event_faulted;
@@ -127,6 +129,8 @@ typedef struct {
     uint8_t track_div_phase[SEQ_LANE_CAPACITY];
     uint32_t step_serial[SEQ_LANE_CAPACITY];
     note_fx_chain_state_t fx_effective[SEQ_LANE_CAPACITY];
+    harmony_track_plan_t harmony_plan[SEQ_LANE_CAPACITY];
+    uint8_t harmony_mode[SEQ_LANE_CAPACITY];
     uint8_t active_lock_count[SEQ_LANE_CAPACITY];
     seq_active_lock_t active_locks[SEQ_LANE_CAPACITY][SEQ_STEP_MAX_LOCKS];
     uint64_t source_active[SEQ_PRODUCT_MAX_SOURCE_GENERATIONS];
@@ -187,6 +191,8 @@ typedef struct {
     uint16_t lock_first[SEQ_LANE_CAPACITY][SEQ_MAX_STEPS];
     uint16_t lock_pool_count[SEQ_LANE_CAPACITY];
     seq_lock_pattern_t *lock_pool[SEQ_LANE_CAPACITY];
+    harmony_track_plan_t *harmony_plan;
+    uint8_t harmony_mode[SEQ_LANE_CAPACITY];
     seq_play_snapshot_t top_play[BRICK_ENTITY_TOP_LEVEL_COUNT][SEQ_MAX_STEPS];
     seq_play_item_t child_play[BRICK_ENTITY_GROUP_CHILD_COUNT][SEQ_MAX_STEPS];
     seq_play_snapshot_t master_play[SEQ_MAX_STEPS];

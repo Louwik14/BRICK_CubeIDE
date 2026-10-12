@@ -10,6 +10,12 @@ static const uint16_t g_chord_masks[MASTER_CHORD_TYPE_COUNT] = {
     0x4D1U,0x591U,0x691U,0x4A1U,0x0A1U,0x049U,0x111U,0x295U,0x451U
 };
 
+uint16_t master_harmony_chord_mask(uint8_t chord_type)
+{
+    return (chord_type < MASTER_CHORD_TYPE_COUNT)
+        ? g_chord_masks[chord_type] : 0U;
+}
+
 typedef struct {
     volatile uint32_t sequence;
     master_harmony_state_t state[12];

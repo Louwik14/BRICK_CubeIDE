@@ -2,6 +2,8 @@
 # Keep entries nominative: directory inference is intentionally forbidden.
 
 set(DOMAIN_CONTROL
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Harmony/harmony_analysis.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Harmony/harmony_engine.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Harmony/master_harmony.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/buttons.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/drv_encoders.c"

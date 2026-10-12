@@ -1,5 +1,6 @@
 #include "Seq/seq_engine.h"
 #include "Harmony/master_harmony.h"
+#include "Harmony/harmony_engine.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_traversal.h"
 #include "Seq/seq_model.h"
@@ -446,8 +447,9 @@ static void terminal_admit(const note_event_t *e,uint64_t record_sample_abs,
     if(e->kind==NOTE_EVENT_KIND_OFF){const int16_t found=ledger_find(g_seq_fx_core,
             e->track,e->occurrence_id,e->source_id);
         if(found<0){return;}
+        const uint8_t emitted_note=g_seq_fx_core->ledger[(uint8_t)found].note;
         const seq_terminal_event_t terminal={.note={
-            .occurrence_id=e->occurrence_id,.track=e->track,.note=e->note,
+            .occurrence_id=e->occurrence_id,.track=e->track,.note=emitted_note,
             .reserved=g_seq_fx_core->ledger[(uint8_t)found].owner_tag,
             .logical_slot=product_slot_from_lane((uint16_t)found)}};
         if(!terminal_push(g_seq_fx_block,(uint16_t)(due-g_seq_fx_start),
@@ -459,7 +461,7 @@ static void terminal_admit(const note_event_t *e,uint64_t record_sample_abs,
         if(ns==NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY||ns==NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI)
             (void)seq_runtime_live_rec_submit_effective(
                 (ns==NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY)?SEQ_LIVE_REC_SRC_INTERNAL:SEQ_LIVE_REC_SRC_EXTERNAL,
-                0U,0U,e->note,record_velocity,record_sample_abs,
+                0U,0U,emitted_note,record_velocity,record_sample_abs,
                 e->occurrence_id,e->occurrence_id);
         return;}
     seq_ledger_plan_t plan;const uint8_t admission=ledger_plan(g_seq_fx_core,e,&plan);
@@ -505,6 +507,19 @@ static void fx_terminal(const note_event_t *event)
     seq_timing_finalize(&g_seq_fx_pattern->timing_plan[event->track],
         g_seq_timing_reference_sample,g_seq_timing_reference_position_q16,
         g_seq_fx_pattern->samples_per_step_q16,&finalized);
+    if(finalized.kind==NOTE_EVENT_KIND_ON
+            &&(finalized.flags&NOTE_EVENT_FLAG_TERMINAL)==0U){
+        master_harmony_state_t target;uint8_t transformed;
+        const harmony_mode_t mode=(harmony_mode_t)
+            g_seq_fx_core->harmony_mode[finalized.track];
+        if(mode!=HARMONY_MODE_OFF
+                &&master_harmony_resolve_at(finalized.sample_abs,&target)!=0U
+                &&harmony_engine_transform(
+                    &g_seq_fx_core->harmony_plan[finalized.track],mode,
+                    finalized.track,finalized.reserved[0],finalized.note,
+                    &target,&transformed)!=0U)
+            finalized.note=transformed;
+    }
     if(finalized.kind==NOTE_EVENT_KIND_OFF){
         const int16_t found=ledger_find(g_seq_fx_core,finalized.track,
             finalized.occurrence_id,finalized.source_id);
@@ -729,7 +744,7 @@ static uint64_t first_on(const seq_pattern_t *p, uint8_t track,
 static ITCM_TEXT void source_add(seq_engine_core_t *core, uint64_t first_on,
     uint64_t span_q16, uint64_t interval_q16, uint32_t gate_samples,
     uint8_t track, uint8_t logical_slot, uint8_t note, uint8_t velocity,
-    uint8_t playback_stage,uint32_t source_epoch,
+    uint8_t playback_stage,uint8_t origin_step,uint32_t source_epoch,
     uint32_t finalizer_advance_samples)
 {
     const uint16_t lane=product_lane_from_track_slot(track,logical_slot);
@@ -750,7 +765,7 @@ static ITCM_TEXT void source_add(seq_engine_core_t *core, uint64_t first_on,
         .finalizer_advance_samples=finalizer_advance_samples,
         .note=note,.velocity=velocity,.playback_stage=playback_stage,
         .ordinal_count=ordinal_count,.active=1U,
-        .reserved=0U};
+        .origin_step=origin_step};
 }
 
 static uint8_t next_phase(const seq_pattern_t *p, uint8_t track,
@@ -834,7 +849,7 @@ static void schedule_step(seq_engine_core_t *core, const seq_pattern_t *p,
         const uint64_t span_q16=(uint64_t)p->samples_per_step_q16*p->track_div[track];
         source_add(core,first_on(p,track,nominal,transport_step_ordinal,
             minimum_microtiming),span_q16,span_q16,1U,track,0U,step,note_count,
-            NOTE_EVENT_STAGE_SOURCE,serial,
+            NOTE_EVENT_STAGE_SOURCE,step,serial,
             p->timing_plan[track].finalizer_max_advance_samples);
         return;
     }
@@ -866,7 +881,7 @@ static void schedule_step(seq_engine_core_t *core, const seq_pattern_t *p,
             ?NOTE_EVENT_STAGE_TERMINAL:NOTE_EVENT_STAGE_SOURCE);
         source_add(core,first,span_q16,interval_q16,
         (uint32_t)(gate ? gate : 1U),track,voice,(uint8_t)note,(uint8_t)vel,
-            playback_stage,serial,
+            playback_stage,step,serial,
             p->timing_plan[track].finalizer_max_advance_samples);
     }
 }
@@ -1025,6 +1040,12 @@ static uint16_t advance(seq_engine_core_t *core,const seq_pattern_t *p)
             p,track,core->traversal_phase[track]);
         core->play_step[track]=resolve_step(
             p,track,core->traversal_phase[track]);
+        if(core->traversal_phase[track]==0U
+                &&(core->harmony_pending_tracks&(uint16_t)(1U<<track))!=0U){
+            core->harmony_plan[track]=p->harmony_plan[track];
+            core->harmony_mode[track]=p->harmony_mode[track];
+            core->harmony_pending_tracks&=(uint16_t)~(1U<<track);
+        }
         ++core->step_serial[track];
         hits |= (uint16_t)(1U << track);
     }
@@ -1104,7 +1125,7 @@ static note_event_result_t process_source_cohort(seq_engine_core_t *core,
    .provenance=NOTE_EVENT_SOURCE_STEP,.stage=s->playback_stage,
    .temporal_index=product_slot_from_lane(ref.lane),
    .timing_class=NOTE_EVENT_TIMING_SCHEDULED,
-   .reserved={0U,0U},
+   .reserved={s->origin_step,0U},
    .flags=(uint8_t)((s->playback_stage==NOTE_EVENT_STAGE_TERMINAL)
       ?NOTE_EVENT_FLAG_TERMINAL:0U)};
   if(++s->next_ordinal>=s->ordinal_count){s->active=0U;
@@ -1305,6 +1326,10 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
         memcpy(core->traversal_phase,p->seed_traversal_phase,
             sizeof(core->traversal_phase));
         memcpy(core->track_div_phase,p->seed_div_phase,sizeof(core->track_div_phase));
+        memcpy(core->harmony_plan,p->harmony_plan,sizeof(core->harmony_plan));
+        memcpy(core->harmony_mode,p->harmony_mode,sizeof(core->harmony_mode));
+        core->harmony_pending_tracks=0U;
+        harmony_engine_live_reset();
         for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){
             const uint8_t cycle=seq_traversal_cycle_length(
                 p->track_length[t],p->track_direction[t]);
@@ -1319,6 +1344,7 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
     ledger_retire_outside_capacity(core,out);
     if(core->pattern_generation!=p->generation){
         core->pattern_generation=p->generation;
+        if(seed_frontier==0U)core->harmony_pending_tracks=UINT16_MAX;
         for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){
             const uint8_t cycle=seq_traversal_cycle_length(
                 p->track_length[t],p->track_direction[t]);
@@ -1330,7 +1356,8 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
     g_seq_collect_reference_sample=start;
     collect_reference_capture(core,&g_seq_collect_reference);
     if((p->running==0U)||(core->samples_per_step_q16==0U)){
-        if(core->running!=0U)master_harmony_reset(p->generation,start);
+        if(core->running!=0U){master_harmony_reset(p->generation,start);
+            harmony_engine_live_reset();}
         core->running=0U;
         collect(core,start,frames,p,&g_seq_collect_reference,out);
         for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track){

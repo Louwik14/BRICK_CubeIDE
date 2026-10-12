@@ -45,6 +45,18 @@ le clamp du mode courant sans reecrire les p-locks stockes. `GENERATOR.P4`
 n'est pas stockable: les changements ARP/HOLD/EUCLID restent des reglages de
 piste, tandis que P1/P2/P3 sont reinterpretes et clamps sans migration.
 
+La transformation harmonique est un terminal de hauteur distinct, place apres
+TRIG et le finalizer temporel, juste avant l'admission NOTE. CONTROL analyse
+les notes PLAY originales avec un debounce de 100 ms et publie au plus quatre
+zones source immuables par piste. SEQ active une nouvelle analyse au prochain
+retour de boucle de la piste, puis transforme uniquement les NOTE_ON selon
+l'accord courant de la Master Track. Le ledger conserve la hauteur emise pour
+le NOTE_OFF: un changement d'accord ne repitche ni ne redeclenche une note
+tenue. Les modes internes sont OFF, CHORD 1, CHORD 2, BASS, DIATONIC et
+PARALLEL; un child GROUP lit le mode du master GROUP mais garde sa propre
+analyse. En l'absence d'accord source fiable, la gamme puis l'ancre melodique
+ponderee fournissent les replis DIATONIC et PARALLEL.
+
 A la boundary, SEQ superpose directement au bloc fixe puis appelle les quatre
 etages dans l'ordre connu. Il n'effectue plus de permutation, recherche de
 slot, dispatch de modele ni validation de famille. Une edition ordinaire

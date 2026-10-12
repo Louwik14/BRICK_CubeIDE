@@ -33,6 +33,7 @@
 #include "Storage/undo_v2.h"
 #include "Storage/waveform_cache.h"
 #include "Storage/waveform_service.h"
+#include "Harmony/harmony_analysis.h"
 #include "Storage/sampler_waveform_store.h"
 #include "Platform/brick6_sd_config.h"
 
@@ -172,6 +173,7 @@ void brick6_app_process(void)
     sample_capture_control_service_quantized_trigger();
     brick6_app_service_storage();
     pattern_live_service();
+    harmony_analysis_service();
     seq_engine_control_poll();
     if (g_boot_audio_state == BRICK6_BOOT_WAIT_MASTER)
     {

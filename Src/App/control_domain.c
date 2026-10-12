@@ -42,6 +42,8 @@
 #include "ui_core.h"
 #include "ui_page_manager.h"
 #include "pages/ui_page_calibration.h"
+#include "Harmony/harmony_analysis.h"
+#include "Harmony/harmony_engine.h"
 
 void control_domain_resume_after_hall_calibration(void)
 {
@@ -82,6 +84,8 @@ void control_domain_start(float postgain, float output_compensation)
     param_registry_init();
     track_state_init();
     seq_runtime_init();
+    harmony_engine_init();
+    harmony_analysis_init();
     ui_core_init();
     (void)param_registry_commit_global(PARAM_POST_GAIN, postgain);
     (void)param_registry_commit_global(PARAM_OUTPUT_COMP, output_compensation);

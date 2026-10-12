@@ -14,6 +14,7 @@
 #include "Platform/memory_layout.h"
 #include "Seq/seq_param_iface.h"
 #include "Track/entity_topology.h"
+#include "Harmony/harmony_analysis.h"
 
 #define SEQ_LOCK_NONE 0xFFFFU
 
@@ -577,6 +578,7 @@ void seq_model_toggle_trig(seq_track_id_t track, seq_step_id_t step)
         s->roll = (uint8_t)SEQ_STEP_ROLL_OFF;
     }
     seq_model_exit_critical(primask);
+    harmony_analysis_mark_dirty(track);
     seq_engine_control_mark_dirty();
 }
 
@@ -599,6 +601,7 @@ void seq_model_set_trig(seq_track_id_t track, seq_step_id_t step, uint8_t trig)
         s->roll = (uint8_t)SEQ_STEP_ROLL_OFF;
     }
     seq_model_exit_critical(primask);
+    harmony_analysis_mark_dirty(track);
     seq_engine_control_mark_dirty();
 }
 
@@ -632,6 +635,7 @@ void seq_model_set_step_roll(seq_track_id_t track, seq_step_id_t step, uint8_t r
     const uint32_t primask = seq_model_enter_critical();
     s->roll = seq_model_normalize_roll(roll);
     seq_model_exit_critical(primask);
+    harmony_analysis_mark_dirty(track);
     seq_engine_control_mark_dirty();
 }
 
@@ -693,6 +697,7 @@ void seq_model_set_track_length(seq_track_id_t track, uint8_t length_steps)
 
     g_seq_project.tracks[track].length_steps = seq_model_clamp_playback_length(length_steps);
     g_seq_project.tracks[track].page_mask = 0U;
+    harmony_analysis_mark_dirty(track);
     seq_engine_control_mark_dirty();
 }
 
@@ -737,6 +742,7 @@ void seq_model_set_track_page_mask(seq_track_id_t track, uint8_t mask)
         count += (uint8_t)((mask >> page) & 1U);
     g_seq_project.tracks[track].page_mask = mask;
     g_seq_project.tracks[track].length_steps = (uint8_t)(count * SEQ_STEPS_PER_PAGE);
+    harmony_analysis_mark_dirty(track);
     seq_engine_control_mark_dirty();
 }
 
@@ -956,6 +962,8 @@ uint8_t seq_model_play_set(seq_track_id_t track,
     if(field==SEQ_STEP_PLAY_FIELD_NOTE)
         item->present_mask=(uint8_t)(item->present_mask&~SEQ_STEP_PLAY_TERMINAL);
     item->present_mask = (uint8_t)(item->present_mask | mask);
+    if(field!=SEQ_STEP_PLAY_FIELD_MICROTIMING)
+        harmony_analysis_mark_dirty(track);
     seq_engine_control_mark_dirty();
     return 1U;
 }
@@ -981,7 +989,7 @@ uint8_t seq_model_play_clear(seq_track_id_t track,
     if ((item == NULL) || (mask == 0U)) return 0U;
     const uint8_t present = ((item->present_mask & mask) != 0U) ? 1U : 0U;
     item->present_mask = (uint8_t)(item->present_mask & (uint8_t)~mask);
-    if (present != 0U) seq_engine_control_mark_dirty();
+    if (present != 0U) {harmony_analysis_mark_dirty(track);seq_engine_control_mark_dirty();}
     return present;
 }
 
@@ -990,7 +998,8 @@ void seq_model_play_clear_item(seq_track_id_t track,
                                      uint8_t voice)
 {
     seq_play_item_t *const item = seq_model_play_item_mut(track, step, voice);
-    if (item != NULL) { memset(item, 0, sizeof(*item)); seq_engine_control_mark_dirty(); }
+    if (item != NULL) { memset(item, 0, sizeof(*item));
+        harmony_analysis_mark_dirty(track);seq_engine_control_mark_dirty(); }
 }
 
 void seq_model_play_clear_step(seq_track_id_t track, seq_step_id_t step)
@@ -1051,7 +1060,11 @@ uint8_t seq_model_play_base_set(seq_track_id_t track,
 {
     if ((track >= SEQ_LANE_CAPACITY) || (voice >= SEQ_PLAY_MAX_CAPACITY)) return 0U;
     const uint8_t changed = seq_play_snapshot_set(&g_seq_project.play_base[track], voice, field, value);
-    if (changed != 0U) seq_engine_control_mark_dirty();
+    if (changed != 0U) {
+        if(field!=SEQ_STEP_PLAY_FIELD_MICROTIMING)
+            harmony_analysis_mark_dirty(track);
+        seq_engine_control_mark_dirty();
+    }
     return changed;
 }
 
@@ -1077,6 +1090,7 @@ uint8_t seq_model_play_base_restore(seq_track_id_t track,
                 return 0U;
         }
     g_seq_project.play_base[track] = *snapshot;
+    harmony_analysis_mark_dirty(track);
     seq_engine_control_mark_dirty();
     return 1U;
 }

@@ -53,6 +53,7 @@ uint8_t master_harmony_publish_notes(const uint8_t *notes, uint8_t note_count,
 uint8_t master_harmony_get_current(master_harmony_state_t *out_state);
 uint8_t master_harmony_resolve_at(uint64_t sample,
     master_harmony_state_t *out_state);
+uint16_t master_harmony_chord_mask(uint8_t chord_type);
 
 #ifdef __cplusplus
 }
