@@ -1084,6 +1084,13 @@ bool ui_set_track_family(uint8_t track, track_family_t family)
         return false;
     }
 
+    entity_topology_descriptor_t topology;
+    if ((entity_topology_get(track, &topology) != 0U)
+            && (topology.role == ENTITY_ROLE_MASTER))
+    {
+        return false;
+    }
+
     const track_config_t config = track_state_get_config(track);
 
     if (!ui_core_track_family_is_available(track, family))
@@ -1158,6 +1165,13 @@ bool ui_set_track_type(uint8_t track, track_type_t type)
     }
 
     if (entity_topology_is_active(track) == 0U)
+    {
+        return false;
+    }
+
+    entity_topology_descriptor_t topology;
+    if ((entity_topology_get(track, &topology) != 0U)
+            && (topology.role == ENTITY_ROLE_MASTER))
     {
         return false;
     }

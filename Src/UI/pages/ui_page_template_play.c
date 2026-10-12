@@ -42,6 +42,18 @@ static const ui_template_family_t *ui_page_template_play_resolve_family(void)
     return &g_ui_template_play_families[g_ui_template_play_subset];
 }
 
+const ui_template_family_t *ui_page_template_play_resolve_for_track(uint8_t track)
+{
+    entity_topology_descriptor_t topology;
+    if ((entity_topology_get(track, &topology) == 0U)
+            || (topology.active == 0U)
+            || (topology.role != ENTITY_ROLE_MASTER))
+    {
+        return NULL;
+    }
+    return &g_ui_template_play_families[0];
+}
+
 static uint8_t ui_page_template_play_subpage_enabled(uint8_t subpage_index)
 {
     const uint8_t active_track = ui_get_active_lane();

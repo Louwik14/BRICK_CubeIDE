@@ -8,6 +8,7 @@
 #include "Track/track_runtime.h"
 #include "Platform/memory_layout.h"
 #include "pages/ui_page_template_tone.h"
+#include "pages/ui_page_template_play.h"
 #include "ui_page_manager.h"
 #include "ui_navigation.h"
 #include "ui_renderer_template.h"
@@ -345,6 +346,15 @@ const ui_template_family_t *ui_template_family_resolve_effective_for_track(ui_te
     if (family_id == UI_TEMPLATE_FAMILY_TONE)
     {
         return ui_page_template_tone_resolve_for_track(owner_track, scope_index);
+    }
+    if (family_id == UI_TEMPLATE_FAMILY_PLAY)
+    {
+        const ui_template_family_t *const master_play =
+            ui_page_template_play_resolve_for_track(owner_track);
+        if (master_play != 0)
+        {
+            return master_play;
+        }
     }
 
     const track_config_t config = ui_get_track_config(owner_track);
