@@ -1072,13 +1072,23 @@ static note_event_result_t process_source_cohort(seq_engine_core_t *core,
    if(((core->source_active[bank]>>lane)&1U)==0U)continue;
    seq_source_cursor_t *const source=&core->sources[bank][lane];
    if(source_cursor_due(source)!=cohort_sample)continue;
-   uint8_t notes[SEQ_PLAY_MAX_CAPACITY];uint8_t count=0U;
+   uint8_t notes[SEQ_PLAY_MAX_CAPACITY];uint8_t count=0U,first_voice=0U;
    for(uint8_t voice=0U;voice<SEQ_PLAY_MAX_CAPACITY;++voice){
     const int16_t note=play_value(p,track,source->note,voice,SEQ_STEP_PLAY_FIELD_NOTE);
     const int16_t velocity=play_value(p,track,source->note,voice,
         SEQ_STEP_PLAY_FIELD_VELOCITY);
-    if(note>=0&&note<128&&velocity>0)notes[count++]=(uint8_t)note;}
-   (void)master_harmony_publish_notes(notes,count,p->generation,cohort_sample);
+    if(note>=0&&note<128&&velocity>0){
+     if(count==0U)first_voice=voice;
+     notes[count++]=(uint8_t)note;}}
+   note_event_t timing_event={.sample_abs=cohort_sample,.duration_samples=1U,
+    .track=track,.note=(count!=0U)?notes[0]:0U,.velocity=1U,
+    .kind=NOTE_EVENT_KIND_ON,.timing_class=NOTE_EVENT_TIMING_SCHEDULED,
+    .temporal_index=first_voice,.flags=NOTE_EVENT_FLAG_HELD};
+   seq_timing_finalize(&p->timing_plan[track],g_seq_timing_reference_sample,
+       g_seq_timing_reference_position_q16,p->samples_per_step_q16,&timing_event);
+   if(timing_event.sample_abs<start)timing_event.sample_abs=start;
+   (void)master_harmony_publish_notes(notes,count,p->generation,
+       timing_event.sample_abs);
    source->active=0U;core->source_active[bank]&=~(UINT64_C(1)<<lane);
    if(core->source_count!=0U)--core->source_count;}
   return NOTE_EVENT_RESULT_ACCEPTED;}
@@ -1344,7 +1354,15 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
     ledger_retire_outside_capacity(core,out);
     if(core->pattern_generation!=p->generation){
         core->pattern_generation=p->generation;
-        if(seed_frontier==0U)core->harmony_pending_tracks=UINT16_MAX;
+        if(seed_frontier==0U){
+            if(p->running==0U){
+                memcpy(core->harmony_plan,p->harmony_plan,
+                    sizeof(core->harmony_plan));
+                memcpy(core->harmony_mode,p->harmony_mode,
+                    sizeof(core->harmony_mode));
+                core->harmony_pending_tracks=0U;
+            }else core->harmony_pending_tracks=UINT16_MAX;
+        }
         for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){
             const uint8_t cycle=seq_traversal_cycle_length(
                 p->track_length[t],p->track_direction[t]);

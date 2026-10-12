@@ -40,7 +40,15 @@ static void publish(const master_harmony_state_t *state)
             g_master_harmony.state[i-1U]=g_master_harmony.state[i];
         g_master_harmony.count=11U;
     }
-    g_master_harmony.state[g_master_harmony.count++]=*state;
+    uint8_t insert=g_master_harmony.count;
+    while(insert!=0U
+            &&g_master_harmony.state[insert-1U].effective_sample
+                >state->effective_sample){
+        g_master_harmony.state[insert]=g_master_harmony.state[insert-1U];
+        --insert;
+    }
+    g_master_harmony.state[insert]=*state;
+    ++g_master_harmony.count;
     __DMB();
     ++g_master_harmony.sequence;
 }
@@ -59,8 +67,10 @@ uint8_t master_harmony_publish_notes(const uint8_t *notes, uint8_t count,
     uint32_t generation, uint64_t sample)
 {
     if (notes == NULL || count == 0U) return 0U;
-    const master_harmony_state_t previous = g_master_harmony.state[
-        (g_master_harmony.count!=0U)?(uint8_t)(g_master_harmony.count-1U):0U];
+    master_harmony_state_t previous={0};
+    for(uint8_t i=0U;i<g_master_harmony.count;++i)
+        if(g_master_harmony.state[i].effective_sample<=sample)
+            previous=g_master_harmony.state[i];
     master_harmony_state_t next = {.effective_sample=sample,
         .pattern_generation=generation,.root=(uint8_t)(notes[0]%12U),
         .type=previous.valid ? previous.type : MASTER_CHORD_MAJOR,
@@ -73,7 +83,7 @@ uint8_t master_harmony_publish_notes(const uint8_t *notes, uint8_t count,
     }
     next.bass=(uint8_t)(bass_note%12U);
     if ((mask & (uint16_t)(mask-1U)) != 0U) {
-        int16_t best=-1; uint8_t best_root=0U,best_type=0U;
+        int16_t best=INT16_MIN; uint8_t best_root=0U,best_type=0U,found=0U;
         for (uint8_t root=0U;root<12U;++root) for (uint8_t type=0U;
                 type<MASTER_CHORD_TYPE_COUNT;++type) {
             if (rotate_mask(g_chord_masks[type],root)!=mask) continue;
@@ -81,9 +91,11 @@ uint8_t master_harmony_publish_notes(const uint8_t *notes, uint8_t count,
             if (previous.valid && root==previous.root) score+=4;
             if (previous.valid && type==previous.type) score+=2;
             score-=(int16_t)type;
-            if (score>best) {best=score;best_root=root;best_type=type;}
+            if (found==0U||score>best) {
+                best=score;best_root=root;best_type=type;found=1U;
+            }
         }
-        if (best<0) return 0U;
+        if (found==0U) return 0U;
         next.root=best_root;next.type=best_type;
     }
     publish(&next);
