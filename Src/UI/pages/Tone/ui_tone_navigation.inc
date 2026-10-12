@@ -28,6 +28,10 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
         if (model == 2U) return &g_ui_template_tone_family_master_comp_brick;
         return &g_ui_template_tone_family_master_comp_off;
     }
+    if (track == BRICK_ENTITY_MASTER_ID)
+    {
+        return &g_ui_template_tone_family_harmony;
+    }
     if ((ui_get_track_family(track) == TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(track) == TRACK_TYPE_WAVE))
     {

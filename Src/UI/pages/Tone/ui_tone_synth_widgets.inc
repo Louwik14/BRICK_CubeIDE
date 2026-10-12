@@ -804,6 +804,30 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                                                 uint32_t out_value_len)
 {
     const uint8_t active_track = ui_get_active_lane();
+    if ((active_track == BRICK_ENTITY_MASTER_ID)
+            && (id >= UI_PARAM_LOCAL_HARM_TRACK_1)
+            && (id <= UI_PARAM_LOCAL_HARM_TRACK_8))
+    {
+        const uint8_t harmony_track =
+            (uint8_t)(id - UI_PARAM_LOCAL_HARM_TRACK_1);
+        int32_t mode = (int32_t)(value + 0.5f);
+        if (mode < 0) mode = 0;
+        if (mode >= (int32_t)HARMONY_MODE_COUNT)
+            mode = (int32_t)HARMONY_MODE_COUNT - 1;
+        if ((out_name != NULL) && (out_name_len > 0U))
+            (void)snprintf(out_name, out_name_len, "TRACK %u",
+                           (unsigned int)harmony_track + 1U);
+        if ((out_value != NULL) && (out_value_len > 0U))
+        {
+            const param_desc_t *const desc = ui_param_get_local_desc(id);
+            if ((desc == NULL) || (desc->labels == NULL)
+                    || (desc->labels[mode] == NULL)) return 0U;
+            (void)snprintf(out_value, out_value_len, "%s",
+                           desc->labels[mode]);
+        }
+        (void)slot;
+        return 1U;
+    }
     if ((id >= PARAM_MODFX_RATE) && (id <= PARAM_MODFX_WIDTH))
     {
         const char *name = (id==PARAM_MODFX_RATE)?"RATE":((id==PARAM_MODFX_DEPTH)?"DEPTH":((id==PARAM_MODFX_FEEDBACK)?"FEEDBACK":"OFFSET"));

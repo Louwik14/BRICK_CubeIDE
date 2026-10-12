@@ -12,6 +12,7 @@
 #include "Param/param_registry.h"
 #include "Param/param_prism_labels.h"
 #include "Param/param_stack_labels.h"
+#include "Harmony/harmony_engine.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_reader_contract.h"
@@ -23,6 +24,24 @@
 
 static uint8_t g_ui_template_tone_subset = 0U;
 static uint8_t g_ui_template_tone_global_master = 0U;
+
+static const ui_template_family_t g_ui_template_tone_family_harmony = {
+    .family_title = "TONE",
+    .nav_labels = { "HARM 1-4", "HARM 5-8", "-", "-" },
+    .subpages = {
+        { .title = "HARM 1-4", .param_bank = { .params = {
+            UI_PARAM_LOCAL_HARM_TRACK_1, UI_PARAM_LOCAL_HARM_TRACK_2,
+            UI_PARAM_LOCAL_HARM_TRACK_3, UI_PARAM_LOCAL_HARM_TRACK_4 } } },
+        { .title = "HARM 5-8", .param_bank = { .params = {
+            UI_PARAM_LOCAL_HARM_TRACK_5, UI_PARAM_LOCAL_HARM_TRACK_6,
+            UI_PARAM_LOCAL_HARM_TRACK_7, UI_PARAM_LOCAL_HARM_TRACK_8 } } },
+        { .title = "-", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = {
+            PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
 
 static uint8_t ui_template_tone_multi_logical_label(uint16_t logical,
                                                     char *out,

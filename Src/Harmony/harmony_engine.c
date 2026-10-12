@@ -3,6 +3,7 @@
 #include "Track/entity_topology.h"
 #include "Track/track_runtime.h"
 #include "Platform/memory_layout.h"
+#include "Seq/seq_engine.h"
 
 static CTRL_STATE uint8_t g_track_mode[BRICK_ENTITY_CAPACITY];
 static CTRL_STATE uint8_t g_live_anchor[BRICK_ENTITY_CAPACITY];
@@ -16,7 +17,9 @@ void harmony_engine_init(void)
  g_track_mode[BRICK_ENTITY_MASTER_ID]=HARMONY_MODE_OFF;g_live_anchor_valid=0U;}
 
 void harmony_engine_set_mode(uint8_t track,harmony_mode_t mode)
-{if(track<BRICK_ENTITY_CAPACITY&&mode<HARMONY_MODE_COUNT)g_track_mode[track]=(uint8_t)mode;}
+{if(track<BRICK_ENTITY_CAPACITY&&mode<HARMONY_MODE_COUNT
+      &&g_track_mode[track]!=(uint8_t)mode){g_track_mode[track]=(uint8_t)mode;
+  seq_engine_control_mark_dirty();}}
 
 harmony_mode_t harmony_engine_get_mode(uint8_t track)
 {return(track<BRICK_ENTITY_CAPACITY)?(harmony_mode_t)g_track_mode[track]:HARMONY_MODE_OFF;}

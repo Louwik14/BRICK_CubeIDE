@@ -48,6 +48,7 @@
 #include "Track/track_state.h"
 #include "encoders.h"
 #include "NoteFx/note_fx_state.h"
+#include "Harmony/harmony_engine.h"
 #include "Track/tone_program_control.h"
 #include "Param/param_global_control.h"
 #include "Platform/memory_layout.h"
@@ -93,7 +94,7 @@ static uint8_t g_ui_param_fm_operator;
 uint8_t ui_param_is_local_control(param_id_t id)
 {
     return (uint8_t)((id >= UI_PARAM_LOCAL_ASSET)
-        && (id <= UI_PARAM_LOCAL_FM_OPERATOR));
+        && (id <= UI_PARAM_LOCAL_HARM_TRACK_8));
 }
 
 
@@ -112,6 +113,17 @@ static const param_desc_t g_ui_local_fm_operator_desc = {
     .min = 0.0f, .max = (float)(PARAM_FM_OPERATOR_COUNT - 1U), .step = 1.0f,
     .default_value = 0.0f, .display_type = PARAM_DISPLAY_INT, .unit = "", .labels = NULL,
 };
+static const char *const g_ui_harmony_mode_labels[] = {
+    "OFF", "CHORD 1", "CHORD 2", "BASS", "DIATONIC", "PARALLEL", NULL
+};
+static const param_desc_t g_ui_local_harmony_desc = {
+    .id = UI_PARAM_LOCAL_HARM_TRACK_1, .name = "HARM",
+    .type = PARAM_TYPE_ENUM, .min = 0.0f,
+    .max = (float)(HARMONY_MODE_COUNT - 1U), .step = 1.0f,
+    .default_value = (float)HARMONY_MODE_CHORD1,
+    .display_type = PARAM_DISPLAY_ENUM, .unit = "",
+    .labels = g_ui_harmony_mode_labels,
+};
 
 const param_desc_t *ui_param_get_local_desc(param_id_t id)
 {
@@ -121,6 +133,14 @@ const param_desc_t *ui_param_get_local_desc(param_id_t id)
         case UI_PARAM_LOCAL_WAVE_OSC1:
         case UI_PARAM_LOCAL_WAVE_OSC2: return &g_ui_local_wave_desc;
         case UI_PARAM_LOCAL_FM_OPERATOR: return &g_ui_local_fm_operator_desc;
+        case UI_PARAM_LOCAL_HARM_TRACK_1:
+        case UI_PARAM_LOCAL_HARM_TRACK_2:
+        case UI_PARAM_LOCAL_HARM_TRACK_3:
+        case UI_PARAM_LOCAL_HARM_TRACK_4:
+        case UI_PARAM_LOCAL_HARM_TRACK_5:
+        case UI_PARAM_LOCAL_HARM_TRACK_6:
+        case UI_PARAM_LOCAL_HARM_TRACK_7:
+        case UI_PARAM_LOCAL_HARM_TRACK_8: return &g_ui_local_harmony_desc;
         default: return NULL;
     }
 }
@@ -149,6 +169,14 @@ static uint8_t ui_param_local_control_get(param_id_t id, uint8_t track,
     if (id == UI_PARAM_LOCAL_FM_OPERATOR)
     {
         *out_value = (float)g_ui_param_fm_operator;
+        return 1U;
+    }
+    if ((id >= UI_PARAM_LOCAL_HARM_TRACK_1)
+            && (id <= UI_PARAM_LOCAL_HARM_TRACK_8))
+    {
+        const uint8_t harmony_track =
+            (uint8_t)(id - UI_PARAM_LOCAL_HARM_TRACK_1);
+        *out_value = (float)harmony_engine_get_mode(harmony_track);
         return 1U;
     }
     return 0U;
@@ -201,6 +229,17 @@ static uint8_t ui_param_local_control_apply(param_id_t id, uint8_t track,
         if (next >= (int32_t)PARAM_FM_OPERATOR_COUNT)
             next = (int32_t)PARAM_FM_OPERATOR_COUNT - 1;
         g_ui_param_fm_operator = (uint8_t)next;
+        return 1U;
+    }
+    if ((id >= UI_PARAM_LOCAL_HARM_TRACK_1)
+            && (id <= UI_PARAM_LOCAL_HARM_TRACK_8))
+    {
+        if (next < 0) next = 0;
+        if (next >= (int32_t)HARMONY_MODE_COUNT)
+            next = (int32_t)HARMONY_MODE_COUNT - 1;
+        harmony_engine_set_mode(
+            (uint8_t)(id - UI_PARAM_LOCAL_HARM_TRACK_1),
+            (harmony_mode_t)next);
         return 1U;
     }
     return 0U;
