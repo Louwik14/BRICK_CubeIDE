@@ -98,7 +98,8 @@ uint16_t entity_topology_get_capabilities(const entity_topology_descriptor_t *de
 
     if (descriptor->role == ENTITY_ROLE_MASTER)
     {
-        return TRACK_CAPABILITY_HARMONY;
+        return (uint16_t)(TRACK_CAPABILITY_HARMONY
+                | TRACK_CAPABILITY_KEYBOARD);
     }
 
     uint16_t capabilities = (uint16_t)(TRACK_CAPABILITY_MUTE

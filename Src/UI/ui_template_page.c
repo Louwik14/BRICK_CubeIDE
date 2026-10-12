@@ -8,12 +8,12 @@
 #include "Track/track_runtime.h"
 #include "Platform/memory_layout.h"
 #include "pages/ui_page_template_tone.h"
-#include "pages/ui_page_template_play.h"
 #include "ui_page_manager.h"
 #include "ui_navigation.h"
 #include "ui_renderer_template.h"
 
 UI_STATE_SDRAM static const ui_template_family_t *g_ui_template_family_registry[UI_TEMPLATE_FAMILY_COUNT][TRACK_FAMILY_COUNT][TRACK_TYPE_COUNT];
+UI_STATE_SDRAM static const ui_template_family_t *g_ui_template_role_family_registry[UI_TEMPLATE_FAMILY_COUNT][ENTITY_ROLE_COUNT];
 
 static ui_template_page_state_t *ui_template_page_get_active_state(void)
 {
@@ -186,6 +186,10 @@ void ui_template_family_registry_init(void)
                 g_ui_template_family_registry[family_index][track_family_index][type_index] = 0;
             }
         }
+        for (uint8_t role = 0U; role < (uint8_t)ENTITY_ROLE_COUNT; ++role)
+        {
+            g_ui_template_role_family_registry[family_index][role] = 0;
+        }
     }
 }
 
@@ -203,6 +207,18 @@ void ui_template_family_register(ui_template_family_id_t family_id,
     }
 
     g_ui_template_family_registry[family_id][track_family][track_type] = family;
+}
+
+void ui_template_family_register_for_role(ui_template_family_id_t family_id,
+                                          entity_role_t role,
+                                          const ui_template_family_t *family)
+{
+    if (((uint8_t)family_id >= (uint8_t)UI_TEMPLATE_FAMILY_COUNT)
+            || ((uint8_t)role >= (uint8_t)ENTITY_ROLE_COUNT))
+    {
+        return;
+    }
+    g_ui_template_role_family_registry[family_id][role] = family;
 }
 
 const ui_template_family_t *ui_template_family_resolve(ui_template_family_id_t family_id,
@@ -347,13 +363,16 @@ const ui_template_family_t *ui_template_family_resolve_effective_for_track(ui_te
     {
         return ui_page_template_tone_resolve_for_track(owner_track, scope_index);
     }
-    if (family_id == UI_TEMPLATE_FAMILY_PLAY)
+
+    entity_topology_descriptor_t topology;
+    if ((entity_topology_get(owner_track, &topology) != 0U)
+            && ((uint8_t)topology.role < (uint8_t)ENTITY_ROLE_COUNT))
     {
-        const ui_template_family_t *const master_play =
-            ui_page_template_play_resolve_for_track(owner_track);
-        if (master_play != 0)
+        const ui_template_family_t *const role_family =
+            g_ui_template_role_family_registry[family_id][topology.role];
+        if (role_family != 0)
         {
-            return master_play;
+            return role_family;
         }
     }
 

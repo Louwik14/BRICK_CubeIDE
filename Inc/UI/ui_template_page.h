@@ -151,6 +151,9 @@ void ui_template_family_register(ui_template_family_id_t family_id,
                                  track_family_t track_family,
                                  track_type_t track_type,
                                  const ui_template_family_t *family);
+void ui_template_family_register_for_role(ui_template_family_id_t family_id,
+                                          entity_role_t role,
+                                          const ui_template_family_t *family);
 const ui_template_family_t *ui_template_family_resolve(ui_template_family_id_t family_id,
                                                        uint8_t track,
                                                        track_family_t track_family,

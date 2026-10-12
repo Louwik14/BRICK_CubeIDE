@@ -36,7 +36,7 @@ static const ui_template_family_t g_ui_template_keyboard_family = {
 
 static const ui_template_family_t *ui_page_template_keyboard_resolve_family(void)
 {
-    return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_KEYBOARD);
+    return ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_KEYBOARD);
 }
 
 static uint8_t ui_page_template_keyboard_virtual_slot_text(uint8_t slot,
@@ -153,6 +153,9 @@ static void ui_page_template_keyboard_handle_event(const ui_event_t *ev)
 
 void ui_page_template_keyboard_register_families(void)
 {
+    ui_template_family_register_for_role(UI_TEMPLATE_FAMILY_KEYBOARD,
+                                         ENTITY_ROLE_MASTER,
+                                         &g_ui_template_keyboard_family);
     for (uint8_t family = 0U; family < (uint8_t)TRACK_FAMILY_COUNT; ++family)
     {
         const track_family_t track_family = (track_family_t)family;

@@ -24,7 +24,7 @@ static const ui_template_family_t g_ui_template_seq_family = {
 
 static const ui_template_family_t *ui_page_template_seq_resolve_family(void)
 {
-    return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_SEQ);
+    return ui_template_family_resolve_effective_active_track(UI_TEMPLATE_FAMILY_SEQ);
 }
 
 static uint8_t ui_page_template_seq_virtual_slot_text(uint8_t slot,
@@ -231,6 +231,9 @@ uint8_t ui_page_template_seq_handle_encoder(uint8_t encoder, int16_t delta)
 
 void ui_page_template_seq_register_families(void)
 {
+    ui_template_family_register_for_role(UI_TEMPLATE_FAMILY_SEQ,
+                                         ENTITY_ROLE_MASTER,
+                                         &g_ui_template_seq_family);
     for (uint8_t track_family = 0U; track_family < (uint8_t)TRACK_FAMILY_COUNT; ++track_family)
     {
         for (uint8_t track_type = 0U; track_type < (uint8_t)TRACK_TYPE_COUNT; ++track_type)
