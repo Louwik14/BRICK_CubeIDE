@@ -64,7 +64,8 @@ static uint16_t product_lane(const note_event_t*e){
   {if(e->track==BRICK_ENTITY_GROUP_MASTER_ID)return UINT16_MAX;
    return(uint16_t)((uint16_t)e->track*SEQ_LOGICAL_CAPACITY_MAX+e->temporal_index);
   }
- if(e->track>=BRICK_ENTITY_FIRST_GROUP_CHILD_ID&&e->track<NOTE_FX_TRACK_COUNT
+ if(e->track>=BRICK_ENTITY_FIRST_GROUP_CHILD_ID
+      &&e->track<=BRICK_ENTITY_LAST_GROUP_CHILD_ID
       &&e->temporal_index==0U)
   return(uint16_t)(((BRICK_ENTITY_TOP_LEVEL_COUNT-1U)*SEQ_LOGICAL_CAPACITY_MAX)
       +(e->track-BRICK_ENTITY_FIRST_GROUP_CHILD_ID));
@@ -72,7 +73,8 @@ static uint16_t product_lane(const note_event_t*e){
 static uint64_t track_lane_mask(uint8_t track){
  if(track<BRICK_ENTITY_GROUP_MASTER_ID)
   return UINT64_C(0xFF)<<((uint32_t)track*SEQ_LOGICAL_CAPACITY_MAX);
- if(track>=BRICK_ENTITY_FIRST_GROUP_CHILD_ID&&track<NOTE_FX_TRACK_COUNT)
+ if(track>=BRICK_ENTITY_FIRST_GROUP_CHILD_ID
+      &&track<=BRICK_ENTITY_LAST_GROUP_CHILD_ID)
   return UINT64_C(1)<<((BRICK_ENTITY_TOP_LEVEL_COUNT-1U)*SEQ_LOGICAL_CAPACITY_MAX
       +(track-BRICK_ENTITY_FIRST_GROUP_CHILD_ID));
  return 0U;}

@@ -3,8 +3,8 @@
 
 #include "Seq/seq_product_contract.h"
 
-/* A GROUP master does not emit. Its eight mono children replace its eight
- * PLAY voices, so both legal topologies expose exactly 64 emitting voices. */
+/* The physical source grid keeps 64 lanes. In GROUP topology, 63 lanes can
+ * emit notes and the last lane carries the non-emitting harmonic Master. */
 #define SEQ_PRODUCT_MAX_EMITTING_VOICES \
     (BRICK_ENTITY_TOP_LEVEL_COUNT * SEQ_PLAY_MAX_CAPACITY)
 #define SEQ_PRODUCT_GROUP_MAX_EMITTING_VOICES \
@@ -71,8 +71,7 @@
 
 _Static_assert(SEQ_PRODUCT_MAX_EMITTING_VOICES == 64U,
                "top-level sequencer voice proof changed");
-_Static_assert(SEQ_PRODUCT_GROUP_MAX_EMITTING_VOICES
-                   == SEQ_PRODUCT_MAX_EMITTING_VOICES,
+_Static_assert(SEQ_PRODUCT_GROUP_MAX_EMITTING_VOICES == 63U,
                "GROUP sequencer voice proof changed");
 _Static_assert(SEQ_PRODUCT_MAX_ACTIVE_SOURCES == 768U,
                "active source owner proof changed");

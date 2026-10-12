@@ -85,7 +85,7 @@ La reverb globale utilise le kernel Mutable/Deluge, son buffer float de 32768 el
 
 ## GROUP
 
-Le GROUP master 7 possede le bus AUDIO, les deux kernels Audio FX A/B, MOD et les traitements post-somme. Les children 8..15 gardent leur moteur, chemin mono/stereo, filtre, VCA, niveau, pan et mute locaux. Leur dry et leurs niveaux locaux A/B alimentent les bus GROUP; leurs sends globaux sont neutralises. Les sorties A/B sont reinjectees en parallele avant filtre et MIX master. Le mute parent coupe le bus et les contributions children sans reecrire leur mute local.
+Le GROUP master 7 possede le bus AUDIO, les deux kernels Audio FX A/B, MOD et les traitements post-somme. Les children 8..14 gardent leur moteur, chemin mono/stereo, filtre, VCA, niveau, pan et mute locaux. L'entite 15 est la Master Track harmonique et ne possede ni renderer, ni voix AUDIO, ni sortie MIDI. Leur dry et leurs niveaux locaux A/B alimentent les bus GROUP; leurs sends globaux sont neutralises. Les sorties A/B sont reinjectees en parallele avant filtre et MIX master. Le mute parent coupe le bus et les contributions children sans reecrire leur mute local.
 
 ## Sampler mono et stereo
 

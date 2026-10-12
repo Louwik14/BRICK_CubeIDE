@@ -11,7 +11,8 @@ typedef enum
 {
     ENTITY_ROLE_MAIN = 0,
     ENTITY_ROLE_GROUP_MASTER,
-    ENTITY_ROLE_GROUP_CHILD
+    ENTITY_ROLE_GROUP_CHILD,
+    ENTITY_ROLE_MASTER
 } entity_role_t;
 
 typedef struct

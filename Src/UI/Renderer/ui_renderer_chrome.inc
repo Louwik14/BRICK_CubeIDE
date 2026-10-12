@@ -142,7 +142,8 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
 
 #define UI_TEMPLATE_HEADER_CACHE_BYTES (OLED_WIDTH * 2U)
 
-static uint8_t g_ui_template_header_cache[UI_TEMPLATE_HEADER_CACHE_BYTES];
+UI_STATE_SDRAM static uint8_t
+    g_ui_template_header_cache[UI_TEMPLATE_HEADER_CACHE_BYTES];
 static uint8_t g_ui_template_footer_page6_cache[OLED_WIDTH];
 static uint8_t g_ui_template_footer_page7_cache[OLED_WIDTH];
 static uint32_t g_ui_template_header_cache_signature;
@@ -319,8 +320,8 @@ static uint8_t ui_renderer_template_draw_audio_fx_group(
         int8_t y_top[AUDIO_WAVEFORM_CAPTURE_COLUMNS];
         int8_t y_bottom[AUDIO_WAVEFORM_CAPTURE_COLUMNS];
     } ui_audio_scope_cache_t;
-    static audio_waveform_capture_snapshot_t snapshot;
-    static ui_audio_scope_cache_t cache;
+    UI_STATE_SDRAM static audio_waveform_capture_snapshot_t snapshot;
+    UI_STATE_SDRAM static ui_audio_scope_cache_t cache;
     static brick_entity_id_t scale_entity = BRICK_ENTITY_INVALID_ID;
     static uint8_t display_peak = 32U;
     const brick_entity_id_t selected_entity =

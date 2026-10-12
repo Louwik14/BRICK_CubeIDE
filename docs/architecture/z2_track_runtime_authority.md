@@ -2,7 +2,7 @@
 
 `track_state` est l'autorite canonique des seize configurations
 `brick_entity_id_t`. `entity_topology` possede l'activite, les roles
-MAIN/GROUP_MASTER/GROUP_CHILD, le parent, le membre et les capacites.
+MAIN/GROUP_MASTER/GROUP_CHILD/MASTER, le parent, le membre et les capacites.
 `track_runtime` derive uniquement l'etat CONTROL necessaire aux catalogues,
 routes et descripteurs PROGRAM.
 
@@ -30,6 +30,10 @@ actifs sont exclusivement des voix mono `SAMPLER/RAM`: le catalogue, le commit
 structurel, la preparation PROGRAM CONTROL et l'installation AUDIO refusent
 STREAM, MULTI et toute autre famille. Les children conservent leur configuration
 quand le GROUP est inactif; l'activation initialise a RAM les slots encore OFF.
+
+La Master Track 15 est toujours active et sequencable, avec la seule capacite
+`HARMONY`. Elle est forcee a OFF dans le catalogue Track et ne peut donc jamais
+acquerir de moteur AUDIO, de destination MIDI ou de place dans un GROUP.
 Le mute CONTROL de chaque entite est local; le mute effectif child derive du
 local ou du parent.
 

@@ -17,7 +17,7 @@ _Static_assert(ENCODER_DETENT_QUEUE_CAPACITY
 _Static_assert(ENC_COUNT == CONTROL_AUDIO_FIFO_ENCODER_COUNT,
                "FIFO encoder fan-in proof changed");
 _Static_assert((BRICK_ENTITY_GROUP_CHILD_COUNT + 1U)
-                   == CONTROL_AUDIO_FIFO_ENCODER_MAX_DELTA,
+                   <= CONTROL_AUDIO_FIFO_ENCODER_MAX_DELTA,
                "FIFO group-mute delta proof changed");
 
 void encoder_control_dispatcher_init(void)

@@ -313,7 +313,7 @@ uint8_t prepared_audio_control_preflight(uint8_t slot_id, uint32_t generation)
         const uint8_t child = (uint8_t)(
             (program->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U);
         if ((target->active > 1U)
-                || (target->topology_role > ENTITY_ROLE_GROUP_CHILD)
+                || (target->topology_role > ENTITY_ROLE_MASTER)
                 || (track_runtime_program_is_canonical(
                     (track_runtime_engine_t)program->engine,
                     (track_runtime_family_t)program->family,
@@ -325,7 +325,10 @@ uint8_t prepared_audio_control_preflight(uint8_t slot_id, uint32_t generation)
                 || ((target->topology_role == ENTITY_ROLE_GROUP_MASTER)
                     != (master != 0U))
                 || ((target->topology_role == ENTITY_ROLE_GROUP_CHILD)
-                    != (child != 0U)))
+                    != (child != 0U))
+                || ((target->topology_role == ENTITY_ROLE_MASTER)
+                    && ((program->family != TRACK_RUNTIME_FAMILY_OFF)
+                        || (master != 0U) || (child != 0U))))
             return 0U;
     }
     return 1U;

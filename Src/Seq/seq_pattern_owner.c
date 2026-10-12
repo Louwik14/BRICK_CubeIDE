@@ -180,7 +180,9 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
         const uint8_t runtime_valid = track_runtime_get_descriptor(track,
             &runtime_descriptor);
         uint8_t logical_capacity = 0U;
-        if ((capabilities & TRACK_CAPABILITY_NOTES) != 0U)
+        if ((capabilities & TRACK_CAPABILITY_HARMONY) != 0U)
+            logical_capacity = SEQ_LOGICAL_CAPACITY_MASTER;
+        else if ((capabilities & TRACK_CAPABILITY_NOTES) != 0U)
         {
             if (entity.role == ENTITY_ROLE_GROUP_CHILD)
                 logical_capacity = SEQ_LOGICAL_CAPACITY_GROUP_CHILD;
@@ -316,9 +318,13 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
         }
         seq_play_snapshot_t *const top = (track < BRICK_ENTITY_TOP_LEVEL_COUNT)
             ? &pattern->top_play[track][step] : 0;
-        seq_play_item_t *const child = (track >= BRICK_ENTITY_TOP_LEVEL_COUNT)
+        seq_play_snapshot_t *const master = (track == BRICK_ENTITY_MASTER_ID)
+            ? &pattern->master_play[step] : 0;
+        seq_play_item_t *const child = (track >= BRICK_ENTITY_FIRST_GROUP_CHILD_ID
+                && track <= BRICK_ENTITY_LAST_GROUP_CHILD_ID)
             ? &pattern->child_play[track - BRICK_ENTITY_TOP_LEVEL_COUNT][step] : 0;
         if (top != 0) memset(top, 0, sizeof(*top));
+        if (master != 0) memset(master, 0, sizeof(*master));
         if (child != 0) memset(child, 0, sizeof(*child));
         const uint8_t voice_count = (child != 0) ? 1U : SEQ_PLAY_MAX_CAPACITY;
         for (uint8_t voice = 0U; voice < voice_count; ++voice)
@@ -329,8 +335,8 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                 if (seq_model_play_get(track, step, voice,
                     (seq_step_play_field_t)field, &value) != 0U)
                 {
-                    if (top != 0)
-                        (void)seq_play_snapshot_set(top, voice,
+                    if (top != 0 || master != 0)
+                        (void)seq_play_snapshot_set((top != 0) ? top : master, voice,
                             (seq_step_play_field_t)field, value);
                     else
                     {
@@ -597,10 +603,14 @@ uint8_t seq_engine_control_prepare_step(
     }
     seq_play_snapshot_t *const top = (track < BRICK_ENTITY_TOP_LEVEL_COUNT)
         ? &pattern->top_play[track][step] : NULL;
-    seq_play_item_t *const child = (track >= BRICK_ENTITY_TOP_LEVEL_COUNT)
+    seq_play_snapshot_t *const master = (track == BRICK_ENTITY_MASTER_ID)
+        ? &pattern->master_play[step] : NULL;
+    seq_play_item_t *const child = (track >= BRICK_ENTITY_FIRST_GROUP_CHILD_ID
+            && track <= BRICK_ENTITY_LAST_GROUP_CHILD_ID)
         ? &pattern->child_play[track - BRICK_ENTITY_TOP_LEVEL_COUNT][step]
         : NULL;
     if (top != NULL) memset(top, 0, sizeof(*top));
+    if (master != NULL) memset(master, 0, sizeof(*master));
     if (child != NULL) memset(child, 0, sizeof(*child));
     const uint8_t voice_count = (child != NULL) ? 1U : prepared->play_count;
     for (uint8_t voice = 0U; voice < voice_count; ++voice)
@@ -611,9 +621,9 @@ uint8_t seq_engine_control_prepare_step(
         for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
             if ((play->present_mask & (uint8_t)(1U << field)) != 0U)
             {
-                if (top != NULL)
+                if (top != NULL || master != NULL)
                 {
-                    if (seq_play_snapshot_set(top, voice,
+                    if (seq_play_snapshot_set((top != NULL) ? top : master, voice,
                             (seq_step_play_field_t)field,
                             values[field]) == 0U) return 0U;
                 }

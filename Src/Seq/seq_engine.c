@@ -1,4 +1,5 @@
 #include "Seq/seq_engine.h"
+#include "Harmony/master_harmony.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_traversal.h"
 #include "Seq/seq_model.h"
@@ -22,7 +23,8 @@ static SEQ_STATE_SDRAM seq_source_cursor_t
     g_seq_sources[SEQ_PRODUCT_MAX_SOURCE_GENERATIONS]
                  [SEQ_PRODUCT_MAX_EMITTING_VOICES];
 typedef struct {uint8_t bank;uint16_t lane;uint32_t order;} seq_source_due_ref_t;
-static seq_source_due_ref_t g_seq_source_due_ref[NOTE_FX_BATCH_CAPACITY];
+static SEC_ATTR(".ram_seq_state_sram3") seq_source_due_ref_t
+    g_seq_source_due_ref[NOTE_FX_BATCH_CAPACITY];
 static seq_engine_core_t *g_seq_fx_core;
 static seq_terminal_block_t *g_seq_fx_block;
 static uint64_t g_seq_fx_start;
@@ -324,8 +326,10 @@ static uint8_t product_slot_from_lane(uint16_t lane)
  ?(uint8_t)(lane%SEQ_LOGICAL_CAPACITY_MAX):0U;}
 static uint8_t product_track_lane_count(uint8_t track)
 {return(track<BRICK_ENTITY_GROUP_MASTER_ID)?SEQ_LOGICAL_CAPACITY_MAX
- :((track>=BRICK_ENTITY_FIRST_GROUP_CHILD_ID&&track<SEQ_LANE_CAPACITY)
-   ?SEQ_LOGICAL_CAPACITY_GROUP_CHILD:0U);}
+ :((track==BRICK_ENTITY_MASTER_ID)?SEQ_LOGICAL_CAPACITY_MASTER
+ :((track>=BRICK_ENTITY_FIRST_GROUP_CHILD_ID
+      &&track<=BRICK_ENTITY_LAST_GROUP_CHILD_ID)
+   ?SEQ_LOGICAL_CAPACITY_GROUP_CHILD:0U));}
 
 static int16_t ledger_find(const seq_engine_core_t *core,uint8_t track,
     uint32_t occurrence,uint32_t source_id)
@@ -684,7 +688,9 @@ static const seq_play_item_t *step_item(const seq_pattern_t *p,
 {
     if (track < BRICK_ENTITY_TOP_LEVEL_COUNT)
         return &p->top_play[track][step].items[voice];
-    if ((track < SEQ_LANE_CAPACITY) && (voice == 0U))
+    if (track == BRICK_ENTITY_MASTER_ID && voice < SEQ_PLAY_MAX_CAPACITY)
+        return &p->master_play[step].items[voice];
+    if ((track <= BRICK_ENTITY_LAST_GROUP_CHILD_ID) && (voice == 0U))
         return &p->child_play[track - BRICK_ENTITY_TOP_LEVEL_COUNT][step];
     return 0;
 }
@@ -815,6 +821,23 @@ static void schedule_step(seq_engine_core_t *core, const seq_pattern_t *p,
     uint8_t track, uint8_t step, uint32_t serial,
     uint64_t nominal, uint64_t transport_step_ordinal)
 {
+    if (track == BRICK_ENTITY_MASTER_ID) {
+        if ((p->steps[track][step].trig_roll & 1U) == 0U) return;
+        int16_t minimum_microtiming=INT16_MAX;uint8_t note_count=0U;
+        for(uint8_t voice=0U;voice<SEQ_PLAY_MAX_CAPACITY;++voice){
+            const int16_t note=play_value(p,track,step,voice,SEQ_STEP_PLAY_FIELD_NOTE);
+            const int16_t vel=play_value(p,track,step,voice,SEQ_STEP_PLAY_FIELD_VELOCITY);
+            const int16_t micro=play_value(p,track,step,voice,SEQ_STEP_PLAY_FIELD_MICROTIMING);
+            if(note<0||note>=128||vel<=0)continue;
+            ++note_count;if(micro<minimum_microtiming)minimum_microtiming=micro;}
+        if(note_count==0U)return;
+        const uint64_t span_q16=(uint64_t)p->samples_per_step_q16*p->track_div[track];
+        source_add(core,first_on(p,track,nominal,transport_step_ordinal,
+            minimum_microtiming),span_q16,span_q16,1U,track,0U,step,note_count,
+            NOTE_EVENT_STAGE_SOURCE,serial,
+            p->timing_plan[track].finalizer_max_advance_samples);
+        return;
+    }
     if ((p->track_can_emit[track] == 0U) || (p->track_muted[track] != 0U)
             || (core->logical_capacity[track] == 0U)
             || ((p->steps[track][step].trig_roll & 1U) == 0U)) return;
@@ -848,12 +871,59 @@ static void schedule_step(seq_engine_core_t *core, const seq_pattern_t *p,
     }
 }
 
+static void seed_master_harmony(const seq_pattern_t *p, uint8_t current_phase,
+    uint64_t sample)
+{
+    master_harmony_reset(p->generation,sample);
+    const uint8_t cycle=seq_traversal_cycle_length(
+        p->track_length[BRICK_ENTITY_MASTER_ID],
+        p->track_direction[BRICK_ENTITY_MASTER_ID]);
+    for(uint8_t offset=1U;offset<cycle;++offset){
+        const uint8_t phase=(uint8_t)((current_phase+offset)%cycle);
+        const uint8_t step=resolve_step(p,BRICK_ENTITY_MASTER_ID,phase);
+        if((p->steps[BRICK_ENTITY_MASTER_ID][step].trig_roll&1U)==0U)continue;
+        uint8_t notes[SEQ_PLAY_MAX_CAPACITY];uint8_t count=0U;
+        for(uint8_t voice=0U;voice<SEQ_PLAY_MAX_CAPACITY;++voice){
+            const int16_t note=play_value(p,BRICK_ENTITY_MASTER_ID,step,voice,
+                SEQ_STEP_PLAY_FIELD_NOTE);
+            const int16_t velocity=play_value(p,BRICK_ENTITY_MASTER_ID,step,voice,
+                SEQ_STEP_PLAY_FIELD_VELOCITY);
+            if(note>=0&&note<128&&velocity>0)notes[count++]=(uint8_t)note;}
+        (void)master_harmony_publish_notes(notes,count,p->generation,sample);
+    }
+}
+
 static void schedule_boundary(seq_engine_core_t *core,
     const seq_pattern_t *p, uint64_t sample, uint16_t hit_mask,
     uint64_t block_start, seq_terminal_block_t *terminal)
 {
-    for (uint8_t track=0U; track<SEQ_LANE_CAPACITY; ++track) {
+    for (uint8_t order=0U; order<SEQ_LANE_CAPACITY; ++order) {
+        const uint8_t track=(order==0U)?BRICK_ENTITY_MASTER_ID:(uint8_t)(order-1U);
         if ((hit_mask & (uint16_t)(1U << track)) == 0U) continue;
+        if (track==BRICK_ENTITY_MASTER_ID) {
+            const uint8_t step=core->play_step[track];
+            const uint32_t serial=core->step_serial[track];
+            schedule_step(core,p,track,step,serial,sample,core->transport_step_serial);
+            uint8_t div=p->track_div[track];
+            if((div!=1U)&&(div!=2U)&&(div!=4U)&&(div!=8U))div=1U;
+            const uint64_t span_q16=(uint64_t)p->samples_per_step_q16*div;
+            const uint64_t span_samples=(span_q16+0x8000ULL)>>16U;
+            const uint32_t lookahead_q16=
+                p->timing_plan[track].source_discovery_advance_q16;
+            const uint32_t future_count=(uint32_t)(((uint64_t)lookahead_q16
+                +((uint64_t)div<<16U)-1U)/((uint64_t)div<<16U));
+            uint8_t future_phase=core->traversal_phase[track];
+            uint64_t future_sample=sample;
+            for(uint32_t future=1U;future<=future_count
+                    && future<SEQ_PRODUCT_MAX_SOURCE_GENERATIONS;++future){
+                future_phase=next_phase(p,track,future_phase);
+                const uint8_t future_step=resolve_step(p,track,future_phase);
+                future_sample+=span_samples;
+                schedule_step(core,p,track,future_step,serial+future,
+                    future_sample,core->transport_step_serial
+                        +(uint64_t)future*div);}
+            continue;
+        }
         core->emitter_tracks |= (uint16_t)(1U << track);
         const uint8_t step=core->play_step[track];
         if(p->track_fx_enabled[track]!=0U)configure_fx_step(p,track,step);
@@ -975,6 +1045,22 @@ static note_event_result_t process_source_cohort(seq_engine_core_t *core,
     uint64_t start,
     uint64_t transport,const uint32_t pattern_position[NOTE_FX_TRACK_COUNT])
 {uint8_t source_count=0U;const uint64_t cohort_sample=due;
+ if(track==BRICK_ENTITY_MASTER_ID){
+  const uint16_t lane=product_lane_from_track_slot(track,0U);
+  for(uint8_t bank=0U;bank<SEQ_PRODUCT_MAX_SOURCE_GENERATIONS;++bank){
+   if(((core->source_active[bank]>>lane)&1U)==0U)continue;
+   seq_source_cursor_t *const source=&core->sources[bank][lane];
+   if(source_cursor_due(source)!=cohort_sample)continue;
+   uint8_t notes[SEQ_PLAY_MAX_CAPACITY];uint8_t count=0U;
+   for(uint8_t voice=0U;voice<SEQ_PLAY_MAX_CAPACITY;++voice){
+    const int16_t note=play_value(p,track,source->note,voice,SEQ_STEP_PLAY_FIELD_NOTE);
+    const int16_t velocity=play_value(p,track,source->note,voice,
+        SEQ_STEP_PLAY_FIELD_VELOCITY);
+    if(note>=0&&note<128&&velocity>0)notes[count++]=(uint8_t)note;}
+   (void)master_harmony_publish_notes(notes,count,p->generation,cohort_sample);
+   source->active=0U;core->source_active[bank]&=~(UINT64_C(1)<<lane);
+   if(core->source_count!=0U)--core->source_count;}
+  return NOTE_EVENT_RESULT_ACCEPTED;}
  if(due>start){const uint64_t span=due-start;
   if(span>UINT32_MAX||note_fx_chain_engine_process(track,start,(uint32_t)span,
       p->samples_per_step_q16,transport,pattern_position,p->track_length,
@@ -1125,7 +1211,8 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
             reference->play_step[t])<<16U)
             +(uint32_t)(track_phase_q16/div);}
     enum {DUE_SOURCE=0,DUE_LEDGER,DUE_CALENDAR};
-    for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track){
+    for(uint8_t order=0U;order<SEQ_LANE_CAPACITY;++order){
+      const uint8_t track=(order==0U)?BRICK_ENTITY_MASTER_ID:(uint8_t)(order-1U);
       seq_collect_head_t head[3];collect_source_head(core,track,end,&head[DUE_SOURCE]);
       collect_ledger_head(core,track,end,&head[DUE_LEDGER]);
       collect_calendar_head(track,start,end,&head[DUE_CALENDAR]);
@@ -1224,6 +1311,7 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
             core->traversal_phase[t]%=cycle;
             core->play_step[t]=resolve_step(p,t,core->traversal_phase[t]);
             configure_fx_step(p,t,core->play_step[t]);}
+        seed_master_harmony(p,core->traversal_phase[BRICK_ENTITY_MASTER_ID],start);
         }
     core->samples_per_step_q16=p->samples_per_step_q16;
     for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){uint8_t capacity=p->track_exec[t].logical_capacity;
@@ -1237,10 +1325,12 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
             core->traversal_phase[t]%=cycle;
             core->play_step[t]=resolve_step(p,t,core->traversal_phase[t]);
             configure_fx_step(p,t,core->play_step[t]);}
+        seed_master_harmony(p,core->traversal_phase[BRICK_ENTITY_MASTER_ID],start);
     }
     g_seq_collect_reference_sample=start;
     collect_reference_capture(core,&g_seq_collect_reference);
     if((p->running==0U)||(core->samples_per_step_q16==0U)){
+        if(core->running!=0U)master_harmony_reset(p->generation,start);
         core->running=0U;
         collect(core,start,frames,p,&g_seq_collect_reference,out);
         for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track){

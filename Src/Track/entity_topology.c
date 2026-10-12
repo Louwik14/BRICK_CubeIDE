@@ -29,6 +29,13 @@ uint8_t entity_topology_resolve(uint8_t group_active,
         return 1U;
     }
 
+    if (entity_id == BRICK_ENTITY_MASTER_ID)
+    {
+        out_descriptor->role = ENTITY_ROLE_MASTER;
+        out_descriptor->active = 1U;
+        return 1U;
+    }
+
     if (group_active != 0U)
     {
         out_descriptor->parent_entity_id = BRICK_ENTITY_GROUP_MASTER_ID;
@@ -73,7 +80,8 @@ uint8_t entity_topology_can_emit_notes(const entity_topology_descriptor_t *descr
 {
     return (uint8_t)((descriptor != NULL)
             && (descriptor->active != 0U)
-            && (descriptor->role != ENTITY_ROLE_GROUP_MASTER));
+            && (descriptor->role != ENTITY_ROLE_GROUP_MASTER)
+            && (descriptor->role != ENTITY_ROLE_MASTER));
 }
 
 uint8_t entity_topology_has_audio_source(const entity_topology_descriptor_t *descriptor)
@@ -86,6 +94,11 @@ uint16_t entity_topology_get_capabilities(const entity_topology_descriptor_t *de
     if ((descriptor == NULL) || (descriptor->active == 0U))
     {
         return 0U;
+    }
+
+    if (descriptor->role == ENTITY_ROLE_MASTER)
+    {
+        return TRACK_CAPABILITY_HARMONY;
     }
 
     uint16_t capabilities = (uint16_t)(TRACK_CAPABILITY_MUTE

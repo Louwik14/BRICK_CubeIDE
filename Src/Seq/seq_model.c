@@ -38,10 +38,12 @@ typedef struct
     uint16_t free_count[SEQ_LANE_CAPACITY];
 } seq_runtime_project_data_t;
 
-_Static_assert(sizeof(seq_runtime_project_data_t) == 81152U,
+_Static_assert(sizeof(seq_runtime_project_data_t) == 80832U,
                "sequencer project storage size changed");
 
 SEC_ATTR(".ram_seq_state_sram2") static seq_runtime_project_data_t g_seq_project;
+SEC_ATTR(".ram_seq_state_sram3") static seq_play_item_t
+    g_master_play[SEQ_MAX_STEPS][SEQ_PLAY_MAX_CAPACITY];
 
 static uint8_t seq_step_play_field_mask(seq_step_play_field_t field)
 {
@@ -224,13 +226,6 @@ static uint8_t seq_model_track_is_play(seq_track_id_t track)
     return seq_model_track_is_valid(track);
 }
 
-static uint8_t seq_model_track_can_emit_notes(seq_track_id_t track)
-{
-    entity_topology_descriptor_t entity;
-    return (entity_topology_get((brick_entity_id_t)track, &entity) != 0U)
-            && (entity_topology_can_emit_notes(&entity) != 0U);
-}
-
 uint8_t seq_model_play_capacity(seq_track_id_t track)
 {
     entity_topology_descriptor_t entity;
@@ -254,6 +249,10 @@ static seq_play_item_t *seq_model_play_item_mut(seq_track_id_t track,
             || (entity_topology_get((brick_entity_id_t)track, &entity) == 0U))
     {
         return NULL;
+    }
+    if (entity.role == ENTITY_ROLE_MASTER)
+    {
+        return &g_master_play[step][item];
     }
     if (entity.role != ENTITY_ROLE_GROUP_CHILD)
     {
@@ -507,6 +506,7 @@ static void seq_model_step_scan_lock_sets(seq_track_id_t track,
 void seq_model_init_defaults(void)
 {
     memset(&g_seq_project, 0, sizeof(g_seq_project));
+    memset(g_master_play, 0, sizeof(g_master_play));
 
     for (uint8_t tr = 0U; tr < (uint8_t)SEQ_LANE_CAPACITY; ++tr)
     {
@@ -786,7 +786,7 @@ uint8_t seq_model_step_is_active(seq_track_id_t track, seq_step_id_t step)
 
 uint8_t seq_model_step_produces_note(seq_track_id_t track, seq_step_id_t step)
 {
-    return (uint8_t)((seq_model_track_can_emit_notes(track) != 0U)
+    return (uint8_t)((seq_model_track_can_store_play(track) != 0U)
                      && (seq_model_step_is_active(track, step) != 0U));
 }
 
@@ -823,7 +823,7 @@ seq_step_visual_t seq_model_get_step_visual(seq_track_id_t track, seq_step_id_t 
     {
         return SEQ_STEP_VISUAL_OFF;
     }
-    if (seq_model_track_can_emit_notes(track) == 0U)
+    if (seq_model_track_can_store_play(track) == 0U)
     {
         return SEQ_STEP_VISUAL_BLUE;
     }
@@ -847,7 +847,7 @@ seq_step_state_t seq_model_get_step_state(seq_track_id_t track, seq_step_id_t st
     {
         return SEQ_STEP_STATE_EMPTY;
     }
-    if (seq_model_track_can_emit_notes(track) == 0U)
+    if (seq_model_track_can_store_play(track) == 0U)
     {
         return SEQ_STEP_STATE_PARAM_LOCK_ONLY;
     }
@@ -898,7 +898,7 @@ uint8_t seq_model_step_is_empty(seq_track_id_t track, seq_step_id_t step)
 
 uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_t step)
 {
-    if (seq_model_track_can_emit_notes(track) == 0U)
+    if (seq_model_track_can_store_play(track) == 0U)
     {
         return 0U;
     }

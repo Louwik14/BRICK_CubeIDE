@@ -29,6 +29,7 @@
 #define SEQ_LOGICAL_CAPACITY_MAX 8U
 #define SEQ_LOGICAL_CAPACITY_GROUP_CHILD 1U
 #define SEQ_LOGICAL_CAPACITY_GROUP_MASTER 0U
+#define SEQ_LOGICAL_CAPACITY_MASTER 1U
 
 /* Raw canonical ingress contract.  A fixed audio window may accept at most
  * this many Keyboard/DIN/USB events in total.  This is deliberately equal to

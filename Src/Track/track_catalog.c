@@ -137,6 +137,10 @@ bool track_catalog_type_is_available(
     {
         return false;
     }
+    if (entity.role == ENTITY_ROLE_MASTER)
+    {
+        return false;
+    }
     if ((type == TRACK_TYPE_GROUP) && (entity.role != ENTITY_ROLE_GROUP_MASTER))
     {
         return false;
@@ -177,6 +181,8 @@ bool track_catalog_family_is_available(
     if ((entity_topology_resolve(group_active, track, &entity) == 0U)
             || (entity.active == 0U))
         return false;
+    if (entity.role == ENTITY_ROLE_MASTER)
+        return (family == TRACK_FAMILY_OFF);
     if (entity.role == ENTITY_ROLE_GROUP_CHILD)
         return (family == TRACK_FAMILY_SAMPLER);
     if (family == TRACK_FAMILY_OFF)

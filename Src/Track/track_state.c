@@ -73,6 +73,12 @@ bool track_structure_validate_entity_bulk_with_polyphony(
         entity_topology_descriptor_t topology;
         if ((entity_topology_resolve(group_active, entity, &topology) == 0U)
                 || (topology.active == 0U)) continue;
+        if (topology.role == ENTITY_ROLE_MASTER)
+        {
+            if ((configs[entity].family != TRACK_FAMILY_OFF)
+                    || (configs[entity].type != TRACK_TYPE_NONE)) return false;
+            continue;
+        }
         const track_family_t ui_family = configs[entity].family;
         const track_type_t ui_type = configs[entity].type;
         if ((topology.role == ENTITY_ROLE_GROUP_CHILD)
@@ -396,7 +402,7 @@ static bool track_state_apply_entity_bulk_with_inputs(
     if ((group_active != 0U) && (entity_topology_group_is_active() == 0U))
     {
         for (uint8_t child = BRICK_ENTITY_FIRST_GROUP_CHILD_ID;
-             child < BRICK_ENTITY_CAPACITY; ++child)
+             child <= BRICK_ENTITY_LAST_GROUP_CHILD_ID; ++child)
         {
             if (next_configs[child].family == TRACK_FAMILY_OFF)
             {

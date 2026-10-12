@@ -18,7 +18,8 @@ decisions musicales du coeur.
 CONTROL prepare un `seq_pattern_t` immutable dans le slot non publie. Le commit
 transfere le slot a SEQ par generation; CONTROL ne modifie jamais le slot publie.
 Le modele compact conserve 16 lanes, 64 steps, 512 noeuds p-lock par lane,
-8 PLAY par top-level et 1 PLAY par enfant GROUP. Chaque slot arme dispose de
+8 PLAY par top-level, 1 PLAY par enfant GROUP et 8 PLAY non emetteurs pour la
+Master Track 15. Chaque slot arme dispose de
 512 locks independants par lane dans les SRAM internes; le chemin chaud
 conserve uniquement les listes actives bornees a 32.
 
@@ -26,7 +27,7 @@ Le Pattern publie aussi la projection executable de chaque lane: role
 topologique, capabilities, destination, mute/timing et capacite logique. Cette
 capacite appartient au modele musical: elle reprend les PLAY presents, bornee a
 8 pour une lane principale, independamment de la polyphonie AUDIO configuree;
-elle vaut 1 pour un enfant GROUP et 0 pour le GROUP master. La polyphonie peut
+elle vaut 1 pour un enfant GROUP et la Master harmonique, et 0 pour le GROUP master. La polyphonie peut
 voler ou limiter les sorties terminales, jamais retirer une source du pool
 ARP/Euclid ni changer son rang. Le master ne publie aucun walker MIDI FX.
 
@@ -110,7 +111,14 @@ lane; la borne globale d'une boundary reste 511 locks actifs et 991 transitions
 ordinaires.
 
 Les lanes top-level admettent au plus 8 notes logiques et les enfants GROUP au
-plus une. Le master GROUP reste non emetteur. En cas de saturation, les notes
+plus une. Le master GROUP reste non emetteur. Les notes de la Master Track
+occupent la lane physique 63 mais sont consommees par le decodeur harmonique
+avant le walker Note FX: elles ne creent ni ledger, ni NOTE ON terminal. Le
+decodeur publie fondamentale, type parmi les 27 formes ABC, basse/inversion,
+generation et sample effectif. Une note seule conserve le type precedent
+(MAJOR avant le premier accord); un ensemble non reconnu ne remplace pas le
+dernier accord valide. A timestamp egal, la Master est collectee avant les
+pistes musicales. En cas de saturation, les notes
 generees les plus anciennes cedent avant les originales les plus anciennes.
 La saturation exceptionnelle du scheduler incremente un compteur diagnostic
 et refuse deterministement la nouvelle obligation.

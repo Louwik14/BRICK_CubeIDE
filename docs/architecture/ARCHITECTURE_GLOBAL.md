@@ -4,7 +4,7 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 
 ## Invariants produit
 
-- Seize identites logiques stables existent: huit entites top-level `0..7` et huit children GROUP `8..15`, actives uniquement lorsque l'entite 7 est GROUP master.
+- Seize identites logiques stables existent: huit entites top-level `0..7`, sept children GROUP `8..14` actives uniquement lorsque l'entite 7 est GROUP master, et la Master Track harmonique permanente `15`.
 - `entity_topology` derive activite, role, parent et capacites. `track_state` possede la configuration CONTROL; `track_runtime` la projette vers les moteurs, ressources et voies physiques.
 - Le Streamer est le seul lecteur de boucles et choisit une source POOL ou REC. External est un moteur dont l'entree physique est arbitree par `track_input_ownership`. Ressource physique et voie mixer ne sont jamais des identites logiques.
 - CONTROL possede UI, preparation Pattern et catalogue Sample. SEQ possede transport musical, Pattern actif, ROLL, Note FX, p-locks, lifetimes, futures, admission et stealing musical. STORAGE possede le Stream, son I/O et son page-cache. AUDIO possede IRQ, mapping d'execution logique vers slot DSP, RELEASE physique, lecteurs, positions, moteurs et mixer.

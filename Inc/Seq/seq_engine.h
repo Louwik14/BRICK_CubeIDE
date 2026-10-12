@@ -189,6 +189,7 @@ typedef struct {
     seq_lock_pattern_t *lock_pool[SEQ_LANE_CAPACITY];
     seq_play_snapshot_t top_play[BRICK_ENTITY_TOP_LEVEL_COUNT][SEQ_MAX_STEPS];
     seq_play_item_t child_play[BRICK_ENTITY_GROUP_CHILD_COUNT][SEQ_MAX_STEPS];
+    seq_play_snapshot_t master_play[SEQ_MAX_STEPS];
 } seq_pattern_t;
 
 typedef struct {

@@ -36,6 +36,11 @@ uint8_t ui_track_led_project_hall(uint8_t hall,
                 ? UI_TRACK_LED_COLOR_TOP_LEVEL_OFF
                 : UI_TRACK_LED_COLOR_TOP_LEVEL_ACTIVE;
     }
+    else if (descriptor.role == ENTITY_ROLE_MASTER)
+    {
+        out_projection->visible = 1U;
+        out_projection->color = UI_TRACK_LED_COLOR_TOP_LEVEL_ACTIVE;
+    }
     else
     {
         /* Child visibility belongs to the live GROUP topology.  Child activity

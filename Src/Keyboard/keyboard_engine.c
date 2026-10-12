@@ -28,6 +28,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_engine.h"
+#include "Seq/seq_edit.h"
 #include <string.h>
 
 #define KBD_REC_NOTE_STACK_DEPTH 8U
@@ -535,6 +536,11 @@ static void keyboard_engine_note_on_for_track_internal(uint8_t track,
     }
 
     const uint8_t owner_track = track;
+    if (owner_track == BRICK_ENTITY_MASTER_ID)
+    {
+        (void)seq_edit_capture_held_note_on(note, velocity);
+        return;
+    }
     if (track_mute_should_suppress_note_on(owner_track) != 0U)
     {
         return;
@@ -580,6 +586,11 @@ static void keyboard_engine_note_off_for_track_internal(uint8_t track,
     }
 
     const uint8_t owner_track = track;
+    if (owner_track == BRICK_ENTITY_MASTER_ID)
+    {
+        (void)seq_edit_note_capture_note_off(note);
+        return;
+    }
 
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
     (void)keyboard_engine_live_rec_pop_track_channel(owner_track, note, channel);
