@@ -41,6 +41,12 @@ autoritaires. `H.LOOP` est une loop forward hold. Le ping-pong est porte par
 entre START et la borne derivee `START + LENGTH`; la loop forward reprend a LOOP START. Le mode est capture
 au NOTE_ON, P-lockable, et exclu de la Matrix/modulation continue.
 
+Un remplacement de sample retire d'abord la voix et sa lease, puis recree
+seulement le renderer pour les sorties physiques encore tenues. Le gate VCA,
+le filtre et le registre `{output_id, note}` ne sont pas rearmes: le NOTE_OFF
+terminal reste donc unique. `OFF`, premiere valeur du selecteur, publie le
+sentinelle non assigne et suit le meme retrait sans recreer de voix.
+
 `Sync Len` restaure le contrat historique `Off / 1 bar / 2 bars / 4 bars /
 Auto`. Les longueurs explicites calent la region START/LENGTH sur la duree
 musicale cible au tempo projet; Auto derive le ratio de `Src BPM`. `Stretch=Off`

@@ -68,6 +68,7 @@ static uint32_t g_audio_wavetable_generation[
 static track_tone_fm_base_voice_t g_audio_fm_base_projection[BRICK_ENTITY_CAPACITY];
 static uint8_t g_audio_state_rebind_deferred;
 static uint16_t g_audio_state_rebind_mask;
+static uint16_t g_audio_state_renderer_rebind_mask;
 
 typedef enum
 {
@@ -415,10 +416,11 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         }
         if (g_audio_state_rebind_deferred != 0U)
         {
-            g_audio_state_rebind_mask |= (uint16_t)(1U << command->entity);
+            g_audio_state_renderer_rebind_mask |=
+                (uint16_t)(1U << command->entity);
             return 1U;
         }
-        return audio_note_engine_adapter_initialize_held_outputs(
+        return audio_note_engine_adapter_reinitialize_held_renderers(
             command->entity);
     }
     if (command->id == CONTROL_AUDIO_PARAM_MIX_ROUTE)
@@ -631,6 +633,7 @@ static audio_command_apply_result_t audio_command_apply_patch_state_commit(
 
     g_audio_state_rebind_deferred = 1U;
     g_audio_state_rebind_mask = changed;
+    g_audio_state_renderer_rebind_mask = 0U;
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
         if ((changed & (uint16_t)(1U << entity)) == 0U) continue;
@@ -658,12 +661,21 @@ static audio_command_apply_result_t audio_command_apply_patch_state_commit(
     g_audio_state_rebind_deferred = 0U;
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
-        if ((g_audio_state_rebind_mask & (uint16_t)(1U << entity)) == 0U)
-            continue;
-        if (audio_note_engine_adapter_initialize_held_outputs(entity) == 0U)
-            return AUDIO_COMMAND_APPLY_REBIND;
+        const uint16_t bit = (uint16_t)(1U << entity);
+        if ((g_audio_state_rebind_mask & bit) != 0U)
+        {
+            if (audio_note_engine_adapter_initialize_held_outputs(entity) == 0U)
+                return AUDIO_COMMAND_APPLY_REBIND;
+        }
+        else if ((g_audio_state_renderer_rebind_mask & bit) != 0U)
+        {
+            if (audio_note_engine_adapter_reinitialize_held_renderers(entity)
+                    == 0U)
+                return AUDIO_COMMAND_APPLY_REBIND;
+        }
     }
     g_audio_state_rebind_mask = 0U;
+    g_audio_state_renderer_rebind_mask = 0U;
     brick6_fm_runtime_finalize_pending();
     audio_mod_matrix_finalize_dirty();
     return AUDIO_COMMAND_APPLY_OK;
@@ -900,7 +912,7 @@ static uint8_t audio_prepared_apply_resource(
         {
             brick6_sampler_runtime_set_sample(entity, resource->sampler_runtime);
         }
-        g_audio_state_rebind_mask |= (uint16_t)(1U << entity);
+        g_audio_state_renderer_rebind_mask |= (uint16_t)(1U << entity);
         return 1U;
     }
     if (resource->kind != PREPARED_AUDIO_RESOURCE_WAVETABLE) return 0U;
@@ -1456,6 +1468,7 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
         }
     g_audio_state_rebind_deferred = 1U;
     g_audio_state_rebind_mask = changed;
+    g_audio_state_renderer_rebind_mask = 0U;
 #if BRICK_PATTERN_RECALL_DIAG
     pattern_recall_diag_phase(PATTERN_DIAG_PHASE_PROGRAM_INSTALL);
 #endif
@@ -1551,10 +1564,21 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
     pattern_recall_diag_phase(PATTERN_DIAG_PHASE_REBIND);
 #endif
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
-        if ((g_audio_state_rebind_mask & (uint16_t)(1U << entity)) != 0U)
+    {
+        const uint16_t bit = (uint16_t)(1U << entity);
+        if ((g_audio_state_rebind_mask & bit) != 0U)
+        {
             if (!audio_note_engine_adapter_initialize_held_outputs(entity))
                 return AUDIO_COMMAND_APPLY_REBIND;
+        }
+        else if ((g_audio_state_renderer_rebind_mask & bit) != 0U)
+        {
+            if (!audio_note_engine_adapter_reinitialize_held_renderers(entity))
+                return AUDIO_COMMAND_APPLY_REBIND;
+        }
+    }
     g_audio_state_rebind_mask = 0U;
+    g_audio_state_renderer_rebind_mask = 0U;
     brick6_fm_runtime_finalize_pending();
     audio_mod_matrix_finalize_dirty();
 #if BRICK_PATTERN_RECALL_DIAG
@@ -1654,6 +1678,7 @@ void audio_command_executor_init(void)
            sizeof(g_audio_wavetable_generation));
     g_audio_state_rebind_deferred = 0U;
     g_audio_state_rebind_mask = 0U;
+    g_audio_state_renderer_rebind_mask = 0U;
     memset(g_audio_seq_output, 0, sizeof(g_audio_seq_output));
     g_audio_seq_next_output_handle = 0U;
     g_audio_seq_age = 0U;

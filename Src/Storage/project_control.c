@@ -630,6 +630,8 @@ uint8_t project_control_track_asset_assign_logical(uint8_t entity,
                                                    project_control_asset_role_t role,
                                                    uint16_t logical)
 {
+    if (logical == PROJECT_CONTROL_ASSET_NONE)
+        return project_control_track_asset_clear(entity, role);
     track_runtime_descriptor_t descriptor;
     if ((role == PROJECT_CONTROL_ASSET_SAMPLER)
             && (track_runtime_get_descriptor(entity, &descriptor) == 0U))

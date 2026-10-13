@@ -1031,6 +1031,27 @@ uint8_t audio_note_engine_adapter_initialize_held_outputs(
     return 1U;
 }
 
+uint8_t audio_note_engine_adapter_reinitialize_held_renderers(
+    brick_entity_id_t entity_id)
+{
+    audio_note_engine_program_t program;
+    if (audio_note_engine_adapter_current(entity_id, &program) == 0U)
+        return 1U;
+    if (program.program_route.engine != TRACK_RUNTIME_ENGINE_SAMPLER)
+        return 0U;
+    for (uint8_t i = 0U; i < AUDIO_PHYSICAL_OUTPUT_CAPACITY; ++i)
+    {
+        const audio_physical_output_t held =
+            g_audio_physical_output[entity_id][i];
+        if (held.gate == 0U)
+            continue;
+        if (audio_note_engine_adapter_initialize_held_renderer(&program,
+                held.note, held.velocity, held.output_id) == 0U)
+            return 0U;
+    }
+    return 1U;
+}
+
 void audio_note_engine_adapter_forget_outputs(brick_entity_id_t entity_id)
 {
     if (entity_id >= BRICK_ENTITY_CAPACITY)

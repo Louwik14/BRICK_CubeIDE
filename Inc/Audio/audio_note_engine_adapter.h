@@ -98,6 +98,8 @@ uint8_t audio_note_engine_adapter_install_prepared(
     const audio_note_engine_install_spec_t *spec);
 uint8_t audio_note_engine_adapter_initialize_held_outputs(
     brick_entity_id_t entity_id);
+uint8_t audio_note_engine_adapter_reinitialize_held_renderers(
+    brick_entity_id_t entity_id);
 uint8_t audio_note_engine_adapter_project_track_configuration(
     brick_entity_id_t entity_id);
 void audio_note_engine_adapter_forget_outputs(brick_entity_id_t entity_id);
