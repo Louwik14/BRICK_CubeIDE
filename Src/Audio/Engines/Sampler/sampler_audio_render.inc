@@ -87,6 +87,7 @@ void brick6_sampler_runtime_render_stream_track(const track_audio_runtime_ctx_t 
         voice->release_pending = 0U;
         voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
         brick6_sampler_runtime_clip_release_slot(ctx->program_route.entity_id);
+        brick6_sampler_runtime_publish_playhead(ctx->program_route.entity_id);
     }
     brick6_sampler_runtime_mix_declick_tails(ctx->program_route.entity_id, out_l, out_r, frames);
 }
@@ -181,6 +182,7 @@ void brick6_sampler_runtime_render_stream_track_mono(const track_audio_runtime_c
         voice->release_pending = 0U;
         voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
         brick6_sampler_runtime_clip_release_slot(track_id);
+        brick6_sampler_runtime_publish_playhead(track_id);
     }
     brick6_sampler_runtime_mix_declick_tails_mono(track_id, out_mono, frames);
 }
