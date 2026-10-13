@@ -641,6 +641,29 @@ Cette mutualisation ne change pas les contrats de transport: le chargement
 reste interdit pendant PLAY et la conversion reste interdite tant que l'audio
 n'est pas arrete. Elle ne prepare aucun hot-swap.
 
+### Limite du hot-load pendant PLAY
+
+Le prefill des pages est cooperatif, mais la preparation complete ne l'est pas
+encore. `f_open`, le parsing WAV ou index et surtout
+`f_lseek(CREATE_LINKMAP)` restent des appels FatFs synchrones. La construction
+du link-map peut parcourir une chaine FAT entiere sans point de preemption; le
+scheduler ne peut donc pas garantir les lectures STREAM urgentes pendant cet
+appel. Le verrou SD ne resout pas cette limite: il serialise les acces, mais
+retarde precisement les lectures temps reel.
+
+Le remplacement n'est pas non plus transactionnel dans les pools actuels.
+Classic retire la projection, les pages et l'enregistrement du slot cible avant
+de preparer son successeur. Multi vide le slot cible avant le chargement et son
+chemin de retirement publie un STOP des voix avant de liberer les leases. Lever
+uniquement les gardes de transport invaliderait donc l'ancienne ressource trop
+tot et pourrait couper des notes actives.
+
+En consequence, le hot-load depuis le Browser reste refuse, y compris pour un
+WAV deja canonique. Il demandera d'abord une preparation FatFs/link-map
+cooperative, puis des slots candidats distincts et une publication atomique
+avec retirement differe sans STOP. La conversion et la generation d'index
+Multi restent explicitement interdites pendant PLAY.
+
 ## Projection RT1172 (pas une mesure hardware)
 
 Pour 16 voix, 48 kHz, stereo FLOAT32 et pitch x8, le debit utile projete est
