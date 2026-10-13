@@ -222,20 +222,28 @@ frames, format, offset audio et une signature CRC des frames de bord. Le CRC32
 du record couvre l'identite, le lien de bucket et les 512 octets de waveform.
 Un record est d'abord ajoute et synchronise; son offset n'est publie dans la
 table de hash qu'apres un second `f_sync`. Une ecriture interrompue reste donc
-un orphan invisible. Le format n'a aucun lecteur legacy: un header/version
-invalide reconstruit le blob.
+un orphan invisible. Le format n'a aucun lecteur legacy. Un lookup est
+strictement read-only: fichier absent, erreur FatFs et corruption sont des
+resultats distincts et il ne cree ni ne tronque jamais le blob. Seul un commit
+qui possede deja une overview valide peut creer le blob absent ou remplacer un
+header/version structurellement invalide.
 
 La conversion canonique accumule les 128 extrema dans `wav_convert_write_output`
 sur les frames float stereo deja produites. Elle ne relit pas l'audio. Une
 source deja canonique est enregistree pendant `sample_cache_prepare`; si aucun
-record valide n'existe, le service STORAGE effectue une seule ouverture, un
-seul parse et un scan sequentiel par quanta de 4096 octets, puis persiste le
-resultat. Ce fallback utilise l'admission background du scheduler et cede donc
-aux urgences Streamer/Recorder; aucune operation FatFs, parse, CRC ou reduction
-n'entre dans AUDIO.
+record valide n'existe, la premiere demande visible fait effectuer au service
+STORAGE une seule ouverture, un seul parse et un scan sequentiel par quanta de
+4096 octets, puis persiste le resultat. Aucun sample seulement enregistre dans
+le catalogue n'est scanne en arriere-plan. Ce fallback utilise l'admission
+background du scheduler et cede donc aux urgences Streamer/Recorder; aucune
+operation FatFs, parse, CRC ou reduction n'entre dans AUDIO.
 
-Le runtime resout l'offset pendant la preparation du slot. A la premiere
-demande froide, il lit et valide directement un record de 576 octets. Un LRU
+Le runtime conserve une seule demande interactive, identifiee par slot,
+identite persistante et epoch media. La Waveview en est proprietaire: un
+changement de sample remplace la demande et l'abandon de la vue la libere. Une
+lecture ou un fallback devenu obsolete est annule avant de publier son
+resultat. A la premiere demande froide, STORAGE resout le bucket puis lit et
+valide directement un record de 576 octets. Un LRU
 de quatre records conserve les overviews chaudes; A -> B -> A est donc servi
 en RAM tant qu'A n'a pas ete evince. Une eviction retrograde toutes les sources
 READY portant cette identite vers ON_DISK; la prochaine demande reste PENDING
@@ -244,6 +252,16 @@ suppression/republication d'un slot
 retire son descripteur; toute modification d'identite force un nouveau lookup
 et interdit une waveform stale. Il n'existe aucun seuil de duree sampler et
 aucun scan lazy multi-resolution Classic sur le chemin normal.
+
+Un refus d'admission background laisse l'etat intact et sera naturellement
+reconsidere par le scheduler; ce n'est pas une erreur de fichier. Un vrai miss
+ou un record dont la structure/CRC est invalide autorise exactement le fallback
+de la demande courante. Une erreur FatFs pendant lookup, lecture, scan ou commit
+place la source en erreur terminale jusqu'a sa re-registration; le rendu ne la
+transforme jamais en `MISSING` et ne declenche donc aucun retry ou rebuild
+aveugle. Le fallback revalide avant publication l'identite, l'epoch media et la
+demande active. Le LRU reste volontairement borne a quatre records: une source
+evincee mais non visible ne produit aucun acces SD.
 
 `g_waveform_diag` expose `persistent_read_calls/bytes`, hits persistants et
 RAM, builds, open/parse/read du WAV et latences request -> premier pixel/
