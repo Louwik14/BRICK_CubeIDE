@@ -7,6 +7,7 @@
 #include "Sampler/multi_sample_zone_detection.h"
 #include "Sampler/sample_cache.h"
 #include "Platform/memory_layout.h"
+#include "Seq/seq_runtime.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
@@ -1461,6 +1462,8 @@ uint8_t multi_sample_import_start(const char *instrument_dir)
         && (g_import_async.work_state != MULTI_IMPORT_WORK_FINISHED)) return 0U;
     if ((instrument_dir == 0) || (instrument_dir[0] == '\0')
         || (project_replacement_is_active() != 0U)
+        || (seq_runtime_is_running() != 0U)
+        || (seq_runtime_is_start_pending() != 0U)
         || (audio_recorder_is_active() != 0U)) return 0U;
 
     memset(&g_import_async, 0, sizeof(g_import_async));
@@ -1490,6 +1493,8 @@ uint8_t multi_sample_import_start(const char *instrument_dir)
 static void multi_import_service_acquire(void)
 {
     if ((project_replacement_is_active() != 0U)
+        || (seq_runtime_is_running() != 0U)
+        || (seq_runtime_is_start_pending() != 0U)
         || (audio_recorder_is_active() != 0U))
     {
         multi_import_fail(MULTI_SAMPLE_IMPORT_SD_BUSY);

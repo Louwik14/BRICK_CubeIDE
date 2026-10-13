@@ -510,6 +510,13 @@ static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entr
         return 1U;
     }
 
+    if ((seq_runtime_is_running() != 0U)
+        || (seq_runtime_is_start_pending() != 0U))
+    {
+        ui_page_settings_status("STOP AUDIO TO CONVERT");
+        return 0U;
+    }
+
     if (multi_sample_import_start(entry->path) == 0U)
     {
         ui_page_settings_status("PREP BUSY");
