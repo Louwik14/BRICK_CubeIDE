@@ -140,6 +140,16 @@ static void publish_projection(const rec_source_generation_t *target)
     __DMB();
 }
 
+static void snapshot_generation(const rec_source_generation_t *source,
+                                rec_source_snapshot_t *snapshot)
+{
+    snapshot->key = source->key;
+    snapshot->frame_count = source->frame_count;
+    snapshot->sample_rate = 48000U;
+    snapshot->registration_epoch = source->registration_epoch;
+    snapshot->ready = 1U;
+}
+
 static uint8_t target_pages_ready(const rec_source_generation_t *target)
 {
     uint32_t pages = (target->frame_count + SAMPLE_PAGE_FRAMES - 1U)
@@ -411,6 +421,17 @@ void rec_source_service(void)
         (void)snprintf(candidate->path, REC_SOURCE_PATH_MAX,
                        REC_SOURCE_DIRECTORY "/REC_GEN_%u.WAV", slot);
     }
+    if (g_rec_source_current_slot < REC_SOURCE_SLOT_COUNT)
+    {
+        rec_source_generation_t *const current =
+            &g_rec_source_generations[g_rec_source_current_slot];
+        if ((current->state == REC_SOURCE_STATE_CURRENT)
+                && ((g_rec_source_projection.ready == 0U)
+                    || (sample_audio_key_equal(
+                        &g_rec_source_projection.key, &current->key) == 0U))
+                && (target_pages_ready(current) != 0U))
+            publish_projection(current);
+    }
 }
 
 uint8_t rec_source_begin_build(const char **temporary_path, const char **final_path,
@@ -516,7 +537,6 @@ uint8_t rec_source_publish_building(uint32_t frame_count, uint32_t registration_
         ? g_rec_source_generations[g_rec_source_current_slot].key.generation : 0U;
     const uint32_t after = building->key.generation;
     if ((undo_v2_audio_transition_can_commit(before, after) == 0U)
-            || (target_pages_ready(building) == 0U)
             || (rec_source_waveform_captured_frames() != frame_count)
             || ((building->waveform.ready == 0U)
                 && (rec_source_waveform_finish(&building->waveform) == 0U)))
@@ -524,9 +544,19 @@ uint8_t rec_source_publish_building(uint32_t frame_count, uint32_t registration_
     building->waveform.generation = after;
     if (undo_v2_commit_audio_transition(before, after) != UNDO_V2_STATUS_OK) return 0U;
     const uint8_t building_slot = g_rec_source_building_slot;
-    if (rec_source_switch_current(after) == 0U) return 0U;
-    g_rec_source_generations[building_slot].state = REC_SOURCE_STATE_CURRENT;
+    if ((g_rec_source_current_slot < REC_SOURCE_SLOT_COUNT)
+            && (g_rec_source_current_slot != building_slot))
+        g_rec_source_generations[g_rec_source_current_slot].state =
+            REC_SOURCE_STATE_UNDO;
+    building->state = REC_SOURCE_STATE_CURRENT;
+    building->release_requested = 0U;
+    g_rec_source_current_slot = building_slot;
+    g_rec_source_preview_slot = REC_SOURCE_INVALID_SLOT;
     g_rec_source_building_slot = REC_SOURCE_INVALID_SLOT;
+    if (target_pages_ready(building) != 0U)
+        publish_projection(building);
+    else
+        publish_projection(NULL);
     return 1U;
 }
 
@@ -642,8 +672,9 @@ uint8_t rec_source_current_path(const char **out_path, rec_source_snapshot_t *ou
     rec_source_generation_t *const current =
         &g_rec_source_generations[g_rec_source_current_slot];
     if ((current->state != REC_SOURCE_STATE_CURRENT)
-            || (rec_source_current_snapshot(out_snapshot) == 0U)
-            || (sample_audio_key_equal(&current->key, &out_snapshot->key) == 0U)) return 0U;
+            || (current->frame_count == 0U)
+            || (current->registration_epoch == 0U)) return 0U;
+    snapshot_generation(current, out_snapshot);
     *out_path = current->path;
     return 1U;
 }

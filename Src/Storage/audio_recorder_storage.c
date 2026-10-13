@@ -364,6 +364,7 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
             if (recorder_file_reservation_job_finish(&runtime->reservation,
                     RECORDER_FILE_JOB_OWNER_FINALIZATION) == 0U)
                 return SD_SCHEDULER_START_ERROR;
+            sd_access_gate_set_recorder_fs_logical_active(0U);
             return SD_SCHEDULER_START_COMPLETED;
         }
 
@@ -623,6 +624,10 @@ void audio_recorder_storage_release(void)
     recorder_file_reservation_init(&g_audio_recorder_storage.reservation);
     g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_IDLE;
     g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_NONE;
+    g_audio_recorder_storage.final_phase = AUDIO_RECORDER_FINAL_NONE;
+    g_audio_recorder_storage.prepare_phase = AUDIO_RECORDER_PREP_NONE;
+    g_audio_recorder_storage.filesystem_io_active = 0U;
+    g_audio_recorder_storage.filesystem_io_lba = 0U;
     g_audio_recorder_storage.temporary_path[0] = '\0';
     g_audio_recorder_storage.final_path[0] = '\0';
     sd_access_gate_set_recorder_fs_logical_active(0U);

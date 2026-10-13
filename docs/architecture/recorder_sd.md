@@ -112,9 +112,13 @@ enregistre la source live dans le page-cache avec une clé comprenant slot et
 génération, met à jour `readable_frames` et réserve les premières pages.
 
 Lorsque le fichier est finalisé, le chemin du cache devient le `.WAV`. La
-publication attend une identité d'enregistrement valide, son waveform READY et
-les premières pages READY. La même opération canonique bascule `CURRENT` pour
-une publication, un Undo ou un Redo. L'ancien `CURRENT` devient `UNDO`.
+génération devient `CURRENT`, et donc sauvegardable, dès que l'identité, le
+fichier final et son waveform sont valides. La projection AUDIO est publiée
+immédiatement si les premières pages sont READY, sinon `REC_SOURCE` la publie
+plus tard lorsque le Streamer les a chargées. L'indisponibilité transitoire du
+cache ne peut donc ni retenir `TAKE_READY`, ni rendre le fichier invisible à
+SAVE. Undo et Redo continuent d'exiger leurs premières pages READY avant le
+basculement. L'ancien `CURRENT` devient `UNDO`.
 L'expiration de l'unique action audio le rend `RETIRED`; sa clé, son cache et
 son workspace ne sont recyclés qu'après extinction des leases, readers et I/O.
 Un descripteur `PERSISTENT` peut être libéré du cache mais son fichier n'est
@@ -381,6 +385,13 @@ phases de copie SAVE/CROP conservent leur quantum maximal de 32 KiB. Une limite
 plus petite reste volontaire pour les services couplant I/O et calcul sous un
 budget CPU, ainsi que pour Preview. EXTEND, RELEASE, allocation et sync restent
 à la granularité native secteur/cluster des métadonnées FAT/exFAT.
+
+Le chaînage physique de lectures STREAM ne prolonge la propriété du gate que
+si aucune écriture Recorder ni transaction filesystem Recorder n'est prête.
+Une opération Recorder prête force donc un point d'arbitrage à la fin du DMA
+READ courant. Le marqueur logique filesystem Recorder couvre PREPARE et
+FINALIZE, puis est libéré avant `TAKE_READY` afin que SAVE/CROP et les autres
+clients background puissent être admis.
 
 ## Looper historique
 

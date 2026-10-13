@@ -462,8 +462,8 @@ uint8_t sd_scheduler_prepare_read_chain(sd_scheduler_t *scheduler,
     sd_scheduler_snapshot_t snapshot;
     sd_scheduler_collect(scheduler, now_us, media_epoch, &snapshot);
     if((snapshot.available[SD_SCHEDULER_CLASS_READ] == 0U)
-            || (snapshot.urgent[SD_SCHEDULER_CLASS_WRITE] != 0U)
-            || (snapshot.urgent[SD_SCHEDULER_CLASS_FILESYSTEM] != 0U))
+            || (snapshot.available[SD_SCHEDULER_CLASS_WRITE] != 0U)
+            || (snapshot.available[SD_SCHEDULER_CLASS_FILESYSTEM] != 0U))
     {
         return 0U;
     }
