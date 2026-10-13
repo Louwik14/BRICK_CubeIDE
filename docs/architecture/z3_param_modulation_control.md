@@ -95,6 +95,18 @@ de `0,0078125 st` est plus fin que `0,01 st`.
 
 Un p-lock AUDIO est resolu par CONTROL en valeur finale puis transporte comme PARAM `TEMP` date. La restauration relit toujours la base canonique CONTROL courante, puis emet `BASE` pour Tone/Filter/FX, ou `CLEAR_TEMP` pour LFO/ENV3 afin de retirer leur override explicite; une edition de base intervenue pendant le lock n'est donc jamais remplacee par une ancienne capture Seq. Le timestamp reste independant de cette semantique. La FIFO unique est dimensionnee pour les 1024 ecritures d'une boundary maximale plus l'horizon NOTE et les commandes de controle. Les p-locks MIDI FX restent integralement CONTROL: leur override canonique est applique au runtime Note FX avant la NOTE de la meme boundary. AUDIO ne connait ni la provenance, ni la notion de p-lock. NOTE, VELOCITY, LENGTH et MICROTIMING sont des champs PLAY structurels et non des p-locks generiques.
 
+Les Scenes reutilisent le stockage Project historique des macros, mais possedent
+une semantique AUDIO distincte `SCENE/CLEAR_SCENE`. Le runtime conserve deux
+validites et deux valeurs separees par `{entity,param}`: p-lock et Scene. La
+composition deterministe est `base CONTROL -> p-lock eventuel -> Scene
+eventuelle -> Matrix/LFO/ENV -> clamp -> DSP`. Une Scene active est une valeur
+absolue prioritaire; un p-lock continue d'evoluer sous cette couche et reapparait
+immediatement lorsque la Scene est retiree. `CLEAR_TEMP` ne touche jamais la
+Scene et `CLEAR_SCENE` revele le p-lock actif ou la base courante. Les valeurs
+partielles PRESSURE sont calculees par CONTROL entre base courante et cible;
+INT, ENUM et BOOL passent ensuite par la canonicalisation Param commune et
+changent par seuil, sans smoothing specifique.
+
 LFO et ENV3 conservent leur validite temporaire par champ. Une commande `BASE`
 retire l'override du seul champ concerne: la nouvelle base devient donc audible
 sans attendre un changement de route ou une restauration de p-lock. Les autres
@@ -165,7 +177,7 @@ la restauration republie la base CONTROL courante. La Matrix prend ce TEMP
 comme base effective, ajoute ses routes, borne dans l'unite canonique du PARAM
 et applique le resultat au setter FM terminal. La composition est donc:
 
-`base patch -> TEMP p-lock eventuel -> somme Matrix -> clamp -> setter DSP`.
+`base patch -> TEMP p-lock eventuel -> Scene eventuelle -> somme Matrix -> clamp -> setter DSP`.
 
 Les niveaux, frequences, detunes, enveloppes, sensibilites velocity/key, macros
 d'enveloppe globale et Pitch EG sont Edit + p-lock + Matrix. Les niveaux OP1 a

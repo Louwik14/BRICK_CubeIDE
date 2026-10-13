@@ -11,6 +11,9 @@ void param_macro_service(void);
 uint8_t param_macro_lock_target_is_supported(uint8_t track, param_id_t param);
 uint8_t param_macro_sync_sources(void);
 void param_macro_note_base_change(uint8_t track, param_id_t param);
+uint8_t param_macro_apply_control_plock(uint8_t track, param_id_t param,
+                                        float value, uint8_t active);
+void param_macro_clear_control_plocks(void);
 uint8_t param_macro_set_amount(uint8_t macro, float amount);
 float param_macro_get_amount(uint8_t macro);
 

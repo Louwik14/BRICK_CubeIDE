@@ -29,5 +29,10 @@ uint8_t ui_step_led_ownership_hall_mode_needs_step_leds(ui_hall_mode_t mode)
         return 1U;
     }
 
+    if (mode == UI_HALL_MODE_MACRO)
+    {
+        return 1U;
+    }
+
     return 0U;
 }

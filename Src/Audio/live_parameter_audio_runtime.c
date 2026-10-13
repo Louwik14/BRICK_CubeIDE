@@ -10,12 +10,42 @@
 #include "ControlRT/live_parameter_event.h"
 #include "ControlRT/control_audio_command.h"
 #include "Param/param_audio.h"
+#include "Param/param_registry.h"
 #include "Param/param_spec.h"
-#include "Track/entity_types.h"
 #include "Platform/memory_layout.h"
+#include "Track/entity_types.h"
 
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_voices[BRICK_ENTITY_CAPACITY];
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_spread[BRICK_ENTITY_CAPACITY];
+
+#define LIVE_PARAMETER_LAYER_WORDS ((PARAM_COUNT + 31U) / 32U)
+
+AUDIO_M7_PRIVATE_SDRAM static float
+    g_live_parameter_plock_value[BRICK_ENTITY_CAPACITY][PARAM_COUNT];
+AUDIO_M7_PRIVATE_SDRAM static float
+    g_live_parameter_scene_value[BRICK_ENTITY_CAPACITY][PARAM_COUNT];
+AUDIO_M7_PRIVATE_SDRAM static uint32_t
+    g_live_parameter_plock_valid[BRICK_ENTITY_CAPACITY][LIVE_PARAMETER_LAYER_WORDS];
+AUDIO_M7_PRIVATE_SDRAM static uint32_t
+    g_live_parameter_scene_valid[BRICK_ENTITY_CAPACITY][LIVE_PARAMETER_LAYER_WORDS];
+
+static uint8_t live_parameter_layer_get(
+    const uint32_t bits[BRICK_ENTITY_CAPACITY][LIVE_PARAMETER_LAYER_WORDS],
+    uint8_t entity, param_id_t id)
+{
+    return (uint8_t)((bits[entity][id >> 5U] >> (id & 31U)) & 1U);
+}
+
+static void live_parameter_layer_set(
+    uint32_t bits[BRICK_ENTITY_CAPACITY][LIVE_PARAMETER_LAYER_WORDS],
+    uint8_t entity, param_id_t id, uint8_t active)
+{
+    const uint32_t mask = UINT32_C(1) << (id & 31U);
+    if (active != 0U)
+        bits[entity][id >> 5U] |= mask;
+    else
+        bits[entity][id >> 5U] &= ~mask;
+}
 
 static uint8_t live_parameter_audio_runtime_changes_matrix_context(param_id_t id)
 {
@@ -50,8 +80,46 @@ static uint8_t live_parameter_audio_runtime_exact_u16(float value,
     return 1U;
 }
 
+static uint8_t live_parameter_audio_runtime_apply_override(
+    uint8_t entity, param_id_t id, float value)
+{
+    const uint8_t applied = param_audio_apply_track_temp(id, entity, value);
+    if (applied == 0U) return 0U;
+    audio_mod_matrix_temp_update(entity, id, value);
+    if (live_parameter_audio_runtime_changes_matrix_context(id) != 0U)
+        audio_mod_matrix_rebuild_track(entity);
+    return audio_note_engine_adapter_project_track_configuration(entity);
+}
+
+static uint8_t live_parameter_audio_runtime_apply_base(
+    uint8_t entity, param_id_t id, float value)
+{
+    audio_mod_matrix_finalize_dirty();
+    const uint8_t applied = param_audio_apply_track(
+        &(const param_audio_value_t){ .id = id, .value = value }, entity);
+    if (applied == 0U) return 0U;
+    audio_mod_matrix_base_update(entity, id, value);
+    if (live_parameter_audio_runtime_changes_matrix_context(id) != 0U)
+        audio_mod_matrix_rebuild_track(entity);
+    return audio_note_engine_adapter_project_track_configuration(entity);
+}
+
+static uint8_t live_parameter_audio_runtime_clear_override(
+    uint8_t entity, param_id_t id)
+{
+    if (param_audio_clear_track_temp(id, entity) == 0U) return 0U;
+    audio_mod_matrix_temp_clear(entity, id);
+    if (live_parameter_audio_runtime_changes_matrix_context(id) != 0U)
+        audio_mod_matrix_rebuild_track(entity);
+    return audio_note_engine_adapter_project_track_configuration(entity);
+}
+
 void live_parameter_audio_runtime_init(void)
 {
+    memset(g_live_parameter_plock_value, 0, sizeof(g_live_parameter_plock_value));
+    memset(g_live_parameter_scene_value, 0, sizeof(g_live_parameter_scene_value));
+    memset(g_live_parameter_plock_valid, 0, sizeof(g_live_parameter_plock_valid));
+    memset(g_live_parameter_scene_valid, 0, sizeof(g_live_parameter_scene_valid));
     for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
         g_live_parameter_audio_poly_voices[track] = 1.0f;
@@ -65,25 +133,6 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
                                                  uint32_t value_bits,
                                                  uint8_t scope)
 {
-    if (scope == CONTROL_AUDIO_PARAM_KIND_SEQ_TEMP_TRACK)
-        scope = CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK;
-    else if (scope == CONTROL_AUDIO_PARAM_KIND_SEQ_CLEAR_TEMP_TRACK)
-        scope = CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK;
-    else if (scope == CONTROL_AUDIO_PARAM_KIND_SEQ_RESTORE_BASE_TRACK)
-        scope = CONTROL_AUDIO_PARAM_KIND_BASE_TRACK;
-    if ((scope == CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK)
-            && (parameter_id < PARAM_COUNT)
-            && (entity < BRICK_ENTITY_CAPACITY))
-    {
-        const uint8_t applied = param_audio_clear_track_temp(
-            (param_id_t)parameter_id, entity);
-        if (applied == 0U) return 0U;
-        audio_mod_matrix_temp_clear(entity, (param_id_t)parameter_id);
-        if (live_parameter_audio_runtime_changes_matrix_context(
-                (param_id_t)parameter_id) != 0U)
-            audio_mod_matrix_rebuild_track(entity);
-        return audio_note_engine_adapter_project_track_configuration(entity);
-    }
     const float decoded = live_parameter_event_decode_float((int32_t)value_bits);
     if (parameter_id == CONTROL_AUDIO_CONFIG_POLY_VOICES)
     {
@@ -167,14 +216,13 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
             return audio_note_engine_adapter_set_master(decoded);
         return audio_global_runtime_apply(parameter_id, decoded);
     }
-    if (((scope != CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)
-            && (scope != CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK))
-            || (entity >= BRICK_ENTITY_CAPACITY))
+    if (entity >= BRICK_ENTITY_CAPACITY)
         return 0U;
 
     const float value = decoded;
     if (parameter_id == PARAM_CFG_POLY_SPREAD)
     {
+        if (scope != CONTROL_AUDIO_PARAM_KIND_BASE_TRACK) return 0U;
         track_audio_runtime_ctx_t ctx;
         if ((audio_note_engine_adapter_current_ctx(entity, &ctx) != 0U)
                 && (ctx.program_route.active == 0U))
@@ -194,38 +242,69 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
         return applied;
     }
 
-    uint8_t applied = 0U;
-    if (scope == CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK)
+    const param_id_t id = (param_id_t)parameter_id;
+    const uint8_t scene_active = live_parameter_layer_get(
+        g_live_parameter_scene_valid, entity, id);
+    const uint8_t plock_active = live_parameter_layer_get(
+        g_live_parameter_plock_valid, entity, id);
+
+    if ((scope == CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK)
+            || (scope == CONTROL_AUDIO_PARAM_KIND_SEQ_TEMP_TRACK))
     {
-        applied = param_audio_apply_track_temp(
-            (param_id_t)parameter_id, entity, value);
-        if (applied != 0U)
-            audio_mod_matrix_temp_update(
-                entity, (param_id_t)parameter_id, value);
-        if ((applied != 0U)
-                && (live_parameter_audio_runtime_changes_matrix_context(
-                    (param_id_t)parameter_id) != 0U))
-            audio_mod_matrix_rebuild_track(entity);
+        g_live_parameter_plock_value[entity][id] = value;
+        live_parameter_layer_set(g_live_parameter_plock_valid, entity, id, 1U);
+        if (scene_active != 0U)
+            return live_parameter_audio_runtime_apply_override(
+                entity, id, g_live_parameter_scene_value[entity][id]);
+        return live_parameter_audio_runtime_apply_override(entity, id, value);
     }
-    else
+
+    if ((scope == CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK)
+            || (scope == CONTROL_AUDIO_PARAM_KIND_SEQ_CLEAR_TEMP_TRACK))
     {
-        /* A Matrix destination command may immediately precede its durable
-         * base projection in the same FIFO bulk.  Materialize the route
-         * before the normal base update is applied. */
-        audio_mod_matrix_finalize_dirty();
-        applied = param_audio_apply_track(&(const param_audio_value_t){
-            .id = (param_id_t)parameter_id, .value = value }, entity);
+        live_parameter_layer_set(g_live_parameter_plock_valid, entity, id, 0U);
+        if (live_parameter_audio_runtime_clear_override(entity, id) == 0U)
+            return 0U;
+        if (scene_active != 0U)
+            return live_parameter_audio_runtime_apply_override(
+                entity, id, g_live_parameter_scene_value[entity][id]);
+        return 1U;
     }
-    if ((applied != 0U) && (scope == CONTROL_AUDIO_PARAM_KIND_BASE_TRACK))
+
+    if (scope == CONTROL_AUDIO_PARAM_KIND_SCENE_TRACK)
     {
-        audio_mod_matrix_base_update(entity, parameter_id, value);
-        if (live_parameter_audio_runtime_changes_matrix_context(
-                (param_id_t)parameter_id) != 0U)
-        {
-            audio_mod_matrix_rebuild_track(entity);
-        }
+        g_live_parameter_scene_value[entity][id] = value;
+        live_parameter_layer_set(g_live_parameter_scene_valid, entity, id, 1U);
+        return live_parameter_audio_runtime_apply_override(entity, id, value);
     }
-    if (applied != 0U)
-        return audio_note_engine_adapter_project_track_configuration(entity);
+
+    if (scope == CONTROL_AUDIO_PARAM_KIND_CLEAR_SCENE_TRACK)
+    {
+        live_parameter_layer_set(g_live_parameter_scene_valid, entity, id, 0U);
+        if (plock_active != 0U)
+            return live_parameter_audio_runtime_apply_override(
+                entity, id, g_live_parameter_plock_value[entity][id]);
+        if (param_registry_temp_is_clearable(id) != 0U)
+            return live_parameter_audio_runtime_clear_override(entity, id);
+        return live_parameter_audio_runtime_apply_base(entity, id, value);
+    }
+
+    if ((scope == CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)
+            || (scope == CONTROL_AUDIO_PARAM_KIND_SEQ_RESTORE_BASE_TRACK))
+    {
+        if (scope == CONTROL_AUDIO_PARAM_KIND_SEQ_RESTORE_BASE_TRACK)
+            live_parameter_layer_set(g_live_parameter_plock_valid, entity, id, 0U);
+        if (live_parameter_audio_runtime_apply_base(entity, id, value) == 0U)
+            return 0U;
+        if (scene_active != 0U)
+            return live_parameter_audio_runtime_apply_override(
+                entity, id, g_live_parameter_scene_value[entity][id]);
+        if ((scope == CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)
+                && (plock_active != 0U))
+            return live_parameter_audio_runtime_apply_override(
+                entity, id, g_live_parameter_plock_value[entity][id]);
+        return 1U;
+    }
+
     return 0U;
 }

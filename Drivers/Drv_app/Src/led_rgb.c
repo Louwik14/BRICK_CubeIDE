@@ -25,7 +25,9 @@
 #include "stm32h7xx_hal.h"
 
 #include "App/Hall/hall_engine.h"
+#include "App/Hall/hall_keymap.h"
 #include "Keyboard/keyboard_runtime.h"
+#include "Param/param_macro.h"
 #include "Track/entity_topology.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
@@ -34,10 +36,12 @@
 #include "led_anim.h"
 #include "led_layer.h"
 #include "Storage/sample_capture.h"
+#include "Storage/project_control.h"
 #include "UI/ui_core.h"
 #include "UI/ui_core_mute.h"
 #include "UI/ui_hall_mode_projection.h"
 #include "UI/ui_navigation.h"
+#include "UI/ui_macro_interaction.h"
 #include "UI/ui_page_manager.h"
 #include "UI/ui_step_led_ownership.h"
 #include "UI/ui_track_led_projection.h"
@@ -454,6 +458,37 @@ static uint8_t led_apply_patch_assign_hall_scene(uint8_t hall)
     return 1U;
 }
 
+static void led_apply_macro_hall_scene(uint8_t hall)
+{
+    hall_key_metadata_t key;
+    if ((hall_keymap_metadata(hall, &key) == 0U)
+            || (key.kind != HALL_KEY_KIND_WHITE)
+            || (key.white_index == 0U)) return;
+    const uint8_t macro = (uint8_t)(key.white_index - 1U);
+    const led_id_t led = led_remap_led_for_hall(hall);
+    uint8_t held_macro = 0xFFU;
+    if ((ui_macro_interaction_get_held_macro(&held_macro) != 0U)
+            && (held_macro == macro))
+    {
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_ORANGE_R,
+                      LED_FIXED_ORANGE_G, LED_FIXED_ORANGE_B);
+        return;
+    }
+    const float amount = param_macro_get_amount(macro);
+    if (amount > 0.0f)
+    {
+        const uint8_t green = (uint8_t)(32.0f
+            + (amount * ((float)LED_FIXED_GREEN_G - 32.0f)));
+        led_layer_set(LED_LAYER_UI, led, 0U, green, 0U);
+        return;
+    }
+    if (project_control_macro_lock_is_empty(macro, 0U) == 0U)
+    {
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_TEAL_R / 4U,
+                      LED_FIXED_TEAL_G / 4U, LED_FIXED_TEAL_B / 4U);
+    }
+}
+
 static bool led_hall_mode_uses_keyboard_scene(ui_hall_mode_t mode)
 {
     return (mode == UI_HALL_MODE_KEYBOARD);
@@ -535,7 +570,9 @@ static void led_apply_fixed_scene(void)
     }
     else if (hall_mode == UI_HALL_MODE_MACRO)
     {
-        /* No STEP/TRIG scene in MACRO. The layer reset above drops the prior Hall scene. */
+        seq_led_render_active_track_page(ui_get_active_lane());
+        for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; ++hall)
+            led_apply_macro_hall_scene(hall);
     }
     else if (ui_page_patch_assign_is_open() != 0U)
     {

@@ -35,11 +35,47 @@ CONTROL_STATE_SDRAM static param_macro_target_t g_macro_work[PARAM_MACRO_TARGET_
 static uint16_t g_macro_previous_count;
 static uint8_t g_macro_retry_pending;
 
-static uint8_t param_macro_prepare_temp_target(param_id_t param,
-                                               uint8_t track,
-                                               float value,
-                                               live_parameter_audio_target_t *out,
-                                               float *out_canonical_value)
+#define PARAM_MACRO_MIDI_CC_COUNT 12U
+CONTROL_STATE_SDRAM static float
+    g_macro_midi_plock[SEQ_LANE_CAPACITY][PARAM_MACRO_MIDI_CC_COUNT];
+CONTROL_STATE_SDRAM static uint16_t
+    g_macro_midi_plock_valid[SEQ_LANE_CAPACITY];
+
+static uint8_t param_macro_midi_cc_index(param_id_t param, uint8_t *out_index)
+{
+    if ((out_index == NULL) || (param < PARAM_MIDI_CC1_1)
+            || (param > PARAM_MIDI_CC3_4)) return 0U;
+    *out_index = (uint8_t)(param - PARAM_MIDI_CC1_1);
+    return 1U;
+}
+
+static uint8_t param_macro_active_backend_value(uint8_t track,
+                                                param_id_t param,
+                                                float *out_value)
+{
+    if (out_value == NULL) return 0U;
+    for (uint16_t i = 0U; i < g_macro_previous_count; ++i)
+    {
+        const param_macro_target_t *const target = &g_macro_previous[i];
+        if ((target->track == track) && (target->param == param)
+                && (target->active != 0U))
+        {
+            *out_value = target->base + target->delta;
+            if (*out_value < param_registry[param].min)
+                *out_value = param_registry[param].min;
+            if (*out_value > param_registry[param].max)
+                *out_value = param_registry[param].max;
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static uint8_t param_macro_prepare_scene_target(param_id_t param,
+                                                uint8_t track,
+                                                float value,
+                                                live_parameter_audio_target_t *out,
+                                                float *out_canonical_value)
 {
     if ((out == NULL) || (param >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)
             || (out_canonical_value == NULL)
@@ -74,7 +110,7 @@ static uint8_t param_macro_prepare_temp_target(param_id_t param,
         .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
         .track = event_track,
         .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .semantic = CONTROL_AUDIO_PARAM_TEMP,
+        .semantic = CONTROL_AUDIO_PARAM_SCENE,
         .value = live_parameter_event_encode_float(value)
     };
     return 1U;
@@ -87,7 +123,7 @@ static uint8_t param_macro_bulk_add(live_parameter_audio_bulk_t *bulk,
                                     float *out_canonical_value)
 {
     live_parameter_audio_target_t target;
-    if ((bulk == NULL) || (param_macro_prepare_temp_target(param, track, value,
+    if ((bulk == NULL) || (param_macro_prepare_scene_target(param, track, value,
             &target, out_canonical_value) == 0U)) return 0U;
 
     for (uint8_t i = 0U; i < bulk->count; ++i)
@@ -113,26 +149,27 @@ static uint8_t param_macro_bulk_add(live_parameter_audio_bulk_t *bulk,
     return 1U;
 }
 
-static uint8_t param_macro_bulk_add_clear_temp(
+static uint8_t param_macro_bulk_add_clear_scene(
     live_parameter_audio_bulk_t *bulk, param_id_t param, uint8_t track)
 {
-    if ((bulk == NULL) || (track >= SEQ_LANE_CAPACITY)
-            || (param_registry_temp_is_clearable(param) == 0U)) return 0U;
+    if ((bulk == NULL) || (track >= SEQ_LANE_CAPACITY)) return 0U;
     for (uint8_t i = 0U; i < bulk->count; ++i)
     {
         const live_parameter_audio_target_t *const item = &bulk->item[i];
         if ((item->parameter_id == (uint16_t)param)
                 && (item->track == track)
-                && (item->semantic == CONTROL_AUDIO_PARAM_CLEAR_TEMP)) return 1U;
+                && (item->semantic == CONTROL_AUDIO_PARAM_CLEAR_SCENE)) return 1U;
     }
     if (bulk->count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS) return 0U;
+    float base = 0.0f;
+    if (param_registry_get_track_value(param, track, &base) == 0U) return 0U;
     bulk->item[bulk->count++] = (live_parameter_audio_target_t){
         .parameter_id = (uint16_t)param,
         .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
         .track = track,
         .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .semantic = CONTROL_AUDIO_PARAM_CLEAR_TEMP,
-        .value = 0
+        .semantic = CONTROL_AUDIO_PARAM_CLEAR_SCENE,
+        .value = live_parameter_event_encode_float(base)
     };
     return 1U;
 }
@@ -186,6 +223,8 @@ void param_macro_init(void)
     g_macro_previous_count = 0U;
     g_macro_retry_pending = 0U;
     memset(g_macro_previous, 0, sizeof(g_macro_previous));
+    memset(g_macro_midi_plock, 0, sizeof(g_macro_midi_plock));
+    memset(g_macro_midi_plock_valid, 0, sizeof(g_macro_midi_plock_valid));
 }
 
 uint8_t param_macro_lock_target_is_supported(uint8_t track, param_id_t param)
@@ -273,6 +312,37 @@ static uint8_t param_macro_apply_backend_value(uint8_t track, param_id_t param, 
     value = param_value_policy_canonicalize(param, track, value);
     if (param_registry_prepare_value(param, value, &prepared) == 0U) return 0U;
     return param_backend_send_midi_cc(track, param, prepared.value);
+}
+
+uint8_t param_macro_apply_control_plock(uint8_t track, param_id_t param,
+                                       float value, uint8_t active)
+{
+    uint8_t index = 0U;
+    if ((track >= SEQ_LANE_CAPACITY)
+            || (param_macro_midi_cc_index(param, &index) == 0U)) return 0U;
+    const uint16_t mask = (uint16_t)(1U << index);
+    if (active != 0U)
+    {
+        g_macro_midi_plock[track][index] = value;
+        g_macro_midi_plock_valid[track] |= mask;
+    }
+    else
+    {
+        g_macro_midi_plock_valid[track] &= (uint16_t)~mask;
+    }
+
+    float effective = value;
+    if (param_macro_active_backend_value(track, param, &effective) == 0U)
+    {
+        if ((g_macro_midi_plock_valid[track] & mask) != 0U)
+            effective = g_macro_midi_plock[track][index];
+    }
+    return param_macro_apply_backend_value(track, param, effective);
+}
+
+void param_macro_clear_control_plocks(void)
+{
+    memset(g_macro_midi_plock_valid, 0, sizeof(g_macro_midi_plock_valid));
 }
 
 static uint8_t param_macro_collect_value(live_parameter_audio_bulk_t *bulk,
@@ -367,10 +437,10 @@ static uint8_t param_macro_recompute(const float amounts[PERSIST_CONTROL_MACRO_C
         {
             if (bulk.count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS
                 && param_macro_flush_bulk(&bulk) == 0U) return 0U;
-            if (target->active == 0U && param_registry_temp_is_clearable(target->param) != 0U)
+            if (target->active == 0U)
             {
-                if (param_macro_bulk_add_clear_temp(&bulk, target->param,
-                                                    target->track) == 0U) return 0U;
+                if (param_macro_bulk_add_clear_scene(&bulk, target->param,
+                                                     target->track) == 0U) return 0U;
             }
             else
             {
@@ -387,6 +457,16 @@ static uint8_t param_macro_recompute(const float amounts[PERSIST_CONTROL_MACRO_C
                 && param_macro_lock_target_is_supported(target->track, target->param) == 0U)
                 continue;
             float value = target->base + target->delta;
+            if (target->active == 0U)
+            {
+                uint8_t midi_index = 0U;
+                if ((param_registry_get_track_value(target->param,
+                        target->track, &value) == 0U)) return 0U;
+                if ((param_macro_midi_cc_index(target->param, &midi_index) != 0U)
+                        && ((g_macro_midi_plock_valid[target->track]
+                            & (uint16_t)(1U << midi_index)) != 0U))
+                    value = g_macro_midi_plock[target->track][midi_index];
+            }
             if (value < param_registry[target->param].min) value = param_registry[target->param].min;
             if (value > param_registry[target->param].max) value = param_registry[target->param].max;
             if (param_macro_apply_backend_value(target->track, target->param, value) == 0U)

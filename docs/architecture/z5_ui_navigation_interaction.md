@@ -27,22 +27,24 @@ pour la selection des tracks, puis disparait au relachement de TRACK; la page
 reprend alors sa projection propre. Sa duree de vie suit exclusivement l'etat
 physique de TRACK: un changement de page, d'ensemble, de sous-page, de mode Hall
 ou de track ne l'annule pas. MUTE et SHIFT restent prioritaires selon leur
-contrat. MACRO est un overlay temporaire des modes Hall KBD et SEQ : son
+contrat. MACRO est fonctionnellement l'overlay SCENE des modes Hall KBD et SEQ : son
 entree memorise le mode Hall courant et toute sortie restaure exactement ce
 mode. SHIFT + STEP 8 y entre. En LIVE, un tap alterne PRESSURE/TOGGLE apres la
 fenetre de double tap et deux taps ouvrent ASSIGN sans appliquer la bascule du
 premier tap. Depuis ASSIGN, un tap revient au dernier mode LIVE. Les 14 touches
-blanches du clavier Hall pilotent les macros;
-les dix noires passent par les raccourcis clavier SEQ existants. Les pads STEP
-conservent leur handler SEQ, sans projection LED STEP/TRIG en MACRO. Chaque
-scene LED reconstruit ses couches depuis zero, ce qui efface la projection du
-mode precedent. Une navigation de page ou d'ensemble ferme MACRO et restaure
-KBD ou SEQ independamment de la destination UI. Les gestes temporaires MACRO,
-les flashes de valeur et la vue OLED sont nettoyes a cette transition. En
+blanches du clavier Hall pilotent les Scenes et constituent les seuls gestes
+STEP reserves par l'overlay; les autres STEP, le transport, la selection de
+track et les raccourcis restent au sequenceur. La projection LED conserve les
+trigs/playhead et superpose sur les blanches l'etat Scene: destination presente
+faible, Scene active verte proportionnelle, Scene tenue en ASSIGN orange. La
+navigation de page ou d'ensemble conserve l'overlay et permet d'assigner sur
+toutes les pages disponibles. En
 ASSIGN, maintenir une blanche puis tourner un encodeur cree ou met a jour la
 valeur cible absolue du parametre selon les memes bornes, politiques de valeur
 et owners que l'edition normale. SHIFT + encodeur efface cette cible. Le
-relachement de la blanche ferme la capture sans modifier les autres locks.
+relachement de la blanche ferme la capture sans modifier les autres locks. Le
+label et la valeur d'une destination tenue reprennent l'inversion p-lock; un
+STEP tenu sans Scene tenue conserve l'edition d'un vrai p-lock.
 
 Audio REC est une page modale Low-Cost, mais les boutons d'ensemble restent
 navigables lorsqu'une destination est disponible. La navigation standard ferme

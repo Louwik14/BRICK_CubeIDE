@@ -15,7 +15,6 @@
 static ui_macro_mode_t g_mode = UI_MACRO_LIVE_PRESSURE;
 static ui_macro_mode_t g_last_live = UI_MACRO_LIVE_PRESSURE;
 static uint8_t g_held_macro = 0xFFU;
-static uint8_t g_held_track = 0xFFU;
 static uint16_t g_pressed_whites;
 static uint8_t g_pending_tap;
 static uint32_t g_pending_tap_ms;
@@ -23,7 +22,6 @@ static uint32_t g_pending_tap_ms;
 static void ui_macro_interaction_clear_gesture(void)
 {
     g_held_macro = 0xFFU;
-    g_held_track = 0xFFU;
     g_pressed_whites = 0U;
     g_pending_tap = 0U;
     g_pending_tap_ms = 0U;
@@ -128,7 +126,6 @@ void ui_macro_interaction_note_hall_press(uint8_t hall)
     if (g_mode == UI_MACRO_ASSIGN)
     {
         g_held_macro = macro;
-        g_held_track = ui_get_active_track();
     }
     else if (g_mode == UI_MACRO_LIVE_TOGGLE)
     {
@@ -145,7 +142,6 @@ void ui_macro_interaction_note_hall_release(uint8_t hall)
     if (g_mode == UI_MACRO_ASSIGN && g_held_macro == macro)
     {
         g_held_macro = 0xFFU;
-        g_held_track = 0xFFU;
     }
     else if (g_mode == UI_MACRO_LIVE_PRESSURE)
         (void)param_macro_set_amount(macro, 0.0f);
@@ -166,8 +162,8 @@ static uint8_t ui_macro_get_held_lock(param_id_t param,
                                       project_control_macro_lock_t *out)
 {
     if (g_mode != UI_MACRO_ASSIGN || g_held_macro >= PERSIST_CONTROL_MACRO_COUNT
-        || g_held_track >= PERSIST_CONTROL_ENTITY_COUNT || param >= PARAM_COUNT) return 0U;
-    uint8_t target_track = g_held_track;
+        || param >= PARAM_COUNT) return 0U;
+    uint8_t target_track = ui_get_active_track();
     if (param_registry_is_modulation_source_param(param) != 0U)
     {
         brick_entity_id_t owner = target_track;
@@ -192,8 +188,8 @@ uint8_t ui_macro_interaction_note_encoder_delta_with_context(
     const ui_param_encoder_context_t *ctx, uint8_t encoder, int16_t delta)
 {
     if (ctx == NULL || ctx->valid == 0U || encoder >= 4U || delta == 0
-        || g_mode != UI_MACRO_ASSIGN || g_held_macro >= PERSIST_CONTROL_MACRO_COUNT
-        || g_held_track >= PERSIST_CONTROL_ENTITY_COUNT) return 0U;
+        || g_mode != UI_MACRO_ASSIGN || g_held_macro >= PERSIST_CONTROL_MACRO_COUNT)
+        return 0U;
     const param_id_t param = ctx->bank.params[encoder];
     if (param >= PARAM_COUNT) return 0U;
 

@@ -97,7 +97,8 @@ uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode)
 uint8_t ui_hall_is_seq_context(ui_hall_mode_t raw_mode)
 {
     return (uint8_t)((raw_mode == UI_HALL_MODE_SEQ)
-                     || (raw_mode == UI_HALL_MODE_KEYBOARD));
+                     || (raw_mode == UI_HALL_MODE_KEYBOARD)
+                     || (raw_mode == UI_HALL_MODE_MACRO));
 }
 
 const char *ui_get_hall_mode_short_label(void)
@@ -110,7 +111,7 @@ const char *ui_get_hall_mode_short_label(void)
     }
 
     if (raw_mode == UI_HALL_MODE_MACRO)
-        return "MACRO";
+        return "SCENE";
 
     if ((ui_page_patch_assign_is_open() != 0U)
             || (ui_hall_patch_feedback_active(HAL_GetTick()) != 0U))

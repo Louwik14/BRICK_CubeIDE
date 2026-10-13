@@ -18,6 +18,7 @@
 #include "param_registry.h"
 #include "NoteFx/note_fx_state.h"
 #include "Param/param_control_backends.h"
+#include "Param/param_macro.h"
 #include "Seq/seq_runtime.h"
 #include "Track/audio_fx_control_state.h"
 #include "Param/audio_fx_param_catalog.h"
@@ -32,7 +33,7 @@ static uint8_t seq_param_iface_apply_control_midi(param_id_t param,
                 track_runtime_get_ctx(track)) == 0U))
         return 0U;
     if (param_backend_is_midi_cc_id(param) != 0U)
-        return param_backend_send_midi_cc(track, param, value);
+        return param_macro_apply_control_plock(track, param, value, 1U);
     if (param == PARAM_MIDI_PROGRAM)
     {
         seq_runtime_on_midi_program_live_change(track, value);
@@ -1116,7 +1117,14 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
 
     if (param_registry_track_temp_is_applicable(param, track) == 0U)
     {
-        if (seq_param_iface_apply_control_midi(param, track, base_value16) == 0U)
+        float base_value = 0.0f;
+        const uint8_t restored = (param_backend_is_midi_cc_id(param) != 0U)
+            ? (uint8_t)((seq_param_iface_decode_param_value(param, base_value16,
+                    &base_value) != 0U)
+                && (param_macro_apply_control_plock(track, param,
+                    base_value, 0U) != 0U))
+            : seq_param_iface_apply_control_midi(param, track, base_value16);
+        if (restored == 0U)
             return 0U;
         state->base_value = base_value16;
         state->runtime_value = base_value16;
@@ -1156,6 +1164,7 @@ void seq_param_iface_discard_runtime_lock(seq_track_id_t track,
 
 void seq_param_iface_execution_replace(void)
 {
+    param_macro_clear_control_plocks();
     /* These structures are projections/ownership of the executing Pattern,
      * not durable parameter state.  Keeping them across a replacement makes
      * later edits/restores observe locks owned by the retired generation. */

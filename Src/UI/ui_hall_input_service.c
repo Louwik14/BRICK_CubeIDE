@@ -79,7 +79,17 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         return;
     }
 
-    (void)hall_mode;
+    if ((hall_mode == UI_HALL_MODE_MACRO)
+            && (shift_down == 0U)
+            && (track_select_armed == 0U)
+            && (was_pressed == 0U)
+            && (pressed != 0U)
+            && (hall_keymap_metadata(hall, &hall_key) != 0U)
+            && (hall_key.kind == HALL_KEY_KIND_WHITE))
+    {
+        hall_note_suppressed[hall] = 1U;
+        return;
+    }
 
     if ((mute_active != 0U)
         && (shift_down == 0U)

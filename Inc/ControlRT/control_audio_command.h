@@ -34,7 +34,9 @@ typedef enum
 {
     CONTROL_AUDIO_PARAM_BASE = 0U,
     CONTROL_AUDIO_PARAM_TEMP,
-    CONTROL_AUDIO_PARAM_CLEAR_TEMP
+    CONTROL_AUDIO_PARAM_CLEAR_TEMP,
+    CONTROL_AUDIO_PARAM_SCENE,
+    CONTROL_AUDIO_PARAM_CLEAR_SCENE
 } control_audio_param_semantic_t;
 
 /* PARAM kinds encode both the target and its explicit base/override semantic. */
@@ -47,6 +49,8 @@ typedef enum
 #define CONTROL_AUDIO_PARAM_KIND_SEQ_TEMP_TRACK          12U
 #define CONTROL_AUDIO_PARAM_KIND_SEQ_CLEAR_TEMP_TRACK    13U
 #define CONTROL_AUDIO_PARAM_KIND_SEQ_RESTORE_BASE_TRACK  14U
+#define CONTROL_AUDIO_PARAM_KIND_SCENE_TRACK              15U
+#define CONTROL_AUDIO_PARAM_KIND_CLEAR_SCENE_TRACK        16U
 typedef enum
 {
     CONTROL_AUDIO_STATE_PATTERN = 0U,
@@ -230,7 +234,11 @@ control_audio_command_state_class(const control_audio_command_t *command)
             || (CONTROL_AUDIO_COMMAND_KIND(command)
                 == CONTROL_AUDIO_PARAM_KIND_SEQ_TEMP_TRACK)
             || (CONTROL_AUDIO_COMMAND_KIND(command)
-                == CONTROL_AUDIO_PARAM_KIND_SEQ_CLEAR_TEMP_TRACK))
+                == CONTROL_AUDIO_PARAM_KIND_SEQ_CLEAR_TEMP_TRACK)
+            || (CONTROL_AUDIO_COMMAND_KIND(command)
+                == CONTROL_AUDIO_PARAM_KIND_SCENE_TRACK)
+            || (CONTROL_AUDIO_COMMAND_KIND(command)
+                == CONTROL_AUDIO_PARAM_KIND_CLEAR_SCENE_TRACK))
         return CONTROL_AUDIO_COMMAND_TRANSIENT_ACTION;
     return CONTROL_AUDIO_COMMAND_DURABLE_STATE;
 }

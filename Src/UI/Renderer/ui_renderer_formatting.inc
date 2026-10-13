@@ -454,6 +454,7 @@ static uint8_t ui_renderer_template_get_visible_param_value(const ui_param_seq_p
     if (macro_value_visible != 0U)
     {
         value = macro_lock_target_value;
+        if (out_inverted != 0) *out_inverted = 1U;
     }
     else
     {

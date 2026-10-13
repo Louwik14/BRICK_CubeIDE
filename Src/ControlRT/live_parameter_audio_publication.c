@@ -56,7 +56,9 @@ static uint8_t live_parameter_audio_build_param_command(
         else return 0U;
     }
     else if ((target->semantic == CONTROL_AUDIO_PARAM_TEMP)
-            || (target->semantic == CONTROL_AUDIO_PARAM_CLEAR_TEMP))
+            || (target->semantic == CONTROL_AUDIO_PARAM_CLEAR_TEMP)
+            || (target->semantic == CONTROL_AUDIO_PARAM_SCENE)
+            || (target->semantic == CONTROL_AUDIO_PARAM_CLEAR_SCENE))
     {
         if ((target->scope != LIVE_PARAMETER_EVENT_SCOPE_TRACK)
                 || (target->slot != LIVE_PARAMETER_EVENT_INVALID_INDEX)
@@ -66,9 +68,14 @@ static uint8_t live_parameter_audio_build_param_command(
                 || ((target->semantic == CONTROL_AUDIO_PARAM_CLEAR_TEMP)
                     && (param_registry_temp_is_clearable(
                         (param_id_t)target->parameter_id) == 0U))) return 0U;
-        kind = (target->semantic == CONTROL_AUDIO_PARAM_TEMP)
-            ? CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK
-            : CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK;
+        if (target->semantic == CONTROL_AUDIO_PARAM_TEMP)
+            kind = CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK;
+        else if (target->semantic == CONTROL_AUDIO_PARAM_CLEAR_TEMP)
+            kind = CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK;
+        else if (target->semantic == CONTROL_AUDIO_PARAM_SCENE)
+            kind = CONTROL_AUDIO_PARAM_KIND_SCENE_TRACK;
+        else
+            kind = CONTROL_AUDIO_PARAM_KIND_CLEAR_SCENE_TRACK;
     }
     else return 0U;
     return control_rt_build_param_command(target->track,

@@ -1758,7 +1758,7 @@ static uint8_t audio_command_executor_apply_seq_event(
             ?CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK
             :((event->param.semantic==SEQ_ENGINE_PARAM_CLEAR_TEMP)
                 ?CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK
-                :CONTROL_AUDIO_PARAM_KIND_BASE_TRACK);
+                :CONTROL_AUDIO_PARAM_KIND_SEQ_RESTORE_BASE_TRACK);
         return live_parameter_audio_runtime_apply_param(event->param.track,
             event->param.param_id,event->param.value32,kind);
     }
@@ -1843,7 +1843,9 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
             && ((CONTROL_AUDIO_COMMAND_KIND(&command)
                     == CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK)
                 || (CONTROL_AUDIO_COMMAND_KIND(&command)
-                    == CONTROL_AUDIO_PARAM_KIND_SEQ_TEMP_TRACK)));
+                    == CONTROL_AUDIO_PARAM_KIND_SEQ_TEMP_TRACK)
+                || (CONTROL_AUDIO_COMMAND_KIND(&command)
+                    == CONTROL_AUDIO_PARAM_KIND_SCENE_TRACK)));
         const uint8_t stale_request = (uint8_t)(
             control_audio_command_state_class(&command)
                 == CONTROL_AUDIO_COMMAND_REQUEST);
