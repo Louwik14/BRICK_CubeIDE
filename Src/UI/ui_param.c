@@ -26,6 +26,7 @@
 
 #include "param_registry.h"
 #include "ui_core.h"
+#include "ui_macro_interaction.h"
 #include "ui_track_catalog.h"
 #include "buttons.h"
 #include "Seq/seq_param_iface.h"

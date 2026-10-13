@@ -934,12 +934,10 @@ void ui_core_tick(void)
         else
         {
             const ui_page_t *const encoder_page = ui_page_get();
-            const uint8_t macro_consumed =
-                ui_macro_interaction_note_encoder_delta_with_context(&encoder_ctx, encoder, delta);
-            const uint8_t page_consumed = (macro_consumed == 0U && (encoder_page != 0)
+            const uint8_t page_consumed = ((encoder_page != 0)
                     && (encoder_page->handle_encoder != 0))
                 ? encoder_page->handle_encoder(encoder, delta) : 0U;
-            if ((macro_consumed == 0U) && (page_consumed == 0U)
+            if ((page_consumed == 0U)
                 && (ui_page_template_keyboard_handle_encoder(encoder, delta) == 0U)
                 && (ui_page_template_seq_handle_encoder(encoder, delta) == 0U)
                 && (ui_page_template_play_handle_encoder(encoder, delta) == 0U)

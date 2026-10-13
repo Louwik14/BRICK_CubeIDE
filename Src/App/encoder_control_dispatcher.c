@@ -6,6 +6,7 @@
 #include "Param/param_registry.h"
 #include "Track/track_mute.h"
 #include "UI/ui_param.h"
+#include "UI/ui_macro_interaction.h"
 #include "encoders.h"
 #include "main.h"
 
@@ -89,6 +90,21 @@ uint8_t encoder_control_dispatcher_service(void)
             continue;
         }
 
+        float edit_source = current_value;
+        const uint8_t scene_capture = ui_macro_interaction_get_edit_source(
+            parameter, value_track, current_value, &edit_source);
+        if ((scene_capture != 0U)
+                && (encoder_binding_shift_down(binding) != 0U))
+        {
+            (void)ui_macro_interaction_commit_edit(detent.encoder_id,
+                                                   parameter,
+                                                   value_track,
+                                                   edit_source,
+                                                   1U);
+            submitted++;
+            continue;
+        }
+
         ui_param_encoder_target_t target;
         if (ui_param_resolve_encoder_detent_from_binding(parameter,
                                                          scope,
@@ -96,9 +112,20 @@ uint8_t encoder_control_dispatcher_service(void)
                                                          slot,
                                                          encoder_binding_shift_down(binding),
                                                          direction,
-                                                         current_value,
+                                                         edit_source,
                                                          &target) == 0U)
         {
+            continue;
+        }
+
+        if (scene_capture != 0U)
+        {
+            (void)ui_macro_interaction_commit_edit(detent.encoder_id,
+                                                   parameter,
+                                                   value_track,
+                                                   target.value,
+                                                   0U);
+            submitted++;
             continue;
         }
 

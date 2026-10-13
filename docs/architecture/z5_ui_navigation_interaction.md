@@ -46,6 +46,17 @@ label et la valeur d'une destination tenue reprennent l'inversion p-lock. Un
 STEP physique tenu donne toujours priorite au vrai p-lock, y compris lorsqu'une
 touche Scene est tenue simultanement en ASSIGN.
 
+La capture ASSIGN se trouve dans les deux ingress du pipeline Param normal, et
+non devant les handlers de page. Les parametres CONTROL passent par
+`ui_param_handle_encoder_with_context`; les parametres AUDIO, dont les detentes
+ne sont volontairement pas recopiees dans le delta UI, passent par
+`encoder_control_dispatcher`. Dans les deux cas l'ordre est identique: tentative
+p-lock STEP, resolution canonique du parametre et de son owner, puis capture de
+la cible Scene si une Scene ASSIGN est maintenue, sinon edition de base. Une
+destination existante fournit la valeur source du tweak suivant. Le stockage
+reste l'unique table Project consommee par PRESSURE/TOGGLE; l'inversion relit
+cette table et ne repose sur aucun flag visuel parallele.
+
 Audio REC est une page modale Low-Cost, mais les boutons d'ensemble restent
 navigables lorsqu'une destination est disponible. La navigation standard ferme
 alors la page REC, restaure le mode/page de retour et ouvre l'ensemble demande;

@@ -3,12 +3,14 @@
 #include <stddef.h>
 #include "App/Hall/hall_keymap.h"
 #include "App/Hall/hall_engine.h"
-#include "buttons.h"
 #include "Storage/project_control.h"
 #include "Param/param_macro.h"
-#include "Track/track_runtime.h"
+#include "Param/param_value_policy.h"
 #include "Track/entity_topology.h"
 #include "ui_core.h"
+#include "ui_core_feedback.h"
+#include "ui_param.h"
+#include "stm32h7xx_hal.h"
 
 #define UI_MACRO_DOUBLE_TAP_MS 400U
 
@@ -184,60 +186,55 @@ static uint8_t ui_macro_get_lock(uint8_t macro,
     return project_control_get_macro_lock_for_param(macro, track, param, out);
 }
 
-static uint8_t ui_macro_physical_step_is_held(void)
+uint8_t ui_macro_interaction_get_edit_source(param_id_t param,
+                                             uint8_t track,
+                                             float base_value,
+                                             float *out_value)
 {
-    for (button_id_t button = BTN_STEP_1; button <= BTN_STEP_16;
-         button = (button_id_t)((uint8_t)button + 1U))
-    {
-        if (button_down(button) != 0U)
-        {
-            return 1U;
-        }
-    }
-    return 0U;
-}
-
-uint8_t ui_macro_interaction_note_encoder_delta_with_context(
-    const ui_param_encoder_context_t *ctx, uint8_t encoder, int16_t delta)
-{
-    if (ctx == NULL || ctx->valid == 0U || encoder >= 4U || delta == 0
-        || g_mode != UI_MACRO_ASSIGN || g_held_macro >= PERSIST_CONTROL_MACRO_COUNT
-        || ui_macro_physical_step_is_held() != 0U)
-        return 0U;
-    const param_id_t param = ctx->bank.params[encoder];
-    if (param >= PARAM_COUNT) return 0U;
-
-    ui_param_encoder_context_t macro_ctx = *ctx;
-    macro_ctx.shift_down = 0U;
-    float value = ui_param_get_active_track_display_value(param, ctx->active_track);
-    if (value != value) return 0U;
-
-    ui_param_encoder_target_t target;
-    if (ui_param_resolve_encoder_detent(&macro_ctx, encoder,
-                                        (delta > 0) ? 1 : -1,
-                                        value, &target) == 0U
-        || target.scope == 0U
-        || param_macro_lock_target_is_supported(target.track, param) == 0U)
+    if (out_value == NULL || g_mode != UI_MACRO_ASSIGN
+            || g_held_macro >= PERSIST_CONTROL_MACRO_COUNT
+            || param_macro_lock_target_is_supported(track, param) == 0U)
         return 0U;
 
     project_control_macro_lock_t prior;
-    if (ui_macro_get_lock(g_held_macro, target.track, param, &prior) != 0U)
-        value = prior.target_value;
+    *out_value = (ui_macro_get_lock(g_held_macro, track, param, &prior) != 0U)
+        ? prior.target_value : base_value;
+    return 1U;
+}
 
-    if (button_down(BTN_SHIFT) != 0U)
+uint8_t ui_macro_interaction_commit_edit(uint8_t encoder,
+                                         param_id_t param,
+                                         uint8_t track,
+                                         float target_value,
+                                         uint8_t clear)
+{
+    if (encoder >= 4U || g_mode != UI_MACRO_ASSIGN
+            || g_held_macro >= PERSIST_CONTROL_MACRO_COUNT
+            || param_macro_lock_target_is_supported(track, param) == 0U)
+        return 0U;
+
+    if (clear != 0U)
     {
-        (void)project_control_clear_macro_lock(g_held_macro, target.track, param);
+        project_control_macro_lock_t prior;
+        if ((ui_macro_get_lock(g_held_macro, track, param, &prior) != 0U)
+                && (project_control_clear_macro_lock(
+                    g_held_macro, track, param) == 0U))
+        {
+            ui_core_feedback_set("SCENE CLEAR FAIL", HAL_GetTick());
+            return 1U;
+        }
         ui_param_clear_value_flash();
         return 1U;
     }
 
-    if (ui_param_resolve_encoder_delta(&macro_ctx, encoder, delta,
-                                       value, &target) == 0U)
+    target_value = param_value_policy_canonicalize(param, track, target_value);
+    if (project_control_assign_macro_lock(g_held_macro, track,
+                                          param, target_value) == 0U)
+    {
+        ui_core_feedback_set("SCENE ASSIGN FAIL", HAL_GetTick());
         return 1U;
-    if (project_control_assign_macro_lock(g_held_macro, target.track,
-                                          param, target.value) == 0U)
-        return 1U;
-    ui_param_note_user_value_flash(encoder, param, target.track, target.value,
+    }
+    ui_param_note_user_value_flash(encoder, param, track, target_value,
                                    UI_PARAM_VALUE_FLASH_MACRO_ASSIGN);
     return 1U;
 }
