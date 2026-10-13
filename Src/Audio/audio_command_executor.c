@@ -395,25 +395,35 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         track_audio_runtime_ctx_t ctx;
         if (audio_note_engine_adapter_current_ctx(command->entity, &ctx) == 0U)
             return 0U;
+        const uint8_t has_asset =
+            control_audio_sampler_selection_is_asset(command->value);
+        if ((command->value != CONTROL_AUDIO_SAMPLER_SELECTION_OFF)
+                && (has_asset == 0U)) return 0U;
+        const uint16_t runtime = (has_asset != 0U)
+            ? control_audio_sampler_selection_runtime(command->value)
+            : UINT16_MAX;
+        if (runtime == UINT16_MAX && has_asset != 0U) return 0U;
         if (ctx.type == TRACK_RUNTIME_TYPE_MULTI)
         {
             uint16_t current_instrument = 0U;
             if (brick6_sampler_runtime_get_multi_instrument(
                     command->entity, &current_instrument) == 0U)
                 return 0U;
-            if (current_instrument == (uint16_t)command->value)
-                return 1U;
             brick6_sampler_runtime_set_multi_instrument(command->entity,
-                                                        (uint16_t)command->value);
+                                                        runtime);
             if ((brick6_sampler_runtime_get_multi_instrument(
                     command->entity, &current_instrument) == 0U)
-                    || (current_instrument != (uint16_t)command->value))
+                    || (current_instrument != runtime))
                 return 0U;
         }
         else
         {
+            uint16_t current_sample = UINT16_MAX;
             brick6_sampler_runtime_set_sample(command->entity,
-                                              (uint16_t)command->value);
+                                              runtime);
+            if (brick6_sampler_runtime_get_sample(
+                    command->entity, &current_sample) == 0U
+                || current_sample != runtime) return 0U;
         }
         return 1U;
     }
@@ -897,21 +907,29 @@ static uint8_t audio_prepared_apply_resource(
     {
         track_audio_runtime_ctx_t ctx;
         if (audio_note_engine_adapter_current_ctx(entity, &ctx) == 0U) return 0U;
+        if (resource->present > PREPARED_AUDIO_SAMPLER_ASSET)
+            return 0U;
+        const uint16_t runtime =
+            (resource->present == PREPARED_AUDIO_SAMPLER_ASSET)
+                ? resource->sampler_runtime : UINT16_MAX;
+        if ((resource->present == PREPARED_AUDIO_SAMPLER_ASSET)
+                && (runtime == UINT16_MAX)) return 0U;
         uint16_t current = UINT16_MAX;
         if (ctx.type == TRACK_RUNTIME_TYPE_MULTI)
         {
-            if ((brick6_sampler_runtime_get_multi_instrument(entity, &current)
-                    != 0U) && (current == resource->sampler_runtime)) return 1U;
             brick6_sampler_runtime_set_multi_instrument(
-                entity, resource->sampler_runtime);
-            if ((resource->sampler_runtime != UINT16_MAX)
+                entity, runtime);
+            if ((runtime != UINT16_MAX)
                     && ((brick6_sampler_runtime_get_multi_instrument(
                         entity, &current) == 0U)
-                        || (current != resource->sampler_runtime))) return 0U;
+                        || (current != runtime))) return 0U;
         }
         else
         {
-            brick6_sampler_runtime_set_sample(entity, resource->sampler_runtime);
+            uint16_t current_sample = UINT16_MAX;
+            brick6_sampler_runtime_set_sample(entity, runtime);
+            if (brick6_sampler_runtime_get_sample(entity, &current_sample) == 0U
+                || current_sample != runtime) return 0U;
         }
         g_audio_state_renderer_rebind_mask |= (uint16_t)(1U << entity);
         return 1U;

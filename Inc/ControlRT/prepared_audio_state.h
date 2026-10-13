@@ -36,6 +36,12 @@ typedef enum
     PREPARED_AUDIO_RESOURCE_WAVETABLE
 } prepared_audio_resource_kind_t;
 
+typedef enum
+{
+    PREPARED_AUDIO_SAMPLER_OFF = 0U,
+    PREPARED_AUDIO_SAMPLER_ASSET
+} prepared_audio_sampler_selection_t;
+
 typedef struct
 {
     uint8_t source;

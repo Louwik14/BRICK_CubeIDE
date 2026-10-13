@@ -158,6 +158,26 @@ static uint8_t ui_param_local_control_get(param_id_t id, uint8_t track,
                 ? PROJECT_CONTROL_ASSET_WAVE_OSC1
                 : PROJECT_CONTROL_ASSET_WAVE_OSC2);
         uint16_t logical = PROJECT_CONTROL_ASSET_NONE;
+        if (id == UI_PARAM_LOCAL_ASSET)
+        {
+            *out_value = 0.0f;
+            if (project_control_track_asset_get_logical(
+                    track, role, &logical) == 0U) return 1U;
+            const uint16_t count = project_control_sampler_choice_count(track);
+            for (uint16_t ordinal = 1U; ordinal < count; ++ordinal)
+            {
+                project_control_sampler_choice_t choice;
+                if (project_control_sampler_choice_at(
+                        track, ordinal, &choice) != 0U
+                    && choice.selection == PROJECT_CONTROL_ASSET_SELECTION_ASSET
+                    && choice.logical_slot == logical)
+                {
+                    *out_value = (float)ordinal;
+                    break;
+                }
+            }
+            return 1U;
+        }
         if (project_control_track_asset_get_logical(track, role, &logical) == 0U)
         {
             *out_value = NAN;
@@ -200,12 +220,19 @@ static uint8_t ui_param_local_control_apply(param_id_t id, uint8_t track,
             count = project_control_list_wavetables(list,
                 SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
         }
-        else if (ui_get_track_type(track) == TRACK_TYPE_MULTI)
-            count = project_control_list_multis(list,
-                SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
         else
-            count = project_control_list_samples(PERSIST_ASSET_SAMPLE_STREAM,
-                list, SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
+        {
+            count = project_control_sampler_choice_count(track);
+            int32_t moved = (int32_t)(current + 0.5f) + delta;
+            if (moved < 0) moved = 0;
+            if (moved >= (int32_t)count) moved = (int32_t)count - 1;
+            project_control_sampler_choice_t choice;
+            return (count != 0U
+                    && project_control_sampler_choice_at(
+                        track, (uint16_t)moved, &choice) != 0U)
+                ? project_control_track_sampler_choice_apply(track, &choice)
+                : 0U;
+        }
         uint16_t pos = 0U; /* Position zero is always the explicit OFF choice. */
         if (isnan(current) == 0)
         {

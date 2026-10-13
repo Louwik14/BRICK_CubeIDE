@@ -49,6 +49,17 @@ asset musical conserve, ni rollback, ni drainage naturel; un echec laisse le
 slot vide. Une note encore tenue n'est pas retriggee et ne rearme ni VCA ni
 filtre: seul le prochain NOTE_ON reel utilise la nouvelle ressource.
 
+La selection sampler est un etat explicite `OFF | ASSET(logical_slot)`, commun
+au catalogue CONTROL, au selecteur UI, au DTO PreparedAudio et a la commande
+CONTROL vers AUDIO. `OFF` est l'entree zero; S0 est le premier asset et ne sert
+jamais de sentinelle. La commande AUDIO encode distinctement `OFF` et
+`ASSET(runtime_id)`, y compris pour le runtime 0. Toute transition OFF vers
+asset, premier chargement compris, publie le binding et valide le runtime sans
+recreer les renderers tenus. La transition vers `OFF` retire voix et lease sans
+recreer de voix. Une reference persistante introuvable reste un asset selectionne
+mais indisponible; sa projection AUDIO effective est `OFF`, ce qui la distingue
+d'un OFF choisi par l'utilisateur.
+
 Les samples et zones Multi occupent des slots globaux disperses. Chaque
 instrument enumere explicitement ses IDs; chaque zone reference directement son
 `multi_sample_id`. DELETE rend exactement ces slots au pool apres fence. Les

@@ -78,10 +78,11 @@ Les cartes MIDI FX cataloguees suivent le rendu Param commun: la valeur et le
 bit d'inversion proviennent ensemble du p-lock du step tenu, puis le formatter
 MIDI FX ne fait que nommer et mettre en forme cette valeur effective.
 
-La troisieme sous-page TONE d'une track STREAM est `RANGE`: P1 adresse
-`PARAM_SAMPLER_START`, P2 adresse `PARAM_SAMPLER_LENGTH` affiche comme `Length`,
-P3 et P4 restent libres. Ces deux controles utilisent le catalogue Param commun
-(edition, p-lock et Matrix); ils ne constituent pas des controles UI speciaux.
+Les deux premieres sous-pages TONE d'une track STREAM conservent les identites
+Param et ne changent que leur projection UI. `PLAY` adresse SAMPLE, MODE, GAIN et
+TUNE sur P1..P4. `LOOP` adresse START, LENGTH, LOOP et SLICE sur P1..P4. Ces
+controles utilisent le catalogue Param commun (edition, p-lock et Matrix); ils
+ne constituent pas des controles UI speciaux.
 
 La page MIDI FX expose directement quatre sous-pages fixes: GENERATOR, VOICER,
 SCALER et TRIG. Chaque sous-page adresse quatre parametres connus; P4 porte le

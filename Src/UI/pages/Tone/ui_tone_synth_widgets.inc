@@ -1069,15 +1069,20 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             if ((id == UI_PARAM_LOCAL_ASSET)
                     && (out_value != NULL) && (out_value_len > 0U))
             {
-                const uint16_t logical = (isnan(value) != 0)
-                    ? PROJECT_CONTROL_ASSET_NONE
-                    : (uint16_t)((value < 0.0f) ? 0U : value + 0.5f);
+                project_control_sampler_choice_t choice;
+                const uint8_t has_selection = (uint8_t)(
+                    isfinite(value) && value >= 0.0f
+                    && project_control_sampler_choice_at(
+                        active_track, (uint16_t)(value + 0.5f), &choice) != 0U
+                    && choice.selection == PROJECT_CONTROL_ASSET_SELECTION_ASSET);
                 uint16_t runtime = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
                 const sample_global_slot_t *asset = NULL;
                 sample_resolved_source_t source;
                 sample_resolved_source_init(&source);
-                if (project_control_resolve_sample_runtime_kind(
-                        PERSIST_ASSET_SAMPLE_STREAM, logical, &runtime) != 0U)
+                if (has_selection != 0U
+                    && project_control_resolve_sample_runtime_kind(
+                        PERSIST_ASSET_SAMPLE_STREAM,
+                        choice.logical_slot, &runtime) != 0U)
                     asset = sample_global_pool_get_slot(runtime);
                 if ((asset == NULL)
                         || (asset->kind != SAMPLE_GLOBAL_KIND_CLASSIC)
@@ -1087,8 +1092,8 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                         || (source.total_frames == 0U))
                     (void)snprintf(out_value, out_value_len, "OFF");
                 else
-                    (void)snprintf(out_value, out_value_len, "S%03u",
-                                   (unsigned int)logical);
+                    (void)snprintf(out_value, out_value_len, "S%u",
+                                   (unsigned int)choice.logical_slot);
             }
             (void)slot;
             return 1U;
@@ -1096,31 +1101,10 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
     }
 
     if ((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)
-            && (ui_get_track_type(active_track) == TRACK_TYPE_STREAM)
-            && (id == UI_PARAM_LOCAL_ASSET))
-    {
-        if ((out_name != NULL) && (out_name_len > 0U))
-            (void)snprintf(out_name, out_name_len, "SAMPLE");
-        if ((out_value != NULL) && (out_value_len > 0U))
-        {
-            if (isnan(value) != 0)
-                (void)snprintf(out_value, out_value_len, "OFF");
-            else
-                (void)snprintf(out_value, out_value_len, "S%03u",
-                               (unsigned int)((value < 0.0f) ? 0U
-                                   : (uint16_t)(value + 0.5f)));
-        }
-        (void)slot;
-        return 1U;
-    }
-
-    if ((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)
             && (ui_get_track_type(active_track) == TRACK_TYPE_MULTI))
     {
         if (id == UI_PARAM_LOCAL_ASSET)
         {
-            float selector = 0.0f;
-
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "INST");
@@ -1128,11 +1112,16 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
 
             if ((out_value != NULL) && (out_value_len > 0U))
             {
-                const uint8_t has_selection =
-                    (!isnan(selector = ui_param_get_active_track_display_value(
-                        UI_PARAM_LOCAL_ASSET, active_track)))
-                    && (ui_template_tone_multi_logical_label(
-                            (uint16_t)(selector + 0.5f), out_value, out_value_len) != 0U);
+                const float selector = ui_param_get_active_track_display_value(
+                    UI_PARAM_LOCAL_ASSET, active_track);
+                project_control_sampler_choice_t choice;
+                const uint8_t has_selection = (uint8_t)(
+                    isfinite(selector) && selector >= 0.0f
+                    && project_control_sampler_choice_at(active_track,
+                        (uint16_t)(selector + 0.5f), &choice) != 0U
+                    && choice.selection == PROJECT_CONTROL_ASSET_SELECTION_ASSET
+                    && ui_template_tone_multi_logical_label(
+                        choice.logical_slot, out_value, out_value_len) != 0U);
                 if (has_selection == 0U)
                 {
                     (void)snprintf(out_value, out_value_len, "OFF");

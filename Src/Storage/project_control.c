@@ -43,6 +43,8 @@ CONTROL_STATE_SDRAM static persist_control_asset_ref_t
     g_track_assets[BRICK_ENTITY_CAPACITY][PROJECT_CONTROL_ASSET_ROLE_COUNT];
 static project_control_asset_availability_t
     g_track_asset_availability[BRICK_ENTITY_CAPACITY][PROJECT_CONTROL_ASSET_ROLE_COUNT];
+static uint8_t
+    g_track_asset_selection[BRICK_ENTITY_CAPACITY][PROJECT_CONTROL_ASSET_ROLE_COUNT];
 
 typedef struct {
     project_control_wavetable_load_result_t result;
@@ -192,7 +194,7 @@ static void project_control_fill_default_macros(persist_control_macros_t *out)
 }
 void project_control_reset_macros(void){param_macro_reset();project_control_fill_default_macros(&g_macros);}
 uint8_t project_control_get_default_macros(persist_control_macros_t *out){if(out==NULL)return 0U;project_control_fill_default_macros(out);return 1U;}
-void project_control_reset_asset_banks(void){memset(g_wavetable_bank,0,sizeof(g_wavetable_bank));memset(g_multi_bank,0,sizeof(g_multi_bank));memset(g_unavailable_assets,0,sizeof(g_unavailable_assets));g_unavailable_asset_count=0U;memset(g_track_assets,0,sizeof(g_track_assets));memset(g_track_asset_availability,0,sizeof(g_track_asset_availability));for(uint8_t entity=0U;entity<BRICK_ENTITY_CAPACITY;++entity)control_music_output_bind_multi_instrument(entity,MULTI_SAMPLE_POOL_INVALID_ID);}
+void project_control_reset_asset_banks(void){memset(g_wavetable_bank,0,sizeof(g_wavetable_bank));memset(g_multi_bank,0,sizeof(g_multi_bank));memset(g_unavailable_assets,0,sizeof(g_unavailable_assets));g_unavailable_asset_count=0U;memset(g_track_assets,0,sizeof(g_track_assets));memset(g_track_asset_availability,0,sizeof(g_track_asset_availability));memset(g_track_asset_selection,0,sizeof(g_track_asset_selection));for(uint8_t entity=0U;entity<BRICK_ENTITY_CAPACITY;++entity)control_music_output_bind_multi_instrument(entity,MULTI_SAMPLE_POOL_INVALID_ID);}
 void project_control_init(void){project_control_reset_macros();project_control_reset_asset_banks();memset(&g_wavetable_load,0,sizeof(g_wavetable_load));audio_wave_table_projection_init();}
 uint8_t project_control_get_macro_lock(uint8_t macro,uint8_t lock,project_control_macro_lock_t*out){if(out==NULL||macro>=PERSIST_CONTROL_MACRO_COUNT||lock>=PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;const persist_control_macro_t*m=&g_macros.macros[macro];if(lock>=m->lock_count){*out=(project_control_macro_lock_t){0xFFU,PARAM_COUNT,0.0f};return 1U;}if(persist_key_param_from_disk(m->locks[lock].parameter,&out->param)==0U)return 0U;out->track=m->locks[lock].entity;out->target_value=m->locks[lock].target_value;return 1U;}
 uint8_t project_control_set_macro_lock(uint8_t macro,uint8_t lock,const project_control_macro_lock_t*in)
@@ -526,11 +528,95 @@ uint8_t project_control_has_multi(uint16_t logical){return bank_has(g_multi_bank
 uint16_t project_control_list_samples(uint32_t kind,uint16_t*out,uint16_t capacity){uint16_t n=0U;if(kind!=PERSIST_ASSET_SAMPLE_STREAM||out==NULL)return 0U;for(uint16_t i=0U;i<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS&&n<capacity;++i)if(sample_global_pool_get_slot(i)->kind==SAMPLE_GLOBAL_KIND_CLASSIC)out[n++]=i;return n;}
 uint16_t project_control_list_wavetables(uint16_t*out,uint16_t capacity){return bank_list(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,0U,out,capacity);}
 uint16_t project_control_list_multis(uint16_t*out,uint16_t capacity){return bank_list(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,0U,out,capacity);}
+uint16_t project_control_sampler_choice_count(uint8_t entity)
+{
+    track_runtime_descriptor_t descriptor;
+    if (track_runtime_get_descriptor(entity, &descriptor) == 0U) return 0U;
+    if (descriptor.type == TRACK_RUNTIME_TYPE_STREAM)
+    {
+        uint16_t count = 1U;
+        for (uint16_t logical = 0U;
+             logical < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS; ++logical)
+            if (sample_global_pool_get_slot(logical)->kind
+                    == SAMPLE_GLOBAL_KIND_CLASSIC
+                && sample_cache_is_ready(logical) != 0U)
+                ++count;
+        return count;
+    }
+    if (descriptor.type != TRACK_RUNTIME_TYPE_MULTI) return 0U;
+    uint16_t count = 1U;
+    for (uint16_t logical = 0U;
+         logical < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++logical)
+        if (g_multi_bank[logical].used != 0U
+            && g_multi_bank[logical].runtime != PROJECT_CONTROL_INVALID_RUNTIME)
+            ++count;
+    return count;
+}
+
+uint8_t project_control_sampler_choice_at(
+    uint8_t entity, uint16_t ordinal, project_control_sampler_choice_t *out)
+{
+    if (out == NULL) return 0U;
+    track_runtime_descriptor_t descriptor;
+    if (track_runtime_get_descriptor(entity, &descriptor) == 0U) return 0U;
+    if (ordinal == 0U)
+    {
+        *out = (project_control_sampler_choice_t){
+            .selection = PROJECT_CONTROL_ASSET_SELECTION_OFF,
+            .asset_kind = 0U,
+            .logical_slot = PROJECT_CONTROL_ASSET_NONE
+        };
+        return 1U;
+    }
+    --ordinal;
+    if (descriptor.type == TRACK_RUNTIME_TYPE_STREAM)
+    {
+        for (uint16_t logical = 0U;
+             logical < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS; ++logical)
+            if (sample_global_pool_get_slot(logical)->kind
+                    == SAMPLE_GLOBAL_KIND_CLASSIC
+                && sample_cache_is_ready(logical) != 0U)
+            {
+                if (ordinal-- != 0U) continue;
+                *out = (project_control_sampler_choice_t){
+                    .selection = PROJECT_CONTROL_ASSET_SELECTION_ASSET,
+                    .asset_kind = PERSIST_ASSET_SAMPLE_STREAM,
+                    .logical_slot = logical
+                };
+                return 1U;
+            }
+        return 0U;
+    }
+    if (descriptor.type != TRACK_RUNTIME_TYPE_MULTI) return 0U;
+    for (uint16_t logical = 0U;
+         logical < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++logical)
+        if (g_multi_bank[logical].used != 0U
+            && g_multi_bank[logical].runtime != PROJECT_CONTROL_INVALID_RUNTIME)
+        {
+            if (ordinal-- != 0U) continue;
+            *out = (project_control_sampler_choice_t){
+                .selection = PROJECT_CONTROL_ASSET_SELECTION_ASSET,
+                .asset_kind = PERSIST_ASSET_MULTI,
+                .logical_slot = logical
+            };
+            return 1U;
+        }
+    return 0U;
+}
 uint8_t project_control_get_logical_asset(uint32_t kind,uint16_t logical,persist_control_asset_ref_t*out){const project_control_bank_slot_t*bank=NULL;uint16_t capacity=0U;if(out==NULL)return 0U;if(kind==PERSIST_ASSET_SAMPLE_STREAM)return classic_asset(logical,out);if(kind==PERSIST_ASSET_WAVETABLE){bank=g_wavetable_bank;capacity=SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS;}else if(kind==PERSIST_ASSET_MULTI){bank=g_multi_bank;capacity=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS;}if(bank==NULL||logical>=capacity||bank[logical].used==0U||bank[logical].kind!=kind)return 0U;return asset_ref_make_canonical(kind,bank[logical].canonical_path,out);}
 uint8_t project_control_resolve_sample_runtime_kind(uint32_t kind,uint16_t logical,uint16_t*out_runtime){const sample_global_slot_t*s=sample_global_pool_get_slot(logical);if(kind!=PERSIST_ASSET_SAMPLE_STREAM||out_runtime==NULL||s==NULL||s->kind!=SAMPLE_GLOBAL_KIND_CLASSIC)return 0U;return sample_global_pool_resolve_backend(logical,SAMPLE_GLOBAL_KIND_CLASSIC,out_runtime);}
 uint8_t project_control_resolve_sample_runtime(uint16_t logical,uint16_t*out_runtime,uint32_t*out_kind){if(project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_STREAM,logical,out_runtime)==0U)return 0U;if(out_kind!=NULL)*out_kind=PERSIST_ASSET_SAMPLE_STREAM;return 1U;}
 uint8_t project_control_resolve_wavetable_runtime(uint16_t logical,uint16_t*out_runtime){return bank_resolve(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical,out_runtime);}
 uint8_t project_control_resolve_multi_runtime(uint16_t logical,uint16_t*out_runtime){uint16_t runtime,found;if(out_runtime==NULL||logical>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||bank_resolve(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,logical,&runtime)==0U)return 0U;const multi_sample_instrument_t*i=multi_sample_pool_get_instrument(runtime);if(i==NULL||multi_sample_pool_get_state(runtime)!=MULTI_SAMPLE_INSTRUMENT_READY||bank_find(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,PERSIST_ASSET_MULTI,i->index_path,&found)==0U||found!=logical)return 0U;*out_runtime=runtime;return 1U;}
+
+static uint8_t project_control_publish_sampler_off(uint8_t entity)
+{
+    if (control_rt_publish_param_now(entity, CONTROL_AUDIO_SAMPLER_ASSET,
+            CONTROL_AUDIO_SAMPLER_SELECTION_OFF, 0U) == 0U) return 0U;
+    control_music_output_bind_multi_instrument(
+        entity, MULTI_SAMPLE_POOL_INVALID_ID);
+    return 1U;
+}
 
 static uint8_t project_control_publish_sampler_asset(uint8_t entity,
                                                       uint16_t logical)
@@ -550,7 +636,8 @@ static uint8_t project_control_publish_sampler_asset(uint8_t entity,
             return 0U;
     }
     if (control_rt_publish_param_now(entity, CONTROL_AUDIO_SAMPLER_ASSET,
-                                     runtime, 0U) == 0U) return 0U;
+            control_audio_sampler_selection_asset(runtime), 0U) == 0U)
+        return 0U;
     control_music_output_bind_multi_instrument(entity,
         (resolved.descriptor.type == TRACK_RUNTIME_TYPE_MULTI)
             ? runtime : MULTI_SAMPLE_POOL_INVALID_ID);
@@ -564,6 +651,8 @@ uint8_t project_control_track_asset_get(uint8_t entity,
     if ((entity >= BRICK_ENTITY_CAPACITY)
             || (role >= PROJECT_CONTROL_ASSET_ROLE_COUNT)
             || (out_asset == NULL)) return 0U;
+    if (g_track_asset_selection[entity][role]
+            != PROJECT_CONTROL_ASSET_SELECTION_ASSET) return 0U;
     *out_asset = g_track_assets[entity][role];
     return (out_asset->path_length != 0U) ? 1U : 0U;
 }
@@ -586,6 +675,8 @@ uint8_t project_control_track_asset_get_logical(uint8_t entity,
     if ((entity >= BRICK_ENTITY_CAPACITY)
             || (role >= PROJECT_CONTROL_ASSET_ROLE_COUNT)
             || (out_logical == NULL)) return 0U;
+    if (g_track_asset_selection[entity][role]
+            != PROJECT_CONTROL_ASSET_SELECTION_ASSET) return 0U;
     const persist_control_asset_ref_t *const asset = &g_track_assets[entity][role];
     char path[PROJECT_CONTROL_ASSET_PATH_BYTES];
     if ((asset->path_length == 0U)
@@ -618,6 +709,8 @@ uint8_t project_control_track_asset_select_logical(uint8_t entity,
             (uint8_t)(role - PROJECT_CONTROL_ASSET_WAVE_OSC1), logical);
     if (published == 0U) return 0U;
     g_track_assets[entity][role] = asset;
+    g_track_asset_selection[entity][role] =
+        PROJECT_CONTROL_ASSET_SELECTION_ASSET;
     g_track_asset_availability[entity][role] = PROJECT_CONTROL_ASSET_LOADED;
     return 1U;
 }
@@ -633,22 +726,47 @@ uint8_t project_control_republish_track_asset(uint8_t entity)
     if (track_runtime_get_descriptor(entity, &descriptor) == 0U) return 0U;
     const uint8_t sampler = (uint8_t)(descriptor.type == TRACK_RUNTIME_TYPE_STREAM
         || descriptor.type == TRACK_RUNTIME_TYPE_MULTI);
-    if (sampler == 0U) return 1U;
+    if (sampler == 0U)
+    {
+        memset(&g_track_assets[entity][PROJECT_CONTROL_ASSET_SAMPLER], 0,
+            sizeof(g_track_assets[entity][PROJECT_CONTROL_ASSET_SAMPLER]));
+        g_track_asset_selection[entity][PROJECT_CONTROL_ASSET_SAMPLER] =
+            PROJECT_CONTROL_ASSET_SELECTION_OFF;
+        g_track_asset_availability[entity][PROJECT_CONTROL_ASSET_SAMPLER] =
+            PROJECT_CONTROL_ASSET_EMPTY;
+        control_music_output_bind_multi_instrument(
+            entity, MULTI_SAMPLE_POOL_INVALID_ID);
+        return 1U;
+    }
     const persist_control_asset_ref_t *const selected =
         &g_track_assets[entity][PROJECT_CONTROL_ASSET_SAMPLER];
     const uint32_t expected = (descriptor.type == TRACK_RUNTIME_TYPE_MULTI)
         ? PERSIST_ASSET_MULTI : PERSIST_ASSET_SAMPLE_STREAM;
-    if (selected->path_length == 0U || selected->kind != expected
-        || g_track_asset_availability[entity][PROJECT_CONTROL_ASSET_SAMPLER]
+    if (g_track_asset_selection[entity][PROJECT_CONTROL_ASSET_SAMPLER]
+            != PROJECT_CONTROL_ASSET_SELECTION_ASSET)
+        return project_control_publish_sampler_off(entity);
+    if (selected->path_length == 0U || selected->kind != expected)
+    {
+        memset(&g_track_assets[entity][PROJECT_CONTROL_ASSET_SAMPLER], 0,
+            sizeof(g_track_assets[entity][PROJECT_CONTROL_ASSET_SAMPLER]));
+        g_track_asset_selection[entity][PROJECT_CONTROL_ASSET_SAMPLER] =
+            PROJECT_CONTROL_ASSET_SELECTION_OFF;
+        g_track_asset_availability[entity][PROJECT_CONTROL_ASSET_SAMPLER] =
+            PROJECT_CONTROL_ASSET_EMPTY;
+        control_music_output_bind_multi_instrument(
+            entity, MULTI_SAMPLE_POOL_INVALID_ID);
+        return project_control_publish_sampler_off(entity);
+    }
+    if (g_track_asset_availability[entity][PROJECT_CONTROL_ASSET_SAMPLER]
             != PROJECT_CONTROL_ASSET_LOADED)
-        return 1U;
+        return project_control_publish_sampler_off(entity);
     if (project_control_track_asset_can_restore(entity,
             PROJECT_CONTROL_ASSET_SAMPLER, selected) == 0U)
-        return 1U;
+        return project_control_publish_sampler_off(entity);
     uint16_t logical;
     if (project_control_track_asset_get_logical(entity,
             PROJECT_CONTROL_ASSET_SAMPLER, &logical) == 0U)
-        return 1U;
+        return project_control_publish_sampler_off(entity);
     return project_control_publish_sampler_asset(entity, logical);
 }
 
@@ -697,6 +815,24 @@ uint8_t project_control_track_asset_assign_logical(uint8_t entity,
     return 1U;
 }
 
+uint8_t project_control_track_sampler_choice_apply(
+    uint8_t entity, const project_control_sampler_choice_t *choice)
+{
+    if (choice == NULL || entity >= BRICK_ENTITY_CAPACITY) return 0U;
+    if (choice->selection == PROJECT_CONTROL_ASSET_SELECTION_OFF)
+        return project_control_track_asset_clear(
+            entity, PROJECT_CONTROL_ASSET_SAMPLER);
+    if (choice->selection != PROJECT_CONTROL_ASSET_SELECTION_ASSET)
+        return 0U;
+    track_runtime_descriptor_t descriptor;
+    if (track_runtime_get_descriptor(entity, &descriptor) == 0U) return 0U;
+    const uint32_t expected = (descriptor.type == TRACK_RUNTIME_TYPE_MULTI)
+        ? PERSIST_ASSET_MULTI : PERSIST_ASSET_SAMPLE_STREAM;
+    if (choice->asset_kind != expected) return 0U;
+    return project_control_track_asset_assign_logical(
+        entity, PROJECT_CONTROL_ASSET_SAMPLER, choice->logical_slot);
+}
+
 uint8_t project_control_track_asset_clear(uint8_t entity,
                                           project_control_asset_role_t role)
 {
@@ -711,8 +847,7 @@ uint8_t project_control_track_asset_clear(uint8_t entity,
         {
             if (descriptor.type == TRACK_RUNTIME_TYPE_STREAM
                 || descriptor.type == TRACK_RUNTIME_TYPE_MULTI)
-                published = control_rt_publish_param_now(entity,
-                    CONTROL_AUDIO_SAMPLER_ASSET, PROJECT_CONTROL_ASSET_NONE, 0U);
+                published = project_control_publish_sampler_off(entity);
         }
         else if (descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
             published = audio_wave_table_projection_clear_track(entity,
@@ -721,6 +856,8 @@ uint8_t project_control_track_asset_clear(uint8_t entity,
     if (published == 0U) return 0U;
     memset(&g_track_assets[entity][role], 0,
            sizeof(g_track_assets[entity][role]));
+    g_track_asset_selection[entity][role] =
+        PROJECT_CONTROL_ASSET_SELECTION_OFF;
     g_track_asset_availability[entity][role] = PROJECT_CONTROL_ASSET_EMPTY;
     if (role == PROJECT_CONTROL_ASSET_SAMPLER)
         control_music_output_bind_multi_instrument(
@@ -733,8 +870,7 @@ static uint8_t project_control_track_asset_mark_unavailable(
     const persist_control_asset_ref_t *asset)
 {
     const uint8_t silent = (role == PROJECT_CONTROL_ASSET_SAMPLER)
-        ? control_rt_publish_param_now(entity, CONTROL_AUDIO_SAMPLER_ASSET,
-                                       UINT16_MAX, 0U)
+        ? project_control_publish_sampler_off(entity)
         : audio_wave_table_projection_clear_track(entity,
             (uint8_t)(role - PROJECT_CONTROL_ASSET_WAVE_OSC1));
     if (silent == 0U) return 0U;
@@ -742,6 +878,8 @@ static uint8_t project_control_track_asset_mark_unavailable(
         control_music_output_bind_multi_instrument(
             entity, MULTI_SAMPLE_POOL_INVALID_ID);
     g_track_assets[entity][role] = *asset;
+    g_track_asset_selection[entity][role] =
+        PROJECT_CONTROL_ASSET_SELECTION_ASSET;
     g_track_asset_availability[entity][role] =
         PROJECT_CONTROL_ASSET_UNAVAILABLE;
     return 1U;
@@ -841,14 +979,15 @@ uint8_t project_control_track_assets_clear(uint8_t entity)
      * a clear as soon as the target PROGRAM is not WAVE. */
     if (((descriptor.type == TRACK_RUNTIME_TYPE_STREAM)
             || (descriptor.type == TRACK_RUNTIME_TYPE_MULTI))
-            && (control_rt_publish_param_now(entity,
-                CONTROL_AUDIO_SAMPLER_ASSET, UINT16_MAX, 0U) == 0U))
+            && (project_control_publish_sampler_off(entity) == 0U))
         return 0U;
     if ((descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
             && ((audio_wave_table_projection_clear_track(entity, 0U) == 0U)
                 || (audio_wave_table_projection_clear_track(entity, 1U) == 0U)))
         return 0U;
     memset(g_track_assets[entity], 0, sizeof(g_track_assets[entity]));
+    memset(g_track_asset_selection[entity], 0,
+           sizeof(g_track_asset_selection[entity]));
     memset(g_track_asset_availability[entity], 0,
            sizeof(g_track_asset_availability[entity]));
     control_music_output_bind_multi_instrument(

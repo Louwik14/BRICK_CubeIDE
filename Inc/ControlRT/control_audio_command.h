@@ -175,6 +175,25 @@ _Static_assert(sizeof(control_audio_command_t) == 16U,
 #define CONTROL_AUDIO_FX_ORDER                       0xFFD9U
 #define CONTROL_AUDIO_FX_SPATIAL_MODE                0xFFDAU
 #define CONTROL_AUDIO_SAMPLER_ASSET                  0xFFDFU
+#define CONTROL_AUDIO_SAMPLER_SELECTION_OFF          UINT32_C(0)
+#define CONTROL_AUDIO_SAMPLER_SELECTION_ASSET_FLAG   UINT32_C(0x00010000)
+#define CONTROL_AUDIO_SAMPLER_SELECTION_ID_MASK      UINT32_C(0x0000FFFF)
+
+static inline uint32_t control_audio_sampler_selection_asset(uint16_t runtime_id)
+{
+    return CONTROL_AUDIO_SAMPLER_SELECTION_ASSET_FLAG | (uint32_t)runtime_id;
+}
+
+static inline uint8_t control_audio_sampler_selection_is_asset(uint32_t value)
+{
+    return (uint8_t)((value & ~CONTROL_AUDIO_SAMPLER_SELECTION_ID_MASK)
+        == CONTROL_AUDIO_SAMPLER_SELECTION_ASSET_FLAG);
+}
+
+static inline uint16_t control_audio_sampler_selection_runtime(uint32_t value)
+{
+    return (uint16_t)(value & CONTROL_AUDIO_SAMPLER_SELECTION_ID_MASK);
+}
 #define CONTROL_AUDIO_PARAM_TRANSPORT_TEMPO        0xFFDCU
 #define CONTROL_AUDIO_PARAM_TRANSPORT_STEP_Q16     0xFFDDU
 #define CONTROL_AUDIO_PARAM_METRONOME_LEVEL        0xFFDEU

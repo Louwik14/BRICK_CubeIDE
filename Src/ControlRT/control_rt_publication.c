@@ -125,7 +125,12 @@ static uint8_t control_rt_param_is_structural(
         return (uint8_t)((scope == 0U) && (command->value <= 127U));
     if (command->id == CONTROL_AUDIO_SAMPLER_ASSET)
         return (uint8_t)((scope == 0U)
-            && (command->entity < BRICK_ENTITY_CAPACITY));
+            && (command->entity < BRICK_ENTITY_CAPACITY)
+            && ((command->value == CONTROL_AUDIO_SAMPLER_SELECTION_OFF)
+                || (control_audio_sampler_selection_is_asset(
+                        command->value) != 0U
+                    && control_audio_sampler_selection_runtime(
+                        command->value) != UINT16_MAX)));
     if ((command->id >= CONTROL_AUDIO_MOD_ROUTE_SOURCE)
             && (command->id <= CONTROL_AUDIO_FX_SPATIAL_MODE))
     {

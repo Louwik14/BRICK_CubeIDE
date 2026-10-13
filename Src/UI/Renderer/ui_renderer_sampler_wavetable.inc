@@ -21,16 +21,17 @@ static const char *ui_renderer_template_path_basename(const char *path)
 static uint16_t ui_renderer_template_sample_selected_global_slot(void)
 {
     const float sample_value = ui_renderer_template_get_param_display_value(UI_PARAM_LOCAL_ASSET);
-    if (isnan(sample_value) != 0)
+    if (!isfinite(sample_value) || sample_value < 0.0f)
         return SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    uint16_t logical_slot = 0U;
-    if (sample_value > 0.0f)
-    {
-        logical_slot = (uint16_t)(sample_value + 0.5f);
-    }
+    project_control_sampler_choice_t choice;
+    if (project_control_sampler_choice_at(
+            ui_renderer_template_get_edit_owner_track(),
+            (uint16_t)(sample_value + 0.5f), &choice) == 0U
+        || choice.selection != PROJECT_CONTROL_ASSET_SELECTION_ASSET)
+        return SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if (project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_STREAM,
-                                                    logical_slot,
+                                                    choice.logical_slot,
                                                     &global_slot) == 0U)
     {
         return SAMPLE_GLOBAL_POOL_INVALID_INDEX;

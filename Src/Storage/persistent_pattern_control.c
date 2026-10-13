@@ -330,11 +330,13 @@ static uint8_t persistent_pattern_diag_validate_static(
                 entity, 0U, PATTERN_DIAG_CODE_DOMAIN, target->resource.kind,
                 expected_resource, PREPARED_AUDIO_RESOURCE_WAVETABLE, type);
         if ((target->resource.kind == PREPARED_AUDIO_RESOURCE_SAMPLER)
-                && ((target->resource.present != 0U)
+                && ((target->resource.present
+                        == PREPARED_AUDIO_SAMPLER_ASSET)
                     != (target->resource.sampler_runtime != UINT16_MAX)))
             pattern_diag_static_failure(PATTERN_DIAG_SUBSYSTEM_RESOURCE,
                 entity, 1U, PATTERN_DIAG_CODE_MISMATCH,
-                target->resource.sampler_runtime, target->resource.present,
+                target->resource.sampler_runtime,
+                target->resource.present,
                 UINT16_MAX, type);
         if (midi_only != 0U && (target->resource.kind
                 != PREPARED_AUDIO_RESOURCE_NONE))
@@ -1110,6 +1112,7 @@ static uint8_t persistent_pattern_prepare_audio(
                     || (type == TRACK_RUNTIME_TYPE_MULTI)))
         {
             target->resource.kind = PREPARED_AUDIO_RESOURCE_SAMPLER;
+            target->resource.present = PREPARED_AUDIO_SAMPLER_OFF;
             target->resource.sampler_runtime = UINT16_MAX;
         }
         else if ((family == TRACK_RUNTIME_FAMILY_SYNTH)
@@ -1253,6 +1256,7 @@ static uint8_t persistent_pattern_finalize_audio_from_control(
                         || (final.program.type == TRACK_RUNTIME_TYPE_MULTI)))
             {
                 final.resource.kind = PREPARED_AUDIO_RESOURCE_SAMPLER;
+                final.resource.present = PREPARED_AUDIO_SAMPLER_OFF;
                 final.resource.sampler_runtime = UINT16_MAX;
             }
             else if ((final.program.family == TRACK_RUNTIME_FAMILY_SYNTH)
@@ -1290,7 +1294,9 @@ static uint8_t persistent_pattern_finalize_audio_from_control(
                     ok = project_control_resolve_sample_runtime_kind(
                         PERSIST_ASSET_SAMPLE_STREAM, logical, &runtime);
                 }
-                if (ok != 0U) final.resource.present = 1U;
+                if (ok != 0U)
+                    final.resource.present =
+                        PREPARED_AUDIO_SAMPLER_ASSET;
             }
             final.resource.sampler_runtime = runtime;
         }

@@ -31,6 +31,17 @@ typedef enum {
     PROJECT_CONTROL_ASSET_UNAVAILABLE
 } project_control_asset_availability_t;
 
+typedef enum {
+    PROJECT_CONTROL_ASSET_SELECTION_OFF = 0,
+    PROJECT_CONTROL_ASSET_SELECTION_ASSET
+} project_control_asset_selection_t;
+
+typedef struct {
+    uint8_t selection;
+    uint32_t asset_kind;
+    uint16_t logical_slot;
+} project_control_sampler_choice_t;
+
 /* Canonical selector value for an explicit unassigned/OFF asset. */
 #define PROJECT_CONTROL_ASSET_NONE UINT16_MAX
 
@@ -92,6 +103,9 @@ uint8_t project_control_has_multi(uint16_t logical);
 uint16_t project_control_list_samples(uint32_t kind,uint16_t *out,uint16_t capacity);
 uint16_t project_control_list_wavetables(uint16_t *out,uint16_t capacity);
 uint16_t project_control_list_multis(uint16_t *out,uint16_t capacity);
+uint16_t project_control_sampler_choice_count(uint8_t entity);
+uint8_t project_control_sampler_choice_at(
+    uint8_t entity, uint16_t ordinal, project_control_sampler_choice_t *out);
 uint8_t project_control_get_logical_asset(uint32_t kind,uint16_t logical,persist_control_asset_ref_t*out);
 uint8_t project_control_resolve_sample_runtime(uint16_t logical,uint16_t*out_runtime_global,uint32_t*out_kind);
 uint8_t project_control_resolve_sample_runtime_kind(uint32_t kind,
@@ -115,6 +129,8 @@ uint8_t project_control_republish_track_asset(uint8_t entity);
 uint8_t project_control_track_asset_assign_logical(uint8_t entity,
                                                    project_control_asset_role_t role,
                                                    uint16_t logical);
+uint8_t project_control_track_sampler_choice_apply(
+    uint8_t entity, const project_control_sampler_choice_t *choice);
 uint8_t project_control_track_asset_clear(uint8_t entity,
                                           project_control_asset_role_t role);
 uint8_t project_control_track_asset_restore(uint8_t entity,
