@@ -211,6 +211,10 @@ attente est un etat transitoire, pas un echec du quiesce.
 PANIC et retrait des gros payloads rendent alors l'ancien Project definitivement
 mort. Le changement de racine Pattern active et `AUDIO_STATE_COMMIT` sont des
 publications techniques post-forward, jamais d'autres commits produit. Apres
+le chargement des assets, chaque reference du Pattern actif doit etre terminale
+et resolue vers son runtime courant. Le Pattern est alors prepare de nouveau sur
+ces identites avant tout commit CONTROL; `PENDING` maintient la machine dans son
+etat cooperatif et une identite incoherente reste une erreur fatale explicite.
 `T_FORWARD`, une erreur locale de fichier asset conserve la reference et la
 configuration Track, publie une source silencieuse et marque l'asset
 `UNAVAILABLE`; elle n'annule pas le Project. Slot, pool, registration,

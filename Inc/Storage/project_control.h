@@ -142,6 +142,8 @@ uint8_t project_control_track_asset_can_restore(
 project_control_asset_result_t project_control_track_asset_restore_status(
     uint8_t entity, project_control_asset_role_t role,
     const persist_control_asset_ref_t *asset);
+project_control_asset_result_t project_control_asset_reference_status(
+    const persist_control_asset_ref_t *asset);
 uint8_t project_control_track_assets_clear(uint8_t entity);
 uint8_t project_control_asset_loads_pending(void);
 

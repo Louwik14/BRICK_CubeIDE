@@ -5,6 +5,7 @@
 #include "Storage/audio_recorder.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/persistent_pattern_control.h"
+#include "Storage/persistent_entity_topology.h"
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/pattern_control_bank.h"
 #include "Storage/pattern_working_bank.h"
@@ -210,6 +211,7 @@ typedef enum
     PROJECT_LOAD_INSTALL_ASSETS,
     PROJECT_LOAD_INSTALL_WAIT_STREAM,
     PROJECT_LOAD_INSTALL_WAIT_WAVETABLE,
+    PROJECT_LOAD_INSTALL_PREPARE_CONTROL,
     PROJECT_LOAD_INSTALL_CONTROL,
     /* Terminal safe state.  Ingress deliberately remains closed. */
     PROJECT_LOAD_FAILED_FORWARD_MEDIA
@@ -1620,6 +1622,32 @@ static uint8_t project_product_pattern_assets_resolved(
     const persist_control_pattern_t *pattern);
 static uint8_t project_product_prevalidate_candidate(
     const persistence_project_restore_workspace_t *restore);
+
+static project_control_asset_result_t project_product_pattern_assets_status(
+    const persist_control_pattern_t *pattern)
+{
+    if (pattern == NULL) return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+    const uint8_t group_active = (uint8_t)(
+        pattern->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type
+            == PERSIST_TYPE_GROUP);
+    for (uint8_t entity = 0U; entity < PERSIST_CONTROL_ENTITY_COUNT; ++entity)
+    {
+        persist_entity_caps_t caps;
+        if (persist_entity_caps_resolve(group_active, entity, &caps) == 0U)
+            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        if (caps.active == 0U) continue;
+        const persist_control_entity_t *const saved = &pattern->entities[entity];
+        for (uint8_t role = 0U; role < saved->asset_count; ++role)
+        {
+            const project_control_asset_result_t status =
+                project_control_asset_reference_status(&saved->assets[role]);
+            if (status == PROJECT_CONTROL_ASSET_PENDING
+                || status == PROJECT_CONTROL_ASSET_FAILED_INTERNAL)
+                return status;
+        }
+    }
+    return PROJECT_CONTROL_ASSET_READY;
+}
 static uint8_t project_product_build_default_candidate(
     persistence_project_restore_workspace_t *restore)
 {
@@ -2228,8 +2256,25 @@ void project_product_load_service(void)
             project_load_progress_assets(restore,0U,0U);
             return;
         }
-        g_project_load.state=PROJECT_LOAD_INSTALL_CONTROL;
+        g_project_load.state=PROJECT_LOAD_INSTALL_PREPARE_CONTROL;
         project_load_progress_set(PROJECT_LOAD_PROGRESS_ASSETS_END);
+    }
+    if(g_project_load.state==PROJECT_LOAD_INSTALL_PREPARE_CONTROL)
+    {
+        const project_control_asset_result_t asset_status =
+            project_product_pattern_assets_status(&restore->working_pattern);
+        if(asset_status==PROJECT_CONTROL_ASSET_PENDING)return;
+        if(asset_status==PROJECT_CONTROL_ASSET_FAILED_INTERNAL)
+            PROJECT_PRODUCT_FATAL("PROJECT_PATTERN_ASSET_NOT_READY",
+                                  PROJECT_FATAL_ASSET_COMPLETION);
+        persistent_pattern_control_abort_prepared(&restore->prepared_pattern);
+        const persist_codec_result_t pattern_prepare=
+            persistent_pattern_control_prepare(&restore->working_pattern,
+                &restore->prepared_pattern,restore->scratch.groove_build.track);
+        if(pattern_prepare!=PERSIST_CODEC_OK)
+            PROJECT_PRODUCT_FATAL("PROJECT_PATTERN_REPREPARE_FAILED",
+                                  PROJECT_FATAL_PATTERN_APPLY);
+        g_project_load.state=PROJECT_LOAD_INSTALL_CONTROL;
     }
     if(g_project_load.state==PROJECT_LOAD_INSTALL_CONTROL)
     {

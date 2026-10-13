@@ -927,44 +927,61 @@ project_control_asset_result_t project_control_track_asset_restore_status(
     if (asset == NULL || project_control_validate_asset(asset) == 0U
         || entity >= BRICK_ENTITY_CAPACITY || role >= PROJECT_CONTROL_ASSET_ROLE_COUNT)
         return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-    char path[PROJECT_CONTROL_ASSET_PATH_BYTES];
-    memcpy(path, asset->canonical_path, asset->path_length);
-    path[asset->path_length] = '\0';
-    if (unavailable_find_ref(asset, NULL) != 0U)
+    const project_control_asset_result_t status =
+        project_control_asset_reference_status(asset);
+    if (status == PROJECT_CONTROL_ASSET_FAILED)
         return (project_control_track_asset_mark_unavailable(
                     entity, role, asset) != 0U)
             ? PROJECT_CONTROL_ASSET_FAILED
             : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+    if (status != PROJECT_CONTROL_ASSET_READY) return status;
+    char path[PROJECT_CONTROL_ASSET_PATH_BYTES];
+    memcpy(path, asset->canonical_path, asset->path_length);
+    path[asset->path_length] = '\0';
     uint16_t logical = 0U;
     /* Pattern installation only binds assets which LOAD_ASSETS has already
      * made terminal.  Loading here would create a second attempt after P3. */
     if (project_control_find_asset(asset->kind, path, &logical) == 0U)
-        return (project_control_track_asset_mark_unavailable(
-                    entity, role, asset) != 0U)
-            ? PROJECT_CONTROL_ASSET_FAILED
-            : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+    return (project_control_track_asset_select_logical(entity, role, logical) != 0U)
+        ? PROJECT_CONTROL_ASSET_READY : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+}
+
+project_control_asset_result_t project_control_asset_reference_status(
+    const persist_control_asset_ref_t *asset)
+{
+    if (asset == NULL || project_control_validate_asset(asset) == 0U)
+        return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+    if (unavailable_find_ref(asset, NULL) != 0U)
+        return PROJECT_CONTROL_ASSET_FAILED;
+    char path[PROJECT_CONTROL_ASSET_PATH_BYTES];
+    memcpy(path, asset->canonical_path, asset->path_length);
+    path[asset->path_length] = '\0';
+    uint16_t logical = 0U;
+    if (project_control_find_asset(asset->kind, path, &logical) == 0U)
+        return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
     if (asset->kind == PERSIST_ASSET_SAMPLE_STREAM)
-    {
-        const project_control_asset_result_t status = classic_asset_status(logical);
-        if (status != PROJECT_CONTROL_ASSET_READY) return status;
-    }
+        return classic_asset_status(logical);
     if (asset->kind == PERSIST_ASSET_MULTI)
     {
         uint16_t runtime;
-        if (project_control_resolve_multi_runtime(logical, &runtime) == 0U)
-            return (g_multi_bank[logical].pending_runtime != PROJECT_CONTROL_INVALID_RUNTIME)
-                ? PROJECT_CONTROL_ASSET_PENDING
-                : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        if (project_control_resolve_multi_runtime(logical, &runtime) != 0U)
+            return PROJECT_CONTROL_ASSET_READY;
+        return (g_multi_bank[logical].pending_runtime
+                    != PROJECT_CONTROL_INVALID_RUNTIME)
+            ? PROJECT_CONTROL_ASSET_PENDING
+            : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
     }
     if (asset->kind == PERSIST_ASSET_WAVETABLE)
     {
-        if (g_wavetable_bank[logical].pending_runtime != PROJECT_CONTROL_INVALID_RUNTIME)
+        if (g_wavetable_bank[logical].pending_runtime
+                != PROJECT_CONTROL_INVALID_RUNTIME)
             return PROJECT_CONTROL_ASSET_PENDING;
-        if (project_control_wavetable_runtime_valid(logical) == 0U)
-            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        return (project_control_wavetable_runtime_valid(logical) != 0U)
+            ? PROJECT_CONTROL_ASSET_READY
+            : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
     }
-    return (project_control_track_asset_select_logical(entity, role, logical) != 0U)
-        ? PROJECT_CONTROL_ASSET_READY : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+    return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
 }
 
 uint8_t project_control_track_assets_clear(uint8_t entity)
@@ -1256,9 +1273,9 @@ uint8_t project_control_asset_loads_pending(void)
         const sample_global_slot_t *const classic =
             sample_global_pool_get_slot(logical);
         if (classic != NULL && classic->kind == SAMPLE_GLOBAL_KIND_CLASSIC
-            && (sample_cache_get_slot_readiness(logical)
+            && (sample_cache_get_slot_readiness(classic->backend_index)
                     == SAMPLE_CACHE_SLOT_PREPARING
-                || sample_cache_get_slot_readiness(logical)
+                || sample_cache_get_slot_readiness(classic->backend_index)
                     == SAMPLE_CACHE_SLOT_START_PENDING)) return 1U;
         if (g_wavetable_bank[logical].used != 0U
             && g_wavetable_bank[logical].pending_runtime != PROJECT_CONTROL_INVALID_RUNTIME)
