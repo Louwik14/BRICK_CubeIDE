@@ -662,7 +662,7 @@ static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
         return 0U;
     }
 
-    if ((ev->type != UI_EVENT_HALL_PRESS) && (ev->type != UI_EVENT_HALL_RELEASE))
+    if ((ev->type != UI_EVENT_STEP_PRESS) && (ev->type != UI_EVENT_STEP_RELEASE))
     {
         return 0U;
     }
@@ -673,7 +673,7 @@ static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
 static uint8_t ui_core_is_suppressed_hall_press_event_consumed(const ui_event_t *ev)
 {
     if ((ev == 0)
-        || (ev->type != UI_EVENT_HALL_PRESS)
+        || (ev->type != UI_EVENT_STEP_PRESS)
         || (ev->id >= HALL_UI_LANE_COUNT))
     {
         return 0U;

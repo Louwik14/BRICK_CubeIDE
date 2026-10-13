@@ -93,14 +93,14 @@ void ui_event_from_inputs(void)
         const uint8_t pressed = hall_surface_is_pressed(hall);
         if ((g_ui_hall_prev_pressed[hall] == 0U) && (pressed != 0U))
         {
-            ev.type = UI_EVENT_HALL_PRESS;
+            ev.type = UI_EVENT_STEP_PRESS;
             ev.id = hall;
             ev.value = 1;
             ui_event_push(&ev);
         }
         else if ((g_ui_hall_prev_pressed[hall] != 0U) && (pressed == 0U))
         {
-            ev.type = UI_EVENT_HALL_RELEASE;
+            ev.type = UI_EVENT_STEP_RELEASE;
             ev.id = hall;
             ev.value = 0;
             ui_event_push(&ev);

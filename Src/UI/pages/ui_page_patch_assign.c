@@ -780,7 +780,7 @@ static void ui_page_patch_assign_handle_event(const ui_event_t *ev)
         return;
     }
 
-    if (ev->type == UI_EVENT_HALL_PRESS)
+    if (ev->type == UI_EVENT_STEP_PRESS)
     {
         if (ui_page_patch_assign_operation_busy() != 0U)
         {

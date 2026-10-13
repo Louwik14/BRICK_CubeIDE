@@ -112,7 +112,7 @@ uint8_t ui_core_pattern_handle_mode_event(const ui_event_t *ev,
         return 1U;
     }
 
-    if ((ev->type != UI_EVENT_HALL_PRESS) || (ev->id >= HALL_UI_LANE_COUNT))
+    if ((ev->type != UI_EVENT_STEP_PRESS) || (ev->id >= HALL_UI_LANE_COUNT))
     {
         return 0U;
     }

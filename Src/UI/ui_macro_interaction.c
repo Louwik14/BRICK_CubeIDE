@@ -184,11 +184,25 @@ static uint8_t ui_macro_get_lock(uint8_t macro,
     return project_control_get_macro_lock_for_param(macro, track, param, out);
 }
 
+static uint8_t ui_macro_physical_step_is_held(void)
+{
+    for (button_id_t button = BTN_STEP_1; button <= BTN_STEP_16;
+         button = (button_id_t)((uint8_t)button + 1U))
+    {
+        if (button_down(button) != 0U)
+        {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
 uint8_t ui_macro_interaction_note_encoder_delta_with_context(
     const ui_param_encoder_context_t *ctx, uint8_t encoder, int16_t delta)
 {
     if (ctx == NULL || ctx->valid == 0U || encoder >= 4U || delta == 0
-        || g_mode != UI_MACRO_ASSIGN || g_held_macro >= PERSIST_CONTROL_MACRO_COUNT)
+        || g_mode != UI_MACRO_ASSIGN || g_held_macro >= PERSIST_CONTROL_MACRO_COUNT
+        || ui_macro_physical_step_is_held() != 0U)
         return 0U;
     const param_id_t param = ctx->bank.params[encoder];
     if (param >= PARAM_COUNT) return 0U;

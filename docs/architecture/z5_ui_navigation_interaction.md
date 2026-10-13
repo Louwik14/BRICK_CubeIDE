@@ -32,19 +32,19 @@ entree memorise le mode Hall courant et toute sortie restaure exactement ce
 mode. SHIFT + STEP 8 y entre. En LIVE, un tap alterne PRESSURE/TOGGLE apres la
 fenetre de double tap et deux taps ouvrent ASSIGN sans appliquer la bascule du
 premier tap. Depuis ASSIGN, un tap revient au dernier mode LIVE. Les 14 touches
-blanches du clavier Hall pilotent les Scenes et constituent les seuls gestes
-STEP reserves par l'overlay; les autres STEP, le transport, la selection de
-track et les raccourcis restent au sequenceur. La projection LED conserve les
-trigs/playhead et superpose sur les blanches l'etat Scene: destination presente
-faible, Scene active verte proportionnelle, Scene tenue en ASSIGN orange. La
-navigation de page ou d'ensemble conserve l'overlay et permet d'assigner sur
-toutes les pages disponibles. En
+blanches du clavier Hall pilotent seules les Scenes via le flux `live_event_t`;
+les STEP physiques utilisent exclusivement `UI_EVENT_STEP_PRESS/RELEASE` et
+restent au sequenceur en PRESSURE, TOGGLE et ASSIGN. Les LED STEP appartiennent
+donc au sequenceur (trigs, p-locks et playhead) et ne projettent aucun etat
+Scene. La navigation de page ou d'ensemble conserve l'overlay et permet
+d'assigner sur toutes les pages disponibles. En
 ASSIGN, maintenir une blanche puis tourner un encodeur cree ou met a jour la
 valeur cible absolue du parametre selon les memes bornes, politiques de valeur
 et owners que l'edition normale. SHIFT + encodeur efface cette cible. Le
 relachement de la blanche ferme la capture sans modifier les autres locks. Le
-label et la valeur d'une destination tenue reprennent l'inversion p-lock; un
-STEP tenu sans Scene tenue conserve l'edition d'un vrai p-lock.
+label et la valeur d'une destination tenue reprennent l'inversion p-lock. Un
+STEP physique tenu donne toujours priorite au vrai p-lock, y compris lorsqu'une
+touche Scene est tenue simultanement en ASSIGN.
 
 Audio REC est une page modale Low-Cost, mais les boutons d'ensemble restent
 navigables lorsqu'une destination est disponible. La navigation standard ferme

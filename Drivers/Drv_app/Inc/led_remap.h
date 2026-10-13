@@ -16,7 +16,7 @@ static inline bool led_remap_is_param_led(led_id_t led)
     return ((uint32_t)led >= (uint32_t)LED_PARAM_1) && ((uint32_t)led <= (uint32_t)LED_PARAM_8);
 }
 
-static inline bool led_remap_is_hall_led(led_id_t led)
+static inline bool led_remap_is_step_led(led_id_t led)
 {
     return ((uint32_t)led >= (uint32_t)LED_STEP_1) && ((uint32_t)led <= (uint32_t)LED_STEP_16);
 }
@@ -36,14 +36,14 @@ static inline led_id_t led_remap_param_led_for_button(button_id_t button)
     return LED_COUNT_TOTAL;
 }
 
-static inline led_id_t led_remap_led_for_hall(uint8_t hall)
+static inline led_id_t led_remap_led_for_step(uint8_t step)
 {
-    if (hall >= HALL_KEY_COUNT)
+    if (step >= HALL_UI_LANE_COUNT)
     {
         return LED_COUNT_TOTAL;
     }
 
-    return (led_id_t)((uint32_t)LED_STEP_1 + (uint32_t)hall);
+    return (led_id_t)((uint32_t)LED_STEP_1 + (uint32_t)step);
 }
 
 static inline led_id_t led_remap_seq_led(uint8_t index)
@@ -69,7 +69,7 @@ static inline uint8_t led_remap_physical_index(led_id_t led, uint8_t *physical_i
     {
         *physical_index = 0U;
     }
-    else if (led_remap_is_hall_led(led))
+    else if (led_remap_is_step_led(led))
     {
         *physical_index = (uint8_t)(1U + ((uint32_t)led - (uint32_t)LED_STEP_1));
     }

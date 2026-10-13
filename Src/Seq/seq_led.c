@@ -80,7 +80,7 @@ void seq_led_render_active_track_page(uint8_t track)
 
     for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
     {
-        const led_id_t led = led_remap_led_for_hall(hall);
+        const led_id_t led = led_remap_led_for_step(hall);
         const uint8_t step = (uint8_t)(base_step + hall);
         if (seq_edit_lowcost_length_flash_step_visible(track, step) != 0U)
         {
@@ -117,6 +117,6 @@ void seq_led_render_active_track_page(uint8_t track)
     }
 
     const uint8_t hall = (uint8_t)(playhead - base_step);
-    const led_id_t led = led_remap_led_for_hall(hall);
+    const led_id_t led = led_remap_led_for_step(hall);
     led_layer_set(LED_LAYER_SEQ_CURSOR, led, SEQ_LED_WHITE, SEQ_LED_WHITE, SEQ_LED_WHITE);
 }

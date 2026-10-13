@@ -11,8 +11,9 @@ typedef enum
     UI_EVENT_ENCODER,
     UI_EVENT_BUTTON_PRESS,
     UI_EVENT_BUTTON_RELEASE,
-    UI_EVENT_HALL_PRESS,
-    UI_EVENT_HALL_RELEASE
+    /* Physical STEP surface. Hall keyboard edges use live_event_t instead. */
+    UI_EVENT_STEP_PRESS,
+    UI_EVENT_STEP_RELEASE
 
 } ui_event_type_t;
 

@@ -409,7 +409,7 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
         return 0U;
     }
 
-    if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < SEQ_LANE_CAPACITY))
+    if ((ev->type == UI_EVENT_STEP_PRESS) && (ev->id < SEQ_LANE_CAPACITY))
     {
         if (ui_core_mute_owns_track_hall(ev->id, *io_shift_down) == 0U)
         {
@@ -432,7 +432,7 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
         return 1U;
     }
 
-    if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < SEQ_LANE_CAPACITY))
+    if ((ev->type == UI_EVENT_STEP_RELEASE) && (ev->id < SEQ_LANE_CAPACITY))
     {
         if (ui_core_mute_owns_track_hall(ev->id, *io_shift_down) == 0U)
         {

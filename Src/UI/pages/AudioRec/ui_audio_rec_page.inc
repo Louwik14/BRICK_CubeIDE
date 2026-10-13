@@ -40,7 +40,7 @@ static void ui_page_audio_rec_handle_event(const ui_event_t *ev)
         return;
     }
 
-    if((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < SAMPLE_CAPTURE_TRACK_COUNT))
+    if((ev->type == UI_EVENT_STEP_PRESS) && (ev->id < SAMPLE_CAPTURE_TRACK_COUNT))
     {
         (void)sample_capture_model_toggle_route(ev->id);
     }
@@ -84,7 +84,7 @@ static void ui_page_rec_edit_handle_event(const ui_event_t *ev)
         return;
     }
 
-    if(ev->type == UI_EVENT_HALL_PRESS)
+    if(ev->type == UI_EVENT_STEP_PRESS)
     {
         sample_capture_state_t state;
         sample_capture_model_get_state(&state);
