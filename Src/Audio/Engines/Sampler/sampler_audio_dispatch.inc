@@ -110,15 +110,9 @@ void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id)
         return;
     }
 
-    brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
-    if (clip->sample_id != sample_id)
-    {
-        /* A source transition owns the complete reader lifetime, including
-         * cold/pending and partially torn-down states.  Always retire its
-         * lease before publishing the next selector. */
-        brick6_sampler_runtime_clip_stop_playback(track_id);
-    }
-    clip->sample_id = sample_id;
+    /* This selector controls the next trigger. Existing readers retain their
+     * key and lease until their normal NOTE OFF/STOP. */
+    g_sampler_clip_runtime[track_id].sample_id = sample_id;
 }
 
 uint8_t brick6_sampler_runtime_get_sample(uint8_t track_id,
@@ -153,11 +147,9 @@ void brick6_sampler_runtime_set_multi_instrument(uint8_t track_id, uint16_t inst
         return;
     }
 
-    if (g_sampler_multi_track_state[track_id].instrument_id != instrument_id)
-    {
-        brick6_sampler_runtime_multi_stop_track(track_id);
-        g_sampler_multi_track_state[track_id].instrument_id = instrument_id;
-    }
+    /* Existing voices retain their instrument/sample identities and leases;
+     * only subsequent NOTE ON admission observes this selector. */
+    g_sampler_multi_track_state[track_id].instrument_id = instrument_id;
 }
 
 void brick6_sampler_runtime_stop_multi_instrument(uint16_t instrument_id)

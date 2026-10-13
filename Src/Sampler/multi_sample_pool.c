@@ -30,6 +30,8 @@ static CTRL_STATE uint8_t
     g_multi_retire_stop_committed[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
 static CTRL_STATE uint32_t
     g_multi_retire_fence_head[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
+static CTRL_STATE uint8_t
+    g_multi_retire_graceful[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
 static CTRL_STATE uint8_t g_multi_retire_invariant_failed;
 static CTRL_STATE uint8_t g_multi_clear_active;
 
@@ -173,6 +175,7 @@ void multi_sample_pool_reset(void)
            sizeof(g_multi_retire_stop_committed));
     memset(g_multi_retire_fence_head, 0,
            sizeof(g_multi_retire_fence_head));
+    memset(g_multi_retire_graceful, 0, sizeof(g_multi_retire_graceful));
     g_multi_retire_invariant_failed = 0U;
     memset(g_multi_instruments, 0, sizeof(g_multi_instruments));
     memset(g_multi_samples, 0, sizeof(g_multi_samples));
@@ -429,6 +432,25 @@ uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id)
     return 1U;
 }
 
+uint8_t multi_sample_pool_retire_replaced(uint16_t instrument_id,
+                                          uint32_t fifo_fence)
+{
+    if (multi_sample_instrument_id_valid(instrument_id) == 0U
+        || g_multi_instruments[instrument_id].used == 0U
+        || g_multi_instruments[instrument_id].desc.state
+            != MULTI_SAMPLE_INSTRUMENT_READY)
+        return 0U;
+    control_music_output_retire_multi_instrument(instrument_id);
+    __DMB();
+    g_multi_instruments[instrument_id].desc.state =
+        MULTI_SAMPLE_INSTRUMENT_RETIRING;
+    g_multi_retire_graceful[instrument_id] = 1U;
+    g_multi_retire_stop_committed[instrument_id] = 1U;
+    g_multi_retire_fence_head[instrument_id] = fifo_fence;
+    __DMB();
+    return 1U;
+}
+
 void multi_sample_pool_retire_all(void)
 {
     for (uint16_t i = 0U; i < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++i)
@@ -473,6 +495,7 @@ void multi_sample_pool_service_retire(void)
         if (leased != 0U) continue;
         g_multi_retire_stop_committed[i] = 0U;
         g_multi_retire_fence_head[i] = 0U;
+        g_multi_retire_graceful[i] = 0U;
         (void)multi_sample_pool_finalize_clear_instrument(i);
     }
 }

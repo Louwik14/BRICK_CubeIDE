@@ -7,6 +7,7 @@
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_port.h"
 #include "Sampler/sample_stream_manager.h"
+#include "Sampler/sample_stream_fatfs_map.h"
 #include "Sampler/sample_cache.h"
 #include "Storage/project_control.h"
 #include "Storage/sd_access_gate.h"
@@ -58,6 +59,12 @@ SDRAM_MULTI_LOAD static multi_sample_prefill_plan_t
     g_multi_prefill_plans[MULTI_SAMPLE_MAX_SAMPLES];
 static multi_sample_prefill_state_t g_multi_prefill;
 static uint16_t g_multi_register_index;
+static uint8_t g_multi_index_pending;
+static uint8_t g_multi_index_ready;
+SDRAM_MULTI_LOAD static multi_sample_index_t g_multi_index_value;
+SDRAM_MULTI_LOAD ALIGN32 static sample_stream_coop_file_t g_multi_sample_file;
+static uint8_t g_multi_sample_file_active;
+SDRAM_MULTI_LOAD static char g_multi_register_path[MULTI_SAMPLE_LOADER_PATH_MAX];
 
 static uint8_t multi_loader_complete_already_ready(uint16_t logical_id,
                                                     const char *index_path,
@@ -86,6 +93,12 @@ void multi_sample_loader_init(void)
     memset(g_multi_load_queue, 0, sizeof(g_multi_load_queue));
     memset(&g_multi_prefill, 0, sizeof(g_multi_prefill));
     g_multi_register_index = 0U;
+    g_multi_index_pending = 0U;
+    g_multi_index_ready = 0U;
+    memset(&g_multi_index_value, 0, sizeof(g_multi_index_value));
+    sample_stream_coop_file_init(&g_multi_sample_file);
+    g_multi_sample_file_active = 0U;
+    memset(g_multi_register_path, 0, sizeof(g_multi_register_path));
 }
 
 static uint8_t multi_loader_copy_text(char *dst, uint32_t dst_size, const char *src)
@@ -276,6 +289,14 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
                                                0U);
     }
     (void)multi_sample_pool_clear_instrument(g_multi_load_status.instrument_id);
+    if (g_multi_sample_file_active != 0U)
+    {
+        sample_stream_coop_file_close(&g_multi_sample_file);
+        sample_stream_coop_file_init(&g_multi_sample_file);
+        g_multi_sample_file_active = 0U;
+    }
+    g_multi_index_pending = 0U;
+    g_multi_index_ready = 0U;
     g_multi_load_active = 0U;
     memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     memset(&g_multi_prefill, 0, sizeof(g_multi_prefill));
@@ -361,23 +382,41 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         return MULTI_SAMPLE_LOAD_SD_BUSY;
     }
 
-    if (multi_loader_runtime_stopped() == 0U)
+    if ((multi_loader_runtime_stopped() == 0U) && (g_multi_index_ready == 0U))
     {
-        g_multi_load_status.last_error = MULTI_SAMPLE_LOAD_TRANSPORT_ACTIVE;
-        return MULTI_SAMPLE_LOAD_TRANSPORT_ACTIVE;
+        if (audio_recorder_is_active() != 0U)
+        {
+            g_multi_load_status.last_error = MULTI_SAMPLE_LOAD_SD_BUSY;
+            return MULTI_SAMPLE_LOAD_SD_BUSY;
+        }
+        if (multi_sample_index_load_cooperative_begin(index_path) == 0U)
+        {
+            g_multi_load_status.last_error = MULTI_SAMPLE_LOAD_SD_BUSY;
+            return MULTI_SAMPLE_LOAD_SD_BUSY;
+        }
+        g_multi_index_pending = 1U;
+        g_multi_load_active = 1U;
+        g_multi_load_status.state = MULTI_SAMPLE_INSTRUMENT_LOADING;
+        return MULTI_SAMPLE_LOAD_OK;
     }
 
     if ((audio_recorder_is_active() != 0U)
-        || (sample_cache_has_pending_sd_work() != 0U)
-        || (sample_stream_manager_has_pending_sd_work() != 0U))
+        || ((multi_loader_runtime_stopped() != 0U)
+            && ((sample_cache_has_pending_sd_work() != 0U)
+                || (sample_stream_manager_has_pending_sd_work() != 0U))))
     {
         g_multi_load_status.last_error = MULTI_SAMPLE_LOAD_SD_BUSY;
         return MULTI_SAMPLE_LOAD_SD_BUSY;
     }
 
     multi_sample_index_t index;
-    const multi_sample_index_result_t load_result =
-        multi_sample_index_load(index_path, &index);
+    const multi_sample_index_result_t load_result = g_multi_index_ready != 0U
+        ? MULTI_SAMPLE_INDEX_OK : multi_sample_index_load(index_path, &index);
+    if (g_multi_index_ready != 0U)
+    {
+        index = g_multi_index_value;
+        g_multi_index_ready = 0U;
+    }
     if (load_result != MULTI_SAMPLE_INDEX_OK)
     {
         g_multi_load_status.last_error = (load_result == MULTI_SAMPLE_INDEX_LIMIT)
@@ -577,6 +616,7 @@ static void multi_loader_start_next_queued(void)
     }
 }
 
+/* 0=error, 1=registered, 2=cooperative work pending. */
 static uint8_t multi_loader_register_next_sample(void)
 {
     const multi_sample_instrument_t *const instrument =
@@ -603,11 +643,47 @@ static uint8_t multi_loader_register_next_sample(void)
     sample_page_stream_info_t stream;
     uint16_t prefill_pages = 0U;
     sample_stream_manager_release_key(key);
-    if (sample_page_cache_port_prepare_stream(
-            key, full_path, &info, sample->total_frames, sample->data_offset,
-            NULL, &stream, &prefill_pages) == 0U)
+    if (multi_loader_runtime_stopped() != 0U)
     {
-        return 0U;
+        if (sample_page_cache_port_prepare_stream(
+                key, full_path, &info, sample->total_frames, sample->data_offset,
+                NULL, &stream, &prefill_pages) == 0U)
+            return 0U;
+    }
+    else
+    {
+        if (g_multi_sample_file_active == 0U)
+        {
+            if (multi_loader_copy_text(g_multi_register_path,
+                    sizeof(g_multi_register_path), full_path) == 0U
+                || sample_stream_coop_file_begin(
+                    &g_multi_sample_file, full_path) == 0U)
+                return 0U;
+            g_multi_sample_file_active = 1U;
+            return 2U;
+        }
+        sample_stream_coop_file_service(&g_multi_sample_file, 16U);
+        if (g_multi_sample_file.state == SAMPLE_STREAM_COOP_ERROR)
+            return 0U;
+        if (g_multi_sample_file.state != SAMPLE_STREAM_COOP_READY)
+            return 2U;
+        sample_stream_physical_map_t map;
+        uint32_t file_size = 0U;
+        memset(&map, 0, sizeof(map));
+        if (sample_stream_coop_file_take_map(
+                &g_multi_sample_file, &map, &file_size) == 0U)
+            return 0U;
+        if (sample_page_cache_port_prepare_stream_mapped(
+                key, g_multi_register_path, &info, sample->total_frames,
+                sample->data_offset, &map, file_size, &stream,
+                &prefill_pages) == 0U)
+        {
+            sample_stream_physical_map_release(&map);
+            return 0U;
+        }
+        sample_stream_coop_file_close(&g_multi_sample_file);
+        sample_stream_coop_file_init(&g_multi_sample_file);
+        g_multi_sample_file_active = 0U;
     }
     if ((stream.format != sample->format)
         || (stream.stride_floats != sample->stride_floats)
@@ -668,12 +744,28 @@ void multi_sample_service_load(uint32_t byte_budget)
         return;
     }
 
-    if (multi_loader_runtime_stopped() == 0U)
+    if (g_multi_index_pending != 0U)
     {
-        multi_loader_set_error(MULTI_SAMPLE_LOAD_TRANSPORT_ACTIVE,
-                               (g_multi_prefill.current_plan < g_multi_prefill.plan_count)
-                                   ? g_multi_prefill_plans[g_multi_prefill.current_plan].sample_id
-                                   : MULTI_SAMPLE_POOL_INVALID_ID);
+        multi_sample_index_load_cooperative_service(16U);
+        multi_sample_index_result_t index_result = MULTI_SAMPLE_INDEX_OK;
+        if (multi_sample_index_load_cooperative_take_result(
+                &g_multi_index_value, &index_result) == 0U) return;
+        g_multi_index_pending = 0U;
+        if (index_result != MULTI_SAMPLE_INDEX_OK)
+        {
+            multi_loader_set_error(
+                (index_result == MULTI_SAMPLE_INDEX_LIMIT)
+                    ? MULTI_SAMPLE_LOAD_INDEX_LIMIT
+                    : MULTI_SAMPLE_LOAD_INDEX_FAIL,
+                MULTI_SAMPLE_POOL_INVALID_ID);
+            return;
+        }
+        g_multi_index_ready = 1U;
+        g_multi_load_active = 0U;
+        const multi_sample_load_result_t result = multi_loader_start_instrument(
+            g_multi_load_request.path, g_multi_load_request.instrument_id);
+        if (result != MULTI_SAMPLE_LOAD_OK)
+            multi_loader_set_error(result, MULTI_SAMPLE_POOL_INVALID_ID);
         return;
     }
     if (byte_budget == 0U) return;
@@ -696,12 +788,14 @@ void multi_sample_service_load(uint32_t byte_budget)
         {
             return;
         }
-        if (multi_loader_register_next_sample() == 0U)
+        const uint8_t register_result = multi_loader_register_next_sample();
+        if (register_result == 0U)
         {
             multi_loader_set_error(MULTI_SAMPLE_LOAD_REGISTER_FAIL,
                 (uint16_t)(g_multi_load_first_sample_id + g_multi_register_index));
             return;
         }
+        if (register_result == 2U) return;
         --work_items;
     }
     if (g_multi_register_index < instrument->sample_count) return;

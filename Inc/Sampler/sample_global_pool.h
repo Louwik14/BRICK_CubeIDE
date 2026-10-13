@@ -90,6 +90,15 @@ typedef struct
     char path[SAMPLE_GLOBAL_POOL_PATH_MAX];
 } sample_global_slot_t;
 
+typedef struct
+{
+    char old_path[SAMPLE_GLOBAL_POOL_PATH_MAX];
+    char new_path[SAMPLE_GLOBAL_POOL_PATH_MAX];
+    uint16_t logical_index;
+    uint16_t old_backend;
+    uint16_t new_backend;
+} sample_classic_hotload_commit_t;
+
 void sample_global_pool_init(void);
 void sample_global_pool_reset(void);
 
@@ -118,6 +127,11 @@ uint8_t sample_global_pool_load_classic_prepared(uint16_t global_index,
 void sample_global_pool_clear_classic(uint16_t global_index);
 sample_classic_slot_state_t sample_global_pool_get_classic_state(uint16_t global_index);
 sample_classic_load_error_t sample_global_pool_get_last_classic_load_error(void);
+void sample_global_pool_service(void);
+uint8_t sample_global_pool_take_classic_hotload_commit(
+    sample_classic_hotload_commit_t *out_commit);
+void sample_global_pool_complete_classic_hotload_publication(
+    uint16_t old_backend, uint64_t fifo_fence);
 uint8_t sample_global_pool_register_multi(uint16_t instrument_id,
                                           const char *path,
                                           uint32_t cost_bytes,

@@ -103,6 +103,8 @@ uint8_t multi_sample_pool_set_index_path(uint16_t instrument_id, const char *pat
 uint8_t multi_sample_pool_set_instrument_format(uint16_t instrument_id,
                                                 sample_audio_format_t format);
 uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id);
+uint8_t multi_sample_pool_retire_replaced(uint16_t instrument_id,
+                                          uint32_t fifo_fence);
 void multi_sample_pool_retire_all(void);
 void multi_sample_pool_service_retire(void);
 uint8_t multi_sample_pool_retire_idle(void);

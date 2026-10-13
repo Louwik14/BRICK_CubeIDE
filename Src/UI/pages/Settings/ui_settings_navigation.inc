@@ -111,7 +111,7 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
                 const uint16_t global_slot = g_ui_settings.sampler_slots[index];
                 const sample_classic_slot_state_t state =
                     (ui_page_settings_stream_backend_from_global(global_slot, &backend_slot) != 0U)
-                        ? sample_global_pool_get_classic_state(backend_slot)
+                        ? sample_global_pool_get_classic_state(global_slot)
                         : SAMPLE_CLASSIC_SLOT_ERROR;
                 const char *state_label = "EMPTY";
                 if (state == SAMPLE_CLASSIC_SLOT_LOADED)

@@ -632,21 +632,6 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
         return;
     }
 
-    /* Gate before stopping voices, clearing a slot or changing UI load state. */
-    if ((seq_runtime_is_running() != 0U)
-        || (seq_runtime_is_start_pending() != 0U))
-    {
-        if (already_blocking != 0U)
-        {
-            ui_page_settings_multi_prepare_finish("STOP AUDIO");
-        }
-        else
-        {
-            ui_page_settings_status("STOP AUDIO");
-        }
-        return;
-    }
-
     if (already_blocking == 0U)
     {
         ui_page_settings_multi_prepare_begin(slot,
@@ -662,30 +647,31 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
         ui_page_settings_multi_prepare_flush_progress();
     }
 
+    uint16_t logical = 0U;
+    uint16_t candidate = slot;
     if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
     {
-        if (project_control_remove_multi(
-                g_ui_settings.sample_slot_selected) == 0U)
+        const int16_t free_candidate = ui_page_settings_multi_find_free_slot();
+        if (free_candidate < 0)
         {
-            ui_page_settings_multi_prepare_finish("UNLOAD BUSY");
+            ui_page_settings_multi_prepare_finish("POOL FULL");
             return;
         }
-        (void)multi_sample_pool_clear_instrument(slot);
+        candidate = (uint16_t)free_candidate;
+        logical = g_ui_settings.sample_slot_selected;
     }
-
-    uint16_t logical = 0U;
-    if (ui_page_settings_multi_register_global(MULTI_SAMPLE_POOL_INVALID_ID,
-                                               entry->index_path,
-                                               &logical) == 0U)
+    else if (ui_page_settings_multi_register_global(
+            MULTI_SAMPLE_POOL_INVALID_ID, entry->index_path, &logical) == 0U)
     {
         ui_page_settings_multi_prepare_finish("BANK FAIL");
         return;
     }
     const multi_sample_load_result_t result =
-        multi_sample_load_instrument(logical,entry->index_path,slot);
+        multi_sample_load_instrument(logical,entry->index_path,candidate);
     if ((result == MULTI_SAMPLE_LOAD_OK) || (result == MULTI_SAMPLE_LOAD_ALREADY_READY))
     {
-        (void)multi_sample_pool_set_index_path(slot, entry->index_path);
+        (void)multi_sample_pool_set_index_path(candidate, entry->index_path);
+        g_ui_settings.confirm_slot = candidate;
         g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_PREPARE;
         g_ui_settings.multi_prepare_progress_done = 0U;
         g_ui_settings.multi_prepare_progress_total = 1U;

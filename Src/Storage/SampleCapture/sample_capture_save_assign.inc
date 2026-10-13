@@ -449,8 +449,7 @@ uint8_t sample_capture_model_assign_selected_take(void)
                                                            &runtime) != 0U)
     {
         if ((type == TRACK_TYPE_STREAM)
-                && (sample_global_pool_get_classic_state(runtime)
-                    != SAMPLE_CLASSIC_SLOT_LOADED))
+                && (sample_cache_is_ready(runtime) == 0U))
         {
             g_sample_capture.assign_loading = 3U;
             g_sample_capture.assign_target = track;

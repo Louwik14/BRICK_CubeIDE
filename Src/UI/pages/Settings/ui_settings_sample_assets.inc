@@ -106,7 +106,9 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
         return;
     }
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-    if (wav_convert_path_needs_canonical(path, 0) != 0U)
+    const uint8_t playing = (uint8_t)((seq_runtime_is_running() != 0U)
+        || (seq_runtime_is_start_pending() != 0U));
+    if ((playing == 0U) && (wav_convert_path_needs_canonical(path, 0) != 0U))
     {
         ui_page_settings_sample_confirm_convert(slot, path,
                                                 UI_SETTINGS_CONVERT_LOAD_CLASSIC);
@@ -117,8 +119,13 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
         const uint16_t global_slot = slot;
         const sample_classic_slot_state_t state =
             sample_global_pool_get_classic_state(global_slot);
-        if ((state == SAMPLE_CLASSIC_SLOT_LOADED)
-            || (state == SAMPLE_CLASSIC_SLOT_PREPARING))
+        if (state == SAMPLE_CLASSIC_SLOT_PREPARING)
+        {
+            g_ui_settings.sample_slot_selected = global_slot;
+            ui_page_settings_status("LOADING");
+            return;
+        }
+        if (state == SAMPLE_CLASSIC_SLOT_LOADED)
         {
             uint16_t logical=0U;
             if(project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_STREAM,path,global_slot,&logical)!=0U)
@@ -210,14 +217,14 @@ static void ui_page_settings_sample_request_replace(uint16_t slot, const char *p
         return;
     }
 
-    ui_page_settings_sample_confirm_replace(backend_slot, path);
+    ui_page_settings_sample_confirm_replace(slot, path);
 }
 
 static void ui_page_settings_sample_confirm_clear(uint16_t slot)
 {
     uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if ((ui_page_settings_stream_backend_from_global(slot, &backend_slot) == 0U)
-        || (sample_global_pool_get_classic_state(backend_slot) == SAMPLE_CLASSIC_SLOT_EMPTY))
+        || (sample_global_pool_get_classic_state(slot) == SAMPLE_CLASSIC_SLOT_EMPTY))
     {
         ui_page_settings_status("SLOT EMPTY");
         return;

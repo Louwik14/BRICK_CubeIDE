@@ -147,7 +147,7 @@ static void ui_page_settings_sample_slot_label(uint16_t global_slot, char *out, 
         return;
     }
 
-    const sample_classic_slot_state_t state = sample_global_pool_get_classic_state(backend_slot);
+    const sample_classic_slot_state_t state = sample_global_pool_get_classic_state(global_slot);
     const sample_global_slot_t *const slot = sample_global_pool_get_slot(global_slot);
     const char *name = (slot != 0) ? strrchr(slot->path, '/') : 0;
     name = (name != 0) ? (name + 1) : ((slot != 0) ? slot->path : "");

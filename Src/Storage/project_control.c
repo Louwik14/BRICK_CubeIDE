@@ -5,6 +5,7 @@
 #include "Track/control_music_output.h"
 #include "Sampler/audio_wave_table_projection_control.h"
 #include "ControlRT/control_audio_command.h"
+#include "ControlRT/control_audio_fifo_control.h"
 #include "ControlRT/control_rt_publication.h"
 
 #include "Param/param_macro.h"
@@ -54,6 +55,18 @@ typedef struct {
 } project_control_wavetable_load_t;
 
 CONTROL_STATE_SDRAM static project_control_wavetable_load_t g_wavetable_load;
+
+typedef struct
+{
+    char old_path[PROJECT_CONTROL_ASSET_PATH_BYTES];
+    char new_path[PROJECT_CONTROL_ASSET_PATH_BYTES];
+    uint16_t logical;
+    uint16_t old_runtime;
+    uint16_t new_runtime;
+    uint8_t active;
+} project_control_multi_replace_t;
+
+CONTROL_STATE_SDRAM static project_control_multi_replace_t g_multi_replace;
 
 static uint8_t bank_set(project_control_bank_slot_t*bank,uint16_t capacity,uint16_t logical,uint32_t kind,const char*path,uint16_t runtime){persist_control_asset_ref_t ref;if(bank==NULL||logical>=capacity||asset_ref_make_canonical(kind,path,&ref)==0U)return 0U;project_control_bank_slot_t next={.used=1U,.kind=kind,.runtime=runtime,.pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME};memcpy(next.canonical_path,ref.canonical_path,ref.path_length);next.canonical_path[ref.path_length]='\0';bank[logical]=next;return 1U;}
 static uint8_t bank_find(const project_control_bank_slot_t*bank,uint16_t capacity,uint32_t kind,const char*path,uint16_t*out_logical){persist_control_asset_ref_t ref;if(bank==NULL||out_logical==NULL||asset_ref_make_canonical(kind,path,&ref)==0U)return 0U;for(uint16_t i=0U;i<capacity;++i)if(bank[i].used!=0U&&bank[i].kind==kind&&strcmp(bank[i].canonical_path,ref.canonical_path)==0){*out_logical=i;return 1U;}return 0U;}
@@ -163,6 +176,8 @@ static project_control_asset_result_t classic_start_failure_result(void)
 }
 
 static project_control_asset_result_t classic_asset_status(uint16_t logical);
+static uint8_t project_control_publish_sampler_asset(uint8_t entity,
+                                                      uint16_t logical);
 
 static uint8_t project_control_wavetable_runtime_valid(uint16_t logical)
 {
@@ -190,7 +205,7 @@ static void project_control_fill_default_macros(persist_control_macros_t *out)
 void project_control_reset_macros(void){param_macro_reset();project_control_fill_default_macros(&g_macros);}
 uint8_t project_control_get_default_macros(persist_control_macros_t *out){if(out==NULL)return 0U;project_control_fill_default_macros(out);return 1U;}
 void project_control_reset_asset_banks(void){memset(g_wavetable_bank,0,sizeof(g_wavetable_bank));memset(g_multi_bank,0,sizeof(g_multi_bank));memset(g_unavailable_assets,0,sizeof(g_unavailable_assets));g_unavailable_asset_count=0U;memset(g_track_assets,0,sizeof(g_track_assets));memset(g_track_asset_availability,0,sizeof(g_track_asset_availability));for(uint8_t entity=0U;entity<BRICK_ENTITY_CAPACITY;++entity)control_music_output_bind_multi_instrument(entity,MULTI_SAMPLE_POOL_INVALID_ID);}
-void project_control_init(void){project_control_reset_macros();project_control_reset_asset_banks();memset(&g_wavetable_load,0,sizeof(g_wavetable_load));audio_wave_table_projection_init();}
+void project_control_init(void){project_control_reset_macros();project_control_reset_asset_banks();memset(&g_wavetable_load,0,sizeof(g_wavetable_load));memset(&g_multi_replace,0,sizeof(g_multi_replace));audio_wave_table_projection_init();}
 uint8_t project_control_get_macro_lock(uint8_t macro,uint8_t lock,project_control_macro_lock_t*out){if(out==NULL||macro>=PERSIST_CONTROL_MACRO_COUNT||lock>=PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;const persist_control_macro_t*m=&g_macros.macros[macro];if(lock>=m->lock_count){*out=(project_control_macro_lock_t){0xFFU,PARAM_COUNT,0.0f};return 1U;}if(persist_key_param_from_disk(m->locks[lock].parameter,&out->param)==0U)return 0U;out->track=m->locks[lock].entity;out->target_value=m->locks[lock].target_value;return 1U;}
 uint8_t project_control_set_macro_lock(uint8_t macro,uint8_t lock,const project_control_macro_lock_t*in)
 {
@@ -284,6 +299,46 @@ static uint8_t project_control_wavetable_completion_valid(
 
 void project_control_asset_load_service(void)
 {
+    sample_classic_hotload_commit_t classic_commit;
+    if (sample_global_pool_take_classic_hotload_commit(&classic_commit) != 0U)
+    {
+        persist_control_asset_ref_t old_asset;
+        persist_control_asset_ref_t new_asset;
+        const uint8_t have_old = (uint8_t)(classic_commit.old_path[0] != '\0'
+            && asset_ref_make_canonical(PERSIST_ASSET_SAMPLE_STREAM,
+                classic_commit.old_path, &old_asset) != 0U);
+        const uint8_t have_new = asset_ref_make_canonical(
+            PERSIST_ASSET_SAMPLE_STREAM, classic_commit.new_path, &new_asset);
+        uint8_t published = have_new;
+        if (published != 0U && have_old != 0U)
+        {
+            for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+            {
+                track_runtime_descriptor_t descriptor;
+                persist_control_asset_ref_t *const selected =
+                    &g_track_assets[entity][PROJECT_CONTROL_ASSET_SAMPLER];
+                if (track_runtime_get_descriptor(entity, &descriptor) == 0U
+                    || descriptor.type != TRACK_RUNTIME_TYPE_STREAM
+                    || selected->kind != old_asset.kind
+                    || selected->path_length != old_asset.path_length
+                    || memcmp(selected->canonical_path, old_asset.canonical_path,
+                        old_asset.path_length) != 0)
+                    continue;
+                if (project_control_publish_sampler_asset(
+                        entity, classic_commit.logical_index) == 0U)
+                { published = 0U; break; }
+                *selected = new_asset;
+            }
+        }
+        if (published != 0U)
+        {
+            unavailable_remove(PERSIST_ASSET_SAMPLE_STREAM,
+                classic_commit.new_path);
+            sample_global_pool_complete_classic_hotload_publication(
+                classic_commit.old_backend,
+                control_audio_fifo_control_head_snapshot());
+        }
+    }
     if(g_wavetable_load.pending!=0U&&g_wavetable_load.valid==0U)
     {
         wavetable_result_t result=WAVETABLE_RESULT_INVALID_ARG;
@@ -356,13 +411,59 @@ uint8_t project_control_wavetable_load_take_result(
     g_wavetable_load.valid=0U;
     return 1U;
 }
-uint8_t project_control_begin_multi_runtime(uint16_t logical,const char*path,uint16_t runtime){uint16_t found;if(path==NULL||logical>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||bank_find(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,PERSIST_ASSET_MULTI,path,&found)==0U||found!=logical)return 0U;g_multi_bank[logical].runtime=PROJECT_CONTROL_INVALID_RUNTIME;g_multi_bank[logical].pending_runtime=runtime;return 1U;}
+uint8_t project_control_begin_multi_runtime(uint16_t logical,const char*path,uint16_t runtime)
+{
+    uint16_t found;
+    if(path==NULL||logical>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS
+        ||runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS
+        ||g_multi_replace.active!=0U)return 0U;
+    if(g_multi_bank[logical].used!=0U
+        &&g_multi_bank[logical].kind==PERSIST_ASSET_MULTI
+        &&g_multi_bank[logical].runtime!=PROJECT_CONTROL_INVALID_RUNTIME)
+    {
+        persist_control_asset_ref_t next;
+        if(runtime==g_multi_bank[logical].runtime
+            ||asset_ref_make_canonical(PERSIST_ASSET_MULTI,path,&next)==0U)
+            return 0U;
+        memset(&g_multi_replace,0,sizeof(g_multi_replace));
+        g_multi_replace.logical=logical;
+        g_multi_replace.old_runtime=g_multi_bank[logical].runtime;
+        g_multi_replace.new_runtime=runtime;
+        (void)snprintf(g_multi_replace.old_path,sizeof(g_multi_replace.old_path),
+            "%s",g_multi_bank[logical].canonical_path);
+        memcpy(g_multi_replace.new_path,next.canonical_path,next.path_length);
+        g_multi_replace.new_path[next.path_length]='\0';
+        g_multi_replace.active=1U;
+        g_multi_bank[logical].pending_runtime=runtime;
+        return 1U;
+    }
+    if(bank_find(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,
+            PERSIST_ASSET_MULTI,path,&found)==0U||found!=logical)return 0U;
+    g_multi_bank[logical].runtime=PROJECT_CONTROL_INVALID_RUNTIME;
+    g_multi_bank[logical].pending_runtime=runtime;
+    return 1U;
+}
 project_control_asset_result_t project_control_complete_multi_runtime(uint16_t logical,const char*path,uint16_t runtime,uint8_t success)
 {
     uint16_t found;
-    if(path==NULL||logical>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||g_multi_bank[logical].pending_runtime!=runtime||bank_find(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,PERSIST_ASSET_MULTI,path,&found)==0U||found!=logical)return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+    const uint8_t replacing=(uint8_t)(g_multi_replace.active!=0U
+        &&g_multi_replace.logical==logical&&g_multi_replace.new_runtime==runtime
+        &&project_control_asset_paths_equal(PERSIST_ASSET_MULTI,
+            g_multi_replace.new_path,path)!=0U);
+    if(path==NULL||logical>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS
+        ||runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS
+        ||g_multi_bank[logical].pending_runtime!=runtime
+        ||(replacing==0U&&(bank_find(g_multi_bank,
+            MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,PERSIST_ASSET_MULTI,path,&found)==0U
+            ||found!=logical)))return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
     if (success == 0U)
     {
+        if(replacing!=0U)
+        {
+            g_multi_bank[logical].pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME;
+            memset(&g_multi_replace,0,sizeof(g_multi_replace));
+            return PROJECT_CONTROL_ASSET_FAILED;
+        }
         (void)bank_remove(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,logical);
         return (unavailable_set(PERSIST_ASSET_MULTI,path)!=0U)
             ? PROJECT_CONTROL_ASSET_FAILED
@@ -377,10 +478,43 @@ project_control_asset_result_t project_control_complete_multi_runtime(uint16_t l
         (void)bank_remove(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,logical);
         return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
     }
+    persist_control_asset_ref_t old_asset,new_asset;
+    if(replacing!=0U
+        &&(asset_ref_make_canonical(PERSIST_ASSET_MULTI,
+                g_multi_replace.old_path,&old_asset)==0U
+            ||asset_ref_make_canonical(PERSIST_ASSET_MULTI,
+                g_multi_replace.new_path,&new_asset)==0U))
+        return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
     g_multi_bank[logical].runtime=runtime;
     g_multi_bank[logical].pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME;
+    if(replacing!=0U)
+        (void)snprintf(g_multi_bank[logical].canonical_path,
+            sizeof(g_multi_bank[logical].canonical_path),"%s",
+            g_multi_replace.new_path);
     unavailable_remove(PERSIST_ASSET_MULTI,path);
-    if (project_control_rebind_multi_tracks(logical) == 0U)
+    if(replacing!=0U)
+    {
+        for(uint8_t entity=0U;entity<BRICK_ENTITY_CAPACITY;++entity)
+        {
+            track_runtime_descriptor_t descriptor;
+            persist_control_asset_ref_t*const selected=
+                &g_track_assets[entity][PROJECT_CONTROL_ASSET_SAMPLER];
+            if(track_runtime_get_descriptor(entity,&descriptor)==0U
+                ||descriptor.type!=TRACK_RUNTIME_TYPE_MULTI
+                ||selected->kind!=old_asset.kind
+                ||selected->path_length!=old_asset.path_length
+                ||memcmp(selected->canonical_path,old_asset.canonical_path,
+                    old_asset.path_length)!=0)continue;
+            if(project_control_publish_sampler_asset(entity,logical)==0U)
+                return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+            *selected=new_asset;
+        }
+        const uint16_t old_runtime=g_multi_replace.old_runtime;
+        memset(&g_multi_replace,0,sizeof(g_multi_replace));
+        (void)multi_sample_pool_retire_replaced(old_runtime,
+            control_audio_fifo_control_head_snapshot());
+    }
+    else if (project_control_rebind_multi_tracks(logical) == 0U)
     {
         (void)bank_remove(g_multi_bank, MULTI_SAMPLE_POOL_MAX_INSTRUMENTS, logical);
         (void)unavailable_set(PERSIST_ASSET_MULTI, path);
@@ -476,7 +610,7 @@ uint16_t project_control_list_samples(uint32_t kind,uint16_t*out,uint16_t capaci
 uint16_t project_control_list_wavetables(uint16_t*out,uint16_t capacity){return bank_list(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,0U,out,capacity);}
 uint16_t project_control_list_multis(uint16_t*out,uint16_t capacity){return bank_list(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,0U,out,capacity);}
 uint8_t project_control_get_logical_asset(uint32_t kind,uint16_t logical,persist_control_asset_ref_t*out){const project_control_bank_slot_t*bank=NULL;uint16_t capacity=0U;if(out==NULL)return 0U;if(kind==PERSIST_ASSET_SAMPLE_STREAM)return classic_asset(logical,out);if(kind==PERSIST_ASSET_WAVETABLE){bank=g_wavetable_bank;capacity=SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS;}else if(kind==PERSIST_ASSET_MULTI){bank=g_multi_bank;capacity=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS;}if(bank==NULL||logical>=capacity||bank[logical].used==0U||bank[logical].kind!=kind)return 0U;return asset_ref_make_canonical(kind,bank[logical].canonical_path,out);}
-uint8_t project_control_resolve_sample_runtime_kind(uint32_t kind,uint16_t logical,uint16_t*out_runtime){const sample_global_slot_t*s=sample_global_pool_get_slot(logical);if(kind!=PERSIST_ASSET_SAMPLE_STREAM||out_runtime==NULL||s==NULL||s->kind!=SAMPLE_GLOBAL_KIND_CLASSIC)return 0U;*out_runtime=logical;return 1U;}
+uint8_t project_control_resolve_sample_runtime_kind(uint32_t kind,uint16_t logical,uint16_t*out_runtime){const sample_global_slot_t*s=sample_global_pool_get_slot(logical);if(kind!=PERSIST_ASSET_SAMPLE_STREAM||out_runtime==NULL||s==NULL||s->kind!=SAMPLE_GLOBAL_KIND_CLASSIC)return 0U;return sample_global_pool_resolve_backend(logical,SAMPLE_GLOBAL_KIND_CLASSIC,out_runtime);}
 uint8_t project_control_resolve_sample_runtime(uint16_t logical,uint16_t*out_runtime,uint32_t*out_kind){if(project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_STREAM,logical,out_runtime)==0U)return 0U;if(out_kind!=NULL)*out_kind=PERSIST_ASSET_SAMPLE_STREAM;return 1U;}
 uint8_t project_control_resolve_wavetable_runtime(uint16_t logical,uint16_t*out_runtime){return bank_resolve(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical,out_runtime);}
 uint8_t project_control_resolve_multi_runtime(uint16_t logical,uint16_t*out_runtime){uint16_t runtime,found;if(out_runtime==NULL||logical>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||bank_resolve(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,logical,&runtime)==0U)return 0U;const multi_sample_instrument_t*i=multi_sample_pool_get_instrument(runtime);if(i==NULL||multi_sample_pool_get_state(runtime)!=MULTI_SAMPLE_INSTRUMENT_READY||bank_find(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,PERSIST_ASSET_MULTI,i->index_path,&found)==0U||found!=logical)return 0U;*out_runtime=runtime;return 1U;}
@@ -494,6 +628,7 @@ static uint8_t project_control_publish_sampler_asset(uint8_t entity,
     else
     {
         if (resolved.descriptor.type != TRACK_RUNTIME_TYPE_STREAM
+            || classic_asset_status(logical) != PROJECT_CONTROL_ASSET_READY
             || project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_STREAM,logical,&runtime)==0U)
             return 0U;
     }
@@ -841,8 +976,12 @@ project_control_asset_result_t project_control_put_asset(
 
 static project_control_asset_result_t classic_asset_status(uint16_t logical)
 {
+    uint16_t backend = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    if (sample_global_pool_resolve_backend(logical,
+            SAMPLE_GLOBAL_KIND_CLASSIC, &backend) == 0U)
+        return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
     const sample_cache_slot_readiness_t readiness =
-        sample_cache_get_slot_readiness(logical);
+        sample_cache_get_slot_readiness(backend);
     if (readiness == SAMPLE_CACHE_SLOT_PLAYABLE)
         return PROJECT_CONTROL_ASSET_READY;
     if ((readiness == SAMPLE_CACHE_SLOT_PREPARING)

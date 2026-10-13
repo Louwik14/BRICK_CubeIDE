@@ -1,6 +1,7 @@
 #include "Storage/brick6_stream_service_task.h"
 
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Storage/sd_access_gate.h"
 #include "Platform/memory_layout.h"
@@ -24,12 +25,10 @@ void brick6_stream_service_task_poll(void)
     /* Monocore Storage service: advance DMA, then consume/submit local jobs. */
     sd_scheduler_runtime_service();
     const uint8_t pending = brick6_stream_service_task_update_gate();
-    if (pending == 0U)
-    {
-        return;
-    }
-
     sample_cache_service(BRICK6_STREAM_SERVICE_BYTE_BUDGET);
+    sample_global_pool_service();
+    if ((pending == 0U) && (sample_cache_prepare_cooperative_active() == 0U))
+        return;
     sd_scheduler_runtime_service();
     brick6_stream_service_task_update_gate();
 }
