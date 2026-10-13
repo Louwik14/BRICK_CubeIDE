@@ -367,20 +367,16 @@ void audio_recorder_service(void)
             {
                 return;
             }
-            uint32_t ready_pages = (frames + SAMPLE_PAGE_FRAMES - 1U)
+            uint32_t startup_pages = (frames + SAMPLE_PAGE_FRAMES - 1U)
                 / SAMPLE_PAGE_FRAMES;
-            if(ready_pages > SAMPLE_PAGE_MIN_READY_PAGES)
-                ready_pages = SAMPLE_PAGE_MIN_READY_PAGES;
+            if(startup_pages > SAMPLE_PAGE_MIN_READY_PAGES)
+                startup_pages = SAMPLE_PAGE_MIN_READY_PAGES;
             (void)sample_page_cache_update_stream_path_key(
                 key, g_audio_recorder.final_path);
-            (void)sample_page_cache_reserve_start_pages_key(key, 0U, ready_pages);
-            uint8_t pages_ready = (ready_pages != 0U) ? 1U : 0U;
-            for(uint32_t page = 0U; page < ready_pages; ++page)
-                if(sample_page_cache_get_page_state_key(key, page)
-                        != SAMPLE_PAGE_READY) pages_ready = 0U;
+            (void)sample_page_cache_reserve_start_pages_key(
+                key, 0U, startup_pages);
             if((sample_page_cache_get_registration_epoch_key(key, &epoch) != 0U)
                     && (audio_recorder_storage_get_map_copy(&map) != 0U)
-                    && (pages_ready != 0U)
                     && (rec_source_publish_building(frames, epoch, &map) != 0U))
             {
                 forget_build_stream();

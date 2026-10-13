@@ -150,12 +150,25 @@ static void snapshot_generation(const rec_source_generation_t *source,
     snapshot->ready = 1U;
 }
 
-static uint8_t target_pages_ready(const rec_source_generation_t *target)
+static uint32_t target_startup_pages(const rec_source_generation_t *target)
 {
     uint32_t pages = (target->frame_count + SAMPLE_PAGE_FRAMES - 1U)
         / SAMPLE_PAGE_FRAMES;
     if (pages > SAMPLE_PAGE_MIN_READY_PAGES) pages = SAMPLE_PAGE_MIN_READY_PAGES;
+    return pages;
+}
+
+static uint8_t target_pages_ready(const rec_source_generation_t *target,
+                                  uint8_t retry_failed)
+{
+    const uint32_t pages = target_startup_pages(target);
     if (pages == 0U) return 0U;
+    if (retry_failed == 0U)
+    {
+        for (uint32_t page = 0U; page < pages; ++page)
+            if (sample_page_cache_get_page_state_key(target->key, page)
+                    == SAMPLE_PAGE_FAILED) return 0U;
+    }
     (void)sample_page_cache_reserve_start_pages_key(target->key, 0U, pages);
     for (uint32_t page = 0U; page < pages; ++page)
         if (sample_page_cache_get_page_state_key(target->key, page)
@@ -168,7 +181,8 @@ uint8_t rec_source_switch_current(uint32_t generation)
     const int8_t target_index = find_generation(generation);
     if ((generation != 0U) && (target_index < 0)) return 0U;
     if ((target_index >= 0)
-            && (target_pages_ready(&g_rec_source_generations[(uint8_t)target_index]) == 0U))
+            && (target_pages_ready(
+                &g_rec_source_generations[(uint8_t)target_index], 0U) == 0U))
         return 0U;
     g_rec_source_preview_slot = REC_SOURCE_INVALID_SLOT;
     if ((g_rec_source_current_slot < REC_SOURCE_SLOT_COUNT)
@@ -429,7 +443,7 @@ void rec_source_service(void)
                 && ((g_rec_source_projection.ready == 0U)
                     || (sample_audio_key_equal(
                         &g_rec_source_projection.key, &current->key) == 0U))
-                && (target_pages_ready(current) != 0U))
+                && (target_pages_ready(current, 0U) != 0U))
             publish_projection(current);
     }
 }
@@ -509,7 +523,7 @@ uint8_t rec_source_publish_building_preview(uint32_t frame_count,
     building->frame_count = frame_count;
     building->registration_epoch = registration_epoch;
     if (g_rec_source_preview_slot == g_rec_source_building_slot) return 1U;
-    if (target_pages_ready(building) == 0U) return 0U;
+    if (target_pages_ready(building, 0U) == 0U) return 0U;
     publish_projection(building);
     g_rec_source_preview_slot = g_rec_source_building_slot;
     return 1U;
@@ -553,7 +567,9 @@ uint8_t rec_source_publish_building(uint32_t frame_count, uint32_t registration_
     g_rec_source_current_slot = building_slot;
     g_rec_source_preview_slot = REC_SOURCE_INVALID_SLOT;
     g_rec_source_building_slot = REC_SOURCE_INVALID_SLOT;
-    if (target_pages_ready(building) != 0U)
+    /* A live BUILDING read may have failed while its append-only extent was
+     * incomplete.  The sealed final file gets one explicit fresh attempt. */
+    if (target_pages_ready(building, 1U) != 0U)
         publish_projection(building);
     else
         publish_projection(NULL);
@@ -663,6 +679,28 @@ uint8_t rec_source_current_snapshot(rec_source_snapshot_t *out_snapshot)
     __DMB();
     return (uint8_t)((out_snapshot->ready != 0U)
         && (g_rec_source_projection.ready != 0U));
+}
+
+rec_source_playback_state_t rec_source_current_playback_state(void)
+{
+    if (g_rec_source_current_slot >= REC_SOURCE_SLOT_COUNT)
+        return REC_SOURCE_PLAYBACK_NONE;
+    const rec_source_generation_t *const current =
+        &g_rec_source_generations[g_rec_source_current_slot];
+    if ((current->state != REC_SOURCE_STATE_CURRENT)
+            || (current->frame_count == 0U)
+            || (current->registration_epoch == 0U))
+        return REC_SOURCE_PLAYBACK_NONE;
+    const uint32_t pages = target_startup_pages(current);
+    if (pages == 0U) return REC_SOURCE_PLAYBACK_FAILED;
+    for (uint32_t page = 0U; page < pages; ++page)
+    {
+        const sample_page_state_t state =
+            sample_page_cache_get_page_state_key(current->key, page);
+        if (state == SAMPLE_PAGE_FAILED) return REC_SOURCE_PLAYBACK_FAILED;
+        if (state != SAMPLE_PAGE_READY) return REC_SOURCE_PLAYBACK_PENDING;
+    }
+    return REC_SOURCE_PLAYBACK_READY;
 }
 
 uint8_t rec_source_current_path(const char **out_path, rec_source_snapshot_t *out_snapshot)

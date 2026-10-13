@@ -28,6 +28,14 @@ typedef enum
     REC_SOURCE_OWNERSHIP_PERSISTENT
 } rec_source_ownership_t;
 
+typedef enum
+{
+    REC_SOURCE_PLAYBACK_NONE = 0,
+    REC_SOURCE_PLAYBACK_PENDING,
+    REC_SOURCE_PLAYBACK_READY,
+    REC_SOURCE_PLAYBACK_FAILED
+} rec_source_playback_state_t;
+
 void rec_source_init(void);
 /* Caller owns the Recorder SD gate and has mounted 0:. */
 uint8_t rec_source_ensure_directory(void);
@@ -51,6 +59,7 @@ void rec_source_release_history_pair(uint32_t before_generation,
                                      uint32_t after_generation);
 uint8_t rec_source_promote_current(const char *persistent_path);
 uint8_t rec_source_current_snapshot(rec_source_snapshot_t *out_snapshot);
+rec_source_playback_state_t rec_source_current_playback_state(void);
 uint8_t rec_source_current_path(const char **out_path,
                                 rec_source_snapshot_t *out_snapshot);
 uint8_t rec_source_current_is_temporary(void);

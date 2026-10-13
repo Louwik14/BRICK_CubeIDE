@@ -174,6 +174,15 @@ static void sample_capture_sync_current_generation(void)
         }
         return;
     }
+    const rec_source_playback_state_t playback =
+        rec_source_current_playback_state();
+    if ((playback == REC_SOURCE_PLAYBACK_FAILED)
+            && ((g_sample_capture.state.error == SAMPLE_CAPTURE_ERROR_NONE)
+                || (g_sample_capture.state.error == SAMPLE_CAPTURE_ERROR_STREAM)))
+        g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_STREAM;
+    else if ((playback != REC_SOURCE_PLAYBACK_FAILED)
+            && (g_sample_capture.state.error == SAMPLE_CAPTURE_ERROR_STREAM))
+        g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     if ((current.key.generation == g_sample_capture.visible_rec_generation)
             && (g_sample_capture.state.take_valid != 0U)
             && (g_sample_capture.state.recorded_frames == current.frame_count)

@@ -115,8 +115,16 @@ Lorsque le fichier est finalisé, le chemin du cache devient le `.WAV`. La
 génération devient `CURRENT`, et donc sauvegardable, dès que l'identité, le
 fichier final et son waveform sont valides. La projection AUDIO est publiée
 immédiatement si les premières pages sont READY, sinon `REC_SOURCE` la publie
-plus tard lorsque le Streamer les a chargées. L'indisponibilité transitoire du
+plus tard lorsque le Streamer les a chargées. Le Stream Manager admet la page
+initiale REC réservée avant de rechercher un nouveau besoin porté par une
+lease, tout en laissant le second slot I/O aux readers actifs. Une charge
+Streamer continue ne peut donc pas affamer l'amorçage d'une génération qui ne
+peut précisément obtenir sa première lease qu'après cet amorçage.
+L'indisponibilité transitoire du
 cache ne peut donc ni retenir `TAKE_READY`, ni rendre le fichier invisible à
+SAVE. Une lecture BUILDING échouée dispose d'une unique nouvelle tentative
+sur le fichier final scellé ; un nouvel échec reste terminal, n'est pas
+réservé en boucle et publie l'erreur `STREAM` sans invalider la prise pour
 SAVE. Undo et Redo continuent d'exiger leurs premières pages READY avant le
 basculement. L'ancien `CURRENT` devient `UNDO`.
 L'expiration de l'unique action audio le rend `RETIRED`; sa clé, son cache et

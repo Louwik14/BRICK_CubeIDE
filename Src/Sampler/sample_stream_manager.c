@@ -497,6 +497,18 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
         }
     }
 
+    /* REC_SOURCE cannot own a voice lease before its startup page is READY.
+     * Admit that reserved page while the bounded I/O queue still has room;
+     * otherwise a permanent stream workload can keep selecting lease-backed
+     * pages and prevent the finalized take from ever becoming playable. */
+    (void)sample_stream_manager_submit_prefill(
+        SAMPLE_AUDIO_DOMAIN_REC, SAMPLE_PAGE_CACHE_REC_ID_CAPACITY);
+    if (sample_stream_io_active_job_count()
+            >= SAMPLE_STREAM_IO_JOB_CAPACITY)
+    {
+        return;
+    }
+
     sample_stream_scheduler_begin_round();
 
     for (;;)
@@ -542,10 +554,8 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
         return;
 
     }
-    if (sample_stream_manager_submit_prefill(
-            SAMPLE_AUDIO_DOMAIN_REC, SAMPLE_PAGE_CACHE_REC_ID_CAPACITY) == 0U)
-        (void)sample_stream_manager_submit_prefill(
-            SAMPLE_AUDIO_DOMAIN_CLASSIC, SAMPLE_CLASSIC_CAPACITY);
+    (void)sample_stream_manager_submit_prefill(
+        SAMPLE_AUDIO_DOMAIN_CLASSIC, SAMPLE_CLASSIC_CAPACITY);
 }
 
 void sample_stream_manager_service(uint32_t byte_budget)
