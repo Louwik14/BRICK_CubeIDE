@@ -386,8 +386,7 @@ static void brick6_sampler_runtime_stream_live_apply(
     live->pending = 0U;
     live->pending_seek = 0U;
     live->pending_start = 0U;
-    if (did_seek != 0U)
-        live->cooldown_frames = BRICK6_SAMPLER_STREAM_LIVE_INTERVAL_FRAMES;
+    live->cooldown_frames = BRICK6_SAMPLER_STREAM_LIVE_INTERVAL_FRAMES;
 }
 
 static void brick6_sampler_runtime_stream_live_schedule(uint8_t track_id)
@@ -424,7 +423,7 @@ static void brick6_sampler_runtime_stream_live_schedule(uint8_t track_id)
             ? loop_begin : (region_end - 1U);
     }
 
-    if ((seek != 0U) && (live->cooldown_frames != 0U)) return;
+    if (live->cooldown_frames != 0U) return;
 
     live->pending_region_begin = region_begin;
     live->pending_region_end = region_end;
