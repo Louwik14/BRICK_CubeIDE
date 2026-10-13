@@ -504,6 +504,7 @@ void ui_template_page_enter(void)
 
 void ui_template_page_leave(void)
 {
+    ui_renderer_template_draw_cancel();
 }
 
 void ui_template_page_handle_event(const ui_event_t *ev)

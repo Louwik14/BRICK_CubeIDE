@@ -688,6 +688,7 @@ static void ui_renderer_template_draw_sample_waveform(const ui_param_seq_plock_f
 
     if (source_ready == 0U)
     {
+        waveform_sampler_request_release();
         return;
     }
     const waveform_result_t waveform = waveform_request(&source, 0U,

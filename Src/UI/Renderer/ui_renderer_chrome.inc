@@ -574,6 +574,7 @@ static void ui_renderer_template_job_prepare(ui_renderer_template_job_t *job)
 
     if (subpage == NULL)
     {
+        waveform_sampler_request_release();
         return;
     }
 
@@ -582,7 +583,13 @@ static void ui_renderer_template_job_prepare(ui_renderer_template_job_t *job)
     const uint8_t wave_classic_page = (uint8_t)((wave_wavetable_subpage != 0U)
         && (family->set_page_count == 2U)
         && (family->set_page_index == 1U));
-    if (ui_renderer_template_is_sample_tone(state, family) != 0U)
+    const uint8_t sample_tone =
+        ui_renderer_template_is_sample_tone(state, family);
+    if (sample_tone == 0U)
+    {
+        waveform_sampler_request_release();
+    }
+    if (sample_tone != 0U)
     {
         job->body = UI_TEMPLATE_BODY_SAMPLER;
         return;
@@ -814,5 +821,9 @@ uint8_t ui_renderer_template_draw_pending(void)
 
 void ui_renderer_template_draw_cancel(void)
 {
+    if (g_ui_renderer_template_job.body == UI_TEMPLATE_BODY_SAMPLER)
+    {
+        waveform_sampler_request_release();
+    }
     g_ui_renderer_template_job.phase = UI_TEMPLATE_RENDER_IDLE;
 }

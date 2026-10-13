@@ -205,6 +205,11 @@ uint8_t waveform_sampler_source(uint16_t sample_id,
     return 1U;
 }
 
+void waveform_sampler_request_release(void)
+{
+    sampler_waveform_store_release_request();
+}
+
 static waveform_tile_t *waveform_find_tile(const waveform_source_t *source,
                                            uint8_t level, uint32_t index)
 {

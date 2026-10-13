@@ -80,9 +80,24 @@ typedef struct
     uint32_t media_epoch;
     sampler_waveform_source_state_t state;
     uint8_t registered;
-    uint8_t requested;
     uint8_t fresh_persistent;
 } sampler_waveform_source_t;
+
+typedef struct
+{
+    sampler_waveform_identity_t identity;
+    uint32_t media_epoch;
+    uint16_t sample_id;
+    uint8_t active;
+} sampler_waveform_request_t;
+
+typedef enum
+{
+    SAMPLER_WAVEFORM_IO_OK = 0,
+    SAMPLER_WAVEFORM_IO_NOT_FOUND,
+    SAMPLER_WAVEFORM_IO_ERROR,
+    SAMPLER_WAVEFORM_IO_CORRUPT
+} sampler_waveform_io_result_t;
 
 typedef struct
 {
@@ -116,6 +131,7 @@ STORAGE_STATE_SDRAM static sampler_waveform_source_t
 STORAGE_STATE_SDRAM static sampler_waveform_ram_record_t
     g_sampler_waveform_ram[SAMPLER_WAVEFORM_RAM_RECORD_COUNT];
 STORAGE_STATE_SDRAM static sampler_waveform_build_t g_sampler_waveform_build;
+STORAGE_STATE_SDRAM static sampler_waveform_request_t g_sampler_waveform_request;
 RECORDER_SCRATCH_SDRAM static uint8_t
     g_sampler_waveform_read[SAMPLER_WAVEFORM_READ_BYTES];
 static uint32_t g_sampler_waveform_age;
@@ -284,11 +300,13 @@ uint8_t sampler_waveform_accumulator_finish(sampler_waveform_accumulator_t *acc,
     return 1U;
 }
 
-static uint32_t sampler_waveform_edge_signature(FIL *file,
-                                                const wav_info_t *info)
+static uint8_t sampler_waveform_edge_signature(FIL *file,
+                                               const wav_info_t *info,
+                                               uint32_t *out_signature)
 {
     if(file == 0 || info == 0 || info->block_align == 0U
-            || info->data_size < info->block_align) return 0U;
+            || info->data_size < info->block_align
+            || out_signature == 0) return 0U;
     uint8_t edge[16] = {0};
     const uint32_t bytes = (info->block_align < 8U) ? info->block_align : 8U;
     UINT read = 0U;
@@ -299,7 +317,8 @@ static uint32_t sampler_waveform_edge_signature(FIL *file,
     if(f_lseek(file, info->data_offset + info->data_size - info->block_align) != FR_OK
             || f_read(file, &edge[8], bytes, &read) != FR_OK || read != bytes)
         return 0U;
-    return sampler_waveform_crc(edge, sizeof(edge));
+    *out_signature = sampler_waveform_crc(edge, sizeof(edge));
+    return 1U;
 }
 
 static uint8_t sampler_waveform_make_identity_open(
@@ -317,7 +336,8 @@ static uint8_t sampler_waveform_make_identity_open(
     out->frame_count = info->data_size / info->block_align;
     out->sample_rate = info->sample_rate;
     out->data_offset = info->data_offset;
-    out->source_signature = sampler_waveform_edge_signature(file, info);
+    if(sampler_waveform_edge_signature(file, info,
+            &out->source_signature) == 0U) return 0U;
     out->channels = info->channels;
     out->bits_per_sample = info->bits_per_sample;
     if(out->frame_count == 0U) return 0U;
@@ -367,39 +387,77 @@ static uint8_t sampler_waveform_create_file(FIL *file)
     header.header_crc = sampler_waveform_header_crc(&header);
     UINT written = 0U;
     if(f_write(file, &header, sizeof(header), &written) != FR_OK
-            || written != sizeof(header)) return 0U;
+            || written != sizeof(header))
+    {
+        (void)f_close(file);
+        return 0U;
+    }
     uint32_t empty[64];
     for(uint32_t i = 0U; i < 64U; ++i) empty[i] = SAMPLER_WAVEFORM_EMPTY_OFFSET;
     for(uint32_t done = 0U; done < SAMPLER_WAVEFORM_BUCKET_COUNT; done += 64U)
     {
         if(f_write(file, empty, sizeof(empty), &written) != FR_OK
-                || written != sizeof(empty)) return 0U;
+                || written != sizeof(empty))
+        {
+            (void)f_close(file);
+            return 0U;
+        }
     }
-    return (f_sync(file) == FR_OK) ? 1U : 0U;
-}
-
-static uint8_t sampler_waveform_open_store(FIL *file, uint8_t writable,
-                                           sampler_waveform_file_header_t *header)
-{
-    const BYTE mode = writable ? (BYTE)(FA_READ | FA_WRITE | FA_OPEN_ALWAYS)
-                               : (BYTE)(FA_READ | FA_OPEN_EXISTING);
-    if(f_open(file, SAMPLER_WAVEFORM_PATH, mode) != FR_OK)
-    {
-        if(writable == 0U || sampler_waveform_create_file(file) == 0U) return 0U;
-    }
-    UINT read = 0U;
-    if(f_lseek(file, 0U) != FR_OK
-            || f_read(file, header, sizeof(*header), &read) != FR_OK
-            || read != sizeof(*header) || sampler_waveform_header_valid(header) == 0U)
+    if(f_sync(file) != FR_OK)
     {
         (void)f_close(file);
-        if(writable == 0U || sampler_waveform_create_file(file) == 0U) return 0U;
-        read = 0U;
-        if(f_lseek(file, 0U) != FR_OK
-                || f_read(file, header, sizeof(*header), &read) != FR_OK
-                || read != sizeof(*header)) return 0U;
+        return 0U;
     }
     return 1U;
+}
+
+static sampler_waveform_io_result_t sampler_waveform_open_store_read(
+    FIL *file, sampler_waveform_file_header_t *header)
+{
+    const FRESULT opened = f_open(file, SAMPLER_WAVEFORM_PATH,
+                                  FA_READ | FA_OPEN_EXISTING);
+    if(opened == FR_NO_FILE || opened == FR_NO_PATH)
+        return SAMPLER_WAVEFORM_IO_NOT_FOUND;
+    if(opened != FR_OK) return SAMPLER_WAVEFORM_IO_ERROR;
+    UINT read = 0U;
+    const FRESULT seek = f_lseek(file, 0U);
+    const FRESULT result = (seek == FR_OK)
+        ? f_read(file, header, sizeof(*header), &read) : seek;
+    if(result != FR_OK)
+    {
+        (void)f_close(file);
+        return SAMPLER_WAVEFORM_IO_ERROR;
+    }
+    if(read != sizeof(*header) || sampler_waveform_header_valid(header) == 0U)
+    {
+        (void)f_close(file);
+        return SAMPLER_WAVEFORM_IO_CORRUPT;
+    }
+    return SAMPLER_WAVEFORM_IO_OK;
+}
+
+static uint8_t sampler_waveform_open_store_write(
+    FIL *file, sampler_waveform_file_header_t *header)
+{
+    sampler_waveform_io_result_t result =
+        sampler_waveform_open_store_read(file, header);
+    if(result == SAMPLER_WAVEFORM_IO_OK)
+    {
+        (void)f_close(file);
+        if(f_open(file, SAMPLER_WAVEFORM_PATH,
+                FA_READ | FA_WRITE | FA_OPEN_EXISTING) != FR_OK) return 0U;
+        return 1U;
+    }
+    if(result == SAMPLER_WAVEFORM_IO_ERROR) return 0U;
+    if(sampler_waveform_create_file(file) == 0U) return 0U;
+    *header = (sampler_waveform_file_header_t){0};
+    UINT read = 0U;
+    const uint8_t valid = (uint8_t)(f_lseek(file, 0U) == FR_OK
+        && f_read(file, header, sizeof(*header), &read) == FR_OK
+        && read == sizeof(*header)
+        && sampler_waveform_header_valid(header) != 0U);
+    if(valid == 0U) (void)f_close(file);
+    return valid;
 }
 
 static uint8_t sampler_waveform_record_valid(
@@ -430,18 +488,21 @@ static void sampler_waveform_record_identity(
     };
 }
 
-static uint8_t sampler_waveform_read_record(FIL *file, uint32_t offset,
-                                            sampler_waveform_record_t *record)
+static sampler_waveform_io_result_t sampler_waveform_read_record(
+    FIL *file, uint32_t offset, sampler_waveform_record_t *record)
 {
+    if(offset < SAMPLER_WAVEFORM_RECORD_BASE)
+        return SAMPLER_WAVEFORM_IO_CORRUPT;
     UINT read = 0U;
-    return (uint8_t)(offset >= SAMPLER_WAVEFORM_RECORD_BASE
-        && f_lseek(file, offset) == FR_OK
-        && f_read(file, record, sizeof(*record), &read) == FR_OK
-        && read == sizeof(*record)
-        && sampler_waveform_record_valid(record) != 0U);
+    if(f_lseek(file, offset) != FR_OK
+            || f_read(file, record, sizeof(*record), &read) != FR_OK)
+        return SAMPLER_WAVEFORM_IO_ERROR;
+    if(read != sizeof(*record) || sampler_waveform_record_valid(record) == 0U)
+        return SAMPLER_WAVEFORM_IO_CORRUPT;
+    return SAMPLER_WAVEFORM_IO_OK;
 }
 
-static uint8_t sampler_waveform_lookup_open(
+static sampler_waveform_io_result_t sampler_waveform_lookup_open(
     FIL *file, const sampler_waveform_identity_t *identity,
     uint32_t *out_offset, sampler_waveform_record_t *out_record)
 {
@@ -451,23 +512,26 @@ static uint8_t sampler_waveform_lookup_open(
     UINT read = 0U;
     if(f_lseek(file, SAMPLER_WAVEFORM_HEADER_BYTES + bucket * 4U) != FR_OK
             || f_read(file, &offset, sizeof(offset), &read) != FR_OK
-            || read != sizeof(offset)) return 0U;
+            || read != sizeof(offset)) return SAMPLER_WAVEFORM_IO_ERROR;
     for(uint32_t chain = 0U; offset != SAMPLER_WAVEFORM_EMPTY_OFFSET
             && chain < SAMPLER_WAVEFORM_MAX_CHAIN; ++chain)
     {
         sampler_waveform_record_t record;
-        if(sampler_waveform_read_record(file, offset, &record) == 0U) return 0U;
+        const sampler_waveform_io_result_t record_result =
+            sampler_waveform_read_record(file, offset, &record);
+        if(record_result != SAMPLER_WAVEFORM_IO_OK) return record_result;
         sampler_waveform_identity_t candidate;
         sampler_waveform_record_identity(&record, &candidate);
         if(sampler_waveform_identity_equal(&candidate, identity) != 0U)
         {
             if(out_offset != 0) *out_offset = offset;
             if(out_record != 0) *out_record = record;
-            return 1U;
+            return SAMPLER_WAVEFORM_IO_OK;
         }
         offset = record.next_offset;
     }
-    return 0U;
+    return (offset == SAMPLER_WAVEFORM_EMPTY_OFFSET)
+        ? SAMPLER_WAVEFORM_IO_NOT_FOUND : SAMPLER_WAVEFORM_IO_CORRUPT;
 }
 
 static uint8_t sampler_waveform_commit_locked(
@@ -477,10 +541,17 @@ static uint8_t sampler_waveform_commit_locked(
 {
     FIL file;
     sampler_waveform_file_header_t header;
-    if(sampler_waveform_open_store(&file, 1U, &header) == 0U) return 0U;
+    if(sampler_waveform_open_store_write(&file, &header) == 0U) return 0U;
     uint32_t existing = 0U;
     sampler_waveform_record_t old_record;
-    if(sampler_waveform_lookup_open(&file, identity, &existing, &old_record) != 0U)
+    const sampler_waveform_io_result_t lookup =
+        sampler_waveform_lookup_open(&file, identity, &existing, &old_record);
+    if(lookup == SAMPLER_WAVEFORM_IO_ERROR)
+    {
+        (void)f_close(&file);
+        return 0U;
+    }
+    if(lookup == SAMPLER_WAVEFORM_IO_OK)
     {
         if(memcmp(old_record.bins, bins, sizeof(old_record.bins)) == 0)
         {
@@ -609,12 +680,34 @@ void sampler_waveform_store_init(void)
     memset(g_sampler_waveform_sources, 0, sizeof(g_sampler_waveform_sources));
     memset(g_sampler_waveform_ram, 0, sizeof(g_sampler_waveform_ram));
     memset(&g_sampler_waveform_build, 0, sizeof(g_sampler_waveform_build));
+    memset(&g_sampler_waveform_request, 0, sizeof(g_sampler_waveform_request));
     g_sampler_waveform_age = 0U;
+}
+
+static uint8_t sampler_waveform_request_matches(
+    uint16_t sample_id, const sampler_waveform_identity_t *identity,
+    uint32_t media_epoch)
+{
+    return (uint8_t)(g_sampler_waveform_request.active != 0U
+        && g_sampler_waveform_request.sample_id == sample_id
+        && g_sampler_waveform_request.media_epoch == media_epoch
+        && sampler_waveform_identity_equal(
+            &g_sampler_waveform_request.identity, identity) != 0U);
+}
+
+void sampler_waveform_store_release_request(void)
+{
+    memset(&g_sampler_waveform_request, 0, sizeof(g_sampler_waveform_request));
+    if(g_sampler_waveform_build.active != 0U)
+        g_sampler_waveform_build.cancel_requested = 1U;
 }
 
 void sampler_waveform_store_unregister_classic(uint16_t sample_id)
 {
     if(sample_id >= SAMPLE_CLASSIC_CAPACITY) return;
+    if(g_sampler_waveform_request.active != 0U
+            && g_sampler_waveform_request.sample_id == sample_id)
+        sampler_waveform_store_release_request();
     memset(&g_sampler_waveform_sources[sample_id], 0,
            sizeof(g_sampler_waveform_sources[sample_id]));
     if(g_sampler_waveform_build.active != 0U
@@ -633,6 +726,12 @@ uint8_t sampler_waveform_store_register_classic(uint16_t sample_id,
     sampler_waveform_identity_t identity;
     if(sampler_waveform_make_identity_open(path, info, open_file, &identity) == 0U)
         return 0U;
+    if(g_sampler_waveform_request.active != 0U
+            && g_sampler_waveform_request.sample_id == sample_id)
+        sampler_waveform_store_release_request();
+    if(g_sampler_waveform_build.active != 0U
+            && g_sampler_waveform_build.sample_id == sample_id)
+        g_sampler_waveform_build.cancel_requested = 1U;
     sampler_waveform_source_t *const source = &g_sampler_waveform_sources[sample_id];
     memset(source, 0, sizeof(*source));
     source->identity = identity;
@@ -652,9 +751,16 @@ sampler_waveform_result_t sampler_waveform_store_request_classic(
     if(source->registered == 0U
             || source->media_epoch != sd_access_media_epoch())
         return SAMPLER_WAVEFORM_RESULT_INVALID;
-    source->requested = 1U;
-    if(source->state == SAMPLER_WAVEFORM_SOURCE_ERROR)
-        source->state = SAMPLER_WAVEFORM_SOURCE_MISSING;
+    if(sampler_waveform_request_matches(sample_id, &source->identity,
+            source->media_epoch) == 0U)
+    {
+        if(g_sampler_waveform_build.active != 0U)
+            g_sampler_waveform_build.cancel_requested = 1U;
+        g_sampler_waveform_request.identity = source->identity;
+        g_sampler_waveform_request.media_epoch = source->media_epoch;
+        g_sampler_waveform_request.sample_id = sample_id;
+        g_sampler_waveform_request.active = 1U;
+    }
     const int8_t slot = sampler_waveform_ram_find(&source->identity);
     if(slot < 0)
     {
@@ -662,6 +768,8 @@ sampler_waveform_result_t sampler_waveform_store_request_classic(
          * indexed SAMPLE.WFM record authoritative and queue a cold reload. */
         if(source->state == SAMPLER_WAVEFORM_SOURCE_READY)
             source->state = SAMPLER_WAVEFORM_SOURCE_ON_DISK;
+        if(source->state == SAMPLER_WAVEFORM_SOURCE_ERROR)
+            return SAMPLER_WAVEFORM_RESULT_INVALID;
         return SAMPLER_WAVEFORM_RESULT_PENDING;
     }
     if(source->state == SAMPLER_WAVEFORM_SOURCE_ON_DISK
@@ -677,21 +785,6 @@ sampler_waveform_result_t sampler_waveform_store_request_classic(
     return SAMPLER_WAVEFORM_RESULT_READY_RAM;
 }
 
-static int16_t sampler_waveform_pick_source(sampler_waveform_source_state_t state,
-                                            uint8_t requested_only)
-{
-    int16_t fallback = -1;
-    for(uint16_t i = 0U; i < SAMPLE_CLASSIC_CAPACITY; ++i)
-    {
-        sampler_waveform_source_t *const source = &g_sampler_waveform_sources[i];
-        if(source->registered == 0U || source->state != state
-                || (requested_only != 0U && source->requested == 0U)) continue;
-        if(source->requested != 0U) return (int16_t)i;
-        if(fallback < 0) fallback = (int16_t)i;
-    }
-    return fallback;
-}
-
 static void sampler_waveform_lookup_service(uint16_t sample_id)
 {
     sampler_waveform_source_t *const source = &g_sampler_waveform_sources[sample_id];
@@ -705,13 +798,17 @@ static void sampler_waveform_lookup_service(uint16_t sample_id)
     sampler_waveform_file_header_t header;
     sampler_waveform_record_t record;
     uint32_t offset = 0U;
-    const uint8_t opened = sampler_waveform_open_store(&file, 1U, &header);
-    const uint8_t found = (uint8_t)(opened != 0U
-        && sampler_waveform_lookup_open(&file, &source->identity,
-            &offset, (source->requested != 0U) ? &record : 0) != 0U);
-    if(opened != 0U) (void)f_close(&file);
+    const sampler_waveform_io_result_t opened =
+        sampler_waveform_open_store_read(&file, &header);
+    sampler_waveform_io_result_t lookup = opened;
+    if(opened == SAMPLER_WAVEFORM_IO_OK)
+    {
+        lookup = sampler_waveform_lookup_open(&file, &source->identity,
+                                               &offset, &record);
+        (void)f_close(&file);
+    }
     source->record_offset = offset;
-    if(found != 0U && source->requested != 0U)
+    if(lookup == SAMPLER_WAVEFORM_IO_OK)
     {
         (void)sampler_waveform_ram_put(&source->identity, record.bins);
         source->state = SAMPLER_WAVEFORM_SOURCE_READY;
@@ -720,10 +817,16 @@ static void sampler_waveform_lookup_service(uint16_t sample_id)
         g_waveform_diag.persistent_read_bytes +=
             sizeof(header) + sizeof(uint32_t) + sizeof(record);
     }
+    else if(lookup == SAMPLER_WAVEFORM_IO_ERROR)
+    {
+        source->state = SAMPLER_WAVEFORM_SOURCE_ERROR;
+    }
     else
     {
-        source->state = found ? SAMPLER_WAVEFORM_SOURCE_ON_DISK
-                              : SAMPLER_WAVEFORM_SOURCE_MISSING;
+        /* A true miss or structurally invalid persisted data gets one
+         * source rebuild. I/O failures above stay terminal until lifecycle
+         * re-registration; they are never converted into retry demand. */
+        source->state = SAMPLER_WAVEFORM_SOURCE_MISSING;
     }
     sd_scheduler_runtime_background_end();
 }
@@ -739,12 +842,19 @@ static void sampler_waveform_load_service(uint16_t sample_id)
     FIL file;
     sampler_waveform_record_t record;
     const uint32_t io_start = DWT->CYCCNT;
-    uint8_t ok = (uint8_t)(f_open(&file, SAMPLER_WAVEFORM_PATH,
-                                  FA_READ | FA_OPEN_EXISTING) == FR_OK);
+    const FRESULT opened = f_open(&file, SAMPLER_WAVEFORM_PATH,
+                                  FA_READ | FA_OPEN_EXISTING);
+    uint8_t ok = (opened == FR_OK) ? 1U : 0U;
+    if(opened != FR_OK && opened != FR_NO_FILE && opened != FR_NO_PATH)
+        source->state = SAMPLER_WAVEFORM_SOURCE_ERROR;
     if(ok != 0U)
     {
-        ok = sampler_waveform_read_record(&file, source->record_offset, &record);
+        const sampler_waveform_io_result_t read_result =
+            sampler_waveform_read_record(&file, source->record_offset, &record);
+        ok = (read_result == SAMPLER_WAVEFORM_IO_OK) ? 1U : 0U;
         (void)f_close(&file);
+        if(read_result == SAMPLER_WAVEFORM_IO_ERROR)
+            source->state = SAMPLER_WAVEFORM_SOURCE_ERROR;
     }
     g_waveform_diag.io_cycles += (uint32_t)(DWT->CYCCNT - io_start);
     g_waveform_diag.persistent_read_calls++;
@@ -761,19 +871,30 @@ static void sampler_waveform_load_service(uint16_t sample_id)
         }
         else ok = 0U;
     }
-    if(ok == 0U) source->state = SAMPLER_WAVEFORM_SOURCE_MISSING;
+    if(ok == 0U && source->state != SAMPLER_WAVEFORM_SOURCE_ERROR)
+        source->state = SAMPLER_WAVEFORM_SOURCE_MISSING;
     sd_scheduler_runtime_background_end();
 }
 
 static uint8_t sampler_waveform_start_build(uint16_t sample_id)
 {
     sampler_waveform_source_t *const source = &g_sampler_waveform_sources[sample_id];
+    if(sampler_waveform_request_matches(sample_id, &source->identity,
+            source->media_epoch) == 0U) return 0U;
     const sample_global_slot_t *const slot = sample_global_pool_get_slot(sample_id);
     if(slot == 0 || slot->kind != SAMPLE_GLOBAL_KIND_CLASSIC
-            || slot->state != SAMPLE_GLOBAL_STATE_READY) return 0U;
+            || slot->state != SAMPLE_GLOBAL_STATE_READY)
+    {
+        source->state = SAMPLER_WAVEFORM_SOURCE_ERROR;
+        return 0U;
+    }
     sampler_waveform_build_t *const build = &g_sampler_waveform_build;
     memset(build, 0, sizeof(*build));
-    if(strlen(slot->path) >= sizeof(build->path)) return 0U;
+    if(strlen(slot->path) >= sizeof(build->path))
+    {
+        source->state = SAMPLER_WAVEFORM_SOURCE_ERROR;
+        return 0U;
+    }
     strcpy(build->path, slot->path);
     build->identity = source->identity;
     build->sample_id = sample_id;
@@ -791,8 +912,15 @@ static void sampler_waveform_build_fail(void)
     sampler_waveform_build_t *const build = &g_sampler_waveform_build;
     if(build->file_open != 0U) (void)f_close(&build->file);
     if(build->sample_id < SAMPLE_CLASSIC_CAPACITY)
-        g_sampler_waveform_sources[build->sample_id].state =
-            SAMPLER_WAVEFORM_SOURCE_ERROR;
+    {
+        sampler_waveform_source_t *const source =
+            &g_sampler_waveform_sources[build->sample_id];
+        if(source->registered != 0U
+                && source->media_epoch == build->media_epoch
+                && sampler_waveform_identity_equal(
+                    &source->identity, &build->identity) != 0U)
+            source->state = SAMPLER_WAVEFORM_SOURCE_ERROR;
+    }
     g_waveform_diag.build_aborts++;
     memset(build, 0, sizeof(*build));
 }
@@ -806,6 +934,9 @@ static void sampler_waveform_build_service(void)
         memset(build, 0, sizeof(*build));
         return;
     }
+    if(sampler_waveform_request_matches(build->sample_id,
+                &build->identity, build->media_epoch) == 0U)
+        build->cancel_requested = 1U;
     const sd_scheduler_background_request_t admission = {
         SAMPLER_WAVEFORM_READ_BYTES, build->media_epoch,
         SD_SCHEDULER_BACKGROUND_DATA };
@@ -814,6 +945,17 @@ static void sampler_waveform_build_service(void)
     if(build->cancel_requested != 0U)
     {
         if(build->file_open != 0U) (void)f_close(&build->file);
+        if(build->sample_id < SAMPLE_CLASSIC_CAPACITY)
+        {
+            sampler_waveform_source_t *const source =
+                &g_sampler_waveform_sources[build->sample_id];
+            if(source->registered != 0U
+                    && source->state == SAMPLER_WAVEFORM_SOURCE_BUILDING
+                    && source->media_epoch == build->media_epoch
+                    && sampler_waveform_identity_equal(
+                        &source->identity, &build->identity) != 0U)
+                source->state = SAMPLER_WAVEFORM_SOURCE_MISSING;
+        }
         memset(build, 0, sizeof(*build));
         sd_scheduler_runtime_background_end();
         return;
@@ -831,7 +973,12 @@ static void sampler_waveform_build_service(void)
         build->file_open = 1U;
         wav_info_t info;
         if(wav_parser_parse_info(&build->file, &info) == 0U
+                || wav_parser_is_canonical_brick_float(&info) == 0U
                 || info.data_size / info.block_align != build->identity.frame_count
+                || info.sample_rate != build->identity.sample_rate
+                || info.data_offset != build->identity.data_offset
+                || info.channels != build->identity.channels
+                || info.bits_per_sample != build->identity.bits_per_sample
                 || f_lseek(&build->file, info.data_offset) != FR_OK)
         {
             g_waveform_diag.io_cycles += (uint32_t)(DWT->CYCCNT - io_start);
@@ -884,11 +1031,19 @@ static void sampler_waveform_build_service(void)
     {
         sampler_waveform_source_t *const source =
             &g_sampler_waveform_sources[build->sample_id];
-        source->record_offset = record_offset;
-        source->state = SAMPLER_WAVEFORM_SOURCE_READY;
-        source->fresh_persistent = 1U;
-        (void)sampler_waveform_ram_put(&build->identity, bins);
-        g_waveform_diag.build_completions++;
+        if(source->registered != 0U
+                && source->media_epoch == build->media_epoch
+                && sampler_waveform_identity_equal(
+                    &source->identity, &build->identity) != 0U
+                && sampler_waveform_request_matches(build->sample_id,
+                    &build->identity, build->media_epoch) != 0U)
+        {
+            source->record_offset = record_offset;
+            source->state = SAMPLER_WAVEFORM_SOURCE_READY;
+            source->fresh_persistent = 1U;
+            (void)sampler_waveform_ram_put(&build->identity, bins);
+            g_waveform_diag.build_completions++;
+        }
     }
     sd_scheduler_runtime_background_end();
     if(committed == 0U) sampler_waveform_build_fail();
@@ -902,33 +1057,25 @@ void sampler_waveform_store_service(void)
         sampler_waveform_build_service();
         return;
     }
-    int16_t sample = sampler_waveform_pick_source(
-        SAMPLER_WAVEFORM_SOURCE_ON_DISK, 1U);
-    if(sample >= 0)
+    if(g_sampler_waveform_request.active == 0U
+            || g_sampler_waveform_request.sample_id >= SAMPLE_CLASSIC_CAPACITY)
+        return;
+    const uint16_t sample = g_sampler_waveform_request.sample_id;
+    sampler_waveform_source_t *const source = &g_sampler_waveform_sources[sample];
+    if(source->registered == 0U
+            || source->media_epoch != sd_access_media_epoch()
+            || sampler_waveform_request_matches(sample, &source->identity,
+                source->media_epoch) == 0U)
     {
-        sampler_waveform_load_service((uint16_t)sample);
+        sampler_waveform_store_release_request();
         return;
     }
-    sample = sampler_waveform_pick_source(SAMPLER_WAVEFORM_SOURCE_LOOKUP, 1U);
-    if(sample >= 0)
-    {
-        sampler_waveform_lookup_service((uint16_t)sample);
-        return;
-    }
-    sample = sampler_waveform_pick_source(SAMPLER_WAVEFORM_SOURCE_MISSING, 1U);
-    if(sample >= 0)
-    {
-        (void)sampler_waveform_start_build((uint16_t)sample);
-        return;
-    }
-    sample = sampler_waveform_pick_source(SAMPLER_WAVEFORM_SOURCE_LOOKUP, 0U);
-    if(sample >= 0)
-    {
-        sampler_waveform_lookup_service((uint16_t)sample);
-        return;
-    }
-    sample = sampler_waveform_pick_source(SAMPLER_WAVEFORM_SOURCE_MISSING, 0U);
-    if(sample >= 0) (void)sampler_waveform_start_build((uint16_t)sample);
+    if(source->state == SAMPLER_WAVEFORM_SOURCE_ON_DISK)
+        sampler_waveform_load_service(sample);
+    else if(source->state == SAMPLER_WAVEFORM_SOURCE_LOOKUP)
+        sampler_waveform_lookup_service(sample);
+    else if(source->state == SAMPLER_WAVEFORM_SOURCE_MISSING)
+        (void)sampler_waveform_start_build(sample);
 }
 
 uint8_t sampler_waveform_store_commit_converted(

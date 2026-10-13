@@ -58,6 +58,7 @@ uint8_t sampler_waveform_store_register_classic(uint16_t sample_id,
 sampler_waveform_result_t sampler_waveform_store_request_classic(
     uint16_t sample_id,
     sampler_waveform_bin_t out_bins[SAMPLER_WAVEFORM_BIN_COUNT]);
+void sampler_waveform_store_release_request(void);
 
 void sampler_waveform_accumulator_init(sampler_waveform_accumulator_t *acc,
                                        uint32_t frame_count);
