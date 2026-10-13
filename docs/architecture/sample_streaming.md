@@ -242,6 +242,14 @@ le catalogue n'est scanne en arriere-plan. Ce fallback utilise l'admission
 background du scheduler et cede donc aux urgences Streamer/Recorder; aucune
 operation FatFs, parse, CRC ou reduction n'entre dans AUDIO.
 
+Lorsqu'un WAV vient d'etre promu par Audio REC, son chemin, sa generation et
+sa duree sont rapproches du `REC_SOURCE CURRENT`. L'overview REC deja valide
+alimente alors le LRU4 au moment de l'enregistrement Classic: EDIT recupere les
+extrema reellement captures sans attendre un second scan. L'etat reste
+`LOOKUP`: une demande visible valide toujours `SAMPLE.WFM`, puis effectue le
+fallback exact normal uniquement en cas de miss. Une identite, une generation
+ou une duree differente interdit ce transfert.
+
 Le runtime conserve une seule demande interactive, identifiee par slot,
 identite persistante et epoch media. La Waveview en est proprietaire: un
 changement de sample remplace la demande et l'abandon de la vue la libere. Une

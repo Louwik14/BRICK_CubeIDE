@@ -7,6 +7,7 @@
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_global_pool.h"
 #include "SD/sd_scheduler_runtime.h"
+#include "Storage/rec_source.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
 #include "Storage/waveform_service.h"
@@ -675,6 +676,51 @@ static uint8_t sampler_waveform_ram_put(
     return slot;
 }
 
+static void sampler_waveform_seed_from_current_rec(
+    const char *path, const sampler_waveform_identity_t *identity)
+{
+    const char *rec_path = 0;
+    rec_source_snapshot_t snapshot;
+    const rec_source_waveform_summary_t *const summary =
+        rec_source_current_waveform();
+    if(path == 0 || identity == 0 || summary == 0
+            || summary->ready == 0U || summary->frames_per_bin == 0U
+            || summary->bin_count == 0U
+            || rec_source_current_path(&rec_path, &snapshot) == 0U
+            || strcmp(path, rec_path) != 0
+            || snapshot.frame_count != identity->frame_count
+            || snapshot.sample_rate != identity->sample_rate
+            || summary->frame_count != identity->frame_count
+            || summary->bin_domain_frames != identity->frame_count
+            || summary->generation != snapshot.key.generation)
+        return;
+
+    sampler_waveform_bin_t bins[SAMPLER_WAVEFORM_BIN_COUNT];
+    for(uint32_t target = 0U; target < SAMPLER_WAVEFORM_BIN_COUNT; ++target)
+    {
+        const uint32_t first_frame = (uint32_t)(((uint64_t)target
+            * identity->frame_count) / SAMPLER_WAVEFORM_BIN_COUNT);
+        uint32_t end_frame = (uint32_t)((((uint64_t)(target + 1U)
+            * identity->frame_count) + SAMPLER_WAVEFORM_BIN_COUNT - 1U)
+            / SAMPLER_WAVEFORM_BIN_COUNT);
+        if(end_frame <= first_frame) end_frame = first_frame + 1U;
+        uint32_t first = first_frame / summary->frames_per_bin;
+        uint32_t last = (end_frame - 1U) / summary->frames_per_bin;
+        if(first >= summary->bin_count) first = summary->bin_count - 1U;
+        if(last >= summary->bin_count) last = summary->bin_count - 1U;
+        int16_t minimum = summary->min[first];
+        int16_t maximum = summary->max[first];
+        for(uint32_t source = first + 1U; source <= last; ++source)
+        {
+            if(summary->min[source] < minimum) minimum = summary->min[source];
+            if(summary->max[source] > maximum) maximum = summary->max[source];
+        }
+        bins[target].min = minimum;
+        bins[target].max = maximum;
+    }
+    (void)sampler_waveform_ram_put(identity, bins);
+}
+
 void sampler_waveform_store_init(void)
 {
     memset(g_sampler_waveform_sources, 0, sizeof(g_sampler_waveform_sources));
@@ -738,6 +784,7 @@ uint8_t sampler_waveform_store_register_classic(uint16_t sample_id,
     source->media_epoch = sd_access_media_epoch();
     source->state = SAMPLER_WAVEFORM_SOURCE_LOOKUP;
     source->registered = 1U;
+    sampler_waveform_seed_from_current_rec(path, &identity);
     return 1U;
 }
 
