@@ -204,6 +204,10 @@ CONTROL, SEQ, AUDIO, assets et racine Pattern actifs restent intacts.
 
 `T_FORWARD` est defini une seule fois par l'appel de
 `project_load_quiesce_request()` et, concretement, par sa fermeture de l'ingress.
+Le panic global n'est publie qu'apres fermeture de l'horizon CONTROL en cours et
+disponibilite d'une entree FIFO. Le quiesce attend alors son effet AUDIO avant le
+retire et la liberation des leases/cache; l'absence de panic publie pendant cette
+attente est un etat transitoire, pas un echec du quiesce.
 PANIC et retrait des gros payloads rendent alors l'ancien Project definitivement
 mort. Le changement de racine Pattern active et `AUDIO_STATE_COMMIT` sont des
 publications techniques post-forward, jamais d'autres commits produit. Apres

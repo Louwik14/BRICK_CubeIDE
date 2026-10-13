@@ -13,6 +13,7 @@
 #include "Storage/pattern_control_bank.h"
 #include "Sampler/sample_page_lease_control.h"
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/wavetable_pool.h"
@@ -45,6 +46,7 @@ uint8_t project_load_allowed(void)
         && (pattern_load_is_pending() == 0U)
         && (project_load_recorder_busy() == 0U)
         && (wavetable_pool_load_async_busy() == 0U)
+        && (sample_global_pool_classic_operation_active() == 0U)
         && (multi_sample_load_has_pending() == 0U)
         && (multi_sample_pool_clear_is_active() == 0U)
         && (wav_convert_is_active() == 0U));
@@ -59,6 +61,25 @@ void project_load_quiesce_init(void)
     g_resource_mutation_ingress_holds = 0U;
 }
 
+static void project_load_quiesce_begin_retire(void)
+{
+    if ((g_project_load_requested == 0U)
+        || (g_project_load_panic_committed != 0U)
+        || (control_rt_publication_horizon_active() != 0U)
+        || (control_rt_publication_free() == 0U)) return;
+
+    g_project_load_panic_committed = control_music_output_panic_all(0U);
+    if (g_project_load_panic_committed == 0U) return;
+
+    (void)sample_page_cache_cancel_reserved_domain(
+        SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U);
+    (void)sample_page_cache_cancel_reserved_domain(
+        SAMPLE_AUDIO_DOMAIN_MULTI, 0U);
+    wavetable_pool_retire_all();
+    multi_sample_pool_retire_all();
+    g_project_load_retire_started = 1U;
+}
+
 void project_load_quiesce_request(void)
 {
     if (g_project_load_requested != 0U) return;
@@ -70,21 +91,12 @@ void project_load_quiesce_request(void)
     sd_preview_stop();
     seq_ingress_panic();
     g_project_load_requested = 1U;
-    g_project_load_panic_committed = control_music_output_panic_all(0U);
-    if (g_project_load_panic_committed != 0U)
-    {
-        (void)sample_page_cache_cancel_reserved_domain(
-            SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U);
-        (void)sample_page_cache_cancel_reserved_domain(
-            SAMPLE_AUDIO_DOMAIN_MULTI, 0U);
-        wavetable_pool_retire_all();
-        multi_sample_pool_retire_all();
-        g_project_load_retire_started = 1U;
-    }
+    project_load_quiesce_begin_retire();
 }
 
 uint8_t project_load_quiesce_safe(void)
 {
+    project_load_quiesce_begin_retire();
     if ((g_project_load_requested == 0U)
         || (g_project_load_panic_committed == 0U)
         || (g_project_load_retire_started == 0U)) return 0U;
@@ -100,8 +112,7 @@ uint8_t project_load_quiesce_safe(void)
 uint8_t project_load_quiesce_failed(void)
 {
     if (g_project_load_requested == 0U) return 0U;
-    return (uint8_t)((g_project_load_panic_committed == 0U)
-        || (wavetable_pool_retire_failed() != 0U)
+    return (uint8_t)((wavetable_pool_retire_failed() != 0U)
         || (multi_sample_pool_retire_failed() != 0U));
 }
 
