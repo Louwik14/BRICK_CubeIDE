@@ -621,6 +621,26 @@ identifiant. La publication de ressource reste reparatrice meme si le selecteur
 numerique est deja egal: les sorties maintenues sont rebindees et ne deduisent
 jamais l'etat du reader de cette seule egalite.
 
+## Preparation commune Classic et Multi
+
+Classic et Multi passent par la meme frontiere de preparation d'asset: la
+validation FLOAT32 canonique, la construction du link-map physique,
+l'enregistrement dans le Page Cache et la reservation du presocle initial sont
+realises par `sample_page_cache_port_prepare_stream()`. Les pages reservees
+sont ensuite remplies de facon asynchrone par le Stream Manager, avec les memes
+epochs, generations, leases et budgets cooperatifs. L'ancien prefill Multi
+synchrone par lots pouvant atteindre 64 Kio n'existe plus.
+
+Multi reste responsable du parsing de son index, des zones clavier/velocite,
+du pool de samples et de la publication atomique de l'instrument complet. Il
+enregistre progressivement ses ressources audio et ne passe READY que lorsque
+le presocle de chacune est READY. Le budget `byte_budget` borne le nombre de
+preparations et de pages inspectees a chaque service.
+
+Cette mutualisation ne change pas les contrats de transport: le chargement
+reste interdit pendant PLAY et la conversion reste interdite tant que l'audio
+n'est pas arrete. Elle ne prepare aucun hot-swap.
+
 ## Projection RT1172 (pas une mesure hardware)
 
 Pour 16 voix, 48 kHz, stereo FLOAT32 et pitch x8, le debit utile projete est
