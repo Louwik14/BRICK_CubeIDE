@@ -320,7 +320,6 @@ static void ui_page_settings_sample_confirm_accept(void)
             ui_page_settings_status("CLEAR BUSY");
             return;
         }
-        sample_global_pool_clear_classic(g_ui_settings.confirm_slot);
         ui_page_settings_refresh_sampler_slots();
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
         ui_page_settings_status("CLEAR OK");
@@ -372,8 +371,7 @@ static void ui_page_settings_sample_confirm_accept(void)
             }
             return;
         }
-        if (project_control_remove_multi(logical) == 0U
-            || multi_sample_pool_clear_instrument(slot) == 0U)
+        if (project_control_remove_multi(logical) == 0U)
         {
             ui_page_settings_status("REPLACE BUSY");
             return;
@@ -393,14 +391,7 @@ static void ui_page_settings_sample_confirm_accept(void)
             ui_page_settings_status("UNLOAD BUSY");
             return;
         }
-        if (multi_sample_pool_clear_instrument(g_ui_settings.confirm_slot) != 0U)
-        {
-            ui_page_settings_status("UNLOAD OK");
-        }
-        else
-        {
-            ui_page_settings_status("UNLOAD FAIL");
-        }
+        ui_page_settings_status("UNLOAD OK");
         ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
         return;
