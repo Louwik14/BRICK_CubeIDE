@@ -404,8 +404,7 @@ static uint8_t audio_note_engine_adapter_apply_physical(
     uint8_t note,
     uint8_t velocity,
     uint8_t is_note_on,
-    uint32_t output_id,
-    uint8_t retrigger)
+    uint32_t output_id)
 {
     if ((program == NULL)
             || (program->program_route.entity_id >= BRICK_ENTITY_CAPACITY)
@@ -498,9 +497,13 @@ static uint8_t audio_note_engine_adapter_apply_physical(
          * its track-level lifetime now so ENV3 cannot leak a held-note count. */
         if (held_reassignment != 0U)
             mod_lfo_v1_note_release(entity_id);
+        /* STREAM is monophonic: every new start replaces its previous source
+         * lifetime, including an H.* voice whose NOTE_OFF was ignored. */
+        if (is_stream_sampler != 0U)
+            mod_lfo_v1_note_release(entity_id);
         mod_lfo_v1_note_trigger(entity_id);
     }
-    else
+    else if (sampler_hold == 0U)
         mod_lfo_v1_note_release(entity_id);
 
     const uint8_t instance = (voice == SYNTH_POLYPHONY_NO_VOICE)
@@ -657,10 +660,8 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         }
         if (is_note_on != 0U)
         {
-            const uint8_t started = (retrigger != 0U)
-                ? brick6_sampler_runtime_retrigger_note_velocity(
-                    entity_id, note, velocity)
-                : brick6_sampler_runtime_trigger_note_velocity(
+            const uint8_t started =
+                brick6_sampler_runtime_trigger_note_velocity(
                     entity_id, note, velocity);
             if (program->has_filter_target != 0U)
             {
@@ -684,7 +685,7 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         else
         {
             brick6_sampler_runtime_note_off_note(entity_id, note);
-            if (sampler_hold != 0U)
+            if (sampler_hold == 0U)
             {
                 if (program->has_filter_target != 0U)
                     mixer_track_filter_note_off(
@@ -711,21 +712,7 @@ uint8_t audio_note_engine_adapter_apply_output(
         return audio_note_engine_commit_output(entity_id, output_id,
             note, velocity, is_note_on);
     return audio_note_engine_adapter_apply_physical(&program, note, velocity,
-        is_note_on, output_id, 0U);
-}
-
-uint8_t audio_note_engine_adapter_retrigger_output(
-    brick_entity_id_t entity_id, uint8_t note, uint8_t velocity,
-    uint32_t output_id)
-{
-    if (entity_id >= BRICK_ENTITY_CAPACITY)
-        return 0U;
-    audio_note_engine_program_t program;
-    if (audio_note_engine_adapter_current(entity_id, &program) == 0U)
-        return audio_note_engine_commit_output(entity_id, output_id,
-            note, velocity, 1U);
-    return audio_note_engine_adapter_apply_physical(&program, note, velocity,
-        1U, output_id, 1U);
+        is_note_on, output_id);
 }
 
 uint8_t audio_note_engine_adapter_set_external_gate_mode(

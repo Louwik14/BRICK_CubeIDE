@@ -47,7 +47,7 @@ void brick6_sampler_runtime_stream_live_diag_reset(void);
 typedef enum
 {
     /* Historical single-parameter contract. Values match the UI/persistence
-     * order; the contiguous H.* range is gate/HOLD, the prefix is TOGGLE. */
+     * order; the H.* range ignores NOTE_OFF, the prefix follows the gate. */
     BRICK6_SAMPLER_MODE_ONE = 0,
     BRICK6_SAMPLER_MODE_REVERSE_ONE,
     BRICK6_SAMPLER_MODE_LOOP,
@@ -129,7 +129,6 @@ void brick6_sampler_runtime_set_clip_shifter_dispersion(uint8_t track_id, uint8_
 void brick6_sampler_runtime_trigger(uint8_t track_id);
 void brick6_sampler_runtime_trigger_note(uint8_t track_id, uint8_t note);
 uint8_t brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note, uint8_t velocity);
-uint8_t brick6_sampler_runtime_retrigger_note_velocity(uint8_t track_id, uint8_t note, uint8_t velocity);
 brick6_sampler_note_result_t brick6_sampler_runtime_initialize_held_note(
     uint8_t track_id, uint8_t note, uint8_t velocity, uint32_t output_id,
     uint8_t multi);

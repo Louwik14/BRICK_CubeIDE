@@ -174,7 +174,7 @@ static uint8_t control_rt_command_is_structural(
             return control_rt_param_is_structural(command);
         case CONTROL_AUDIO_COMMAND_NOTE:
             return (uint8_t)((command->entity < BRICK_ENTITY_CAPACITY)
-                && (kind <= CONTROL_AUDIO_NOTE_RETRIGGER)
+                && (kind <= CONTROL_AUDIO_NOTE_ON)
                 && (command->value != 0U)
                 && ((command->id & 0xFFU) <= 127U)
                 && ((command->id >> 8) <= 127U));

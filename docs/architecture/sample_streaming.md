@@ -102,15 +102,19 @@ VoiceReader republie seulement les roles de lease modifies.
 
 Classic et Group exposent le parametre historique unique `Mode`, dans cet ordre:
 `ONE`, `REV.ONE`, `LOOP`, `PINGPONG`, `H.ONE`, `H.LOOP`, `H.PINGPONG`.
-Sans `H`, le mode est TOGGLE: un NOTE_ON externe lance la voix, le suivant la
-libere, et NOTE_OFF ne pilote pas ce cycle. Un depart ou retrigger sequenceur
-est publie comme RETRIGGER et remplace toujours la lecture courante; il ne
-constitue jamais le second geste du toggle. Les modes `H.*` suivent le gate:
-NOTE_ON lance/redeclenche et NOTE_OFF libere la voix. `H.LOOP` est donc une loop
-forward hold, et non un ping-pong. `PINGPONG` et `H.PINGPONG` alternent sur toute la
+Sans `H`, le mode suit le GATE: NOTE_ON lance ou redeclenche la voix et NOTE_OFF
+la libere. Les modes `H.*` suivent HOLD: NOTE_OFF est ignore; un nouveau NOTE_ON,
+STOP, PANIC ou un remplacement de renderer conserve son autorite d'arret.
+`H.LOOP` est donc une loop forward hold, et non un ping-pong. `PINGPONG` et
+`H.PINGPONG` alternent sur toute la
 region `[START, START + LENGTH[`; `LOOP` et `H.LOOP` jouent d'abord depuis START puis rebouclent
 depuis LOOP START. Le mode est echantillonne au NOTE_ON, reglable et P-lockable,
 mais n'est pas une destination de modulation continue.
+
+Le NOTE_ON STREAM publie immediatement son lease. Une page chaude est rendue au
+bloc AUDIO courant; une page froide demarre des que son prefixe est publie par
+le DMA SD. Cette attente froide est une indisponibilite reelle des donnees, pas
+une quantification ou une temporisation de mode. Aucun I/O ne bloque AUDIO.
 
 La page TONE 3 `SOURCE` expose le parametre historique `Sync Len`: `Off`,
 `1 bar`, `2 bars`, `4 bars`, `Auto`. Les valeurs en bars adaptent la region

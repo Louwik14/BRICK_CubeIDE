@@ -802,12 +802,12 @@ void brick6_sampler_runtime_note_off(uint8_t track_id)
 
     if (brick6_sampler_runtime_track_is_clip(track_id) != 0U)
     {
-        /* H.* follows the physical gate. TOGGLE modes are released by their
-         * next NOTE_ON and deliberately ignore the matching NOTE_OFF. */
+        /* Normal modes follow the physical gate. H.* deliberately keeps the
+         * source alive when its matching NOTE_OFF arrives. */
         if ((g_sampler_voice[track_id].active != 0U)
                 && (g_sampler_voice[track_id].source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
                 && (brick6_sampler_mode_is_hold_value(
-                        g_sampler_voice[track_id].mode) != 0U))
+                        g_sampler_voice[track_id].mode) == 0U))
         {
             g_sampler_voice[track_id].release_pending = 1U;
         }

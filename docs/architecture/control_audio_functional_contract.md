@@ -52,11 +52,8 @@ PROGRAM PARAM NOTE TRANSPORT RECORD PANIC AUDIO_STATE_COMMIT
   borne. Le bus GROUP 16, les destinations Wave 0..31 et les STOP Multi/RAM/Wave
   utilisent donc leurs capacites canoniques respectives.
 - `NOTE ON` porte `entity`, `output_id`, note et velocite. `NOTE OFF` est
-  identifie par `output_id`. `NOTE RETRIGGER` porte explicitement un depart qui
-  doit remplacer la lecture physique courante; un retrigger publie OFF puis
-  RETRIGGER au meme sample. Les nouveaux departs internes utilisent aussi cette
-  semantique, tandis qu'un depart externe conserve NOTE ON et les gestes
-  TOGGLE propres au renderer.
+  identifie par `output_id`. Un retrigger est un OFF puis un ON au meme sample;
+  les sources live, sequenceur et MIDI externe partagent les memes commandes.
 - `TRANSPORT` porte START, STOP, CONTINUE ou LOCATE.
 - `RECORD` porte START ou STOP, un `session_id`, une configuration et un client.
 - `PANIC` est global ou limite a une entite.

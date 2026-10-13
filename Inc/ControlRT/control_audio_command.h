@@ -19,8 +19,7 @@ typedef enum
 typedef enum
 {
     CONTROL_AUDIO_NOTE_OFF = 0U,
-    CONTROL_AUDIO_NOTE_ON,
-    CONTROL_AUDIO_NOTE_RETRIGGER
+    CONTROL_AUDIO_NOTE_ON
 } control_audio_note_kind_t;
 typedef enum
 {
