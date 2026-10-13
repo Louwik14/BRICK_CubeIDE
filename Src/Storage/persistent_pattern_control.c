@@ -1350,7 +1350,9 @@ static uint8_t persistent_pattern_prepare_seq(
             (track_type_t)prepared->type[entity]);
         const uint16_t capabilities=entity_topology_get_capabilities(&topology);
         uint8_t logical=0U;
-        if((capabilities&TRACK_CAPABILITY_NOTES)!=0U)
+        if((capabilities&TRACK_CAPABILITY_HARMONY)!=0U)
+            logical=SEQ_LOGICAL_CAPACITY_MASTER;
+        else if((capabilities&TRACK_CAPABILITY_NOTES)!=0U)
         {logical=(topology.role==ENTITY_ROLE_GROUP_CHILD)?SEQ_LOGICAL_CAPACITY_GROUP_CHILD:(topology.role!=ENTITY_ROLE_GROUP_MASTER?SEQ_PLAY_MAX_CAPACITY:0U);}
         seq_pattern_prepare_track_t track={0};
         track.capabilities=capabilities;track.logical_capacity=logical;

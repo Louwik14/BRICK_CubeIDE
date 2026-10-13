@@ -23,7 +23,7 @@
     (SEQ_PRODUCT_MAX_NOTE_ONS_PER_HORIZON * 2U)
 
 /* VOICER is the only multiplicative direct stage. Top track 7 and its
- * eight children are mutually exclusive representations of the same product
+ * seven children are mutually exclusive representations of the same product
  * lanes. */
 #define SEQ_PRODUCT_HARMONY_FANOUT_MAX 4U
 #define SEQ_PRODUCT_HELD_STATE_CAPACITY \

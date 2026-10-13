@@ -10,6 +10,10 @@ _Static_assert(PERSIST_CONTROL_GROUP_MASTER_ID == BRICK_ENTITY_GROUP_MASTER_ID,
                "persistence and product GROUP master identities diverged");
 _Static_assert(PERSIST_CONTROL_FIRST_GROUP_CHILD_ID == BRICK_ENTITY_FIRST_GROUP_CHILD_ID,
                "persistence and product GROUP child identities diverged");
+_Static_assert(PERSIST_CONTROL_GROUP_CHILD_COUNT == BRICK_ENTITY_GROUP_CHILD_COUNT,
+               "persistence and product GROUP child counts diverged");
+_Static_assert(PERSIST_CONTROL_MASTER_ID == BRICK_ENTITY_MASTER_ID,
+               "persistence and product Master identities diverged");
 
 uint8_t persist_entity_caps_resolve(uint8_t group_active,
                                     persist_control_entity_id_t entity_id,
@@ -27,6 +31,8 @@ uint8_t persist_entity_caps_resolve(uint8_t group_active,
         role = PERSIST_ENTITY_ROLE_GROUP_MASTER;
     else if (topology.role == ENTITY_ROLE_GROUP_CHILD)
         role = PERSIST_ENTITY_ROLE_GROUP_CHILD;
+    else if (topology.role == ENTITY_ROLE_MASTER)
+        role = PERSIST_ENTITY_ROLE_MASTER;
 
     const uint8_t top_level = (uint8_t)(
         entity_id < PERSIST_CONTROL_FIRST_GROUP_CHILD_ID);
@@ -42,7 +48,7 @@ uint8_t persist_entity_caps_resolve(uint8_t group_active,
         .audio_fx_owner = (uint8_t)(topology.active && top_level),
         .note_fx_owner = (uint8_t)(topology.active
             && (topology.role != ENTITY_ROLE_GROUP_MASTER)),
-        .input_owner = (uint8_t)(topology.active
+        .input_owner = (uint8_t)(topology.active && top_level
             && (topology.role != ENTITY_ROLE_GROUP_CHILD)),
         .play_limit = (entity_topology_can_sequence(&topology) == 0U) ? 0U
             : ((topology.role == ENTITY_ROLE_GROUP_CHILD)

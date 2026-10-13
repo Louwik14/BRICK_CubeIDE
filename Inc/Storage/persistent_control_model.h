@@ -30,8 +30,10 @@ extern "C" {
 #define PERSIST_CONTROL_ENTITY_COUNT             16U
 #define PERSIST_CONTROL_TOP_LEVEL_COUNT           8U
 #define PERSIST_CONTROL_GROUP_MASTER_ID           7U
-#define PERSIST_CONTROL_GROUP_CHILD_COUNT         8U
+#define PERSIST_CONTROL_GROUP_CHILD_COUNT         7U
 #define PERSIST_CONTROL_FIRST_GROUP_CHILD_ID       8U
+#define PERSIST_CONTROL_MASTER_COUNT               1U
+#define PERSIST_CONTROL_MASTER_ID                 15U
 #define PERSIST_CONTROL_STEP_COUNT                64U
 #define PERSIST_CONTROL_PLAY_ITEM_COUNT            8U
 #define PERSIST_CONTROL_CHILD_PLAY_ITEM_COUNT      1U
@@ -60,7 +62,8 @@ typedef enum
 {
     PERSIST_ENTITY_ROLE_MAIN = 1,
     PERSIST_ENTITY_ROLE_GROUP_MASTER,
-    PERSIST_ENTITY_ROLE_GROUP_CHILD
+    PERSIST_ENTITY_ROLE_GROUP_CHILD,
+    PERSIST_ENTITY_ROLE_MASTER
 } persist_control_entity_role_t;
 
 /* Stable product keys. Their numeric values are explicit contracts and must
@@ -368,12 +371,16 @@ typedef struct
 } persist_control_patch_t;
 
 _Static_assert(PERSIST_CONTROL_ENTITY_COUNT
-                   == (PERSIST_CONTROL_TOP_LEVEL_COUNT + PERSIST_CONTROL_GROUP_CHILD_COUNT),
+                   == (PERSIST_CONTROL_TOP_LEVEL_COUNT
+                       + PERSIST_CONTROL_GROUP_CHILD_COUNT
+                       + PERSIST_CONTROL_MASTER_COUNT),
                "canonical project must represent all sixteen entities");
 _Static_assert(PERSIST_CONTROL_GROUP_MASTER_ID == 7U,
                "GROUP master persistent identity changed");
 _Static_assert(PERSIST_CONTROL_FIRST_GROUP_CHILD_ID == 8U,
                "GROUP child persistent identity changed");
+_Static_assert(PERSIST_CONTROL_MASTER_ID == 15U,
+               "harmonic Master persistent identity changed");
 _Static_assert(PERSIST_CONTROL_PLAY_ITEM_COUNT == 8U,
                "top-level and GROUP-master PLAY capacity changed");
 _Static_assert(PERSIST_CONTROL_CHILD_PLAY_ITEM_COUNT == 1U,

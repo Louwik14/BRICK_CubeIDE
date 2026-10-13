@@ -31,9 +31,10 @@ structurel, la preparation PROGRAM CONTROL et l'installation AUDIO refusent
 STREAM, MULTI et toute autre famille. Les children conservent leur configuration
 quand le GROUP est inactif; l'activation initialise a RAM les slots encore OFF.
 
-La Master Track 15 est toujours active et sequencable, avec la seule capacite
-`HARMONY`. Elle est forcee a OFF dans le catalogue Track et ne peut donc jamais
-acquerir de moteur AUDIO, de destination MIDI ou de place dans un GROUP.
+La Master Track 15 est toujours active et sequencable, avec les capacites
+`HARMONY` et `KEYBOARD`. Elle est forcee a OFF dans le catalogue Track et ne
+peut donc jamais acquerir de moteur AUDIO, de destination MIDI ou de place dans
+un GROUP.
 Le mute CONTROL de chaque entite est local; le mute effectif child derive du
 local ou du parent.
 

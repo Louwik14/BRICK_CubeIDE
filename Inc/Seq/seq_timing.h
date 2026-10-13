@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "NoteFx/note_fx_event.h"
+#include "Seq/seq_types.h"
 
 typedef enum
 {
@@ -21,7 +22,7 @@ typedef enum
 #define SEQ_GROOVE_NAME_BYTES 64U
 #define SEQ_GROOVE_FLAG_MISSING 0x01U
 #define SEQ_GROOVE_MAX_PREPARED_NODES 512U
-#define SEQ_TIMING_TRACK_COUNT 16U
+#define SEQ_TIMING_TRACK_COUNT SEQ_LANE_CAPACITY
 
 typedef struct
 {

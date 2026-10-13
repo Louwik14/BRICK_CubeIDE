@@ -21,7 +21,9 @@ Le modele compact conserve 16 lanes, 64 steps, 512 noeuds p-lock par lane,
 8 PLAY par top-level, 1 PLAY par enfant GROUP et 8 PLAY non emetteurs pour la
 Master Track 15. Chaque slot arme dispose de
 512 locks independants par lane dans les SRAM internes; le chemin chaud
-conserve uniquement les listes actives bornees a 32.
+conserve uniquement les listes actives bornees a 32. Le pool physique est
+initialise pour les 16 identites, y compris les children GROUP dormants; leur
+activite topologique ne change jamais la capacite de stockage reservee.
 
 Le Pattern publie aussi la projection executable de chaque lane: role
 topologique, capabilities, destination, mute/timing et capacite logique. Cette

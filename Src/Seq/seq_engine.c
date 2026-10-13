@@ -313,15 +313,21 @@ static void hierarchical_calendar_insert(const note_event_t *event,
 static uint16_t product_lane_from_track_slot(uint8_t track,uint8_t slot)
 {if(track<BRICK_ENTITY_GROUP_MASTER_ID&&slot<SEQ_LOGICAL_CAPACITY_MAX)
     return(uint16_t)((uint16_t)track*SEQ_LOGICAL_CAPACITY_MAX+slot);
- if(track>=BRICK_ENTITY_FIRST_GROUP_CHILD_ID&&track<SEQ_LANE_CAPACITY&&slot==0U)
+ if(track>=BRICK_ENTITY_FIRST_GROUP_CHILD_ID
+      &&track<=BRICK_ENTITY_LAST_GROUP_CHILD_ID&&slot==0U)
     return(uint16_t)(((BRICK_ENTITY_TOP_LEVEL_COUNT-1U)*SEQ_LOGICAL_CAPACITY_MAX)
         +(track-BRICK_ENTITY_FIRST_GROUP_CHILD_ID));
+ if(track==BRICK_ENTITY_MASTER_ID&&slot==0U)
+    return(SEQ_PRODUCT_MAX_EMITTING_VOICES-1U);
  return UINT16_MAX;}
 static uint8_t product_track_from_lane(uint16_t lane)
-{return(lane<(BRICK_ENTITY_TOP_LEVEL_COUNT-1U)*SEQ_LOGICAL_CAPACITY_MAX)
- ?(uint8_t)(lane/SEQ_LOGICAL_CAPACITY_MAX)
- :(uint8_t)(BRICK_ENTITY_FIRST_GROUP_CHILD_ID+lane
- -(BRICK_ENTITY_TOP_LEVEL_COUNT-1U)*SEQ_LOGICAL_CAPACITY_MAX);}
+{if(lane<(BRICK_ENTITY_TOP_LEVEL_COUNT-1U)*SEQ_LOGICAL_CAPACITY_MAX)
+    return(uint8_t)(lane/SEQ_LOGICAL_CAPACITY_MAX);
+ if(lane<SEQ_PRODUCT_MAX_EMITTING_VOICES-1U)
+    return(uint8_t)(BRICK_ENTITY_FIRST_GROUP_CHILD_ID+lane
+        -(BRICK_ENTITY_TOP_LEVEL_COUNT-1U)*SEQ_LOGICAL_CAPACITY_MAX);
+ return(lane==SEQ_PRODUCT_MAX_EMITTING_VOICES-1U)
+    ?BRICK_ENTITY_MASTER_ID:BRICK_ENTITY_INVALID_ID;}
 static uint8_t product_slot_from_lane(uint16_t lane)
 {return(lane<(BRICK_ENTITY_TOP_LEVEL_COUNT-1U)*SEQ_LOGICAL_CAPACITY_MAX)
  ?(uint8_t)(lane%SEQ_LOGICAL_CAPACITY_MAX):0U;}

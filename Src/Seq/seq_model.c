@@ -275,12 +275,13 @@ static const seq_play_item_t *seq_model_play_item_const(seq_track_id_t track,
 
 static uint16_t seq_model_pool_capacity(seq_track_id_t track)
 {
-    return (seq_model_track_is_valid(track) != 0U) ? (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK : 0U;
+    return (track < SEQ_LANE_CAPACITY)
+        ? (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK : 0U;
 }
 
 static seq_plock_node_t *seq_model_pool_entry_mut(seq_track_id_t track, uint16_t index)
 {
-    if ((seq_model_track_is_valid(track) == 0U) || (index >= seq_model_pool_capacity(track)))
+    if ((track >= SEQ_LANE_CAPACITY) || (index >= seq_model_pool_capacity(track)))
     {
         return NULL;
     }
