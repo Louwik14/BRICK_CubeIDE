@@ -37,7 +37,7 @@ typedef struct
 
 static multi_sample_load_status_t g_multi_load_status;
 static uint8_t g_multi_load_active;
-static uint16_t g_multi_load_first_sample_id;
+static uint16_t g_multi_register_sample_id;
 static multi_sample_load_request_t g_multi_load_request;
 SDRAM_MULTI_LOAD static multi_sample_load_request_t
     g_multi_load_queue[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
@@ -62,7 +62,7 @@ static uint16_t g_multi_register_index;
 static uint8_t g_multi_index_pending;
 static uint8_t g_multi_index_ready;
 SDRAM_MULTI_LOAD static multi_sample_index_t g_multi_index_value;
-SDRAM_MULTI_LOAD ALIGN32 static sample_stream_coop_file_t g_multi_sample_file;
+#define g_multi_sample_file (*sample_stream_coop_file_shared())
 static uint8_t g_multi_sample_file_active;
 SDRAM_MULTI_LOAD static char g_multi_register_path[MULTI_SAMPLE_LOADER_PATH_MAX];
 
@@ -88,7 +88,7 @@ void multi_sample_loader_init(void)
 {
     memset(&g_multi_load_status, 0, sizeof(g_multi_load_status));
     g_multi_load_active = 0U;
-    g_multi_load_first_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    g_multi_register_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
     memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     memset(g_multi_load_queue, 0, sizeof(g_multi_load_queue));
     memset(&g_multi_prefill, 0, sizeof(g_multi_prefill));
@@ -359,7 +359,7 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     g_multi_load_status.last_error = MULTI_SAMPLE_LOAD_OK;
     g_multi_load_status.state = multi_sample_pool_get_state(instrument_id);
     g_multi_load_active = 0U;
-    g_multi_load_first_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    g_multi_register_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
     memset(&g_multi_prefill, 0, sizeof(g_multi_prefill));
     g_multi_register_index = 0U;
 
@@ -446,15 +446,9 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         || (prep_budget.samples_preparable < index.sample_count))
        
     {
-        const multi_sample_instrument_t *const failed_instrument =
-            multi_sample_pool_get_instrument(instrument_id);
         multi_loader_set_error(
             MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED,
-            ((failed_instrument != 0)
-             && (prep_budget.first_unpreparable_sample != MULTI_SAMPLE_POOL_INVALID_ID))
-                ? (uint16_t)(failed_instrument->first_sample_id
-                             + prep_budget.first_unpreparable_sample)
-                : MULTI_SAMPLE_POOL_INVALID_ID);
+            MULTI_SAMPLE_POOL_INVALID_ID);
         return MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED;
     }
 
@@ -500,7 +494,7 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         return MULTI_SAMPLE_LOAD_PATH_TOO_LONG;
     }
 
-    g_multi_load_first_sample_id = instrument->first_sample_id;
+    g_multi_register_sample_id = instrument->sample_head_id;
     g_multi_load_status.state = MULTI_SAMPLE_INSTRUMENT_LOADING;
     (void)multi_sample_pool_set_state(instrument_id, MULTI_SAMPLE_INSTRUMENT_LOADING);
 
@@ -628,7 +622,7 @@ static uint8_t multi_loader_register_next_sample(void)
         return 0U;
     }
     const uint16_t index = g_multi_register_index;
-    const uint16_t sample_id = (uint16_t)(instrument->first_sample_id + index);
+    const uint16_t sample_id = g_multi_register_sample_id;
     const multi_sample_desc_t *const sample = multi_sample_pool_get_sample(sample_id);
     if (sample == 0) return 0U;
     char full_path[MULTI_SAMPLE_LOADER_PATH_MAX];
@@ -693,6 +687,12 @@ static uint8_t multi_loader_register_next_sample(void)
         sample_page_cache_port_clear(key);
         return 0U;
     }
+    if (multi_sample_pool_set_sample_registration_epoch(
+            sample_id, stream.registration_epoch) == 0U)
+    {
+        sample_page_cache_port_clear(key);
+        return 0U;
+    }
     g_multi_prefill_plans[index] = (multi_sample_prefill_plan_t){
         .sample_id = sample_id,
         .page_count = prefill_pages,
@@ -701,6 +701,7 @@ static uint8_t multi_loader_register_next_sample(void)
     g_multi_prefill.plan_count++;
     g_multi_load_status.pages_requested = (uint16_t)(
         g_multi_load_status.pages_requested + prefill_pages);
+    g_multi_register_sample_id = multi_sample_pool_next_sample_id(sample_id);
     g_multi_register_index++;
     return 1U;
 }
@@ -792,7 +793,7 @@ void multi_sample_service_load(uint32_t byte_budget)
         if (register_result == 0U)
         {
             multi_loader_set_error(MULTI_SAMPLE_LOAD_REGISTER_FAIL,
-                (uint16_t)(g_multi_load_first_sample_id + g_multi_register_index));
+                g_multi_register_sample_id);
             return;
         }
         if (register_result == 2U) return;

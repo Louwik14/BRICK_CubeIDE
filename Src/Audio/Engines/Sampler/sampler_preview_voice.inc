@@ -294,6 +294,17 @@ void brick6_sampler_preview_note_off(uint8_t note)
     voice->active = 0U;
 }
 
+static void brick6_sampler_preview_stop_classic_sample(uint16_t sample_id)
+{
+    brick6_sampler_voice_t *const voice = &g_sampler_preview.voice;
+    if ((voice->active == 0U)
+        || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
+        || (voice->sample_id != sample_id)) return;
+    sample_voice_reader_stop(&voice->reader);
+    voice->active = 0U;
+    voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
+}
+
 uint8_t brick6_sampler_preview_render(float *left, float *right,
                                       uint32_t frames)
 {

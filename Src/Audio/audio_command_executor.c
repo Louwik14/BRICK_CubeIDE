@@ -32,6 +32,7 @@
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
 #include "Sampler/multi_sample_config.h"
+#include "Sampler/sample_classic_config.h"
 #include "Sampler/wavetable_config.h"
 #include "Audio/audio_wavetable_registry.h"
 #include "Audio/multi_sample_audio_projection_audio.h"
@@ -63,7 +64,7 @@ typedef enum
 _Static_assert(PREPARED_AUDIO_TEMP_OWNER_COUNT == SEQ_TRACK_COUNT,
                "Prepared AUDIO temp owners must match AUDIO mod owners");
 brick_fatal_record_t g_audio_command_fatal_record;
-static uint32_t g_audio_wavetable_generation[
+AUDIO_M7_PRIVATE_SDRAM static uint32_t g_audio_wavetable_generation[
     BRICK_ENTITY_CAPACITY * BRICK6_WAVE_OSC_COUNT];
 static track_tone_fm_base_voice_t g_audio_fm_base_projection[BRICK_ENTITY_CAPACITY];
 static uint8_t g_audio_state_rebind_deferred;
@@ -414,14 +415,7 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
             brick6_sampler_runtime_set_sample(command->entity,
                                               (uint16_t)command->value);
         }
-        if (g_audio_state_rebind_deferred != 0U)
-        {
-            g_audio_state_renderer_rebind_mask |=
-                (uint16_t)(1U << command->entity);
-            return 1U;
-        }
-        return audio_note_engine_adapter_reinitialize_held_renderers(
-            command->entity);
+        return 1U;
     }
     if (command->id == CONTROL_AUDIO_PARAM_MIX_ROUTE)
         return mixer_audio_set_route(command->entity, command->value);
@@ -434,6 +428,13 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
     {
         if (command->entity >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS) return 0U;
         brick6_sampler_runtime_stop_multi_instrument(command->entity);
+        return 1U;
+    }
+    if (command->id == CONTROL_AUDIO_PARAM_CLASSIC_RESOURCE_STOP)
+    {
+        const uint16_t sample_id = (uint16_t)command->value;
+        if (sample_id >= SAMPLE_CLASSIC_CAPACITY) return 0U;
+        brick6_sampler_runtime_stop_classic_sample(sample_id);
         return 1U;
     }
     if (command->id == CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP)

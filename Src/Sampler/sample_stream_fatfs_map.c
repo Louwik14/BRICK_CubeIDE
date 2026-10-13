@@ -31,6 +31,13 @@ SDRAM_STREAM_SERVICE static sample_stream_physical_pool_block_t
 SDRAM_STREAM_SCRATCH static DWORD g_sample_stream_clmt_scratch[SAMPLE_STREAM_FATFS_CLMT_ITEMS];
 static uint32_t g_sample_stream_physical_generation;
 static sample_stream_coop_file_t *g_sample_stream_coop_active;
+SDRAM_STREAM_SCRATCH ALIGN32 static sample_stream_coop_file_t
+    g_sample_stream_coop_shared;
+
+sample_stream_coop_file_t *sample_stream_coop_file_shared(void)
+{
+    return &g_sample_stream_coop_shared;
+}
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(sizeof(sample_stream_physical_extent_t) == 12U,

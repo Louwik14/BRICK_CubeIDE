@@ -73,6 +73,8 @@ uint8_t project_control_wavetable_load_take_result(
 uint8_t project_control_register_sample_runtime(uint32_t kind,const char*path,uint16_t runtime_global,uint16_t*out_logical);
 uint8_t project_control_register_wavetable_runtime(const char*path,uint16_t runtime_global,uint16_t*out_logical);
 uint8_t project_control_register_multi_runtime(const char*path,uint16_t runtime_instrument,uint16_t*out_logical);
+uint8_t project_control_reserve_multi_runtime_at(
+    uint16_t logical,const char*path,uint16_t runtime_instrument);
 uint8_t project_control_begin_multi_runtime(uint16_t logical,const char*path,uint16_t runtime_instrument);
 project_control_asset_result_t project_control_complete_multi_runtime(
     uint16_t logical,const char*path,uint16_t runtime_instrument,uint8_t success);

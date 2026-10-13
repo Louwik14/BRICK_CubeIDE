@@ -116,6 +116,8 @@ typedef struct
     FRESULT result;
 } sample_stream_coop_file_t;
 
+sample_stream_coop_file_t *sample_stream_coop_file_shared(void);
+
 void sample_stream_physical_map_pool_reset(void);
 void sample_stream_physical_map_release(sample_stream_physical_map_t *map);
 uint8_t sample_stream_physical_map_import(

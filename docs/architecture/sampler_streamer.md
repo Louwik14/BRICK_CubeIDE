@@ -41,11 +41,20 @@ autoritaires. `H.LOOP` est une loop forward hold. Le ping-pong est porte par
 entre START et la borne derivee `START + LENGTH`; la loop forward reprend a LOOP START. Le mode est capture
 au NOTE_ON, P-lockable, et exclu de la Matrix/modulation continue.
 
-Un remplacement de sample retire d'abord la voix et sa lease, puis recree
-seulement le renderer pour les sorties physiques encore tenues. Le gate VCA,
-le filtre et le registre `{output_id, note}` ne sont pas rearmes: le NOTE_OFF
-terminal reste donc unique. `OFF`, premiere valeur du selecteur, publie le
-sentinelle non assigne et suit le meme retrait sans recreer de voix.
+`REPLACE FROM SD` est une macro stricte `DELETE -> EMPTY -> LOAD`. DELETE coupe
+immediatement toutes les voix de la ressource, annule les seeks live, attend la
+fence AUDIO et la disparition des leases, puis libere cache et Stream Manager.
+Le LOAD cooperatif ne publie qu'apres prefill complet. Il n'existe ni ancien
+asset musical conserve, ni rollback, ni drainage naturel; un echec laisse le
+slot vide. Une note encore tenue n'est pas retriggee et ne rearme ni VCA ni
+filtre: seul le prochain NOTE_ON reel utilise la nouvelle ressource.
+
+Les samples et zones Multi occupent des slots globaux disperses. Chaque
+instrument enumere explicitement ses IDs; chaque zone reference directement son
+`multi_sample_id`. DELETE rend exactement ces slots au pool apres fence. Les
+IDs restent stables pendant READY et leur reutilisation cree obligatoirement un
+nouvel epoch Page Cache. Il n'existe plus de plage `first + index`, de
+fragmentation externe ni de compaction runtime.
 
 `Sync Len` restaure le contrat historique `Off / 1 bar / 2 bars / 4 bars /
 Auto`. Les longueurs explicites calent la region START/LENGTH sur la duree

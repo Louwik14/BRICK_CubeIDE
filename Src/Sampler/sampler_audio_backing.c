@@ -27,9 +27,9 @@ _Static_assert(sizeof(sample_classic_audio_source_t) == 28U,
                "Classic source layout changed");
 _Static_assert(sizeof(rec_source_projection_t) == 24U,
                "REC source projection layout changed");
-_Static_assert(sizeof(multi_audio_instrument_t) == 10U,
+_Static_assert(sizeof(multi_audio_instrument_t) == 8U,
                "Multi instrument layout changed");
-_Static_assert(sizeof(multi_audio_zone_t) == 8U,
+_Static_assert(sizeof(multi_audio_zone_t) == 10U,
                "Multi zone ABI changed");
 _Static_assert(sizeof(multi_sample_audio_source_t) == 40U,
                "Multi source ABI changed");

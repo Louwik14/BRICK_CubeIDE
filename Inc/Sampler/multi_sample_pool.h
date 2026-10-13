@@ -33,8 +33,10 @@ typedef struct
     uint8_t note_max;
     uint16_t sample_count;
     uint16_t zone_count;
-    uint16_t first_sample_id;
-    uint16_t first_zone_id;
+    uint16_t sample_head_id;
+    uint16_t sample_tail_id;
+    uint16_t zone_head_id;
+    uint16_t zone_tail_id;
 } multi_sample_instrument_t;
 
 typedef struct
@@ -103,8 +105,6 @@ uint8_t multi_sample_pool_set_index_path(uint16_t instrument_id, const char *pat
 uint8_t multi_sample_pool_set_instrument_format(uint16_t instrument_id,
                                                 sample_audio_format_t format);
 uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id);
-uint8_t multi_sample_pool_retire_replaced(uint16_t instrument_id,
-                                          uint32_t fifo_fence);
 void multi_sample_pool_retire_all(void);
 void multi_sample_pool_service_retire(void);
 uint8_t multi_sample_pool_retire_idle(void);
@@ -124,6 +124,8 @@ uint8_t multi_sample_pool_resolve_source_from_result(
     const multi_sample_resolve_result_t *resolved,
     sample_resolved_source_t *out_source);
 uint8_t multi_sample_pool_copy_zone(uint16_t zone_id, multi_sample_zone_t *out_zone);
+uint16_t multi_sample_pool_next_sample_id(uint16_t multi_sample_id);
+uint16_t multi_sample_pool_next_zone_id(uint16_t zone_id);
 
 uint8_t multi_sample_pool_debug_define_instrument(uint16_t instrument_id,
                                                   const char *name,
@@ -146,6 +148,8 @@ uint8_t multi_sample_pool_set_sample_loop(uint16_t multi_sample_id,
                                           uint8_t has_loop,
                                           uint32_t loop_begin,
                                           uint32_t loop_end);
+uint8_t multi_sample_pool_set_sample_registration_epoch(
+    uint16_t multi_sample_id, uint32_t registration_epoch);
 uint8_t multi_sample_pool_debug_add_zone(uint16_t instrument_id,
                                          const multi_sample_zone_t *zone);
 

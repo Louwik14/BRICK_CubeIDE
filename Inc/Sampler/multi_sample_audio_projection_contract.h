@@ -7,9 +7,8 @@ typedef struct
 {
     volatile uint8_t ready;
     uint8_t reserved;
-    uint16_t first_zone_id;
+    uint16_t zone_head_id;
     uint16_t zone_count;
-    uint16_t first_sample_id;
     uint16_t sample_count;
 } multi_audio_instrument_t;
 
@@ -22,6 +21,7 @@ typedef struct
     uint8_t root_note;
     uint8_t reserved;
     uint16_t multi_sample_id;
+    uint16_t next_zone_id;
 } multi_audio_zone_t;
 
 extern multi_audio_instrument_t

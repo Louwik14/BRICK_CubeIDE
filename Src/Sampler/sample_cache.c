@@ -51,7 +51,7 @@ typedef struct
     sample_cache_coop_phase_t phase;
 } sample_cache_coop_load_t;
 
-SDRAM_CLASSIC_POOL ALIGN32 static sample_stream_coop_file_t g_sample_cache_coop_file;
+#define g_sample_cache_coop_file (*sample_stream_coop_file_shared())
 SDRAM_CLASSIC_POOL static sample_cache_coop_load_t g_sample_cache_coop;
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)

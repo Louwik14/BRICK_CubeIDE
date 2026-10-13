@@ -35,11 +35,17 @@ uint8_t multi_sample_audio_projection_resolve(uint16_t instrument_id,
     const multi_audio_zone_t *fallback = NULL;
     uint16_t best_zone = MULTI_SAMPLE_POOL_INVALID_ID;
     uint8_t best_delta = UINT8_MAX, fallback_delta = UINT8_MAX;
-    for (uint32_t i = snap.first_zone_id;
-         i < (uint32_t)snap.first_zone_id + snap.zone_count; ++i)
+    uint16_t zone_id = snap.zone_head_id;
+    for (uint16_t visited = 0U; visited < snap.zone_count; ++visited)
     {
-        const multi_audio_zone_t *const z = &g_multi_audio_zones[i];
-        if ((note < z->note_low) || (note > z->note_high)) continue;
+        if (zone_id >= MULTI_SAMPLE_POOL_MAX_ZONES) return 0U;
+        const multi_audio_zone_t *const z = &g_multi_audio_zones[zone_id];
+        const uint16_t next_zone_id = z->next_zone_id;
+        if ((note < z->note_low) || (note > z->note_high))
+        {
+            zone_id = next_zone_id;
+            continue;
+        }
         const uint8_t d = abs_delta(z->root_note, note);
         if ((fallback == NULL) || (d < fallback_delta))
         {
@@ -50,9 +56,10 @@ uint8_t multi_sample_audio_projection_resolve(uint16_t instrument_id,
             && ((best == NULL) || (d < best_delta)))
         {
             best = z;
-            best_zone = (uint16_t)i;
+            best_zone = zone_id;
             best_delta = d;
         }
+        zone_id = next_zone_id;
     }
     const uint8_t used_fallback = (best == NULL) ? 1U : 0U;
     if (best == NULL)
@@ -63,13 +70,15 @@ uint8_t multi_sample_audio_projection_resolve(uint16_t instrument_id,
     if ((best == NULL) || (best->multi_sample_id >= MULTI_SAMPLE_POOL_MAX_SAMPLES))
         return 0U;
     uint8_t layer_count = 0U;
-    for (uint32_t i = snap.first_zone_id;
-         i < (uint32_t)snap.first_zone_id + snap.zone_count; ++i)
+    zone_id = snap.zone_head_id;
+    for (uint16_t visited = 0U; visited < snap.zone_count; ++visited)
     {
-        const multi_audio_zone_t *const z = &g_multi_audio_zones[i];
+        if (zone_id >= MULTI_SAMPLE_POOL_MAX_ZONES) return 0U;
+        const multi_audio_zone_t *const z = &g_multi_audio_zones[zone_id];
         if ((note >= z->note_low) && (note <= z->note_high)
             && (z->root_note == best->root_note) && (layer_count != UINT8_MAX))
             layer_count++;
+        zone_id = z->next_zone_id;
     }
     if ((used_fallback != 0U) && (layer_count != 1U)) return 0U;
     *out = g_multi_audio_samples[best->multi_sample_id];

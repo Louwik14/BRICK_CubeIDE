@@ -65,7 +65,7 @@ typedef struct
     multi_sample_index_result_t result;
 } multi_index_coop_load_t;
 
-SDRAM_MULTI_LOAD ALIGN32 static sample_stream_coop_file_t g_multi_index_file;
+#define g_multi_index_file (*sample_stream_coop_file_shared())
 SDRAM_MULTI_LOAD static multi_index_coop_load_t g_multi_index_coop;
 
 static uint16_t multi_index_get_le16(const uint8_t *p)
@@ -782,7 +782,6 @@ uint8_t multi_sample_index_load_cooperative_begin(const char *path)
         || g_multi_index_coop.terminal != 0U)
         return 0U;
     memset(&g_multi_index_coop, 0, sizeof(g_multi_index_coop));
-    sample_stream_coop_file_init(&g_multi_index_file);
     if (sample_stream_coop_file_begin(&g_multi_index_file, path) == 0U)
         return 0U;
     g_multi_index_coop.active = 1U;

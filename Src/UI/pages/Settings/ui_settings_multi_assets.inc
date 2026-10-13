@@ -648,17 +648,16 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
     }
 
     uint16_t logical = 0U;
-    uint16_t candidate = slot;
+    const uint16_t candidate = slot;
     if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
     {
-        const int16_t free_candidate = ui_page_settings_multi_find_free_slot();
-        if (free_candidate < 0)
+        logical = g_ui_settings.sample_slot_selected;
+        if (project_control_reserve_multi_runtime_at(
+                logical, entry->index_path, candidate) == 0U)
         {
-            ui_page_settings_multi_prepare_finish("POOL FULL");
+            ui_page_settings_multi_prepare_finish("BANK FAIL");
             return;
         }
-        candidate = (uint16_t)free_candidate;
-        logical = g_ui_settings.sample_slot_selected;
     }
     else if (ui_page_settings_multi_register_global(
             MULTI_SAMPLE_POOL_INVALID_ID, entry->index_path, &logical) == 0U)

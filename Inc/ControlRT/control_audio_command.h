@@ -182,6 +182,7 @@ _Static_assert(sizeof(control_audio_command_t) == 16U,
 #define CONTROL_AUDIO_PARAM_MIX_INSERT_FIRST    0xFFE1U
 #define CONTROL_AUDIO_PARAM_MIX_INSERT_LAST     0xFFE4U
 #define CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP 0xFFF5U
+#define CONTROL_AUDIO_PARAM_CLASSIC_RESOURCE_STOP 0xFFF6U
 #define CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP  0xFFF7U
 
 /* Durable/transient is a property of the command, not of PARAM identity.

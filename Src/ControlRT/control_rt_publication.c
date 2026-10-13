@@ -19,6 +19,7 @@
 #include "Mod/mod_matrix.h"
 #include "Param/engine_model_catalog.h"
 #include "Sampler/multi_sample_config.h"
+#include "Sampler/sample_classic_config.h"
 #include "Sampler/wavetable_config.h"
 #include "main.h"
 
@@ -153,6 +154,9 @@ static uint8_t control_rt_param_is_structural(
     if (command->id == CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP)
         return (uint8_t)((scope == 0U)
             && (command->entity < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS));
+    if (command->id == CONTROL_AUDIO_PARAM_CLASSIC_RESOURCE_STOP)
+        return (uint8_t)((scope == 0U)
+            && (command->value < SAMPLE_CLASSIC_CAPACITY));
     if (command->id == CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP)
         return (uint8_t)((scope == 0U)
             && (command->entity < WAVETABLE_POOL_MAX_SLOTS));

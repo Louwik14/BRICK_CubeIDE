@@ -24,14 +24,16 @@ static CTRL_STATE multi_sample_instrument_slot_t
     g_multi_instruments[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
 SDRAM_MULTI_POOL static multi_sample_desc_t g_multi_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 SDRAM_MULTI_POOL static multi_sample_zone_t g_multi_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
+SDRAM_MULTI_POOL static uint8_t g_multi_sample_used[MULTI_SAMPLE_POOL_MAX_SAMPLES];
+SDRAM_MULTI_POOL static uint8_t g_multi_zone_used[MULTI_SAMPLE_POOL_MAX_ZONES];
+SDRAM_MULTI_POOL static uint16_t g_multi_sample_next[MULTI_SAMPLE_POOL_MAX_SAMPLES];
+SDRAM_MULTI_POOL static uint16_t g_multi_zone_next[MULTI_SAMPLE_POOL_MAX_ZONES];
 static CTRL_STATE uint16_t g_multi_sample_count;
 static CTRL_STATE uint16_t g_multi_zone_count;
 static CTRL_STATE uint8_t
     g_multi_retire_stop_committed[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
 static CTRL_STATE uint32_t
     g_multi_retire_fence_head[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
-static CTRL_STATE uint8_t
-    g_multi_retire_graceful[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
 static CTRL_STATE uint8_t g_multi_retire_invariant_failed;
 static CTRL_STATE uint8_t g_multi_clear_active;
 
@@ -93,25 +95,41 @@ static uint8_t multi_sample_abs_note_delta(uint8_t a, uint8_t b)
     return (a >= b) ? (uint8_t)(a - b) : (uint8_t)(b - a);
 }
 
+static uint16_t multi_sample_find_free_sample(void)
+{
+    for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_SAMPLES; ++id)
+        if (g_multi_sample_used[id] == 0U) return id;
+    return MULTI_SAMPLE_POOL_INVALID_ID;
+}
+
+static uint16_t multi_sample_find_free_zone(void)
+{
+    for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_ZONES; ++id)
+        if (g_multi_zone_used[id] == 0U) return id;
+    return MULTI_SAMPLE_POOL_INVALID_ID;
+}
+
 static uint8_t multi_sample_count_velocity_layers_for_note_root(
     const multi_sample_instrument_t *instrument,
     uint8_t note,
     uint8_t root_note)
 {
     if ((instrument == 0) || (instrument->zone_count == 0U)
-        || (instrument->first_zone_id >= MULTI_SAMPLE_POOL_MAX_ZONES))
+        || (instrument->zone_head_id >= MULTI_SAMPLE_POOL_MAX_ZONES))
     {
         return 0U;
     }
 
     uint16_t count = 0U;
-    const uint32_t end_zone = (uint32_t)instrument->first_zone_id + instrument->zone_count;
-    for (uint32_t zone_id = instrument->first_zone_id;
-         (zone_id < end_zone) && (zone_id < MULTI_SAMPLE_POOL_MAX_ZONES);
-         ++zone_id)
+    uint16_t zone_id = instrument->zone_head_id;
+    for (uint16_t visited = 0U;
+         visited < instrument->zone_count && zone_id < MULTI_SAMPLE_POOL_MAX_ZONES;
+         ++visited, zone_id = g_multi_zone_next[zone_id])
     {
         const multi_sample_zone_t *const zone = &g_multi_zones[zone_id];
-        if ((zone->multi_sample_id >= g_multi_sample_count)
+        if (g_multi_zone_used[zone_id] == 0U
+            || zone->multi_sample_id >= MULTI_SAMPLE_POOL_MAX_SAMPLES
+            || g_multi_sample_used[zone->multi_sample_id] == 0U
             || (zone->root_note != root_note)
             || (multi_sample_range_contains(zone->note_low, zone->note_high, note) == 0U))
         {
@@ -130,7 +148,7 @@ static uint8_t multi_sample_count_velocity_layers_for_note_root(
 static void multi_sample_instrument_recompute_note_range(multi_sample_instrument_t *instrument)
 {
     if ((instrument == 0) || (instrument->zone_count == 0U)
-        || (instrument->first_zone_id >= MULTI_SAMPLE_POOL_MAX_ZONES))
+        || (instrument->zone_head_id >= MULTI_SAMPLE_POOL_MAX_ZONES))
     {
         if (instrument != 0)
         {
@@ -142,11 +160,12 @@ static void multi_sample_instrument_recompute_note_range(multi_sample_instrument
 
     uint8_t note_min = 127U;
     uint8_t note_max = 0U;
-    const uint32_t end_zone = (uint32_t)instrument->first_zone_id + instrument->zone_count;
-    for (uint32_t zone_id = instrument->first_zone_id;
-         (zone_id < end_zone) && (zone_id < MULTI_SAMPLE_POOL_MAX_ZONES);
-         ++zone_id)
+    uint16_t zone_id = instrument->zone_head_id;
+    for (uint16_t visited = 0U;
+         visited < instrument->zone_count && zone_id < MULTI_SAMPLE_POOL_MAX_ZONES;
+         ++visited, zone_id = g_multi_zone_next[zone_id])
     {
+        if (g_multi_zone_used[zone_id] == 0U) break;
         const multi_sample_zone_t *const zone = &g_multi_zones[zone_id];
         if (zone->note_low < note_min)
         {
@@ -175,11 +194,14 @@ void multi_sample_pool_reset(void)
            sizeof(g_multi_retire_stop_committed));
     memset(g_multi_retire_fence_head, 0,
            sizeof(g_multi_retire_fence_head));
-    memset(g_multi_retire_graceful, 0, sizeof(g_multi_retire_graceful));
     g_multi_retire_invariant_failed = 0U;
     memset(g_multi_instruments, 0, sizeof(g_multi_instruments));
     memset(g_multi_samples, 0, sizeof(g_multi_samples));
     memset(g_multi_zones, 0, sizeof(g_multi_zones));
+    memset(g_multi_sample_used, 0, sizeof(g_multi_sample_used));
+    memset(g_multi_zone_used, 0, sizeof(g_multi_zone_used));
+    memset(g_multi_sample_next, 0xFF, sizeof(g_multi_sample_next));
+    memset(g_multi_zone_next, 0xFF, sizeof(g_multi_zone_next));
     g_multi_sample_count = 0U;
     g_multi_zone_count = 0U;
 
@@ -187,8 +209,10 @@ void multi_sample_pool_reset(void)
     {
         g_multi_instruments[i].desc.id = i;
         g_multi_instruments[i].desc.state = MULTI_SAMPLE_INSTRUMENT_EMPTY;
-        g_multi_instruments[i].desc.first_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-        g_multi_instruments[i].desc.first_zone_id = MULTI_SAMPLE_POOL_INVALID_ID;
+        g_multi_instruments[i].desc.sample_head_id = MULTI_SAMPLE_POOL_INVALID_ID;
+        g_multi_instruments[i].desc.sample_tail_id = MULTI_SAMPLE_POOL_INVALID_ID;
+        g_multi_instruments[i].desc.zone_head_id = MULTI_SAMPLE_POOL_INVALID_ID;
+        g_multi_instruments[i].desc.zone_tail_id = MULTI_SAMPLE_POOL_INVALID_ID;
     }
 }
 
@@ -213,8 +237,9 @@ uint16_t multi_sample_pool_get_sample_capacity_used(void)
 uint16_t multi_sample_pool_get_slot_capacity_used(void)
 {
     uint32_t slots = 0U;
-    for (uint16_t i = 0U; i < g_multi_sample_count; ++i)
+    for (uint16_t i = 0U; i < MULTI_SAMPLE_POOL_MAX_SAMPLES; ++i)
     {
+        if (g_multi_sample_used[i] == 0U) continue;
         const multi_sample_desc_t *const sample = &g_multi_samples[i];
         if ((sample->instrument_id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
             && (g_multi_instruments[sample->instrument_id].used != 0U))
@@ -250,7 +275,8 @@ const multi_sample_instrument_t *multi_sample_pool_get_instrument(uint16_t instr
 
 const multi_sample_desc_t *multi_sample_pool_get_sample(uint16_t multi_sample_id)
 {
-    if (multi_sample_id >= g_multi_sample_count)
+    if (multi_sample_id >= MULTI_SAMPLE_POOL_MAX_SAMPLES
+        || g_multi_sample_used[multi_sample_id] == 0U)
     {
         return 0;
     }
@@ -301,10 +327,25 @@ uint8_t multi_sample_pool_set_state(uint16_t instrument_id,
 
 uint8_t multi_sample_pool_copy_zone(uint16_t zone_id, multi_sample_zone_t *out_zone)
 {
-    if ((out_zone == NULL) || (zone_id >= g_multi_zone_count))
+    if ((out_zone == NULL) || (zone_id >= MULTI_SAMPLE_POOL_MAX_ZONES)
+        || g_multi_zone_used[zone_id] == 0U)
         return 0U;
     *out_zone = g_multi_zones[zone_id];
     return 1U;
+}
+
+uint16_t multi_sample_pool_next_sample_id(uint16_t multi_sample_id)
+{
+    return (multi_sample_id < MULTI_SAMPLE_POOL_MAX_SAMPLES
+            && g_multi_sample_used[multi_sample_id] != 0U)
+        ? g_multi_sample_next[multi_sample_id] : MULTI_SAMPLE_POOL_INVALID_ID;
+}
+
+uint16_t multi_sample_pool_next_zone_id(uint16_t zone_id)
+{
+    return (zone_id < MULTI_SAMPLE_POOL_MAX_ZONES
+            && g_multi_zone_used[zone_id] != 0U)
+        ? g_multi_zone_next[zone_id] : MULTI_SAMPLE_POOL_INVALID_ID;
 }
 
 uint8_t multi_sample_pool_set_index_path(uint16_t instrument_id, const char *path)
@@ -337,12 +378,13 @@ uint8_t multi_sample_pool_set_instrument_format(uint16_t instrument_id,
     multi_sample_instrument_t *const instrument = &g_multi_instruments[instrument_id].desc;
     if (instrument->sample_count != 0U)
     {
-        const uint32_t end_sample = (uint32_t)instrument->first_sample_id
-                                    + instrument->sample_count;
-        for (uint32_t sample_id = instrument->first_sample_id;
-             (sample_id < end_sample) && (sample_id < g_multi_sample_count);
-             ++sample_id)
+        uint16_t sample_id = instrument->sample_head_id;
+        for (uint16_t visited = 0U;
+             visited < instrument->sample_count
+                && sample_id < MULTI_SAMPLE_POOL_MAX_SAMPLES;
+             ++visited, sample_id = g_multi_sample_next[sample_id])
         {
+            if (g_multi_sample_used[sample_id] == 0U) return 0U;
             const multi_sample_desc_t *const sample = &g_multi_samples[sample_id];
             if ((sample->format != format)
                 || (sample->stride_floats
@@ -374,43 +416,42 @@ static uint8_t multi_sample_pool_finalize_clear_instrument(uint16_t instrument_i
     sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_MULTI, instrument_id);
 
     const multi_sample_instrument_t *const instrument = &g_multi_instruments[instrument_id].desc;
-    const uint32_t sample_end = (instrument->first_sample_id == MULTI_SAMPLE_POOL_INVALID_ID)
-        ? g_multi_sample_count
-        : ((uint32_t)instrument->first_sample_id + instrument->sample_count);
-    const uint32_t zone_end = (instrument->first_zone_id == MULTI_SAMPLE_POOL_INVALID_ID)
-        ? g_multi_zone_count
-        : ((uint32_t)instrument->first_zone_id + instrument->zone_count);
-
-    if (instrument->first_sample_id != MULTI_SAMPLE_POOL_INVALID_ID)
+    uint16_t sample_id = instrument->sample_head_id;
+    for (uint16_t visited = 0U;
+         visited < instrument->sample_count
+            && sample_id < MULTI_SAMPLE_POOL_MAX_SAMPLES;
+         ++visited)
     {
-        for (uint32_t sample_id = instrument->first_sample_id;
-             (sample_id < sample_end) && (sample_id < MULTI_SAMPLE_POOL_MAX_SAMPLES);
-             ++sample_id)
-        {
-            const sample_audio_key_t key = sample_audio_key_multi((uint16_t)sample_id);
-            sample_stream_manager_release_key(key);
-            sample_page_cache_clear_key(key);
-        }
+        const uint16_t next = g_multi_sample_next[sample_id];
+        const sample_audio_key_t key = sample_audio_key_multi(sample_id);
+        sample_stream_manager_release_key(key);
+        sample_page_cache_clear_key(key);
+        memset(&g_multi_samples[sample_id], 0, sizeof(g_multi_samples[sample_id]));
+        g_multi_sample_used[sample_id] = 0U;
+        g_multi_sample_next[sample_id] = MULTI_SAMPLE_POOL_INVALID_ID;
+        if (g_multi_sample_count != 0U) --g_multi_sample_count;
+        sample_id = next;
     }
-
-    if (sample_end == g_multi_sample_count)
+    uint16_t zone_id = instrument->zone_head_id;
+    for (uint16_t visited = 0U;
+         visited < instrument->zone_count && zone_id < MULTI_SAMPLE_POOL_MAX_ZONES;
+         ++visited)
     {
-        g_multi_sample_count = (instrument->first_sample_id == MULTI_SAMPLE_POOL_INVALID_ID)
-            ? g_multi_sample_count
-            : instrument->first_sample_id;
-    }
-    if (zone_end == g_multi_zone_count)
-    {
-        g_multi_zone_count = (instrument->first_zone_id == MULTI_SAMPLE_POOL_INVALID_ID)
-            ? g_multi_zone_count
-            : instrument->first_zone_id;
+        const uint16_t next = g_multi_zone_next[zone_id];
+        memset(&g_multi_zones[zone_id], 0, sizeof(g_multi_zones[zone_id]));
+        g_multi_zone_used[zone_id] = 0U;
+        g_multi_zone_next[zone_id] = MULTI_SAMPLE_POOL_INVALID_ID;
+        if (g_multi_zone_count != 0U) --g_multi_zone_count;
+        zone_id = next;
     }
 
     memset(&g_multi_instruments[instrument_id], 0, sizeof(g_multi_instruments[instrument_id]));
     g_multi_instruments[instrument_id].desc.id = instrument_id;
     g_multi_instruments[instrument_id].desc.state = MULTI_SAMPLE_INSTRUMENT_EMPTY;
-    g_multi_instruments[instrument_id].desc.first_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-    g_multi_instruments[instrument_id].desc.first_zone_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    g_multi_instruments[instrument_id].desc.sample_head_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    g_multi_instruments[instrument_id].desc.sample_tail_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    g_multi_instruments[instrument_id].desc.zone_head_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    g_multi_instruments[instrument_id].desc.zone_tail_id = MULTI_SAMPLE_POOL_INVALID_ID;
     return 1U;
 }
 
@@ -428,25 +469,6 @@ uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id)
     instrument->state = MULTI_SAMPLE_INSTRUMENT_RETIRING;
     g_multi_retire_stop_committed[instrument_id] = 0U;
     g_multi_retire_fence_head[instrument_id] = 0U;
-    __DMB();
-    return 1U;
-}
-
-uint8_t multi_sample_pool_retire_replaced(uint16_t instrument_id,
-                                          uint32_t fifo_fence)
-{
-    if (multi_sample_instrument_id_valid(instrument_id) == 0U
-        || g_multi_instruments[instrument_id].used == 0U
-        || g_multi_instruments[instrument_id].desc.state
-            != MULTI_SAMPLE_INSTRUMENT_READY)
-        return 0U;
-    control_music_output_retire_multi_instrument(instrument_id);
-    __DMB();
-    g_multi_instruments[instrument_id].desc.state =
-        MULTI_SAMPLE_INSTRUMENT_RETIRING;
-    g_multi_retire_graceful[instrument_id] = 1U;
-    g_multi_retire_stop_committed[instrument_id] = 1U;
-    g_multi_retire_fence_head[instrument_id] = fifo_fence;
     __DMB();
     return 1U;
 }
@@ -485,17 +507,17 @@ void multi_sample_pool_service_retire(void)
         if (control_audio_fifo_control_head_consumed(
                 g_multi_retire_fence_head[i]) == 0U) continue;
         uint8_t leased = 0U;
-        const uint32_t end = (uint32_t)instrument->first_sample_id
-            + instrument->sample_count;
-        for (uint32_t sample = instrument->first_sample_id;
-             sample < end; ++sample)
+        uint16_t sample = instrument->sample_head_id;
+        for (uint16_t visited = 0U;
+             visited < instrument->sample_count
+                && sample < MULTI_SAMPLE_POOL_MAX_SAMPLES;
+             ++visited, sample = g_multi_sample_next[sample])
             if (sample_page_lease_control_references_key(
-                    sample_audio_key_multi((uint16_t)sample)) != 0U)
+                    sample_audio_key_multi(sample)) != 0U)
             { leased = 1U; break; }
         if (leased != 0U) continue;
         g_multi_retire_stop_committed[i] = 0U;
         g_multi_retire_fence_head[i] = 0U;
-        g_multi_retire_graceful[i] = 0U;
         (void)multi_sample_pool_finalize_clear_instrument(i);
     }
 }
@@ -531,7 +553,7 @@ uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
     if ((instrument == 0) || (out_result == 0)
         || (instrument->state != MULTI_SAMPLE_INSTRUMENT_READY)
         || (instrument->zone_count == 0U)
-        || (instrument->first_zone_id >= MULTI_SAMPLE_POOL_MAX_ZONES))
+        || (instrument->zone_head_id >= MULTI_SAMPLE_POOL_MAX_ZONES))
     {
         return 0U;
     }
@@ -540,13 +562,16 @@ uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
     const multi_sample_zone_t *fallback_zone = 0;
     uint8_t best_delta = UINT8_MAX;
     uint8_t fallback_delta = UINT8_MAX;
-    const uint32_t end_zone = (uint32_t)instrument->first_zone_id + instrument->zone_count;
-    for (uint32_t zone_id = instrument->first_zone_id;
-         (zone_id < end_zone) && (zone_id < MULTI_SAMPLE_POOL_MAX_ZONES);
-         ++zone_id)
+    uint16_t best_zone_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    uint16_t zone_id = instrument->zone_head_id;
+    for (uint16_t visited = 0U;
+         visited < instrument->zone_count && zone_id < MULTI_SAMPLE_POOL_MAX_ZONES;
+         ++visited, zone_id = g_multi_zone_next[zone_id])
     {
         const multi_sample_zone_t *const zone = &g_multi_zones[zone_id];
-        if ((zone->multi_sample_id >= g_multi_sample_count)
+        if (g_multi_zone_used[zone_id] == 0U
+            || zone->multi_sample_id >= MULTI_SAMPLE_POOL_MAX_SAMPLES
+            || g_multi_sample_used[zone->multi_sample_id] == 0U
             || (multi_sample_range_contains(zone->note_low, zone->note_high, note) == 0U))
         {
             continue;
@@ -567,6 +592,7 @@ uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
         if ((best_zone == 0) || (delta < best_delta))
         {
             best_zone = zone;
+            best_zone_id = zone_id;
             best_delta = delta;
         }
     }
@@ -588,6 +614,7 @@ uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
         }
 
         best_zone = fallback_zone;
+        best_zone_id = (uint16_t)(fallback_zone - &g_multi_zones[0]);
     }
 
     const uint8_t velocity_layer_count =
@@ -596,7 +623,7 @@ uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
                                                          best_zone->root_note);
 
     out_result->multi_sample_id = best_zone->multi_sample_id;
-    out_result->zone_id = (uint16_t)(best_zone - &g_multi_zones[0]);
+    out_result->zone_id = best_zone_id;
     out_result->root_note = best_zone->root_note;
     out_result->pitch_semitones = (int8_t)((int16_t)note - (int16_t)best_zone->root_note);
     out_result->vel_low = best_zone->vel_low;
@@ -639,8 +666,10 @@ uint8_t multi_sample_pool_debug_define_instrument(uint16_t instrument_id,
     slot->used = 1U;
     slot->desc.id = instrument_id;
     slot->desc.state = state;
-    slot->desc.first_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-    slot->desc.first_zone_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    slot->desc.sample_head_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    slot->desc.sample_tail_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    slot->desc.zone_head_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    slot->desc.zone_tail_id = MULTI_SAMPLE_POOL_INVALID_ID;
     memcpy(slot->desc.name, copied_name, sizeof(slot->desc.name));
     return 1U;
 }
@@ -673,14 +702,8 @@ uint8_t multi_sample_pool_debug_add_sample(uint16_t instrument_id,
     }
 
     multi_sample_instrument_t *const instrument = &g_multi_instruments[instrument_id].desc;
-    if ((instrument->sample_count != 0U)
-        && (((uint32_t)instrument->first_sample_id + instrument->sample_count)
-            != g_multi_sample_count))
-    {
-        return 0U;
-    }
-
-    const uint16_t sample_id = g_multi_sample_count++;
+    const uint16_t sample_id = multi_sample_find_free_sample();
+    if (sample_id == MULTI_SAMPLE_POOL_INVALID_ID) return 0U;
     multi_sample_desc_t *const sample = &g_multi_samples[sample_id];
     memset(sample, 0, sizeof(*sample));
     sample->multi_sample_id = sample_id;
@@ -692,16 +715,19 @@ uint8_t multi_sample_pool_debug_add_sample(uint16_t instrument_id,
     sample->flags = flags;
     if (multi_sample_copy_text(sample->path, sizeof(sample->path), path) == 0U)
     {
-        g_multi_sample_count--;
         memset(sample, 0, sizeof(*sample));
         return 0U;
     }
-
+    g_multi_sample_used[sample_id] = 1U;
+    g_multi_sample_next[sample_id] = MULTI_SAMPLE_POOL_INVALID_ID;
     if (instrument->sample_count == 0U)
     {
-        instrument->first_sample_id = sample_id;
+        instrument->sample_head_id = sample_id;
     }
+    else g_multi_sample_next[instrument->sample_tail_id] = sample_id;
+    instrument->sample_tail_id = sample_id;
     instrument->sample_count++;
+    g_multi_sample_count++;
 
     if (out_multi_sample_id != 0)
     {
@@ -717,7 +743,8 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
                                             uint16_t channels,
                                             uint16_t bits_per_sample)
 {
-    if ((multi_sample_id >= g_multi_sample_count)
+    if ((multi_sample_id >= MULTI_SAMPLE_POOL_MAX_SAMPLES)
+        || (g_multi_sample_used[multi_sample_id] == 0U)
         || (sample_rate == 0U)
         || (channels == 0U)
         || (bits_per_sample == 0U))
@@ -764,7 +791,8 @@ uint8_t multi_sample_pool_set_sample_loop(uint16_t multi_sample_id,
                                           uint32_t loop_begin,
                                           uint32_t loop_end)
 {
-    if ((multi_sample_id >= g_multi_sample_count)
+    if ((multi_sample_id >= MULTI_SAMPLE_POOL_MAX_SAMPLES)
+        || (g_multi_sample_used[multi_sample_id] == 0U)
         || (g_multi_samples[multi_sample_id].instrument_id
             >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
         || (g_multi_instruments[g_multi_samples[multi_sample_id].instrument_id]
@@ -790,6 +818,16 @@ uint8_t multi_sample_pool_set_sample_loop(uint16_t multi_sample_id,
     sample->has_loop = 1U;
     sample->loop_begin = loop_begin;
     sample->loop_end = loop_end;
+    return 1U;
+}
+
+uint8_t multi_sample_pool_set_sample_registration_epoch(
+    uint16_t multi_sample_id, uint32_t registration_epoch)
+{
+    if (multi_sample_id >= MULTI_SAMPLE_POOL_MAX_SAMPLES
+        || g_multi_sample_used[multi_sample_id] == 0U
+        || registration_epoch == 0U) return 0U;
+    g_multi_samples[multi_sample_id].registration_epoch = registration_epoch;
     return 1U;
 }
 
@@ -834,7 +872,7 @@ uint8_t multi_sample_pool_resolve_source_from_result(
     out_source->format = sample->format;
     out_source->stride_floats = sample->stride_floats;
     out_source->frames_per_page = sample->frames_per_page;
-    out_source->registration_epoch = 0U;
+    out_source->registration_epoch = sample->registration_epoch;
     out_source->root_note = resolved->root_note;
     out_source->fine_tune_cents = 0;
     out_source->region_begin = 0U;
@@ -888,17 +926,13 @@ uint8_t multi_sample_pool_debug_add_zone(uint16_t instrument_id,
         || (zone->vel_low > zone->vel_high)
         || (zone->vel_high > 127U)
         || (zone->root_note > 127U)
-        || (zone->multi_sample_id >= g_multi_sample_count))
+        || (zone->multi_sample_id >= MULTI_SAMPLE_POOL_MAX_SAMPLES)
+        || (g_multi_sample_used[zone->multi_sample_id] == 0U))
     {
         return 0U;
     }
 
     multi_sample_instrument_t *const instrument = &g_multi_instruments[instrument_id].desc;
-    if ((instrument->zone_count != 0U)
-        && (((uint32_t)instrument->first_zone_id + instrument->zone_count) != g_multi_zone_count))
-    {
-        return 0U;
-    }
 
     const multi_sample_desc_t *const sample = &g_multi_samples[zone->multi_sample_id];
     if ((sample->instrument_id != instrument_id)
@@ -914,13 +948,19 @@ uint8_t multi_sample_pool_debug_add_zone(uint16_t instrument_id,
         return 0U;
     }
 
-    const uint16_t zone_id = g_multi_zone_count++;
+    const uint16_t zone_id = multi_sample_find_free_zone();
+    if (zone_id == MULTI_SAMPLE_POOL_INVALID_ID) return 0U;
     g_multi_zones[zone_id] = *zone;
+    g_multi_zone_used[zone_id] = 1U;
+    g_multi_zone_next[zone_id] = MULTI_SAMPLE_POOL_INVALID_ID;
     if (instrument->zone_count == 0U)
     {
-        instrument->first_zone_id = zone_id;
+        instrument->zone_head_id = zone_id;
     }
+    else g_multi_zone_next[instrument->zone_tail_id] = zone_id;
+    instrument->zone_tail_id = zone_id;
     instrument->zone_count++;
+    g_multi_zone_count++;
     multi_sample_instrument_recompute_note_range(instrument);
     return 1U;
 }

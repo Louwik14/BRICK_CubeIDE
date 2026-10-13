@@ -321,6 +321,7 @@ static void brick6_sampler_runtime_stream_live_queue(uint8_t track_id,
 static void brick6_sampler_runtime_stream_live_service(uint8_t track_id,
                                                        uint32_t frames);
 static void brick6_sampler_runtime_stream_live_reset(uint8_t track_id);
+static void brick6_sampler_preview_stop_classic_sample(uint16_t sample_id);
 static float brick6_sampler_runtime_pitch_ratio(float semitones);
 static uint32_t brick6_sampler_runtime_clip_resolve_timing_ratio_q16(uint8_t track_id,
                                                                      const sample_resolved_source_t *desc,

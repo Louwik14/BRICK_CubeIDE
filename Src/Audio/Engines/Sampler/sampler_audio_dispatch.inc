@@ -115,6 +115,30 @@ void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id)
     g_sampler_clip_runtime[track_id].sample_id = sample_id;
 }
 
+void brick6_sampler_runtime_stop_classic_sample(uint16_t sample_id)
+{
+    if (sample_id >= SAMPLE_CLASSIC_CAPACITY) return;
+    for (uint8_t track_id = 0U; track_id < SEQ_TRACK_COUNT; ++track_id)
+    {
+        brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+        uint8_t affected = 0U;
+        if ((voice->active != 0U)
+            && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
+            && (voice->sample_id == sample_id))
+        {
+            brick6_sampler_runtime_clip_stop_playback_silent(track_id);
+            affected = 1U;
+        }
+        if (g_sampler_clip_runtime[track_id].sample_id == sample_id)
+        {
+            g_sampler_clip_runtime[track_id].sample_id = UINT16_MAX;
+            affected = 1U;
+        }
+        if (affected != 0U) brick6_sampler_runtime_stream_live_reset(track_id);
+    }
+    brick6_sampler_preview_stop_classic_sample(sample_id);
+}
+
 uint8_t brick6_sampler_runtime_get_sample(uint8_t track_id,
                                           uint16_t *out_sample_id)
 {
