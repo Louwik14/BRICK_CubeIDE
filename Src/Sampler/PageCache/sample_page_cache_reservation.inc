@@ -361,7 +361,7 @@ uint8_t sample_page_cache_cancel_loading_key(sample_audio_key_t key,
     return found;
 }
 
-uint8_t sample_page_cache_prepare_bulk_page_key_alloc(
+uint8_t sample_page_cache_prepare_reserved_page_key_alloc(
     sample_audio_key_t key,
     uint32_t page_index,
     sample_page_alloc_type_t alloc_type)
@@ -381,39 +381,6 @@ uint8_t sample_page_cache_prepare_bulk_page_key_alloc(
     {
         return 0U;
     }
-    return 1U;
-}
-
-uint8_t sample_page_cache_get_bulk_load_target_key(
-    sample_audio_key_t key,
-    uint32_t page_index,
-    sample_page_load_target_t *out_target)
-{
-    if ((sample_page_cache_key_valid(key) == 0U) || (out_target == 0))
-    {
-        return 0U;
-    }
-
-    sample_page_desc_t *const page = sample_page_cache_find_page_mut_key(key, page_index);
-    float *const data = sample_page_cache_data_resolve(page);
-    if ((page == 0) || (page->state != SAMPLE_PAGE_RESERVED) || (data == 0))
-    {
-        return 0U;
-    }
-
-    memset(out_target, 0, sizeof(*out_target));
-    out_target->key = key;
-    out_target->sample_id = sample_page_cache_key_slot(key);
-    out_target->slot_index = (uint16_t)(page - g_sample_page_desc);
-    out_target->page_index = page->page_index;
-    out_target->start_frame = page->start_frame;
-    out_target->frame_count = page->frame_count;
-    out_target->format = page->format;
-    out_target->stride_floats = page->stride_floats;
-    out_target->frames_per_page = page->frames_per_page;
-    out_target->registration_epoch = page->registration_epoch;
-    out_target->page_generation = page->generation;
-    out_target->frames_interleaved = data;
     return 1U;
 }
 

@@ -564,42 +564,6 @@ uint8_t sample_stream_io_key_busy(sample_audio_key_t key)
     return 0U;
 }
 
-void sample_stream_io_execute_local(const sample_page_load_token_t *token,
-                                    uint32_t deadline_margin_us,
-                                    sample_stream_io_result_t *out_result)
-{
-    if (out_result == NULL) return;
-    memset(out_result, 0, sizeof(*out_result));
-    out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-    if (token == NULL) return;
-    out_result->token[0] = *token;
-    out_result->page_count = 1U;
-
-    /* Bulk callers own the Storage service while using this blocking helper.
-     * Refuse to steal a completion from the cooperative Stream manager. */
-    if (sample_stream_io_active_job_count() != 0U) return;
-
-    if (sample_stream_io_begin(token, deadline_margin_us) == 0U) return;
-    do
-    {
-        sd_scheduler_runtime_service();
-    } while (sample_stream_io_poll(out_result) == 0U);
-
-    if ((out_result->token[0].slot_index != token->slot_index)
-        || (out_result->token[0].page_generation
-            != token->page_generation)
-        || (out_result->token[0].registration_epoch
-            != token->registration_epoch)
-        || (out_result->token[0].page_index != token->page_index)
-        || (sample_audio_key_equal(&out_result->token[0].key,
-                                   &token->key) == 0U))
-    {
-        out_result->token[0] = *token;
-        out_result->page_count = 1U;
-        out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-    }
-}
-
 uint8_t sample_stream_io_cancel_stale_coalesced_before_submit(
     uint8_t voice_id, uint32_t current_lease_seq)
 {

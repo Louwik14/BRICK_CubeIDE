@@ -86,12 +86,64 @@ static uint8_t sample_page_cache_port_prepare_registration(
     return 1U;
 }
 
-static uint8_t sample_page_cache_port_install(sample_audio_key_t key,
-                                              const char *path,
-                                              const wav_info_t *info,
-                                              uint32_t total_frames,
-                                              uint32_t data_offset,
-                                              FIL *map_file)
+uint8_t sample_page_cache_port_prepare_stream(
+    sample_audio_key_t key,
+    const char *path,
+    const wav_info_t *info,
+    uint32_t total_frames,
+    uint32_t data_offset,
+    FIL *map_file,
+    sample_page_stream_info_t *out_stream,
+    uint16_t *out_prefill_pages)
+{
+    if (out_stream != NULL) memset(out_stream, 0, sizeof(*out_stream));
+    if (out_prefill_pages != NULL) *out_prefill_pages = 0U;
+    sample_page_stream_info_t registration;
+    if (sample_page_cache_port_prepare_registration(
+            key, path, info, total_frames, data_offset, map_file, 0U,
+            &registration) == 0U) return 0U;
+    if (sample_page_cache_register_prepared_stream(&registration) == 0U)
+    {
+        sample_stream_physical_map_release(&registration.stream_safe.physical_map);
+        return 0U;
+    }
+    sample_page_stream_info_t installed;
+    if (sample_page_cache_get_stream_info_key(key, &installed) == 0U)
+    {
+        sample_page_cache_clear_key(key);
+        return 0U;
+    }
+    const uint32_t startup_frames = (total_frames < SAMPLE_PAGE_MIN_READY_FRAMES)
+        ? total_frames : SAMPLE_PAGE_MIN_READY_FRAMES;
+    const uint32_t startup_pages = sample_audio_format_required_page_count(
+        installed.format, startup_frames);
+    if ((startup_pages == 0U) || (startup_pages > UINT16_MAX))
+    {
+        sample_page_cache_clear_key(key);
+        return 0U;
+    }
+    for (uint32_t page = 0U; page < startup_pages; ++page)
+    {
+        if ((sample_page_cache_prepare_reserved_page_key_alloc(
+                key, page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U)
+            || (sample_page_cache_mark_static_page_key_alloc(
+                key, page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U))
+        {
+            sample_page_cache_clear_key(key);
+            return 0U;
+        }
+    }
+    if (out_stream != NULL) *out_stream = installed;
+    if (out_prefill_pages != NULL) *out_prefill_pages = (uint16_t)startup_pages;
+    return 1U;
+}
+
+uint8_t sample_page_cache_port_register_file(sample_audio_key_t key,
+                                             const char *path,
+                                             const wav_info_t *info,
+                                             uint32_t total_frames,
+                                             uint32_t data_offset,
+                                             FIL *map_file)
 {
     sample_page_stream_info_t registration;
     if (sample_page_cache_port_prepare_registration(
@@ -103,80 +155,6 @@ static uint8_t sample_page_cache_port_install(sample_audio_key_t key,
         return 0U;
     }
     return 1U;
-}
-
-uint8_t sample_page_cache_port_register_path(sample_audio_key_t key,
-                                             const char *path,
-                                             const wav_info_t *info,
-                                             uint32_t total_frames,
-                                             uint32_t data_offset)
-{
-    return sample_page_cache_port_install(key, path, info, total_frames,
-                                          data_offset, NULL);
-}
-
-uint8_t sample_page_cache_port_register_file(sample_audio_key_t key,
-                                             const char *path,
-                                             const wav_info_t *info,
-                                             uint32_t total_frames,
-                                             uint32_t data_offset,
-                                             FIL *map_file)
-{
-    return sample_page_cache_port_install(key, path, info, total_frames,
-                                          data_offset, map_file);
-}
-
-uint8_t sample_page_cache_port_prepare_page(sample_audio_key_t key,
-                                            uint32_t page_index,
-                                            sample_page_alloc_type_t alloc_type,
-                                            uint8_t static_resident,
-                                            sample_page_load_token_t *out_token)
-{
-    if (out_token == NULL) return 0U;
-    memset(out_token, 0, sizeof(*out_token));
-    if ((sample_page_cache_prepare_bulk_page_key_alloc(key, page_index,
-                                                       alloc_type) == 0U)
-        || ((static_resident != 0U) && (sample_page_cache_mark_static_page_key_alloc(
-                                key, page_index, alloc_type) == 0U))) return 0U;
-    sample_page_load_target_t target;
-    if ((sample_page_cache_get_bulk_load_target_key(key, page_index, &target) == 0U)
-        || (sample_page_cache_begin_loading(&target, out_token) == 0U))
-        return 0U;
-    return 1U;
-}
-
-uint8_t sample_page_cache_port_reserve_static(sample_audio_key_t key,
-                                           uint32_t page_index,
-                                           sample_page_alloc_type_t alloc_type)
-{
-    return (uint8_t)((sample_page_cache_prepare_bulk_page_key_alloc(
-                          key, page_index, alloc_type) != 0U)
-        && (sample_page_cache_mark_static_page_key_alloc(
-                key, page_index, alloc_type) != 0U));
-}
-
-uint8_t sample_page_cache_port_reserve(sample_audio_key_t key,
-                                       uint32_t page_index,
-                                       sample_page_alloc_type_t alloc_type)
-{
-    return sample_page_cache_prepare_bulk_page_key_alloc(
-        key, page_index, alloc_type);
-}
-
-uint8_t sample_page_cache_port_complete(const sample_stream_io_result_t *result)
-{
-    if (result == NULL) return 0U;
-    return sample_page_cache_finish_loading(
-        &result->token[0],
-        (result->load_result == SAMPLE_PAGE_LOAD_OK)
-            ? SAMPLE_PAGE_FINISH_READY : SAMPLE_PAGE_FINISH_ERROR);
-}
-
-void sample_page_cache_port_abort(const sample_page_load_token_t *token)
-{
-    if (token != NULL)
-        (void)sample_page_cache_finish_loading(token,
-                                               SAMPLE_PAGE_FINISH_ERROR);
 }
 
 void sample_page_cache_port_clear(sample_audio_key_t key)

@@ -28,8 +28,6 @@ static uint8_t sample_cache_prepare_via_page_cache(uint16_t sample_id,
                                                    sample_cache_desc_t *desc,
                                                    FIL *map_file,
                                                    const char *path);
-static uint8_t sample_cache_reserve_static_page_span(uint16_t sample_id,
-                                                  const sample_play_plan_page_span_t *span);
 static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *desc);
 
 static void sample_cache_sync_projections(void)
@@ -101,81 +99,30 @@ static uint8_t sample_cache_prepare_via_page_cache(uint16_t sample_id,
         return 0U;
     }
 
-    if (sample_page_cache_port_register_file(
-            sample_audio_key_classic(sample_id),
-            path,
-            &desc->info,
-            desc->total_frames,
-            desc->info.data_offset,
-            map_file) == 0U)
+    sample_page_stream_info_t stream_info;
+    uint16_t prefill_pages = 0U;
+    if (sample_page_cache_port_prepare_stream(
+            sample_audio_key_classic(sample_id), path, &desc->info,
+            desc->total_frames, desc->info.data_offset, map_file,
+            &stream_info, &prefill_pages) == 0U)
     {
         desc->last_error = 12U;
         g_sample_cache_last_fresult[sample_id] = FR_INVALID_PARAMETER;
         return 0U;
     }
-
-    sample_page_stream_info_t stream_info;
-    if (sample_page_cache_get_stream_info(sample_id, &stream_info) != 0U)
-    {
-        desc->format = stream_info.format;
-        desc->stride_floats = stream_info.stride_floats;
-        desc->frames_per_page = stream_info.frames_per_page;
-        desc->registration_epoch = stream_info.registration_epoch;
-    }
-
-    sample_play_plan_t forward_plan;
-    sample_play_plan_init(&forward_plan);
-    forward_plan.key = sample_audio_key_classic(sample_id);
-    forward_plan.sample_id = sample_id;
-    forward_plan.format = desc->format;
-    forward_plan.stride_floats = desc->stride_floats;
-    forward_plan.frames_per_page = desc->frames_per_page;
-    forward_plan.start_frame = 0U;
-    forward_plan.region_begin = 0U;
-    forward_plan.region_end = desc->total_frames;
-    sample_play_plan_page_span_t forward_span;
-    if (sample_play_plan_frames_to_page_span(&forward_plan,
-                                             SAMPLE_PREP_MIN_READY_FRAMES,
-                                             &forward_span) == 0U)
+    if (prefill_pages == 0U)
     {
         desc->last_error = 8U;
         g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
         return 0U;
     }
-    if (sample_cache_reserve_static_page_span(sample_id, &forward_span) == 0U)
-    {
-        desc->last_error = 8U;
-        g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
-        return 0U;
-    }
-    if (sample_page_cache_get_page_state(sample_id, 0U) != SAMPLE_PAGE_READY)
-    {
-    }
+    desc->format = stream_info.format;
+    desc->stride_floats = stream_info.stride_floats;
+    desc->frames_per_page = stream_info.frames_per_page;
+    desc->registration_epoch = stream_info.registration_epoch;
 
     desc->state = SAMPLE_CACHE_READY;
     desc->last_error = 0U;
-    return 1U;
-}
-
-static uint8_t sample_cache_reserve_static_page_span(uint16_t sample_id,
-                                                  const sample_play_plan_page_span_t *span)
-{
-    if ((span == 0) || (span->valid == 0U) || (span->page_count == 0U)
-        || (span->page_start > span->page_end))
-    {
-        return 0U;
-    }
-
-    for (uint32_t page_index = span->page_start; page_index <= span->page_end; ++page_index)
-    {
-        if (sample_page_cache_port_reserve_static(
-                sample_audio_key_classic(sample_id), page_index,
-                SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U)
-        {
-            return 0U;
-        }
-    }
-
     return 1U;
 }
 

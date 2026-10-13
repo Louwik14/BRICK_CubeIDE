@@ -554,6 +554,16 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
         return;
 
     }
+    /* Classic and Multi startup pages use the same registration, reservation
+     * and asynchronous I/O lifecycle.  Multi keeps instrument-level READY
+     * publication, but no longer owns a parallel synchronous page loader. */
+    (void)sample_stream_manager_submit_prefill(
+        SAMPLE_AUDIO_DOMAIN_MULTI, SAMPLE_PAGE_CACHE_MULTI_ID_CAPACITY);
+    if (sample_stream_io_active_job_count()
+            >= SAMPLE_STREAM_IO_JOB_CAPACITY)
+    {
+        return;
+    }
     (void)sample_stream_manager_submit_prefill(
         SAMPLE_AUDIO_DOMAIN_CLASSIC, SAMPLE_CLASSIC_CAPACITY);
 }
@@ -583,12 +593,10 @@ uint8_t sample_stream_manager_has_pending_sd_work(void)
     if (sample_page_cache_get_reserved_load_target_domain_range(
         SAMPLE_AUDIO_DOMAIN_REC, 0U, SAMPLE_PAGE_CACHE_REC_ID_CAPACITY,
         &prefill_target) != 0U) return 1U;
+    if (sample_page_cache_get_reserved_load_target_domain_range(
+        SAMPLE_AUDIO_DOMAIN_MULTI, 0U, SAMPLE_PAGE_CACHE_MULTI_ID_CAPACITY,
+        &prefill_target) != 0U) return 1U;
     return sample_page_cache_get_reserved_load_target_domain_range(
         SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U, SAMPLE_CLASSIC_CAPACITY,
         &prefill_target);
-}
-
-uint8_t sample_stream_manager_io_in_flight(void)
-{
-    return (sample_stream_io_active_job_count() != 0U) ? 1U : 0U;
 }

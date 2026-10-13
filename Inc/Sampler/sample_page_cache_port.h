@@ -3,7 +3,6 @@
 #include <stdint.h>
 
 #include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_stream_io.h"
 #include "ff.h"
 
 typedef struct
@@ -25,29 +24,23 @@ void *sample_page_cache_port_resolve_local(
 uint32_t sample_page_cache_port_local_total_bytes(void);
 uint32_t sample_page_cache_port_local_free_bytes(void);
 
-/* H743 local adapter between loader clients and the page-cache owner. */
-uint8_t sample_page_cache_port_register_path(sample_audio_key_t key,
-                                             const char *path,
-                                             const wav_info_t *info,
-                                             uint32_t total_frames,
-                                             uint32_t data_offset);
+/* Common Classic/Multi preparation boundary.  It registers the immutable
+ * stream metadata/link-map and reserves the product startup pages, but leaves
+ * their asynchronous fill to the Stream Manager. */
+uint8_t sample_page_cache_port_prepare_stream(
+    sample_audio_key_t key,
+    const char *path,
+    const wav_info_t *info,
+    uint32_t total_frames,
+    uint32_t data_offset,
+    FIL *map_file,
+    sample_page_stream_info_t *out_stream,
+    uint16_t *out_prefill_pages);
+/* REC_SOURCE keeps its own startup-page lifecycle. */
 uint8_t sample_page_cache_port_register_file(sample_audio_key_t key,
                                              const char *path,
                                              const wav_info_t *info,
                                              uint32_t total_frames,
                                              uint32_t data_offset,
                                              FIL *map_file);
-uint8_t sample_page_cache_port_prepare_page(sample_audio_key_t key,
-                                            uint32_t page_index,
-                                            sample_page_alloc_type_t alloc_type,
-                                            uint8_t static_resident,
-                                            sample_page_load_token_t *out_token);
-uint8_t sample_page_cache_port_reserve_static(sample_audio_key_t key,
-                                           uint32_t page_index,
-                                           sample_page_alloc_type_t alloc_type);
-uint8_t sample_page_cache_port_reserve(sample_audio_key_t key,
-                                       uint32_t page_index,
-                                       sample_page_alloc_type_t alloc_type);
-uint8_t sample_page_cache_port_complete(const sample_stream_io_result_t *result);
-void sample_page_cache_port_abort(const sample_page_load_token_t *token);
 void sample_page_cache_port_clear(sample_audio_key_t key);

@@ -53,9 +53,6 @@ uint8_t sample_stream_io_cancel_stale_coalesced_before_submit(
 uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result);
 uint32_t sample_stream_io_active_job_count(void);
 uint8_t sample_stream_io_key_busy(sample_audio_key_t key);
-void sample_stream_io_execute_local(const sample_page_load_token_t *token,
-                                    uint32_t deadline_margin_us,
-                                    sample_stream_io_result_t *out_result);
 void sample_stream_io_cancel(void);
 
 #ifdef __cplusplus

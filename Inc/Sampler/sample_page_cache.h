@@ -178,14 +178,10 @@ uint8_t sample_page_cache_publish_loading_progress_isr(
     uint32_t available_frame_end);
 uint8_t sample_page_cache_cancel_loading_key(sample_audio_key_t key,
                                                uint32_t page_index);
-uint8_t sample_page_cache_prepare_bulk_page_key_alloc(
+uint8_t sample_page_cache_prepare_reserved_page_key_alloc(
     sample_audio_key_t key,
     uint32_t page_index,
     sample_page_alloc_type_t alloc_type);
-uint8_t sample_page_cache_get_bulk_load_target_key(
-    sample_audio_key_t key,
-    uint32_t page_index,
-    sample_page_load_target_t *out_target);
 uint8_t sample_page_cache_set_page_state(uint16_t sample_id,
                                          uint32_t page_index,
                                          sample_page_state_t state);

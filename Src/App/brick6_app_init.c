@@ -126,7 +126,7 @@ static void brick6_app_service_storage(void)
     patch_product_apply_service();
     if (multi_sample_load_has_pending() != 0U)
     {
-        multi_sample_service_load(0U);
+        multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
     }
     else
     {

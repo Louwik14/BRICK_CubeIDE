@@ -1,6 +1,5 @@
 #include "Storage/brick6_stream_service_task.h"
 
-#include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Storage/sd_access_gate.h"
@@ -26,12 +25,6 @@ void brick6_stream_service_task_poll(void)
     sd_scheduler_runtime_service();
     const uint8_t pending = brick6_stream_service_task_update_gate();
     if (pending == 0U)
-    {
-        return;
-    }
-
-    if ((sample_stream_manager_io_in_flight() == 0U)
-        && (multi_sample_load_is_active() != 0U))
     {
         return;
     }
