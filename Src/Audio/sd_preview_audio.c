@@ -1,5 +1,6 @@
 #include "Audio/sd_preview_audio.h"
 
+#include "Audio/mixer.h"
 #include "Storage/sd_preview_ring_contract.h"
 #include "stm32h7xx.h"
 
@@ -34,13 +35,14 @@ uint8_t sd_preview_render_main(float *out_main_l, float *out_main_r,
     if ((out_main_l == 0) || (out_main_r == 0) || (frames == 0U)
             || (g_sd_preview_active == 0U)) return 0U;
     uint8_t mixed = 0U;
+    const float gain = g_sd_preview_gain * MIXER_TRACK_NOMINAL_TRIM;
     for (uint32_t i = 0U; i < frames; ++i)
     {
         float left = 0.0f;
         float right = 0.0f;
         if (sd_preview_ring_pop(&left, &right) == 0U) break;
-        out_main_l[i] += left * g_sd_preview_gain;
-        out_main_r[i] += right * g_sd_preview_gain;
+        out_main_l[i] += left * gain;
+        out_main_r[i] += right * gain;
         mixed = 1U;
     }
     return mixed;
