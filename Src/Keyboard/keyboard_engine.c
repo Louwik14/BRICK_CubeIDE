@@ -62,15 +62,6 @@ static uint32_t g_keyboard_engine_ingress_serial;
 static keyboard_note_time_order_t g_keyboard_engine_time_order;
 typedef struct
 {
-    uint8_t count[128U];
-    uint8_t notes[SEQ_PLAY_MAX_CAPACITY];
-    uint8_t note_count;
-} keyboard_engine_master_held_t;
-CONTROL_STATE_SDRAM static keyboard_engine_master_held_t
-    g_keyboard_engine_master_held;
-
-typedef struct
-{
     uint8_t note;
     uint8_t velocity;
 } keyboard_engine_mono_note_t;
@@ -284,20 +275,6 @@ static uint64_t keyboard_engine_resolve_capture_sample(uint8_t capture_tick_vali
     return capture_sample;
 }
 
-static void keyboard_engine_publish_master_held(uint64_t sample)
-{
-    if (g_keyboard_engine_master_held.note_count == 0U)
-    {
-        return;
-    }
-    master_harmony_state_t current = {0};
-    (void)master_harmony_resolve_at(sample, &current);
-    (void)master_harmony_publish_notes(g_keyboard_engine_master_held.notes,
-                                       g_keyboard_engine_master_held.note_count,
-                                       current.pattern_generation,
-                                       sample);
-}
-
 static void keyboard_engine_master_note_on(uint8_t note, uint8_t velocity,
                                            uint8_t capture_tick_valid,
                                            uint32_t capture_tick,
@@ -305,17 +282,11 @@ static void keyboard_engine_master_note_on(uint8_t note, uint8_t velocity,
 {
     const uint64_t sample = keyboard_engine_resolve_capture_sample(
         capture_tick_valid, capture_tick, ingress_serial);
-    const uint8_t was_held = g_keyboard_engine_master_held.count[note];
-    if (g_keyboard_engine_master_held.count[note] < UINT8_MAX)
-    {
-        g_keyboard_engine_master_held.count[note]++;
-    }
-    if ((was_held == 0U)
-            && (g_keyboard_engine_master_held.note_count < SEQ_PLAY_MAX_CAPACITY))
-    {
-        g_keyboard_engine_master_held.notes[g_keyboard_engine_master_held.note_count++] = note;
-    }
-    keyboard_engine_publish_master_held(sample);
+    master_harmony_state_t current = {0};
+    (void)master_harmony_resolve_at(sample, &current);
+    (void)master_harmony_gate_note_on(MASTER_HARMONY_GATE_KEYBOARD,
+        (uint32_t)note + 1U, note, current.pattern_generation, sample,
+        UINT64_MAX);
     seq_runtime_live_rec_note_on_at_sample(SEQ_LIVE_REC_SRC_INTERNAL,
         keyboard_engine_get_track_midi_channel_zero_based(BRICK_ENTITY_MASTER_ID),
         note, velocity, sample);
@@ -328,27 +299,8 @@ static void keyboard_engine_master_note_off(uint8_t note,
 {
     const uint64_t sample = keyboard_engine_resolve_capture_sample(
         capture_tick_valid, capture_tick, ingress_serial);
-    if (g_keyboard_engine_master_held.count[note] != 0U)
-    {
-        if (--g_keyboard_engine_master_held.count[note] == 0U)
-        {
-            for (uint8_t i = 0U; i < g_keyboard_engine_master_held.note_count; ++i)
-            {
-                if (g_keyboard_engine_master_held.notes[i] != note)
-                {
-                    continue;
-                }
-                for (uint8_t j = i + 1U; j < g_keyboard_engine_master_held.note_count; ++j)
-                {
-                    g_keyboard_engine_master_held.notes[j - 1U] =
-                        g_keyboard_engine_master_held.notes[j];
-                }
-                g_keyboard_engine_master_held.note_count--;
-                break;
-            }
-        }
-        keyboard_engine_publish_master_held(sample);
-    }
+    (void)master_harmony_gate_note_off(MASTER_HARMONY_GATE_KEYBOARD,
+        (uint32_t)note + 1U, sample);
     seq_runtime_live_rec_note_off_at_sample(SEQ_LIVE_REC_SRC_INTERNAL,
         keyboard_engine_get_track_midi_channel_zero_based(BRICK_ENTITY_MASTER_ID),
         note, sample);
@@ -729,11 +681,12 @@ void keyboard_engine_clear_source_occurrences_silent(void)
 
 void keyboard_engine_clear_state_silent(void)
 {
+    uint64_t sample=0U;
+    (void)brick_media_clock_now_sample(&sample);
+    master_harmony_gate_cancel_owner(MASTER_HARMONY_GATE_KEYBOARD, sample);
     keyboard_engine_mono_clear();
     memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
     memset(g_kbd_rec_track_note_count, 0, sizeof(g_kbd_rec_track_note_count));
-    memset(&g_keyboard_engine_master_held, 0,
-           sizeof(g_keyboard_engine_master_held));
 }
 
 static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len)

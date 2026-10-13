@@ -1257,6 +1257,18 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
         return;
     }
 
+    entity_topology_descriptor_t topology;
+    if (entity_topology_get(track, &topology) == 0U)
+    {
+        (void)snprintf(out, out_len, "NONE");
+        return;
+    }
+    if (topology.role == ENTITY_ROLE_MASTER)
+    {
+        (void)snprintf(out, out_len, "MASTER");
+        return;
+    }
+
     const track_config_t config = ui_get_track_config(track);
 
     if (config.family == TRACK_FAMILY_OFF)

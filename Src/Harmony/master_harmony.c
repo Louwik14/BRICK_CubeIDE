@@ -1,6 +1,7 @@
 #include "Harmony/master_harmony.h"
 
 #include <stddef.h>
+#include <string.h>
 #include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
@@ -28,6 +29,30 @@ typedef struct {
 
 static SEC_ATTR(".ram_seq_state_sram3") master_harmony_publication_t
     g_master_harmony;
+
+#define MASTER_HARMONY_GATE_CAPACITY 128U
+typedef struct {
+    uint64_t start;
+    uint64_t due_off;
+    uint32_t token;
+    uint8_t owner;
+    uint8_t note;
+    uint8_t references;
+    uint8_t active;
+} master_harmony_gate_t;
+
+typedef struct {
+    master_harmony_gate_t gates[MASTER_HARMONY_GATE_CAPACITY];
+    master_harmony_state_t base;
+    uint16_t active_count;
+    uint8_t base_captured;
+} master_harmony_gate_runtime_t;
+
+static SEC_ATTR(".ram_seq_state_sram3") master_harmony_gate_runtime_t
+    g_master_harmony_gate;
+
+static uint8_t publish_notes(const uint8_t *notes, uint8_t count,
+    uint32_t generation, uint64_t sample);
 
 static uint16_t rotate_mask(uint16_t mask, uint8_t root)
 {
@@ -70,6 +95,7 @@ void master_harmony_reset(uint32_t generation, uint64_t sample)
         .effective_sample=sample,.pattern_generation=generation,
         .root=0U,.type=MASTER_CHORD_MAJOR,.bass=0U,.valid=0U};
     const uint32_t primask=__get_PRIMASK();__disable_irq();
+    g_master_harmony_gate=(master_harmony_gate_runtime_t){0};
     const uint32_t inactive=(g_master_harmony.active_index&1U)^1U;
     master_harmony_snapshot_t *const next=
         &g_master_harmony.snapshot[inactive];
@@ -78,7 +104,148 @@ void master_harmony_reset(uint32_t generation, uint64_t sample)
     __set_PRIMASK(primask);
 }
 
-uint8_t master_harmony_publish_notes(const uint8_t *notes, uint8_t count,
+static void gate_publish_effective(uint64_t sample)
+{
+    uint16_t effective_count=0U;
+    for(uint16_t i=0U;i<MASTER_HARMONY_GATE_CAPACITY;++i){
+        const master_harmony_gate_t *const gate=&g_master_harmony_gate.gates[i];
+        if(gate->active!=0U&&gate->start<=sample&&gate->due_off>sample)
+            ++effective_count;
+    }
+    if(effective_count==0U){
+        if(g_master_harmony_gate.base_captured!=0U){
+            master_harmony_state_t restored=g_master_harmony_gate.base;
+            restored.effective_sample=sample;
+            publish(&restored);
+        }
+        if(g_master_harmony_gate.active_count==0U)
+            g_master_harmony_gate.base_captured=0U;
+        return;
+    }
+    uint8_t notes[128U];uint8_t count=0U;
+    for(uint16_t note=0U;note<128U;++note){
+        for(uint16_t i=0U;i<MASTER_HARMONY_GATE_CAPACITY;++i){
+            const master_harmony_gate_t *const gate=&g_master_harmony_gate.gates[i];
+            if(gate->active!=0U&&gate->start<=sample&&gate->due_off>sample
+                    &&gate->note==(uint8_t)note){notes[count++]=(uint8_t)note;break;}
+        }
+    }
+    uint32_t generation=g_master_harmony_gate.base.pattern_generation;
+    for(uint16_t i=0U;i<MASTER_HARMONY_GATE_CAPACITY;++i)
+        if(g_master_harmony_gate.gates[i].active!=0U
+                &&g_master_harmony_gate.gates[i].start<=sample
+                &&g_master_harmony_gate.gates[i].due_off>sample){
+            master_harmony_state_t current={0};
+            if(master_harmony_resolve_at(sample,&current)!=0U)
+                generation=current.pattern_generation;
+            break;
+        }
+    (void)publish_notes(notes,count,generation,sample);
+}
+
+uint8_t master_harmony_gate_note_on(master_harmony_gate_owner_t owner,
+    uint32_t token,uint8_t note,uint32_t generation,uint64_t sample,
+    uint64_t due_off)
+{
+    if(owner>=MASTER_HARMONY_GATE_OWNER_COUNT||token==0U||note>=128U
+            ||due_off<=sample)return 0U;
+    const uint32_t primask=__get_PRIMASK();__disable_irq();
+    int16_t free_index=-1;
+    for(uint16_t i=0U;i<MASTER_HARMONY_GATE_CAPACITY;++i){
+        master_harmony_gate_t *const gate=&g_master_harmony_gate.gates[i];
+        if(gate->active!=0U&&gate->owner==(uint8_t)owner
+                &&gate->token==token&&gate->note==note){
+            if(gate->references<UINT8_MAX)++gate->references;
+            if(due_off>gate->due_off)gate->due_off=due_off;
+            __set_PRIMASK(primask);return 1U;
+        }
+        if(gate->active==0U&&free_index<0)free_index=(int16_t)i;
+    }
+    if(free_index<0){__set_PRIMASK(primask);return 0U;}
+    if(g_master_harmony_gate.active_count==0U){
+        g_master_harmony_gate.base=(master_harmony_state_t){
+            .effective_sample=sample,.pattern_generation=generation};
+        (void)master_harmony_resolve_at(sample,&g_master_harmony_gate.base);
+        g_master_harmony_gate.base_captured=1U;
+    }
+    g_master_harmony_gate.gates[(uint16_t)free_index]=(master_harmony_gate_t){
+        .start=sample,.due_off=due_off,.token=token,.owner=(uint8_t)owner,.note=note,
+        .references=1U,.active=1U};
+    ++g_master_harmony_gate.active_count;
+    gate_publish_effective(sample);
+    __set_PRIMASK(primask);return 1U;
+}
+
+uint8_t master_harmony_gate_note_off(master_harmony_gate_owner_t owner,
+    uint32_t token,uint64_t sample)
+{
+    if(owner>=MASTER_HARMONY_GATE_OWNER_COUNT||token==0U)return 0U;
+    const uint32_t primask=__get_PRIMASK();__disable_irq();
+    for(uint16_t i=0U;i<MASTER_HARMONY_GATE_CAPACITY;++i){
+        master_harmony_gate_t *const gate=&g_master_harmony_gate.gates[i];
+        if(gate->active==0U||gate->owner!=(uint8_t)owner||gate->token!=token)continue;
+        if(gate->references>1U){--gate->references;__set_PRIMASK(primask);return 1U;}
+        *gate=(master_harmony_gate_t){0};--g_master_harmony_gate.active_count;
+        gate_publish_effective(sample);__set_PRIMASK(primask);return 1U;
+    }
+    __set_PRIMASK(primask);return 0U;
+}
+
+void master_harmony_gate_advance(uint64_t sample)
+{
+    const uint32_t primask=__get_PRIMASK();__disable_irq();
+    for(;;){
+        uint64_t due=UINT64_MAX;
+        for(uint16_t i=0U;i<MASTER_HARMONY_GATE_CAPACITY;++i){
+            const master_harmony_gate_t *const gate=&g_master_harmony_gate.gates[i];
+            if(gate->active!=0U&&gate->due_off<=sample&&gate->due_off<due)due=gate->due_off;
+        }
+        if(due==UINT64_MAX)break;
+        for(uint16_t i=0U;i<MASTER_HARMONY_GATE_CAPACITY;++i){
+            master_harmony_gate_t *const gate=&g_master_harmony_gate.gates[i];
+            if(gate->active!=0U&&gate->due_off==due){
+                *gate=(master_harmony_gate_t){0};--g_master_harmony_gate.active_count;
+            }
+        }
+        gate_publish_effective(due);
+    }
+    __set_PRIMASK(primask);
+}
+
+void master_harmony_gate_cancel_owner(master_harmony_gate_owner_t owner,
+    uint64_t sample)
+{
+    if(owner>=MASTER_HARMONY_GATE_OWNER_COUNT)return;
+    const uint32_t primask=__get_PRIMASK();__disable_irq();uint8_t changed=0U;
+    for(uint16_t i=0U;i<MASTER_HARMONY_GATE_CAPACITY;++i){
+        master_harmony_gate_t *const gate=&g_master_harmony_gate.gates[i];
+        if(gate->active!=0U&&gate->owner==(uint8_t)owner){
+            *gate=(master_harmony_gate_t){0};--g_master_harmony_gate.active_count;changed=1U;
+        }
+    }
+    if(changed!=0U)gate_publish_effective(sample);
+    __set_PRIMASK(primask);
+}
+
+void master_harmony_gate_cancel_all(uint64_t sample)
+{
+    const uint32_t primask=__get_PRIMASK();__disable_irq();
+    if(g_master_harmony_gate.active_count!=0U){
+        master_harmony_state_t restored=g_master_harmony_gate.base;
+        restored.effective_sample=sample;
+        const uint32_t inactive=(g_master_harmony.active_index&1U)^1U;
+        master_harmony_snapshot_t *const next=
+            &g_master_harmony.snapshot[inactive];
+        next->count=1U;next->state[0]=restored;
+        __DMB();g_master_harmony.active_index=inactive;__DMB();
+        memset(g_master_harmony_gate.gates,0,sizeof(g_master_harmony_gate.gates));
+        g_master_harmony_gate.active_count=0U;
+        g_master_harmony_gate.base_captured=0U;
+    }
+    __set_PRIMASK(primask);
+}
+
+static uint8_t publish_notes(const uint8_t *notes, uint8_t count,
     uint32_t generation, uint64_t sample)
 {
     if (notes == NULL || count == 0U) return 0U;

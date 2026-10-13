@@ -47,9 +47,22 @@ typedef struct {
     uint8_t valid;
 } master_harmony_state_t;
 
+typedef enum {
+    MASTER_HARMONY_GATE_KEYBOARD = 0,
+    MASTER_HARMONY_GATE_SEQUENCER,
+    MASTER_HARMONY_GATE_OWNER_COUNT
+} master_harmony_gate_owner_t;
+
 void master_harmony_reset(uint32_t pattern_generation, uint64_t sample);
-uint8_t master_harmony_publish_notes(const uint8_t *notes, uint8_t note_count,
-    uint32_t pattern_generation, uint64_t sample);
+uint8_t master_harmony_gate_note_on(master_harmony_gate_owner_t owner,
+    uint32_t token, uint8_t note, uint32_t pattern_generation,
+    uint64_t sample, uint64_t due_off);
+uint8_t master_harmony_gate_note_off(master_harmony_gate_owner_t owner,
+    uint32_t token, uint64_t sample);
+void master_harmony_gate_advance(uint64_t sample);
+void master_harmony_gate_cancel_owner(master_harmony_gate_owner_t owner,
+    uint64_t sample);
+void master_harmony_gate_cancel_all(uint64_t sample);
 uint8_t master_harmony_get_current(master_harmony_state_t *out_state);
 uint8_t master_harmony_resolve_at(uint64_t sample,
     master_harmony_state_t *out_state);

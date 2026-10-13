@@ -129,9 +129,15 @@ plus une. Le master GROUP reste non emetteur. Les notes de la Master Track
 occupent la lane physique 63 mais sont consommees par le decodeur harmonique
 avant le walker Note FX: elles ne creent ni ledger, ni NOTE ON terminal. Le
 decodeur publie fondamentale, type parmi les 27 formes ABC, basse/inversion,
-generation et sample effectif. Une note seule conserve le type precedent
-(MAJOR avant le premier accord); un ensemble non reconnu ne remplace pas le
-dernier accord valide. A timestamp egal, la Master est collectee avant les
+generation et sample effectif. Ces notes sont des gates momentanes: KEY/NOTE ON
+capture l'accord effectif anterieur au premier gate, les gates simultanes ou
+chevauchants restent actifs jusqu'a leur dernier KEY/NOTE OFF, puis cet accord
+anterieur exact est restaure. Les gates sequencees expirent a la longueur PLAY
+de chaque note; retrigger ne remplace pas le snapshot de base. STOP, Panic et
+changement de generation purgent les gates. Keyboard et Sequencer utilisent le
+meme runtime de gates, avec ownership separe. Une note seule conserve le type
+precedent (MAJOR avant le premier accord); un ensemble non reconnu ne remplace
+pas le dernier accord valide. A timestamp egal, la Master est collectee avant les
 pistes musicales. En cas de saturation, les notes
 generees les plus anciennes cedent avant les originales les plus anciennes.
 La saturation exceptionnelle du scheduler incremente un compteur diagnostic

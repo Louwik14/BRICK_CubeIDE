@@ -2,6 +2,10 @@
 
 STEP 1..8 selectionnent les top-level. En GROUP, STEP 9..15 selectionnent les children 8..14; STEP 16 selectionne toujours la Master Track harmonique 15. La Master reutilise SEQ/PLAY et ses huit voix d'edition, sans page de saisie specifique, et son TONE contient exclusivement HARM 1-4 et HARM 5-8 pour les modes OFF/CHORD 1/CHORD 2/BASS/DIATONIC/PARALLEL des huit pistes top-level. Le mode du top-level 7 est herite par ses sept children GROUP. La Master n'expose aucun moteur ni sortie de notes. La disponibilite des ensembles vient du masque `track_runtime`: le master GROUP expose CFG, ENV, MOD, MIX et FX audio, mais ni SEQ, MIDI FX, TONE ni PLAY puisqu'il ne possede ni lane ni moteur de notes; son ENV edite le filtre post-somme (Cutoff, Resonance, Morph) et l'ENV3 commun. Un child expose la voix RAM mono, sa sequence/PLAY, ses MIDI FX, son ENV/TONE/MIX/FX et la vue filtree de la MOD partagee. MOD derive toujours son owner par `entity_topology`.
 
+Le bandeau derive d'abord l'identite via `entity_topology`: la Master affiche
+toujours `MASTER`, independamment de sa famille technique OFF; OFF reste reserve
+aux pistes ordinaires desactivees et NONE aux identifiants invalides.
+
 `SHIFT + STEP 16` ouvre le Master global sans changer la selection. Master expose reverb, delay et compresseur et ne possede ni sequence, mute, clipboard Track, Undo ni slot persistant.
 
 `ui_set_hall_mode` est l'autorite de transition. MUTE et PATTERN possedent leurs sous-etats; SEQ est un gate de handler. Sortir force MUTE/PATTERN nettoie leur etat via ce point central.

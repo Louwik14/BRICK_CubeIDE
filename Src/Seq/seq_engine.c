@@ -896,22 +896,7 @@ static void seed_master_harmony(const seq_pattern_t *p, uint8_t current_phase,
     uint64_t sample)
 {
     master_harmony_reset(p->generation,sample);
-    const uint8_t cycle=seq_traversal_cycle_length(
-        p->track_length[BRICK_ENTITY_MASTER_ID],
-        p->track_direction[BRICK_ENTITY_MASTER_ID]);
-    for(uint8_t offset=1U;offset<cycle;++offset){
-        const uint8_t phase=(uint8_t)((current_phase+offset)%cycle);
-        const uint8_t step=resolve_step(p,BRICK_ENTITY_MASTER_ID,phase);
-        if((p->steps[BRICK_ENTITY_MASTER_ID][step].trig_roll&1U)==0U)continue;
-        uint8_t notes[SEQ_PLAY_MAX_CAPACITY];uint8_t count=0U;
-        for(uint8_t voice=0U;voice<SEQ_PLAY_MAX_CAPACITY;++voice){
-            const int16_t note=play_value(p,BRICK_ENTITY_MASTER_ID,step,voice,
-                SEQ_STEP_PLAY_FIELD_NOTE);
-            const int16_t velocity=play_value(p,BRICK_ENTITY_MASTER_ID,step,voice,
-                SEQ_STEP_PLAY_FIELD_VELOCITY);
-            if(note>=0&&note<128&&velocity>0)notes[count++]=(uint8_t)note;}
-        (void)master_harmony_publish_notes(notes,count,p->generation,sample);
-    }
+    (void)current_phase;
 }
 
 static void schedule_boundary(seq_engine_core_t *core,
@@ -1078,23 +1063,41 @@ static note_event_result_t process_source_cohort(seq_engine_core_t *core,
    if(((core->source_active[bank]>>lane)&1U)==0U)continue;
    seq_source_cursor_t *const source=&core->sources[bank][lane];
    if(source_cursor_due(source)!=cohort_sample)continue;
-   uint8_t notes[SEQ_PLAY_MAX_CAPACITY];uint8_t count=0U,first_voice=0U;
-   for(uint8_t voice=0U;voice<SEQ_PLAY_MAX_CAPACITY;++voice){
-    const int16_t note=play_value(p,track,source->note,voice,SEQ_STEP_PLAY_FIELD_NOTE);
-    const int16_t velocity=play_value(p,track,source->note,voice,
-        SEQ_STEP_PLAY_FIELD_VELOCITY);
-    if(note>=0&&note<128&&velocity>0){
-     if(count==0U)first_voice=voice;
-     notes[count++]=(uint8_t)note;}}
-   note_event_t timing_event={.sample_abs=cohort_sample,.duration_samples=1U,
-    .track=track,.note=(count!=0U)?notes[0]:0U,.velocity=1U,
-    .kind=NOTE_EVENT_KIND_ON,.timing_class=NOTE_EVENT_TIMING_SCHEDULED,
-    .temporal_index=first_voice,.flags=NOTE_EVENT_FLAG_HELD};
-   seq_timing_finalize(&p->timing_plan[track],g_seq_timing_reference_sample,
-       g_seq_timing_reference_position_q16,p->samples_per_step_q16,&timing_event);
-   if(timing_event.sample_abs<start)timing_event.sample_abs=start;
-   (void)master_harmony_publish_notes(notes,count,p->generation,
-       timing_event.sample_abs);
+    note_event_t gates[SEQ_PLAY_MAX_CAPACITY];uint8_t gate_count=0U;
+    for(uint8_t voice=0U;voice<SEQ_PLAY_MAX_CAPACITY;++voice){
+     const int16_t note=play_value(p,track,source->note,voice,SEQ_STEP_PLAY_FIELD_NOTE);
+     const int16_t velocity=play_value(p,track,source->note,voice,
+         SEQ_STEP_PLAY_FIELD_VELOCITY);
+     int16_t length=play_value(p,track,source->note,voice,
+         SEQ_STEP_PLAY_FIELD_LENGTH);
+     if(note<0||note>=128||velocity<=0)continue;
+     if(length<1)length=1;
+     if(length>64)length=64;
+     const uint64_t gate64=((uint64_t)(uint16_t)length
+         *p->samples_per_step_q16+0x8000ULL)>>16U;
+     const uint32_t gate=(uint32_t)((gate64==0U)?1U:
+         ((gate64>UINT32_MAX)?UINT32_MAX:gate64));
+     gates[gate_count]=(note_event_t){.sample_abs=cohort_sample,
+        .duration_samples=gate,.track=track,.note=(uint8_t)note,
+        .velocity=(uint8_t)velocity,.kind=NOTE_EVENT_KIND_ON,
+        .timing_class=NOTE_EVENT_TIMING_SCHEDULED,.temporal_index=voice};
+     seq_timing_finalize(&p->timing_plan[track],g_seq_timing_reference_sample,
+        g_seq_timing_reference_position_q16,p->samples_per_step_q16,
+        &gates[gate_count]);
+     if(gates[gate_count].sample_abs<start)gates[gate_count].sample_abs=start;
+     ++gate_count;}
+    for(uint8_t i=1U;i<gate_count;++i){const note_event_t event=gates[i];
+     uint8_t j=i;while(j!=0U&&gates[j-1U].sample_abs>event.sample_abs){
+      gates[j]=gates[j-1U];--j;}gates[j]=event;}
+    for(uint8_t i=0U;i<gate_count;++i){
+     master_harmony_gate_advance(gates[i].sample_abs);
+     const uint64_t gate_end=(gates[i].sample_abs
+         >UINT64_MAX-gates[i].duration_samples)?UINT64_MAX
+         :gates[i].sample_abs+gates[i].duration_samples;
+     uint32_t token=++core->occurrence_serial;
+     if(token==0U)token=++core->occurrence_serial;
+     (void)master_harmony_gate_note_on(MASTER_HARMONY_GATE_SEQUENCER,
+         token,gates[i].note,p->generation,gates[i].sample_abs,gate_end);}
    source->active=0U;core->source_active[bank]&=~(UINT64_C(1)<<lane);
    if(core->source_count!=0U)--core->source_count;}
   return NOTE_EVENT_RESULT_ACCEPTED;}
@@ -1286,7 +1289,10 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
         terminal_admit(&event,node.record_sample_abs,node.record_velocity);
         collect_calendar_head(track,start,end,&head[DUE_CALENDAR]);
         collect_ledger_head(core,track,end,&head[DUE_LEDGER]);
-        }}
+        }
+      if(track==BRICK_ENTITY_MASTER_ID&&end!=0U)
+        master_harmony_gate_advance(end-1U);
+    }
     for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track){
         const uint32_t horizon=frames
             +p->timing_plan[track].finalizer_max_advance_samples;

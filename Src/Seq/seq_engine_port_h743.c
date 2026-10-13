@@ -396,9 +396,11 @@ uint8_t seq_ingress_submit(const seq_ingress_event_t *event)
 
 void seq_ingress_panic(void)
 {
+    const uint64_t release_sample=g_publish_until;
     const uint32_t primask=__get_PRIMASK();__disable_irq();
     g_ingress_count=0U;g_ingress_head=0U;g_ingress_tail=0U;g_ingress_panic=1U;
     __set_PRIMASK(primask);
+    master_harmony_gate_cancel_all(release_sample);
 }
 
 void seq_ingress_discard(void)
@@ -427,6 +429,7 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
     const uint64_t start = publish_until_sample;
     const uint16_t frames = SEQ_ENGINE_H743_PERIOD_SAMPLES;
     if(g_ingress_panic!=0U){g_ingress_panic=0U;
+        master_harmony_gate_cancel_all(start);
         seq_engine_core_init(&g_core);}
     if ((g_force_stopped != 0U) && (start >= g_force_stop_sample)) {
         seq_engine_core_process_block(&g_core,start,frames,0,block);

@@ -30,6 +30,7 @@
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Keyboard/keyboard_runtime.h"
+#include "Harmony/master_harmony.h"
 #include "midi.h"
 #include "MIDI/midi_clock_timer.h"
 
@@ -212,6 +213,7 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
     sample_capture_control_on_transport_stop(stop_sample);
     seq_edit_note_capture_reset();
     seq_transport_owner_stop_lifecycle_apply(&g_seq_runtime, stop_sample);
+    master_harmony_gate_cancel_all(stop_sample);
     if (emit_transport_stop_and_panic != 0U)
     {
         const uint8_t send_stop = (uint8_t)(
