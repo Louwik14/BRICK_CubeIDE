@@ -129,6 +129,7 @@ void brick6_sampler_runtime_set_clip_shifter_dispersion(uint8_t track_id, uint8_
 void brick6_sampler_runtime_trigger(uint8_t track_id);
 void brick6_sampler_runtime_trigger_note(uint8_t track_id, uint8_t note);
 uint8_t brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note, uint8_t velocity);
+uint8_t brick6_sampler_runtime_retrigger_note_velocity(uint8_t track_id, uint8_t note, uint8_t velocity);
 brick6_sampler_note_result_t brick6_sampler_runtime_initialize_held_note(
     uint8_t track_id, uint8_t note, uint8_t velocity, uint32_t output_id,
     uint8_t multi);

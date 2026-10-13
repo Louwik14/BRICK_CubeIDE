@@ -16,7 +16,7 @@ cache, le meme DSP et les memes quatre pages TONE:
 1. `PLAY`: Sample, Mode, Start, Length.
 2. `LOOP`: Gain, Tune, Loop Start, Slice Count, avec waveform, markers et
    playhead communs.
-3. `SOURCE`: Source, Src BPM, Stretch, emplacement libre.
+3. `SOURCE`: Source, Src BPM, Stretch, Sync Len.
 4. `STR`: Grain, Heads, Window, Dispersion.
 
 `START` et `END` pilotent directement le plan Streamer. Les changements live
@@ -33,12 +33,22 @@ cree pas de moteur distinct.
 
 Classic et Group retrouvent l'unique parametre historique `Mode`, avec les
 labels et l'ordre exacts `ONE`, `REV.ONE`, `LOOP`, `PINGPONG`, `H.ONE`,
-`H.LOOP`, `H.PINGPONG`. Les modes sans `H` sont TOGGLE: le NOTE_ON suivant
-arrete la voix et NOTE_OFF ne pilote pas leur cycle. Les modes `H.*` suivent le
-gate: NOTE_ON lance/redeclenche et NOTE_OFF libere la voix. `H.LOOP` est une
+`H.LOOP`, `H.PINGPONG`. Les modes sans `H` sont TOGGLE: un NOTE_ON externe
+suivant arrete la voix et NOTE_OFF ne pilote pas leur cycle. Un depart ou
+retrigger sequenceur porte la semantique RETRIGGER et remplace toujours la
+lecture courante, sans etre interprete comme le second geste du toggle. Les
+modes `H.*` suivent le gate: NOTE_ON lance/redeclenche et NOTE_OFF libere la voix. `H.LOOP` est une
 loop forward hold. Le ping-pong est porte par `PINGPONG`/`H.PINGPONG` et alterne
 entre START et la borne derivee `START + LENGTH`; la loop forward reprend a LOOP START. Le mode est capture
 au NOTE_ON, P-lockable, et exclu de la Matrix/modulation continue.
+
+`Sync Len` restaure le contrat historique `Off / 1 bar / 2 bars / 4 bars /
+Auto`. Les longueurs explicites calent la region START/LENGTH sur la duree
+musicale cible au tempo projet; Auto derive le ratio de `Src BPM`. `Stretch=Off`
+neutralise le calage, `Speed` applique un varispeed qui change aussi la hauteur,
+et `Shifter` corrige la hauteur. Ces reglages passifs sont pris en compte au
+prochain depart/retrigger et n'ajoutent ni quantification de depart ni I/O SD
+dans AUDIO.
 
 Reverse et ping-pong tournent dans le VoiceReader canonique. Reverse consomme
 les pages de la fin vers le debut, tandis que le backend conserve des lectures

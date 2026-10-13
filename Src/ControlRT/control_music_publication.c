@@ -28,13 +28,16 @@ static uint16_t control_music_convert(const control_music_transition_t *action,
         .entity = action->entity_id
     };
     out[0] = base;
+    const uint8_t action_kind = control_music_action_kind(action);
+    const uint8_t start_kind = (control_music_action_is_external(action) != 0U)
+        ? CONTROL_AUDIO_NOTE_ON : CONTROL_AUDIO_NOTE_RETRIGGER;
     out[0].opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_NOTE,
-        (control_music_action_kind(action) == CONTROL_MUSIC_ACTION_START)
-            ? CONTROL_AUDIO_NOTE_ON : CONTROL_AUDIO_NOTE_OFF);
-    if (control_music_action_kind(action) != CONTROL_MUSIC_ACTION_RETRIGGER) return 1U;
+        (action_kind == CONTROL_MUSIC_ACTION_START)
+            ? start_kind : CONTROL_AUDIO_NOTE_OFF);
+    if (action_kind != CONTROL_MUSIC_ACTION_RETRIGGER) return 1U;
     out[1] = base;
     out[1].opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
-        CONTROL_AUDIO_COMMAND_NOTE, CONTROL_AUDIO_NOTE_ON);
+        CONTROL_AUDIO_COMMAND_NOTE, CONTROL_AUDIO_NOTE_RETRIGGER);
     return 2U;
 }
 

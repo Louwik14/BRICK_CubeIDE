@@ -187,7 +187,6 @@ static uint8_t ui_param_local_control_apply(param_id_t id, uint8_t track,
 {
     float current = 0.0f;
     (void)ui_param_local_control_get(id, track, &current);
-    int32_t next = (int32_t)(current + 0.5f) + delta;
     if ((id == UI_PARAM_LOCAL_ASSET) || (id == UI_PARAM_LOCAL_WAVE_OSC1)
             || (id == UI_PARAM_LOCAL_WAVE_OSC2))
     {
@@ -223,6 +222,7 @@ static uint8_t ui_param_local_control_apply(param_id_t id, uint8_t track,
             : project_control_track_asset_assign_logical(track, role,
                 list[pos - 1U]);
     }
+    int32_t next = (int32_t)(current + 0.5f) + delta;
     if (id == UI_PARAM_LOCAL_FM_OPERATOR)
     {
         if (next < 0) next = 0;

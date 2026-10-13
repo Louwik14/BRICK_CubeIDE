@@ -501,9 +501,10 @@ void brick6_sampler_runtime_trigger_note(uint8_t track_id, uint8_t note)
     (void)brick6_sampler_runtime_trigger_note_velocity(track_id, note, 127U);
 }
 
-uint8_t brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id,
-                                                     uint8_t note,
-                                                     uint8_t velocity)
+static uint8_t brick6_sampler_runtime_apply_note_velocity(uint8_t track_id,
+                                                          uint8_t note,
+                                                          uint8_t velocity,
+                                                          uint8_t retrigger)
 {
     if (track_id >= SEQ_TRACK_COUNT)
     {
@@ -512,7 +513,8 @@ uint8_t brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id,
 
     brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
     const uint8_t configured_mode = g_sampler_clip_runtime[track_id].mode;
-    if ((brick6_sampler_mode_is_hold_value(configured_mode) == 0U)
+    if ((retrigger == 0U)
+            && (brick6_sampler_mode_is_hold_value(configured_mode) == 0U)
             && (voice->active != 0U)
             && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP)
             && (voice->release_pending == 0U))
@@ -536,4 +538,20 @@ uint8_t brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id,
 
     brick6_sampler_runtime_trigger(track_id);
     return (uint8_t)(g_sampler_voice[track_id].active != 0U);
+}
+
+uint8_t brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id,
+                                                     uint8_t note,
+                                                     uint8_t velocity)
+{
+    return brick6_sampler_runtime_apply_note_velocity(track_id, note,
+        velocity, 0U);
+}
+
+uint8_t brick6_sampler_runtime_retrigger_note_velocity(uint8_t track_id,
+                                                       uint8_t note,
+                                                       uint8_t velocity)
+{
+    return brick6_sampler_runtime_apply_note_velocity(track_id, note,
+        velocity, 1U);
 }

@@ -460,7 +460,8 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
 static uint8_t audio_command_apply_note(const control_audio_command_t *command)
 {
     if ((command->entity >= BRICK_ENTITY_CAPACITY)
-            || (CONTROL_AUDIO_COMMAND_KIND(command) > CONTROL_AUDIO_NOTE_ON)
+            || (CONTROL_AUDIO_COMMAND_KIND(command)
+                > CONTROL_AUDIO_NOTE_RETRIGGER)
             || (command->value == 0U))
         return 0U;
     if ((command->value & CONTROL_AUDIO_NOTE_METRONOME_MASK)
@@ -471,10 +472,14 @@ static uint8_t audio_command_apply_note(const control_audio_command_t *command)
                                   : METRONOME_CLICK_NORMAL);
         return 1U;
     }
+    const uint8_t kind = CONTROL_AUDIO_COMMAND_KIND(command);
+    if (kind == CONTROL_AUDIO_NOTE_RETRIGGER)
+        return audio_note_engine_adapter_retrigger_output(command->entity,
+            (uint8_t)command->id, (uint8_t)(command->id >> 8),
+            command->value);
     return audio_note_engine_adapter_apply_output(command->entity,
         (uint8_t)command->id, (uint8_t)(command->id >> 8),
-        CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_NOTE_ON,
-        command->value);
+        kind == CONTROL_AUDIO_NOTE_ON, command->value);
 }
 
 static uint8_t audio_command_apply_transport(
@@ -1756,8 +1761,14 @@ static uint8_t audio_command_executor_apply_seq_event(
     const uint32_t output_id = audio_seq_allocate_output_handle();
     if (output_id == 0U)
         return 0U;
-    if (audio_note_engine_adapter_apply_output(event->note.track,event->note.note,
-            event->note.velocity, 1U, output_id) == 0U)
+    const uint8_t live = (uint8_t)((event->note.reserved
+        & SEQ_ENGINE_NOTE_LIVE) != 0U);
+    const uint8_t started = (live != 0U)
+        ? audio_note_engine_adapter_apply_output(event->note.track,
+            event->note.note, event->note.velocity, 1U, output_id)
+        : audio_note_engine_adapter_retrigger_output(event->note.track,
+            event->note.note, event->note.velocity, output_id);
+    if (started == 0U)
         return 0U;
     outputs[target] = (audio_seq_output_t){
         .id=output_id,.occurrence_id=event->note.occurrence_id,
@@ -1793,7 +1804,7 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
         const uint8_t opcode = CONTROL_AUDIO_COMMAND_OPCODE(&command);
         const uint8_t stale_note_on = (uint8_t)(
             (opcode == CONTROL_AUDIO_COMMAND_NOTE)
-            && (CONTROL_AUDIO_COMMAND_KIND(&command) == CONTROL_AUDIO_NOTE_ON));
+            && (CONTROL_AUDIO_COMMAND_KIND(&command) != CONTROL_AUDIO_NOTE_OFF));
         const uint8_t stale_temporary_param = (uint8_t)(
             (opcode == CONTROL_AUDIO_COMMAND_PARAM)
             && ((CONTROL_AUDIO_COMMAND_KIND(&command)

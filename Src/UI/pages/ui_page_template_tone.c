@@ -200,7 +200,7 @@ static const ui_template_family_t g_ui_template_tone_family_clip = {
     .subpages = {
         { .title = "PLAY", .param_bank = { .params = { UI_PARAM_LOCAL_ASSET, PARAM_SAMPLER_MODE, PARAM_SAMPLER_START, PARAM_SAMPLER_LENGTH } } },
         { .title = "LOOP", .param_bank = { .params = { PARAM_SAMPLER_GAIN, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_LOOP_START, PARAM_SAMPLER_SLICE_COUNT } } },
-        { .title = "SOURCE", .param_bank = { .params = { PARAM_SAMPLER_CLIP_SOURCE, PARAM_SAMPLER_CLIP_SOURCE_BPM, PARAM_SAMPLER_CLIP_STRETCH_MODE, PARAM_COUNT } } },
+        { .title = "SOURCE", .param_bank = { .params = { PARAM_SAMPLER_CLIP_SOURCE, PARAM_SAMPLER_CLIP_SOURCE_BPM, PARAM_SAMPLER_CLIP_STRETCH_MODE, PARAM_SAMPLER_CLIP_SYNC_LENGTH } } },
         { .title = "STR", .param_bank = { .params = { PARAM_SAMPLER_CLIP_GRAIN, PARAM_SHIFTER_HEADS, PARAM_SHIFTER_WINDOW, PARAM_SHIFTER_DISP } } },
     },
     .default_subpage = 0U,

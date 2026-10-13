@@ -16,7 +16,12 @@ typedef enum
     CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT
 } control_audio_command_opcode_t;
 
-typedef enum { CONTROL_AUDIO_NOTE_OFF = 0U, CONTROL_AUDIO_NOTE_ON } control_audio_note_kind_t;
+typedef enum
+{
+    CONTROL_AUDIO_NOTE_OFF = 0U,
+    CONTROL_AUDIO_NOTE_ON,
+    CONTROL_AUDIO_NOTE_RETRIGGER
+} control_audio_note_kind_t;
 typedef enum
 {
     CONTROL_AUDIO_TRANSPORT_START = 0U,
