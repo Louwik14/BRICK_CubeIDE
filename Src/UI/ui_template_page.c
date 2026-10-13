@@ -67,7 +67,8 @@ static uint8_t ui_template_subpage_has_param(const ui_template_subpage_t *subpag
 
     for (uint8_t i = 0U; i < 4U; ++i)
     {
-        if (subpage->param_bank.params[i] < PARAM_COUNT)
+        if ((subpage->param_bank.params[i] < PARAM_COUNT) ||
+            (ui_param_is_local_control(subpage->param_bank.params[i]) != 0U))
         {
             return 1U;
         }

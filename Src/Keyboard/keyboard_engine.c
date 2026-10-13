@@ -629,7 +629,7 @@ static void keyboard_engine_note_on_for_track_internal(uint8_t track,
                                                         uint32_t capture_tick,
                                                         uint32_t ingress_serial)
 {
-    if ((track >= TRACK_COUNT) || (entity_topology_is_active(track) == 0U))
+    if ((track >= SEQ_LANE_CAPACITY) || (entity_topology_is_active(track) == 0U))
     {
         return;
     }
@@ -680,7 +680,7 @@ static void keyboard_engine_note_off_for_track_internal(uint8_t track,
                                                          uint32_t capture_tick,
                                                          uint32_t ingress_serial)
 {
-    if ((track >= TRACK_COUNT) || (entity_topology_is_active(track) == 0U))
+    if ((track >= SEQ_LANE_CAPACITY) || (entity_topology_is_active(track) == 0U))
     {
         return;
     }

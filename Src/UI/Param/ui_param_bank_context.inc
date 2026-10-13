@@ -20,7 +20,8 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
 
     for (uint8_t i = 0U; i < 4U; i++)
     {
-        if (g_ui_param.bank.params[i] < PARAM_COUNT)
+        if ((g_ui_param.bank.params[i] < PARAM_COUNT) ||
+            (ui_param_is_local_control(g_ui_param.bank.params[i]) != 0U))
         {
             g_ui_param.valid = 1U;
             break;
