@@ -349,7 +349,7 @@ typedef struct {
 	BYTE after_window;
 } FF_META_REMOVE_CHAIN_CONT;
 
-#define FF_BRICK_REC_PATH_MAX 96U
+#define FF_BRICK_REC_PATH_MAX 160U
 
 typedef struct {
 	FATFS* fs;
@@ -395,7 +395,25 @@ typedef struct {
 	TCHAR path[FF_BRICK_REC_PATH_MAX];
 	WCHAR target_lfn[_MAX_LFN + 1];
 	BYTE xdir[FF_META_XDIR_BUFFER_SIZE];
+	BYTE read_only;
 } FF_BRICK_REC_PREPARE_CONT;
+
+typedef struct {
+	FIL* fp;
+	FF_META_WINDOW_CONT window;
+	BYTE* staging;
+	DWORD current;
+	DWORD next;
+	DWORD run_start;
+	DWORD run_length;
+	DWORD cluster_count;
+	DWORD cluster_index;
+	DWORD table_index;
+	DWORD required_items;
+	FRESULT result;
+	UINT staging_size;
+	BYTE phase;
+} FF_BRICK_READ_MAP_CONT;
 
 typedef struct {
 	FATFS* fs;
@@ -480,6 +498,22 @@ FF_META_STEP_RESULT f_brick_rec_prepare_step (FF_BRICK_REC_PREPARE_CONT* cont,
 FRESULT f_brick_rec_prepare_io_started (FF_BRICK_REC_PREPARE_CONT* cont,
 	DWORD sequence);
 FRESULT f_brick_rec_prepare_io_complete (FF_BRICK_REC_PREPARE_CONT* cont,
+	DWORD sequence, FRESULT result);
+FRESULT f_brick_read_open_begin (FF_BRICK_REC_PREPARE_CONT* cont, FIL* fp,
+	const TCHAR* path, BYTE* staging, UINT staging_size);
+FF_META_STEP_RESULT f_brick_read_open_step (FF_BRICK_REC_PREPARE_CONT* cont,
+	const FF_META_REQUEST** request);
+FRESULT f_brick_read_open_io_started (FF_BRICK_REC_PREPARE_CONT* cont,
+	DWORD sequence);
+FRESULT f_brick_read_open_io_complete (FF_BRICK_REC_PREPARE_CONT* cont,
+	DWORD sequence, FRESULT result);
+FRESULT f_brick_read_map_begin (FF_BRICK_READ_MAP_CONT* cont, FIL* fp,
+	BYTE* staging, UINT staging_size);
+FF_META_STEP_RESULT f_brick_read_map_step (FF_BRICK_READ_MAP_CONT* cont,
+	const FF_META_REQUEST** request);
+FRESULT f_brick_read_map_io_started (FF_BRICK_READ_MAP_CONT* cont,
+	DWORD sequence);
+FRESULT f_brick_read_map_io_complete (FF_BRICK_READ_MAP_CONT* cont,
 	DWORD sequence, FRESULT result);
 FRESULT f_brick_rec_rename_begin (FF_BRICK_REC_RENAME_CONT* cont,
 	const FIL* closed_file, const TCHAR* new_name, BYTE* staging,

@@ -6979,6 +6979,7 @@ static FF_META_STEP_RESULT brick_rec_prepare_scan_end (
 {
 	if (cont->scan_purpose == FF_BRICK_PREP_SCAN_LOOKUP) {
 		if (!cont->target_last) return brick_rec_prepare_error(cont, FR_NO_PATH);
+		if (cont->read_only) return brick_rec_prepare_error(cont, FR_NO_FILE);
 		return brick_rec_prepare_begin_create_scan(cont);
 	}
 	if (cont->alias_collision) {
@@ -7105,7 +7106,8 @@ static FF_META_STEP_RESULT brick_rec_prepare_found (
 		cont->phase = FF_BRICK_PREP_PHASE_COMPONENT;
 		return FF_META_STEP_YIELD;
 	}
-	if (attr & (AM_DIR | AM_RDO)) return brick_rec_prepare_error(cont, FR_DENIED);
+	if (attr & AM_DIR) return brick_rec_prepare_error(cont, FR_NO_FILE);
+	if (!cont->read_only && (attr & AM_RDO)) return brick_rec_prepare_error(cont, FR_DENIED);
 #if _FS_LOCK != 0
 	{
 		DIR lock_dir;
@@ -7113,10 +7115,57 @@ static FF_META_STEP_RESULT brick_rec_prepare_found (
 		mem_set(&lock_dir, 0, sizeof(lock_dir));
 		lock_dir.obj = cont->directory_obj;
 		lock_dir.dptr = cont->source_entry_offset;
-		lock_result = chk_lock(&lock_dir, 2);
+		lock_result = chk_lock(&lock_dir, cont->read_only ? 0 : 2);
 		if (lock_result != FR_OK) return brick_rec_prepare_error(cont, lock_result);
 	}
 #endif
+	if (cont->read_only) {
+		mem_set(cont->fp, 0, sizeof(*cont->fp));
+		cont->fp->obj.fs = cont->fs;
+		cont->fp->obj.id = cont->fs->id;
+		cont->fp->obj.sclust = first_cluster;
+		cont->fp->obj.objsize = size;
+		cont->fp->obj.stat = chain_status;
+		cont->fp->flag = FA_READ;
+		cont->fp->err = 0;
+		cont->fp->sect = 0;
+		cont->fp->fptr = 0;
+		cont->fp->dir_sect = cont->fs->winsect;
+		cont->fp->dir_ptr = cont->fs->win
+			+ (cont->source_entry_offset % SS(cont->fs));
+		cont->fp->brick_dir_obj = cont->directory_obj;
+		cont->fp->brick_dir_obj.id = cont->fs->id;
+		cont->fp->brick_dir_block_ofs = cont->source_block_offset;
+		cont->fp->brick_dir_entry_ofs = cont->source_entry_offset;
+#if _FS_EXFAT
+		if (cont->fs->fs_type == FS_EXFAT) {
+			cont->fp->obj.c_scl = cont->directory_obj.sclust;
+			cont->fp->obj.c_size = ((DWORD)cont->directory_obj.objsize & 0xFFFFFF00)
+				| cont->directory_obj.stat;
+			cont->fp->obj.c_ofs = cont->source_block_offset;
+		}
+#endif
+#if _USE_FASTSEEK
+		cont->fp->cltbl = 0;
+#endif
+#if !_FS_TINY
+		mem_set(cont->fp->buf, 0, _MAX_SS);
+#endif
+#if _FS_LOCK != 0
+		{
+			DIR lock_dir;
+			mem_set(&lock_dir, 0, sizeof(lock_dir));
+			lock_dir.obj = cont->directory_obj;
+			lock_dir.dptr = cont->source_entry_offset;
+			cont->fp->obj.lockid = inc_lock(&lock_dir, 0);
+			if (!cont->fp->obj.lockid)
+				return brick_rec_prepare_error(cont, FR_TOO_MANY_OPEN_FILES);
+		}
+#endif
+		cont->result = FR_OK;
+		cont->phase = FF_BRICK_PREP_PHASE_DONE;
+		return FF_META_STEP_DONE;
+	}
 	mem_set(&cont->source_obj, 0, sizeof(cont->source_obj));
 	cont->source_obj.fs = cont->fs;
 	cont->source_obj.id = cont->fs->id;
@@ -7132,12 +7181,13 @@ static FF_META_STEP_RESULT brick_rec_prepare_found (
 }
 
 
-FRESULT f_brick_rec_prepare_begin (
+static FRESULT brick_prepare_begin_mode (
 	FF_BRICK_REC_PREPARE_CONT* cont,
 	FIL* fp,
 	const TCHAR* path,
 	BYTE* staging,
-	UINT staging_size)
+	UINT staging_size,
+	BYTE read_only)
 {
 	const TCHAR* volume_path;
 	FATFS* fs;
@@ -7150,7 +7200,7 @@ FRESULT f_brick_rec_prepare_begin (
 	mem_set(cont, 0, sizeof(*cont));
 	mem_cpy(cont->path, path, (length + 1) * sizeof(TCHAR));
 	volume_path = cont->path;
-	result = find_volume(&volume_path, &fs, FA_WRITE);
+	result = find_volume(&volume_path, &fs, read_only ? FA_READ : FA_WRITE);
 	if (result != FR_OK) return result;
 	if (fs->fs_type != FS_FAT32
 #if _FS_EXFAT
@@ -7165,11 +7215,23 @@ FRESULT f_brick_rec_prepare_begin (
 	cont->path_index = (UINT)(volume_path - cont->path);
 	cont->timestamp = GET_FATTIME();
 	cont->result = FR_OK;
+	cont->read_only = read_only ? 1 : 0;
 	mem_set(&cont->directory_obj, 0, sizeof(cont->directory_obj));
 	cont->directory_obj.fs = fs;
 	cont->directory_obj.id = fs->id;
 	cont->phase = FF_BRICK_PREP_PHASE_COMPONENT;
 	return FR_OK;
+}
+
+
+FRESULT f_brick_rec_prepare_begin (
+	FF_BRICK_REC_PREPARE_CONT* cont,
+	FIL* fp,
+	const TCHAR* path,
+	BYTE* staging,
+	UINT staging_size)
+{
+	return brick_prepare_begin_mode(cont, fp, path, staging, staging_size, 0);
 }
 
 
@@ -7544,6 +7606,201 @@ FRESULT f_brick_rec_prepare_io_complete (
 	}
 	if (cont->phase != FF_BRICK_PREP_PHASE_WINDOW) return FR_INVALID_PARAMETER;
 	return f_brick_meta_window_io_complete(&cont->window, sequence, result);
+}
+
+
+FRESULT f_brick_read_open_begin (
+	FF_BRICK_REC_PREPARE_CONT* cont,
+	FIL* fp,
+	const TCHAR* path,
+	BYTE* staging,
+	UINT staging_size)
+{
+	return brick_prepare_begin_mode(cont, fp, path, staging, staging_size, 1);
+}
+
+
+FF_META_STEP_RESULT f_brick_read_open_step (
+	FF_BRICK_REC_PREPARE_CONT* cont,
+	const FF_META_REQUEST** request)
+{
+	if (!cont || !cont->read_only) return FF_META_STEP_ERROR;
+	return f_brick_rec_prepare_step(cont, request);
+}
+
+
+FRESULT f_brick_read_open_io_started (
+	FF_BRICK_REC_PREPARE_CONT* cont,
+	DWORD sequence)
+{
+	return (!cont || !cont->read_only) ? FR_INVALID_PARAMETER
+		: f_brick_rec_prepare_io_started(cont, sequence);
+}
+
+
+FRESULT f_brick_read_open_io_complete (
+	FF_BRICK_REC_PREPARE_CONT* cont,
+	DWORD sequence,
+	FRESULT result)
+{
+	return (!cont || !cont->read_only) ? FR_INVALID_PARAMETER
+		: f_brick_rec_prepare_io_complete(cont, sequence, result);
+}
+
+
+enum {
+	FF_BRICK_READ_MAP_PHASE_NEXT = 0,
+	FF_BRICK_READ_MAP_PHASE_WINDOW,
+	FF_BRICK_READ_MAP_PHASE_LOADED,
+	FF_BRICK_READ_MAP_PHASE_DONE,
+	FF_BRICK_READ_MAP_PHASE_ERROR
+};
+
+
+static FF_META_STEP_RESULT brick_read_map_error (
+	FF_BRICK_READ_MAP_CONT* cont,
+	FRESULT result)
+{
+	cont->result = result;
+	cont->phase = FF_BRICK_READ_MAP_PHASE_ERROR;
+	return FF_META_STEP_ERROR;
+}
+
+
+static FRESULT brick_read_map_append (FF_BRICK_READ_MAP_CONT* cont)
+{
+	DWORD* table = cont->fp->cltbl;
+	cont->required_items += 2;
+	if (cont->table_index + 2 >= table[0]) return FR_NOT_ENOUGH_CORE;
+	table[cont->table_index++] = cont->run_length;
+	table[cont->table_index++] = cont->run_start;
+	return FR_OK;
+}
+
+
+FRESULT f_brick_read_map_begin (
+	FF_BRICK_READ_MAP_CONT* cont,
+	FIL* fp,
+	BYTE* staging,
+	UINT staging_size)
+{
+	FATFS* fs;
+	FRESULT result;
+	DWORD cluster_bytes;
+	if (!cont || !fp || !fp->cltbl) return FR_INVALID_PARAMETER;
+	result = validate(&fp->obj, &fs);
+	if (result != FR_OK) return result;
+	if (fp->err != FR_OK || fp->obj.objsize == 0 || fp->obj.sclust < 2
+		|| fp->obj.sclust >= fs->n_fatent || fp->cltbl[0] < 4)
+		return FR_INVALID_PARAMETER;
+	if (staging && staging_size < SS(fs)) return FR_INVALID_PARAMETER;
+	cluster_bytes = (DWORD)fs->csize * SS(fs);
+	mem_set(cont, 0, sizeof(*cont));
+	cont->fp = fp;
+	cont->staging = staging;
+	cont->staging_size = staging ? staging_size : 0;
+	cont->current = fp->obj.sclust;
+	cont->run_start = cont->current;
+	cont->run_length = 1;
+	cont->cluster_count = (DWORD)((fp->obj.objsize + cluster_bytes - 1) / cluster_bytes);
+	cont->cluster_index = 1;
+	cont->table_index = 1;
+	cont->required_items = 2;
+	cont->result = FR_OK;
+	cont->phase = FF_BRICK_READ_MAP_PHASE_NEXT;
+	return FR_OK;
+}
+
+
+FF_META_STEP_RESULT f_brick_read_map_step (
+	FF_BRICK_READ_MAP_CONT* cont,
+	const FF_META_REQUEST** request)
+{
+	FF_META_STEP_RESULT child;
+	FRESULT result;
+	FATFS* fs;
+	if (request) *request = 0;
+	if (!cont || !cont->fp || !cont->fp->obj.fs || !cont->fp->cltbl)
+		return FF_META_STEP_ERROR;
+	fs = cont->fp->obj.fs;
+	switch (cont->phase) {
+	case FF_BRICK_READ_MAP_PHASE_NEXT:
+		if (cont->cluster_index >= cont->cluster_count) {
+			result = brick_read_map_append(cont);
+			cont->fp->cltbl[0] = cont->required_items;
+			if (result != FR_OK) return brick_read_map_error(cont, result);
+			cont->fp->cltbl[cont->table_index] = 0;
+			cont->phase = FF_BRICK_READ_MAP_PHASE_DONE;
+			return FF_META_STEP_DONE;
+		}
+		if (brick_meta_exfat_synthetic_value(&cont->fp->obj,
+			cont->current, &cont->next)) {
+			cont->phase = FF_BRICK_READ_MAP_PHASE_LOADED;
+			return FF_META_STEP_YIELD;
+		}
+		result = f_brick_meta_window_begin(&cont->window, fs,
+			brick_meta_fat_sector(fs, cont->current), 1,
+			cont->staging, cont->staging_size);
+		if (result != FR_OK) return brick_read_map_error(cont, result);
+		cont->phase = FF_BRICK_READ_MAP_PHASE_WINDOW;
+		return FF_META_STEP_YIELD;
+
+	case FF_BRICK_READ_MAP_PHASE_WINDOW:
+		child = f_brick_meta_window_step(&cont->window, request);
+		if (child == FF_META_STEP_DONE) {
+			cont->next = brick_meta_fat_value_loaded(&cont->fp->obj, cont->current);
+			cont->phase = FF_BRICK_READ_MAP_PHASE_LOADED;
+			return FF_META_STEP_YIELD;
+		}
+		if (child == FF_META_STEP_ERROR)
+			return brick_read_map_error(cont, cont->window.result);
+		return child;
+
+	case FF_BRICK_READ_MAP_PHASE_LOADED:
+		if (cont->next < 2 || cont->next >= fs->n_fatent)
+			return brick_read_map_error(cont,
+				cont->next == 0xFFFFFFFF ? FR_DISK_ERR : FR_INT_ERR);
+		if (cont->next == cont->current + 1) {
+			cont->run_length++;
+		} else {
+			result = brick_read_map_append(cont);
+			if (result != FR_OK) return brick_read_map_error(cont, result);
+			cont->run_start = cont->next;
+			cont->run_length = 1;
+		}
+		cont->current = cont->next;
+		cont->cluster_index++;
+		cont->phase = FF_BRICK_READ_MAP_PHASE_NEXT;
+		return FF_META_STEP_YIELD;
+
+	case FF_BRICK_READ_MAP_PHASE_DONE:
+		return FF_META_STEP_DONE;
+
+	default:
+		return brick_read_map_error(cont,
+			cont->result != FR_OK ? cont->result : FR_INT_ERR);
+	}
+}
+
+
+FRESULT f_brick_read_map_io_started (
+	FF_BRICK_READ_MAP_CONT* cont,
+	DWORD sequence)
+{
+	return (!cont || cont->phase != FF_BRICK_READ_MAP_PHASE_WINDOW)
+		? FR_INVALID_PARAMETER
+		: f_brick_meta_window_io_started(&cont->window, sequence);
+}
+
+
+FRESULT f_brick_read_map_io_complete (
+	FF_BRICK_READ_MAP_CONT* cont,
+	DWORD sequence,
+	FRESULT result)
+{
+	return (!cont || cont->phase != FF_BRICK_READ_MAP_PHASE_WINDOW)
+		? FR_INVALID_PARAMETER
+		: f_brick_meta_window_io_complete(&cont->window, sequence, result);
 }
 
 

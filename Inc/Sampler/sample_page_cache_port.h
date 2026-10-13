@@ -36,6 +36,16 @@ uint8_t sample_page_cache_port_prepare_stream(
     FIL *map_file,
     sample_page_stream_info_t *out_stream,
     uint16_t *out_prefill_pages);
+uint8_t sample_page_cache_port_prepare_stream_mapped(
+    sample_audio_key_t key,
+    const char *path,
+    const wav_info_t *info,
+    uint32_t total_frames,
+    uint32_t data_offset,
+    sample_stream_physical_map_t *map,
+    uint32_t file_size,
+    sample_page_stream_info_t *out_stream,
+    uint16_t *out_prefill_pages);
 /* REC_SOURCE keeps its own startup-page lifecycle. */
 uint8_t sample_page_cache_port_register_file(sample_audio_key_t key,
                                              const char *path,

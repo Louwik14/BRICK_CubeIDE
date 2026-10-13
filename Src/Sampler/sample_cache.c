@@ -19,6 +19,41 @@ static CTRL_STATE FRESULT g_sample_cache_last_fresult[SAMPLE_CLASSIC_CAPACITY];
 static uint8_t g_sample_cache_stream_gate_held;
 static uint8_t g_sample_cache_projection_published[SAMPLE_CLASSIC_CAPACITY];
 
+typedef enum
+{
+    SAMPLE_CACHE_COOP_RIFF = 0,
+    SAMPLE_CACHE_COOP_CHUNK,
+    SAMPLE_CACHE_COOP_FMT,
+    SAMPLE_CACHE_COOP_FACT_FIRST,
+    SAMPLE_CACHE_COOP_FACT_LAST,
+    SAMPLE_CACHE_COOP_INSTALL
+} sample_cache_coop_phase_t;
+
+typedef struct
+{
+    char path[SAMPLE_CLASSIC_PATH_MAX];
+    wav_info_t info;
+    uint8_t io[40U];
+    uint32_t parse_limit;
+    uint32_t cursor;
+    uint32_t chunk_size;
+    uint32_t chunk_payload;
+    uint32_t source_signature;
+    uint16_t sample_id;
+    uint8_t active;
+    uint8_t waiting;
+    uint8_t terminal;
+    uint8_t success;
+    uint8_t have_fmt;
+    uint8_t have_fact;
+    uint8_t have_data;
+    uint8_t edge_ready;
+    sample_cache_coop_phase_t phase;
+} sample_cache_coop_load_t;
+
+SDRAM_CLASSIC_POOL ALIGN32 static sample_stream_coop_file_t g_sample_cache_coop_file;
+SDRAM_CLASSIC_POOL static sample_cache_coop_load_t g_sample_cache_coop;
+
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CLASSIC_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
                "hot sample cache ids must fit in the page-cache id space");
@@ -58,12 +93,21 @@ uint32_t sample_cache_product_cost_bytes(uint32_t frames,
                sample_audio_format_or_stereo(format), prep_frames)
            * SAMPLE_PAGE_BYTES;
 }
+
+uint32_t sample_cache_get_product_cost_bytes(uint16_t sample_id)
+{
+    if (sample_id >= SAMPLE_CLASSIC_CAPACITY) return 0U;
+    const sample_cache_desc_t *const desc = &g_sample_cache[sample_id];
+    if (desc->total_frames == 0U) return 0U;
+    return sample_cache_product_cost_bytes(desc->total_frames, desc->format);
+}
 static const char *sample_cache_path(uint16_t sample_id)
 {
-    const sample_global_slot_t *const slot = sample_global_pool_get_slot(sample_id);
-    return ((slot != 0) && (slot->kind == SAMPLE_GLOBAL_KIND_CLASSIC))
-               ? slot->path
-               : 0;
+    uint16_t global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    if (sample_global_pool_find_by_backend(
+            SAMPLE_GLOBAL_KIND_CLASSIC, sample_id, &global) == 0U) return 0;
+    const sample_global_slot_t *const slot = sample_global_pool_get_slot(global);
+    return (slot != 0) ? slot->path : 0;
 }
 
 static void sample_cache_clear_desc(sample_cache_desc_t *desc)
@@ -244,6 +288,245 @@ void sample_cache_init(void)
         g_sample_cache_projection_published[i] = 0U;
     }
 
+    sample_stream_coop_file_init(&g_sample_cache_coop_file);
+    memset(&g_sample_cache_coop, 0, sizeof(g_sample_cache_coop));
+
+}
+
+static uint16_t sample_cache_coop_le16(const uint8_t *p)
+{
+    return (uint16_t)p[0] | ((uint16_t)p[1] << 8U);
+}
+
+static uint32_t sample_cache_coop_le32(const uint8_t *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8U)
+        | ((uint32_t)p[2] << 16U) | ((uint32_t)p[3] << 24U);
+}
+
+static uint32_t sample_cache_coop_crc32(const uint8_t *data, uint32_t size)
+{
+    uint32_t crc = 0xFFFFFFFFUL;
+    for (uint32_t i = 0U; i < size; ++i)
+    {
+        crc ^= data[i];
+        for (uint8_t bit = 0U; bit < 8U; ++bit)
+        {
+            const uint32_t mask = 0U - (crc & 1U);
+            crc = (crc >> 1U) ^ (0xEDB88320UL & mask);
+        }
+    }
+    return ~crc;
+}
+
+static void sample_cache_coop_finish(uint8_t success, FRESULT result)
+{
+    const uint16_t id = g_sample_cache_coop.sample_id;
+    if ((success == 0U) && (id < SAMPLE_CLASSIC_CAPACITY))
+    {
+        sample_cache_release_slot(id);
+        g_sample_cache[id].state = SAMPLE_CACHE_ERROR;
+        if (g_sample_cache[id].last_error == 0U) g_sample_cache[id].last_error = 5U;
+        g_sample_cache_last_fresult[id] = result;
+    }
+    sample_stream_coop_file_close(&g_sample_cache_coop_file);
+    g_sample_cache_coop.active = 0U;
+    g_sample_cache_coop.terminal = 1U;
+    g_sample_cache_coop.success = success;
+}
+
+uint8_t sample_cache_prepare_cooperative_begin(uint16_t sample_id,
+                                               const char *path)
+{
+    if ((sample_id >= SAMPLE_CLASSIC_CAPACITY) || (path == NULL)
+        || (path[0] == '\0') || (strlen(path) >= SAMPLE_CLASSIC_PATH_MAX)
+        || (g_sample_cache_coop.active != 0U)
+        || (g_sample_cache_coop.terminal != 0U)) return 0U;
+    sample_cache_clear(sample_id);
+    memset(&g_sample_cache_coop, 0, sizeof(g_sample_cache_coop));
+    memcpy(g_sample_cache_coop.path, path, strlen(path) + 1U);
+    g_sample_cache_coop.sample_id = sample_id;
+    g_sample_cache_coop.phase = SAMPLE_CACHE_COOP_RIFF;
+    g_sample_cache[sample_id].state = SAMPLE_CACHE_PREPARING;
+    if (sample_stream_coop_file_begin(&g_sample_cache_coop_file, path) == 0U)
+    {
+        g_sample_cache[sample_id].state = SAMPLE_CACHE_ERROR;
+        return 0U;
+    }
+    g_sample_cache_coop.active = 1U;
+    return 1U;
+}
+
+static uint8_t sample_cache_coop_read(uint32_t offset, uint32_t bytes)
+{
+    if (g_sample_cache_coop.waiting != 0U)
+    {
+        if (sample_stream_coop_file_read_done(&g_sample_cache_coop_file) == 0U)
+            return 0U;
+        g_sample_cache_coop.waiting = 0U;
+        return 1U;
+    }
+    if (bytes > sizeof(g_sample_cache_coop.io)
+        || sample_stream_coop_file_read_begin(&g_sample_cache_coop_file,
+                offset, g_sample_cache_coop.io, bytes) == 0U)
+        return 0U;
+    g_sample_cache_coop.waiting = 1U;
+    return 0U;
+}
+
+static void sample_cache_coop_parse_service(void)
+{
+    sample_cache_coop_load_t *const load = &g_sample_cache_coop;
+    if (load->phase == SAMPLE_CACHE_COOP_RIFF)
+    {
+        if (sample_cache_coop_read(0U, 12U) == 0U) return;
+        if (memcmp(load->io, "RIFF", 4U) != 0
+            || memcmp(&load->io[8], "WAVE", 4U) != 0)
+        { sample_cache_coop_finish(0U, FR_INVALID_OBJECT); return; }
+        const uint64_t limit = (uint64_t)sample_cache_coop_le32(&load->io[4]) + 8ULL;
+        if ((limit < 12ULL) || (limit > g_sample_cache_coop_file.file_size))
+        { sample_cache_coop_finish(0U, FR_INVALID_OBJECT); return; }
+        load->parse_limit = (uint32_t)limit;
+        load->cursor = 12U;
+        load->phase = SAMPLE_CACHE_COOP_CHUNK;
+        return;
+    }
+    if (load->phase == SAMPLE_CACHE_COOP_CHUNK)
+    {
+        if ((load->cursor + 8U) > load->parse_limit)
+        { sample_cache_coop_finish(0U, FR_INVALID_OBJECT); return; }
+        if (sample_cache_coop_read(load->cursor, 8U) == 0U) return;
+        load->chunk_size = sample_cache_coop_le32(&load->io[4]);
+        load->chunk_payload = load->cursor + 8U;
+        const uint64_t end = (uint64_t)load->chunk_payload + load->chunk_size;
+        if (end > load->parse_limit)
+        { sample_cache_coop_finish(0U, FR_INVALID_OBJECT); return; }
+        load->cursor = (uint32_t)end + (load->chunk_size & 1U);
+        if (memcmp(load->io, "fmt ", 4U) == 0)
+        {
+            if (load->chunk_size < 16U)
+            { sample_cache_coop_finish(0U, FR_INVALID_OBJECT); return; }
+            load->phase = SAMPLE_CACHE_COOP_FMT;
+        }
+        else if (memcmp(load->io, "fact", 4U) == 0)
+        {
+            if (load->chunk_size < 4U)
+            { sample_cache_coop_finish(0U, FR_INVALID_OBJECT); return; }
+            load->phase = SAMPLE_CACHE_COOP_FACT_FIRST;
+        }
+        else if (memcmp(load->io, "data", 4U) == 0)
+        {
+            load->info.data_offset = load->chunk_payload;
+            load->info.data_size = load->chunk_size;
+            load->have_data = 1U;
+            load->phase = (load->have_fmt != 0U && load->have_fact != 0U)
+                ? SAMPLE_CACHE_COOP_FACT_LAST : SAMPLE_CACHE_COOP_CHUNK;
+        }
+        return;
+    }
+    if (load->phase == SAMPLE_CACHE_COOP_FMT)
+    {
+        const uint32_t bytes = (load->chunk_size > 40U) ? 40U : load->chunk_size;
+        if (sample_cache_coop_read(load->chunk_payload, bytes) == 0U) return;
+        load->info.audio_format = sample_cache_coop_le16(&load->io[0]);
+        load->info.encoding = (load->info.audio_format == 3U)
+            ? WAV_SAMPLE_ENCODING_IEEE_FLOAT : WAV_SAMPLE_ENCODING_INVALID;
+        load->info.channels = sample_cache_coop_le16(&load->io[2]);
+        load->info.sample_rate = sample_cache_coop_le32(&load->io[4]);
+        load->info.byte_rate = sample_cache_coop_le32(&load->io[8]);
+        load->info.block_align = sample_cache_coop_le16(&load->io[12]);
+        load->info.bits_per_sample = sample_cache_coop_le16(&load->io[14]);
+        load->info.valid_bits_per_sample = load->info.bits_per_sample;
+        load->info.fmt_chunk_size = load->chunk_size;
+        load->have_fmt = 1U;
+        load->phase = (load->have_data != 0U && load->have_fact != 0U)
+            ? SAMPLE_CACHE_COOP_FACT_LAST : SAMPLE_CACHE_COOP_CHUNK;
+        return;
+    }
+    if (load->phase == SAMPLE_CACHE_COOP_FACT_FIRST)
+    {
+        if (sample_cache_coop_read(load->chunk_payload, 4U) == 0U) return;
+        load->info.fact_sample_length = sample_cache_coop_le32(load->io);
+        load->info.has_fact = 1U;
+        load->have_fact = 1U;
+        load->phase = (load->have_data != 0U && load->have_fmt != 0U)
+            ? SAMPLE_CACHE_COOP_FACT_LAST : SAMPLE_CACHE_COOP_CHUNK;
+        return;
+    }
+    if (load->phase == SAMPLE_CACHE_COOP_FACT_LAST)
+    {
+        if (wav_parser_is_canonical_brick_float(&load->info) == 0U)
+        { sample_cache_coop_finish(0U, FR_INVALID_PARAMETER); return; }
+        if (sample_cache_coop_read(load->info.data_offset, 8U) == 0U) return;
+        memcpy(&load->io[16], load->io, 8U);
+        load->phase = SAMPLE_CACHE_COOP_INSTALL;
+        return;
+    }
+    if (load->phase == SAMPLE_CACHE_COOP_INSTALL)
+    {
+        if (load->edge_ready == 0U)
+        {
+            const uint32_t last = load->info.data_offset + load->info.data_size
+                - load->info.block_align;
+            if (sample_cache_coop_read(last, 8U) == 0U) return;
+            memcpy(&load->io[24], load->io, 8U);
+            load->source_signature = sample_cache_coop_crc32(&load->io[16], 16U);
+            load->edge_ready = 1U;
+            return;
+        }
+        sample_stream_physical_map_t map;
+        memset(&map, 0, sizeof(map));
+        uint32_t file_size = 0U;
+        if (sample_stream_coop_file_take_map(
+                &g_sample_cache_coop_file, &map, &file_size) == 0U)
+        { sample_cache_coop_finish(0U, FR_INT_ERR); return; }
+        sample_cache_desc_t *const desc = &g_sample_cache[load->sample_id];
+        desc->info = load->info;
+        desc->total_frames = desc->info.data_size / desc->info.block_align;
+        desc->format = sample_audio_format_from_channels(desc->info.channels);
+        desc->stride_floats = (uint16_t)sample_audio_format_stride_floats(desc->format);
+        desc->frames_per_page = sample_audio_format_frames_per_page(desc->format);
+        desc->state = SAMPLE_CACHE_PREFILLING;
+        sample_page_stream_info_t stream;
+        uint16_t prefill = 0U;
+        if (sample_page_cache_port_prepare_stream_mapped(
+                sample_audio_key_classic(load->sample_id), load->path,
+                &desc->info, desc->total_frames, desc->info.data_offset,
+                &map, file_size, &stream, &prefill) == 0U)
+        {
+            sample_stream_physical_map_release(&map);
+            sample_cache_coop_finish(0U, FR_NOT_ENOUGH_CORE);
+            return;
+        }
+        desc->registration_epoch = stream.registration_epoch;
+        if (sampler_waveform_store_register_classic_prepared(
+                load->sample_id, load->path, &desc->info, file_size,
+                load->source_signature) == 0U)
+        {
+            sample_page_cache_port_clear(sample_audio_key_classic(load->sample_id));
+            sample_cache_coop_finish(0U, FR_INVALID_OBJECT);
+            return;
+        }
+        desc->state = SAMPLE_CACHE_READY;
+        desc->last_error = 0U;
+        g_sample_cache_last_fresult[load->sample_id] = FR_OK;
+        sample_cache_coop_finish(1U, FR_OK);
+    }
+}
+
+uint8_t sample_cache_prepare_cooperative_active(void)
+{
+    return g_sample_cache_coop.active;
+}
+
+uint8_t sample_cache_prepare_cooperative_take_result(uint16_t *out_sample_id,
+                                                     uint8_t *out_success)
+{
+    if (g_sample_cache_coop.terminal == 0U) return 0U;
+    if (out_sample_id != NULL) *out_sample_id = g_sample_cache_coop.sample_id;
+    if (out_success != NULL) *out_success = g_sample_cache_coop.success;
+    g_sample_cache_coop.terminal = 0U;
+    return 1U;
 }
 
 void sample_cache_clear(uint16_t sample_id)
@@ -440,11 +723,21 @@ uint8_t sample_cache_prepare_prevalidated(uint16_t sample_id,
 void sample_cache_service(uint32_t byte_budget)
 {
     sample_cache_sync_projections();
+    if (g_sample_cache_coop.active != 0U)
+    {
+        sample_stream_coop_file_service(&g_sample_cache_coop_file, 16U);
+        if (g_sample_cache_coop_file.state == SAMPLE_STREAM_COOP_ERROR)
+            sample_cache_coop_finish(0U, g_sample_cache_coop_file.result);
+        else if ((g_sample_cache_coop_file.state == SAMPLE_STREAM_COOP_READY)
+                && (g_sample_cache_coop.active != 0U))
+            sample_cache_coop_parse_service();
+    }
     if (byte_budget == 0U)
     {
         return;
     }
 
+    if (sample_stream_manager_has_pending_sd_work() == 0U) return;
     if ((g_sample_cache_stream_gate_held == 0U)
         && (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_STREAM) == 0U))
     {

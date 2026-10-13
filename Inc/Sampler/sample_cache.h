@@ -44,7 +44,8 @@ void sample_cache_init(void);
 void sample_cache_clear(uint16_t sample_id);
 uint8_t sample_cache_wav_format_supported(const wav_info_t *info);
 uint32_t sample_cache_product_cost_bytes(uint32_t frames,
-                                         sample_audio_format_t format);
+                                          sample_audio_format_t format);
+uint32_t sample_cache_get_product_cost_bytes(uint16_t sample_id);
 uint8_t sample_cache_prepare(uint16_t sample_id, const char *path);
 uint8_t sample_cache_prepare_prevalidated(uint16_t sample_id,
                                           const char *path,
@@ -52,6 +53,11 @@ uint8_t sample_cache_prepare_prevalidated(uint16_t sample_id,
                                           uint32_t source_file_size,
                                           uint32_t source_crc32,
                                           uint32_t prepared_cost_bytes);
+uint8_t sample_cache_prepare_cooperative_begin(uint16_t sample_id,
+                                               const char *path);
+uint8_t sample_cache_prepare_cooperative_active(void);
+uint8_t sample_cache_prepare_cooperative_take_result(uint16_t *out_sample_id,
+                                                     uint8_t *out_success);
 void sample_cache_service(uint32_t byte_budget);
 uint8_t sample_cache_has_pending_sd_work(void);
 uint8_t sample_cache_is_ready(uint16_t sample_id);

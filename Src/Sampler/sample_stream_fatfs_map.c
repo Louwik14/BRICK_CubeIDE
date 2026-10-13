@@ -3,6 +3,9 @@
 #include <string.h>
 
 #include "Storage/sd_access_gate.h"
+#include "Storage/audio_recorder.h"
+#include "SD/sd_block_device.h"
+#include "SD/sd_scheduler_runtime.h"
 #include "Platform/memory_layout.h"
 
 #include "ff.h"
@@ -10,6 +13,10 @@
 #define SAMPLE_STREAM_FATFS_SECTOR_SIZE (512U)
 #define SAMPLE_STREAM_FATFS_CLMT_ITEMS  \
     (2U + (2U * SAMPLE_STREAM_PHYSICAL_MAP_MAX_EXTENTS))
+
+#define SAMPLE_STREAM_COOP_IO_OPEN (1U)
+#define SAMPLE_STREAM_COOP_IO_MAP  (2U)
+#define SAMPLE_STREAM_COOP_IO_READ (3U)
 
 typedef struct
 {
@@ -23,6 +30,7 @@ SDRAM_STREAM_SERVICE static sample_stream_physical_pool_block_t
     g_sample_stream_physical_pool[SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS];
 SDRAM_STREAM_SCRATCH static DWORD g_sample_stream_clmt_scratch[SAMPLE_STREAM_FATFS_CLMT_ITEMS];
 static uint32_t g_sample_stream_physical_generation;
+static sample_stream_coop_file_t *g_sample_stream_coop_active;
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(sizeof(sample_stream_physical_extent_t) == 12U,
@@ -499,6 +507,353 @@ uint8_t sample_stream_fatfs_map_build_from_file(FIL *fp,
     map->valid = 1U;
     out_meta->file_size = file_size;
     return 1U;
+}
+
+static uint8_t sample_stream_physical_map_from_clmt(
+    FIL *fp, const DWORD *clmt, sample_stream_physical_map_t *map,
+    uint32_t *out_file_size)
+{
+    if ((fp == NULL) || (clmt == NULL) || (map == NULL)
+        || (fp->obj.fs == NULL) || (fp->obj.fs->csize == 0U)
+        || (f_size(fp) == 0U) || (f_size(fp) > (FSIZE_t)UINT32_MAX))
+        return 0U;
+    sample_stream_physical_map_release(map);
+    map->generation = sample_stream_physical_next_generation();
+    map->media_epoch = sd_access_media_epoch();
+    sample_stream_physical_map_reset_blocks(map);
+    const uint32_t file_size = (uint32_t)f_size(fp);
+    uint32_t remaining_sectors = (uint32_t)(((uint64_t)file_size
+        + SAMPLE_STREAM_FATFS_SECTOR_SIZE - 1U) / SAMPLE_STREAM_FATFS_SECTOR_SIZE);
+    uint32_t file_sector = 0U;
+    uint32_t item = 1U;
+    while ((item + 1U < SAMPLE_STREAM_COOP_CLMT_ITEMS)
+        && (clmt[item] != 0U) && (remaining_sectors != 0U))
+    {
+        const uint32_t cluster_count = clmt[item++];
+        const uint32_t first_cluster = clmt[item++];
+        const uint64_t run64 = (uint64_t)cluster_count * fp->obj.fs->csize;
+        const uint64_t lba64 = (uint64_t)fp->obj.fs->database
+            + ((uint64_t)(first_cluster - 2U) * fp->obj.fs->csize);
+        if ((first_cluster < 2U) || (run64 == 0U) || (run64 > UINT32_MAX)
+            || (lba64 > UINT32_MAX)) goto fail;
+        uint32_t run = (uint32_t)run64;
+        if (run > remaining_sectors) run = remaining_sectors;
+        const sample_stream_physical_extent_t extent = {
+            .file_sector_start = file_sector,
+            .lba_start = (uint32_t)lba64,
+            .sector_count = run,
+        };
+        if (sample_stream_physical_map_append(map, &extent) == 0U) goto fail;
+        file_sector += run;
+        remaining_sectors -= run;
+    }
+    if ((remaining_sectors != 0U) || (map->extent_count == 0U)) goto fail;
+    map->valid = 1U;
+    if (out_file_size != NULL) *out_file_size = file_size;
+    return 1U;
+fail:
+    sample_stream_physical_map_release(map);
+    return 0U;
+}
+
+static void sample_stream_coop_fail(sample_stream_coop_file_t *file,
+                                    FRESULT result)
+{
+    file->result = result;
+    file->state = SAMPLE_STREAM_COOP_ERROR;
+}
+
+void sample_stream_coop_file_init(sample_stream_coop_file_t *file)
+{
+    if (file == NULL) return;
+    memset(file, 0, sizeof(*file));
+    sample_stream_physical_map_reset_blocks(&file->physical_map);
+    file->cached_sector = UINT32_MAX;
+    file->state = SAMPLE_STREAM_COOP_IDLE;
+    file->result = FR_OK;
+}
+
+uint8_t sample_stream_coop_file_begin(sample_stream_coop_file_t *file,
+                                      const char *path)
+{
+    if ((file == NULL) || (path == NULL) || (path[0] == '\0')
+        || (strlen(path) >= sizeof(file->path))
+        || (file->state != SAMPLE_STREAM_COOP_IDLE)
+        || (g_sample_stream_coop_active != NULL)
+        || (audio_recorder_is_active() != 0U)
+        || (sd_access_gate_recorder_fs_logical_active() != 0U)
+        || (sd_access_storage_status() != SD_STORAGE_STATUS_READY))
+        return 0U;
+    sample_stream_coop_file_init(file);
+    memcpy(file->path, path, strlen(path) + 1U);
+    file->media_epoch = sd_access_media_epoch();
+    sd_access_gate_set_cooperative_fs_active(1U);
+    g_sample_stream_coop_active = file;
+    const FRESULT result = f_brick_read_open_begin(
+        &file->open, &file->file, file->path, file->sector, sizeof(file->sector));
+    if (result != FR_OK)
+    {
+        sample_stream_coop_fail(file, result);
+        sample_stream_coop_file_close(file);
+        return 0U;
+    }
+    file->state = SAMPLE_STREAM_COOP_OPENING;
+    return 1U;
+}
+
+static uint8_t sample_stream_coop_submit(sample_stream_coop_file_t *file,
+                                         const FF_META_REQUEST *request,
+                                         uint8_t kind)
+{
+    if ((request == NULL) || (request->operation != FF_META_IO_READ)
+        || (request->count != 1U)) return 0U;
+    const sd_scheduler_background_request_t admission = {
+        .byte_count = 0U,
+        .media_epoch = file->media_epoch,
+        .kind = SD_SCHEDULER_BACKGROUND_METADATA,
+    };
+    if (sd_scheduler_runtime_background_try_begin(&admission)
+        != SD_SCHEDULER_BACKGROUND_GO) return 2U;
+    if (++file->io_identity == 0U) file->io_identity = 1U;
+    const sd_block_device_result_t submitted = sd_block_device_async_read_submit(
+        request->sector, 1U, request->buffer, file->io_identity);
+    if (submitted != SD_BLOCK_DEVICE_OK)
+    {
+        sd_scheduler_runtime_background_end();
+        return (submitted == SD_BLOCK_DEVICE_BUSY
+            || submitted == SD_BLOCK_DEVICE_QUEUE_FULL) ? 2U : 0U;
+    }
+    const FRESULT started = (kind == SAMPLE_STREAM_COOP_IO_OPEN)
+        ? f_brick_read_open_io_started(&file->open, request->sequence)
+        : f_brick_read_map_io_started(&file->map, request->sequence);
+    if (started != FR_OK)
+    {
+        (void)sd_block_device_async_abort_generation(file->io_identity);
+        sample_stream_coop_fail(file, started);
+        return 0U;
+    }
+    file->io_lba = request->sector;
+    file->io_sequence = request->sequence;
+    file->io_kind = kind;
+    file->io_active = 1U;
+    return 1U;
+}
+
+static uint8_t sample_stream_coop_submit_raw(sample_stream_coop_file_t *file,
+                                             uint32_t lba)
+{
+    const sd_scheduler_background_request_t admission = {
+        .byte_count = 0U,
+        .media_epoch = file->media_epoch,
+        .kind = SD_SCHEDULER_BACKGROUND_METADATA,
+    };
+    if (sd_scheduler_runtime_background_try_begin(&admission)
+        != SD_SCHEDULER_BACKGROUND_GO) return 2U;
+    if (++file->io_identity == 0U) file->io_identity = 1U;
+    const sd_block_device_result_t submitted = sd_block_device_async_read_submit(
+        lba, 1U, file->sector, file->io_identity);
+    if (submitted != SD_BLOCK_DEVICE_OK)
+    {
+        sd_scheduler_runtime_background_end();
+        return (submitted == SD_BLOCK_DEVICE_BUSY
+            || submitted == SD_BLOCK_DEVICE_QUEUE_FULL) ? 2U : 0U;
+    }
+    file->io_lba = lba;
+    file->io_sequence = 0U;
+    file->io_kind = SAMPLE_STREAM_COOP_IO_READ;
+    file->io_active = 1U;
+    return 1U;
+}
+
+static void sample_stream_coop_poll(sample_stream_coop_file_t *file)
+{
+    sd_block_device_async_poll();
+    sd_block_device_async_completion_t completion;
+    if (sd_block_device_async_take_completion(&completion) == 0U) return;
+    file->io_active = 0U;
+    const FRESULT result = (completion.result == SD_BLOCK_DEVICE_OK)
+        ? FR_OK : FR_DISK_ERR;
+    const uint8_t valid = (uint8_t)(completion.operation == SD_BLOCK_DEVICE_OPERATION_READ
+        && completion.lba == file->io_lba && completion.sector_count == 1U
+        && completion.media_epoch == file->media_epoch
+        && completion.owner_generation == file->io_identity);
+    if (valid != 0U)
+    {
+        if (file->io_kind == SAMPLE_STREAM_COOP_IO_OPEN)
+            (void)f_brick_read_open_io_complete(
+                &file->open, file->io_sequence, result);
+        else if (file->io_kind == SAMPLE_STREAM_COOP_IO_MAP)
+            (void)f_brick_read_map_io_complete(
+                &file->map, file->io_sequence, result);
+        else if (file->io_kind == SAMPLE_STREAM_COOP_IO_READ)
+        {
+            file->cached_sector = file->read_offset / SAMPLE_STREAM_FATFS_SECTOR_SIZE;
+            file->cached_valid = (result == FR_OK) ? 1U : 0U;
+        }
+    }
+    sd_scheduler_runtime_background_end();
+    if ((valid == 0U) || (result != FR_OK)) sample_stream_coop_fail(file, result);
+}
+
+void sample_stream_coop_file_service(sample_stream_coop_file_t *file,
+                                     uint32_t cpu_step_budget)
+{
+    if ((file == NULL) || (g_sample_stream_coop_active != file)
+        || (file->state == SAMPLE_STREAM_COOP_IDLE)
+        || (file->state == SAMPLE_STREAM_COOP_ERROR)) return;
+    if (file->media_epoch != sd_access_media_epoch())
+    {
+        sample_stream_coop_fail(file, FR_DISK_ERR);
+        return;
+    }
+    if (file->io_active != 0U)
+    {
+        sample_stream_coop_poll(file);
+        if (file->io_active != 0U || file->state == SAMPLE_STREAM_COOP_ERROR) return;
+    }
+    if (cpu_step_budget == 0U) cpu_step_budget = 1U;
+    while (cpu_step_budget-- != 0U)
+    {
+        if (file->state == SAMPLE_STREAM_COOP_READING)
+        {
+            if (file->read_remaining == 0U)
+            {
+                file->state = SAMPLE_STREAM_COOP_READY;
+                return;
+            }
+            const uint32_t sector_index = file->read_offset / SAMPLE_STREAM_FATFS_SECTOR_SIZE;
+            const uint16_t skip = (uint16_t)(file->read_offset
+                & (SAMPLE_STREAM_FATFS_SECTOR_SIZE - 1U));
+            if ((file->cached_valid != 0U) && (file->cached_sector == sector_index))
+            {
+                uint32_t copy = SAMPLE_STREAM_FATFS_SECTOR_SIZE - skip;
+                if (copy > file->read_remaining) copy = file->read_remaining;
+                memcpy(file->read_cursor, &file->sector[skip], copy);
+                file->read_cursor += copy;
+                file->read_offset += copy;
+                file->read_remaining -= copy;
+                continue;
+            }
+            sample_stream_physical_span_t span;
+            sample_stream_physical_cursor_t cursor = {0};
+            if (sample_stream_physical_map_resolve(&file->physical_map,
+                    (uint64_t)sector_index * SAMPLE_STREAM_FATFS_SECTOR_SIZE,
+                    SAMPLE_STREAM_FATFS_SECTOR_SIZE, &cursor, &span) == 0U)
+            {
+                sample_stream_coop_fail(file, FR_INT_ERR);
+                return;
+            }
+            const uint8_t submit = sample_stream_coop_submit_raw(file, span.lba);
+            if (submit == 0U) sample_stream_coop_fail(file, FR_DISK_ERR);
+            return;
+        }
+
+        const FF_META_REQUEST *request = NULL;
+        const uint8_t opening = (file->state == SAMPLE_STREAM_COOP_OPENING) ? 1U : 0U;
+        const FF_META_STEP_RESULT step = opening
+            ? f_brick_read_open_step(&file->open, &request)
+            : f_brick_read_map_step(&file->map, &request);
+        if (step == FF_META_STEP_YIELD) continue;
+        if (step == FF_META_STEP_NEED_IO)
+        {
+            const uint8_t submit = sample_stream_coop_submit(file, request,
+                opening ? SAMPLE_STREAM_COOP_IO_OPEN : SAMPLE_STREAM_COOP_IO_MAP);
+            if (submit == 0U) sample_stream_coop_fail(file, FR_DISK_ERR);
+            return;
+        }
+        if (step == FF_META_STEP_ERROR)
+        {
+            sample_stream_coop_fail(file,
+                opening ? file->open.result : file->map.result);
+            return;
+        }
+        if (step != FF_META_STEP_DONE)
+        {
+            sample_stream_coop_fail(file, FR_INT_ERR);
+            return;
+        }
+        if (opening != 0U)
+        {
+            file->file_open = 1U;
+            file->file_size = (uint32_t)f_size(&file->file);
+            memset(file->clmt, 0, sizeof(file->clmt));
+            file->clmt[0] = SAMPLE_STREAM_COOP_CLMT_ITEMS;
+            file->file.cltbl = file->clmt;
+            const FRESULT begin = f_brick_read_map_begin(
+                &file->map, &file->file, file->sector, sizeof(file->sector));
+            if (begin != FR_OK)
+            {
+                sample_stream_coop_fail(file, begin);
+                return;
+            }
+            file->state = SAMPLE_STREAM_COOP_MAPPING;
+            continue;
+        }
+        if (sample_stream_physical_map_from_clmt(&file->file, file->clmt,
+                &file->physical_map, &file->file_size) == 0U)
+        {
+            sample_stream_coop_fail(file, FR_INT_ERR);
+            return;
+        }
+        file->state = SAMPLE_STREAM_COOP_READY;
+        return;
+    }
+}
+
+uint8_t sample_stream_coop_file_read_begin(sample_stream_coop_file_t *file,
+                                           uint32_t offset,
+                                           void *dst,
+                                           uint32_t bytes)
+{
+    if ((file == NULL) || (g_sample_stream_coop_active != file)
+        || (file->state != SAMPLE_STREAM_COOP_READY) || (dst == NULL)
+        || (bytes == 0U) || (offset > file->file_size)
+        || (bytes > (file->file_size - offset))) return 0U;
+    file->read_dst = dst;
+    file->read_cursor = dst;
+    file->read_offset = offset;
+    file->read_remaining = bytes;
+    file->state = SAMPLE_STREAM_COOP_READING;
+    return 1U;
+}
+
+uint8_t sample_stream_coop_file_read_done(const sample_stream_coop_file_t *file)
+{
+    return (file != NULL && file->state == SAMPLE_STREAM_COOP_READY
+        && file->read_dst != NULL && file->read_remaining == 0U) ? 1U : 0U;
+}
+
+uint8_t sample_stream_coop_file_take_map(sample_stream_coop_file_t *file,
+                                         sample_stream_physical_map_t *out_map,
+                                         uint32_t *out_file_size)
+{
+    if ((file == NULL) || (out_map == NULL)
+        || (file->state != SAMPLE_STREAM_COOP_READY)
+        || (file->physical_map.valid == 0U)) return 0U;
+    *out_map = file->physical_map;
+    memset(&file->physical_map, 0, sizeof(file->physical_map));
+    sample_stream_physical_map_reset_blocks(&file->physical_map);
+    if (out_file_size != NULL) *out_file_size = file->file_size;
+    return 1U;
+}
+
+void sample_stream_coop_file_close(sample_stream_coop_file_t *file)
+{
+    if (file == NULL) return;
+    if (file->io_active != 0U)
+    {
+        (void)sd_block_device_async_abort_generation(file->io_identity);
+        file->io_active = 0U;
+        sd_scheduler_runtime_background_end();
+    }
+    sample_stream_physical_map_release(&file->physical_map);
+    if (file->file_open != 0U) (void)f_close(&file->file);
+    if (g_sample_stream_coop_active == file)
+    {
+        g_sample_stream_coop_active = NULL;
+        sd_access_gate_set_cooperative_fs_active(0U);
+    }
+    sample_stream_coop_file_init(file);
 }
 
 uint8_t sample_stream_fatfs_map_build_from_path(const char *path,

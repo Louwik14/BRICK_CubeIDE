@@ -55,6 +55,9 @@ uint8_t sampler_waveform_store_register_classic(uint16_t sample_id,
                                                  const char *path,
                                                  const wav_info_t *info,
                                                  FIL *open_file);
+uint8_t sampler_waveform_store_register_classic_prepared(
+    uint16_t sample_id, const char *path, const wav_info_t *info,
+    uint32_t file_size, uint32_t source_signature);
 sampler_waveform_result_t sampler_waveform_store_request_classic(
     uint16_t sample_id,
     sampler_waveform_bin_t out_bins[SAMPLER_WAVEFORM_BIN_COUNT]);

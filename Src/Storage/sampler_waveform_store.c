@@ -788,6 +788,40 @@ uint8_t sampler_waveform_store_register_classic(uint16_t sample_id,
     return 1U;
 }
 
+uint8_t sampler_waveform_store_register_classic_prepared(
+    uint16_t sample_id, const char *path, const wav_info_t *info,
+    uint32_t file_size, uint32_t source_signature)
+{
+    if(sample_id >= SAMPLE_CLASSIC_CAPACITY || path == NULL || info == NULL
+        || info->block_align == 0U || file_size == 0U) return 0U;
+    sampler_waveform_identity_t identity;
+    memset(&identity, 0, sizeof(identity));
+    identity.path_hash = sampler_waveform_path_hash(path);
+    identity.file_size = file_size;
+    identity.frame_count = info->data_size / info->block_align;
+    identity.sample_rate = info->sample_rate;
+    identity.data_offset = info->data_offset;
+    identity.source_signature = source_signature;
+    identity.channels = info->channels;
+    identity.bits_per_sample = info->bits_per_sample;
+    if(identity.frame_count == 0U) return 0U;
+    identity.identity_hash = sampler_waveform_identity_hash(&identity);
+    if(g_sampler_waveform_request.active != 0U
+        && g_sampler_waveform_request.sample_id == sample_id)
+        sampler_waveform_store_release_request();
+    if(g_sampler_waveform_build.active != 0U
+        && g_sampler_waveform_build.sample_id == sample_id)
+        g_sampler_waveform_build.cancel_requested = 1U;
+    sampler_waveform_source_t *const source = &g_sampler_waveform_sources[sample_id];
+    memset(source, 0, sizeof(*source));
+    source->identity = identity;
+    source->media_epoch = sd_access_media_epoch();
+    source->state = SAMPLER_WAVEFORM_SOURCE_LOOKUP;
+    source->registered = 1U;
+    sampler_waveform_seed_from_current_rec(path, &identity);
+    return 1U;
+}
+
 sampler_waveform_result_t sampler_waveform_store_request_classic(
     uint16_t sample_id,
     sampler_waveform_bin_t out_bins[SAMPLER_WAVEFORM_BIN_COUNT])

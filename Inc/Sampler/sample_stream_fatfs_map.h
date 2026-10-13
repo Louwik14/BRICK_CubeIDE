@@ -23,6 +23,7 @@ typedef enum
       + SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK - 1U) \
      / SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK)
 #define SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK    (UINT16_MAX)
+#define SAMPLE_STREAM_COOP_CLMT_ITEMS                (2U + (2U * SAMPLE_STREAM_PHYSICAL_MAP_MAX_EXTENTS))
 
 typedef struct
 {
@@ -76,6 +77,45 @@ typedef struct
     sample_stream_physical_map_t physical_map;
 } sample_stream_safe_metadata_t;
 
+typedef enum
+{
+    SAMPLE_STREAM_COOP_IDLE = 0,
+    SAMPLE_STREAM_COOP_OPENING,
+    SAMPLE_STREAM_COOP_MAPPING,
+    SAMPLE_STREAM_COOP_READY,
+    SAMPLE_STREAM_COOP_READING,
+    SAMPLE_STREAM_COOP_ERROR
+} sample_stream_coop_state_t;
+
+typedef struct
+{
+    uint8_t sector[512U];
+    DWORD clmt[SAMPLE_STREAM_COOP_CLMT_ITEMS];
+    FIL file;
+    FF_BRICK_REC_PREPARE_CONT open;
+    FF_BRICK_READ_MAP_CONT map;
+    sample_stream_physical_map_t physical_map;
+    char path[160U];
+    void *read_dst;
+    uint32_t file_size;
+    uint32_t media_epoch;
+    uint32_t io_identity;
+    uint32_t io_lba;
+    uint32_t io_sequence;
+    uint32_t cached_sector;
+    uint32_t read_offset;
+    uint32_t read_remaining;
+    uint16_t read_sector_skip;
+    uint16_t read_copy_bytes;
+    uint8_t *read_cursor;
+    uint8_t io_active;
+    uint8_t io_kind;
+    uint8_t file_open;
+    uint8_t cached_valid;
+    sample_stream_coop_state_t state;
+    FRESULT result;
+} sample_stream_coop_file_t;
+
 void sample_stream_physical_map_pool_reset(void);
 void sample_stream_physical_map_release(sample_stream_physical_map_t *map);
 uint8_t sample_stream_physical_map_import(
@@ -100,6 +140,21 @@ uint8_t sample_stream_fatfs_map_build_from_file(FIL *fp,
 
 uint8_t sample_stream_fatfs_map_build_from_path(const char *path,
                                                 sample_stream_safe_metadata_t *out_meta);
+
+void sample_stream_coop_file_init(sample_stream_coop_file_t *file);
+uint8_t sample_stream_coop_file_begin(sample_stream_coop_file_t *file,
+                                      const char *path);
+void sample_stream_coop_file_service(sample_stream_coop_file_t *file,
+                                     uint32_t cpu_step_budget);
+uint8_t sample_stream_coop_file_read_begin(sample_stream_coop_file_t *file,
+                                           uint32_t offset,
+                                           void *dst,
+                                           uint32_t bytes);
+uint8_t sample_stream_coop_file_read_done(const sample_stream_coop_file_t *file);
+uint8_t sample_stream_coop_file_take_map(sample_stream_coop_file_t *file,
+                                         sample_stream_physical_map_t *out_map,
+                                         uint32_t *out_file_size);
+void sample_stream_coop_file_close(sample_stream_coop_file_t *file);
 
 void sample_stream_safe_metadata_init_fatfs(sample_audio_key_t key,
                                             const wav_info_t *info,

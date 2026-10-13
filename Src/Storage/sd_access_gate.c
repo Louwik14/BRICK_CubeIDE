@@ -10,6 +10,7 @@ static volatile uint8_t g_sd_access_total_count;
 static volatile uint8_t g_sd_access_client_count[SD_ACCESS_CLIENT_MAX + 1U];
 static volatile uint8_t g_sd_access_streaming_critical;
 static volatile uint8_t g_sd_access_recorder_fs_logical_active;
+static volatile uint8_t g_sd_access_cooperative_fs_active;
 STORAGE_STATE_SDRAM static FATFS g_sd_fs;
 static uint8_t g_sd_fs_mounted;
 static volatile uint32_t g_sd_media_epoch;
@@ -57,6 +58,7 @@ void sd_access_gate_init(void)
     g_sd_access_total_count = 0U;
     g_sd_access_streaming_critical = 0U;
     g_sd_access_recorder_fs_logical_active = 0U;
+    g_sd_access_cooperative_fs_active = 0U;
     for (uint8_t i = 0U; i <= (uint8_t)SD_ACCESS_CLIENT_MAX; ++i)
     {
         g_sd_access_client_count[i] = 0U;
@@ -210,6 +212,14 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
         sd_access_trace_recorder_gate(client, REC_SD_ADMISSION_DEFERRED, 1U);
         return 0U;
     }
+    if ((g_sd_access_cooperative_fs_active != 0U)
+        && (client != SD_ACCESS_CLIENT_SAMPLE_STREAM)
+        && (client != SD_ACCESS_CLIENT_BACKGROUND))
+    {
+        sd_access_gate_exit_critical(primask);
+        sd_access_trace_recorder_gate(client, REC_SD_ADMISSION_DEFERRED, 4U);
+        return 0U;
+    }
     if ((g_sd_access_streaming_critical != 0U)
         && (g_sd_access_total_count == 0U)
         && (client != SD_ACCESS_CLIENT_SAMPLE_STREAM)
@@ -324,6 +334,22 @@ uint8_t sd_access_gate_recorder_fs_logical_active(void)
     uint8_t active;
     const uint32_t primask = sd_access_gate_enter_critical();
     active = g_sd_access_recorder_fs_logical_active;
+    sd_access_gate_exit_critical(primask);
+    return active;
+}
+
+void sd_access_gate_set_cooperative_fs_active(uint8_t active)
+{
+    const uint32_t primask = sd_access_gate_enter_critical();
+    g_sd_access_cooperative_fs_active = (active != 0U) ? 1U : 0U;
+    sd_access_gate_exit_critical(primask);
+}
+
+uint8_t sd_access_gate_cooperative_fs_active(void)
+{
+    uint8_t active;
+    const uint32_t primask = sd_access_gate_enter_critical();
+    active = g_sd_access_cooperative_fs_active;
     sd_access_gate_exit_critical(primask);
     return active;
 }

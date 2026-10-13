@@ -7,6 +7,7 @@
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_parser.h"
+#include "Sampler/sample_stream_fatfs_map.h"
 
 #include "ff.h"
 
@@ -41,6 +42,31 @@ SDRAM_MULTI_LOAD static multi_sample_index_zone_t
 SDRAM_MULTI_LOAD static char g_index_strings[MULTI_SAMPLE_INDEX_STRING_MAX_BYTES];
 SDRAM_MULTI_LOAD static uint8_t g_index_io[MULTI_SAMPLE_INDEX_HEADER_SIZE];
 static CTRL_STATE uint16_t g_apply_sample_map[MULTI_SAMPLE_POOL_MAX_SAMPLES];
+
+typedef enum
+{
+    MULTI_INDEX_COOP_HEADER = 0,
+    MULTI_INDEX_COOP_SAMPLES,
+    MULTI_INDEX_COOP_ZONES,
+    MULTI_INDEX_COOP_STRINGS,
+    MULTI_INDEX_COOP_VALIDATE
+} multi_index_coop_phase_t;
+
+typedef struct
+{
+    multi_sample_index_t index;
+    multi_sample_index_header_t header;
+    uint32_t offset;
+    uint16_t item;
+    uint8_t active;
+    uint8_t waiting;
+    uint8_t terminal;
+    multi_index_coop_phase_t phase;
+    multi_sample_index_result_t result;
+} multi_index_coop_load_t;
+
+SDRAM_MULTI_LOAD ALIGN32 static sample_stream_coop_file_t g_multi_index_file;
+SDRAM_MULTI_LOAD static multi_index_coop_load_t g_multi_index_coop;
 
 static uint16_t multi_index_get_le16(const uint8_t *p)
 {
@@ -737,6 +763,148 @@ multi_sample_index_result_t multi_sample_index_load(const char *path,
                                                     multi_sample_index_t *out)
 {
     return multi_sample_index_load_internal(path, out);
+}
+
+static void multi_index_coop_finish(multi_sample_index_result_t result)
+{
+    sample_stream_coop_file_close(&g_multi_index_file);
+    g_multi_index_coop.result = result;
+    g_multi_index_coop.active = 0U;
+    g_multi_index_coop.terminal = 1U;
+    if (result != MULTI_SAMPLE_INDEX_OK)
+        multi_sample_index_reset(&g_multi_index_coop.index);
+}
+
+uint8_t multi_sample_index_load_cooperative_begin(const char *path)
+{
+    if (path == NULL || path[0] == '\0'
+        || g_multi_index_coop.active != 0U
+        || g_multi_index_coop.terminal != 0U)
+        return 0U;
+    memset(&g_multi_index_coop, 0, sizeof(g_multi_index_coop));
+    sample_stream_coop_file_init(&g_multi_index_file);
+    if (sample_stream_coop_file_begin(&g_multi_index_file, path) == 0U)
+        return 0U;
+    g_multi_index_coop.active = 1U;
+    g_multi_index_coop.phase = MULTI_INDEX_COOP_HEADER;
+    g_multi_index_coop.result = MULTI_SAMPLE_INDEX_OK;
+    return 1U;
+}
+
+static uint8_t multi_index_coop_read(uint32_t offset, void *dst, uint32_t bytes)
+{
+    if (g_multi_index_coop.waiting != 0U)
+    {
+        if (sample_stream_coop_file_read_done(&g_multi_index_file) == 0U)
+            return 0U;
+        g_multi_index_coop.waiting = 0U;
+        return 1U;
+    }
+    if (sample_stream_coop_file_read_begin(&g_multi_index_file,
+            offset, dst, bytes) == 0U)
+        return 0U;
+    g_multi_index_coop.waiting = 1U;
+    return 0U;
+}
+
+void multi_sample_index_load_cooperative_service(uint32_t work_budget)
+{
+    if (g_multi_index_coop.active == 0U || work_budget == 0U) return;
+    sample_stream_coop_file_service(&g_multi_index_file, work_budget);
+    if (g_multi_index_file.state == SAMPLE_STREAM_COOP_ERROR)
+    { multi_index_coop_finish(MULTI_SAMPLE_INDEX_READ_FAIL); return; }
+    if (g_multi_index_file.state != SAMPLE_STREAM_COOP_READY) return;
+
+    multi_index_coop_load_t *const load = &g_multi_index_coop;
+    if (load->phase == MULTI_INDEX_COOP_HEADER)
+    {
+        if (multi_index_coop_read(0U, g_index_io,
+                MULTI_SAMPLE_INDEX_HEADER_SIZE) == 0U) return;
+        multi_index_decode_header(g_index_io, &load->header);
+        if (load->header.sample_count > MULTI_SAMPLE_POOL_MAX_SAMPLES
+            || load->header.zone_count > MULTI_SAMPLE_POOL_MAX_ZONES
+            || load->header.string_bytes > MULTI_SAMPLE_INDEX_STRING_MAX_BYTES)
+        { multi_index_coop_finish(MULTI_SAMPLE_INDEX_LIMIT); return; }
+        if (multi_index_header_basic_valid(&load->header) == 0U
+            || load->header.file_size != g_multi_index_file.file_size)
+        { multi_index_coop_finish(MULTI_SAMPLE_INDEX_BAD_FORMAT); return; }
+        multi_sample_index_t *const out = &load->index;
+        memcpy(out->instrument_name, load->header.instrument_name,
+            sizeof(out->instrument_name));
+        out->flags = load->header.flags;
+        out->sample_count = load->header.sample_count;
+        out->zone_count = load->header.zone_count;
+        out->string_bytes = load->header.string_bytes;
+        out->format = load->header.format;
+        out->stride_floats = load->header.stride_floats;
+        out->frames_per_page = load->header.frames_per_page;
+        out->samples = g_index_samples;
+        out->zones = g_index_zones;
+        out->strings = g_index_strings;
+        out->file_size = load->header.file_size;
+        out->crc32 = load->header.crc32;
+        load->item = 0U;
+        load->offset = load->header.samples_offset;
+        load->phase = MULTI_INDEX_COOP_SAMPLES;
+        return;
+    }
+    if (load->phase == MULTI_INDEX_COOP_SAMPLES)
+    {
+        if (load->item >= load->index.sample_count)
+        {
+            load->item = 0U;
+            load->offset = load->header.zones_offset;
+            load->phase = MULTI_INDEX_COOP_ZONES;
+            return;
+        }
+        if (multi_index_coop_read(load->offset, g_index_io,
+                MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE) == 0U) return;
+        multi_index_decode_sample(g_index_io, &g_index_samples[load->item++]);
+        load->offset += MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE;
+        return;
+    }
+    if (load->phase == MULTI_INDEX_COOP_ZONES)
+    {
+        if (load->item >= load->index.zone_count)
+        {
+            load->phase = MULTI_INDEX_COOP_STRINGS;
+            return;
+        }
+        if (multi_index_coop_read(load->offset, g_index_io,
+                MULTI_SAMPLE_INDEX_ZONE_RECORD_SIZE) == 0U) return;
+        multi_index_decode_zone(g_index_io, &g_index_zones[load->item++]);
+        load->offset += MULTI_SAMPLE_INDEX_ZONE_RECORD_SIZE;
+        return;
+    }
+    if (load->phase == MULTI_INDEX_COOP_STRINGS)
+    {
+        if (load->index.string_bytes != 0U
+            && multi_index_coop_read(load->header.strings_offset,
+                g_index_strings, load->index.string_bytes) == 0U) return;
+        load->phase = MULTI_INDEX_COOP_VALIDATE;
+        return;
+    }
+    if (multi_sample_index_validate(&load->index) == 0U)
+    { multi_index_coop_finish(MULTI_SAMPLE_INDEX_BAD_FORMAT); return; }
+    if (multi_index_crc_header_tables(&load->index, &load->header)
+            != load->header.crc32)
+    { multi_index_coop_finish(MULTI_SAMPLE_INDEX_CRC_FAIL); return; }
+    multi_index_coop_finish(MULTI_SAMPLE_INDEX_OK);
+}
+
+uint8_t multi_sample_index_load_cooperative_take_result(
+    multi_sample_index_t *out, multi_sample_index_result_t *out_result)
+{
+    if (out == NULL || g_multi_index_coop.terminal == 0U) return 0U;
+    *out = g_multi_index_coop.index;
+    if (out_result != NULL) *out_result = g_multi_index_coop.result;
+    g_multi_index_coop.terminal = 0U;
+    return 1U;
+}
+
+uint8_t multi_sample_index_load_cooperative_active(void)
+{
+    return g_multi_index_coop.active;
 }
 
 multi_sample_index_result_t multi_sample_index_retitle(

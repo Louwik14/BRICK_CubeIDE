@@ -41,6 +41,8 @@ void sd_access_gate_set_streaming_critical(uint8_t active);
 uint8_t sd_access_gate_streaming_critical_active(void);
 void sd_access_gate_set_recorder_fs_logical_active(uint8_t active);
 uint8_t sd_access_gate_recorder_fs_logical_active(void);
+void sd_access_gate_set_cooperative_fs_active(uint8_t active);
+uint8_t sd_access_gate_cooperative_fs_active(void);
 sd_access_client_t sd_access_gate_current_owner(void);
 uint8_t sd_access_gate_held_count(void);
 const char *sd_access_gate_client_label(sd_access_client_t client);

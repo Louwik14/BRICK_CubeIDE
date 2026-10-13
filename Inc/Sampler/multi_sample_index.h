@@ -137,6 +137,11 @@ multi_sample_index_result_t multi_sample_index_retitle(
     const char *path, const char *instrument_name);
 multi_sample_index_result_t multi_sample_index_load(const char *path,
                                                     multi_sample_index_t *out);
+uint8_t multi_sample_index_load_cooperative_begin(const char *path);
+void multi_sample_index_load_cooperative_service(uint32_t work_budget);
+uint8_t multi_sample_index_load_cooperative_take_result(
+    multi_sample_index_t *out, multi_sample_index_result_t *out_result);
+uint8_t multi_sample_index_load_cooperative_active(void);
 uint8_t multi_sample_index_resolve(const multi_sample_index_t *index,
                                    uint8_t note,
                                    uint8_t velocity,
