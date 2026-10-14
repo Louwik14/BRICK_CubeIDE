@@ -234,8 +234,18 @@ typedef struct
     uint32_t status_until_ms;
     uint32_t header_slot_flash_until_ms;
     uint32_t header_mem_flash_until_ms;
+    uint32_t sample_pool_revision;
+    uint16_t classic_pending_slot;
+    uint8_t classic_pending_operation;
     int16_t encoder_accum[UI_SETTINGS_ENCODER_COUNT];
 } ui_settings_state_t;
+
+typedef enum
+{
+    UI_SETTINGS_CLASSIC_PENDING_NONE = 0,
+    UI_SETTINGS_CLASSIC_PENDING_LOAD,
+    UI_SETTINGS_CLASSIC_PENDING_CLEAR
+} ui_settings_classic_pending_t;
 
 #define UI_SETTINGS_STATIC_ASSERT(name, cond) typedef char ui_settings_static_assert_##name[(cond) ? 1 : -1]
 #define UI_SETTINGS_OFFSET_ALIGNED(type, field) ((offsetof(type, field) % 4U) == 0U)

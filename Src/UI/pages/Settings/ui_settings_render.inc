@@ -764,6 +764,10 @@ static void ui_page_settings_render_sample_browser(void)
         UI_SETTINGS_SAMPLE_RIGHT_TEXT_W = 62
     };
 
+    /* Consumer-edge guard: STORAGE may publish between the page tick and the
+     * next OLED frame, but one frame must never dereference the old snapshot. */
+    ui_page_settings_classic_coherence_service();
+
     ui_page_settings_draw_global_sample_header("STREAM");
     drv_display_draw_line(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y, 127, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y);
     ui_page_settings_draw_stream_name_label();

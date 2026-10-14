@@ -567,9 +567,10 @@ static void ui_page_settings_apply_action(void)
                     ui_page_settings_status("CLEAR BUSY");
                     return;
                 }
-                sample_global_pool_clear_classic(g_ui_settings.selected_slot);
-                ui_page_settings_refresh_sampler_slots();
-                ui_page_settings_status("CLEAR OK");
+                ui_page_settings_classic_pending_begin(
+                    UI_SETTINGS_CLASSIC_PENDING_CLEAR,
+                    g_ui_settings.sample_slot_selected);
+                ui_page_settings_status("CLEARING");
             }
             break;
 
@@ -928,6 +929,7 @@ static void ui_page_settings_handle_event_page(const ui_event_t *ev)
 
 static void ui_page_settings_tick(void)
 {
+    ui_page_settings_classic_coherence_service();
     uint8_t project_slot = 0U;
     uint8_t project_success = 0U;
     if (project_product_save_take_result(&project_slot, &project_success) != 0U)

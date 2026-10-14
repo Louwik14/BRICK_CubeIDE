@@ -89,6 +89,7 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 - [z4_seq_clock_scheduler.md](z4_seq_clock_scheduler.md): sequence, Note FX, horodatage live, files et Undo/Redo.
 - [note_fx_capacity_lifetime_audit.md](note_fx_capacity_lifetime_audit.md): transitions NoteFx, identites, handles, admission et revoice.
 - [z5_ui_navigation_interaction.md](z5_ui_navigation_interaction.md): navigation, modes, selection, Master et ordre des handlers.
+- [project_browser_names.md](project_browser_names.md): actions des browsers et contrat de coherence des mutations d'assets.
 - [ui_render_cooperative.md](ui_render_cooperative.md): rendu OLED fractionne, annulation, coalescence et atomicite de frame.
 - [z6_state_persistence_patterns_projects.md](z6_state_persistence_patterns_projects.md): modele, codec, cles, Pattern, Patch, Project et transactions Storage.
 - [internal_flash_map.md](internal_flash_map.md): partage Flash firmware et reservation de la future banque Groove.

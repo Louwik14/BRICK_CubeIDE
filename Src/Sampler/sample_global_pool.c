@@ -12,8 +12,18 @@
 
 STORAGE_STATE_SDRAM static sample_global_slot_t
     g_sample_global_pool[SAMPLE_GLOBAL_POOL_MAX_SLOTS];
+static uint32_t g_sample_global_pool_revision;
 
 static sample_classic_load_error_t g_sample_classic_last_error;
+
+static void sample_global_pool_publish_change(void)
+{
+    g_sample_global_pool_revision++;
+    if (g_sample_global_pool_revision == 0U)
+    {
+        g_sample_global_pool_revision = 1U;
+    }
+}
 
 typedef enum
 {
@@ -151,6 +161,12 @@ void sample_global_pool_reset(void)
     }
     g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_OK;
     memset(&g_sample_classic_operation, 0, sizeof(g_sample_classic_operation));
+    sample_global_pool_publish_change();
+}
+
+uint32_t sample_global_pool_get_revision(void)
+{
+    return g_sample_global_pool_revision;
 }
 
 uint16_t sample_global_pool_find_free_slot(void)
@@ -319,6 +335,7 @@ static uint8_t sample_global_pool_register(sample_global_kind_t kind,
     {
         *out_global_index = global_index;
     }
+    sample_global_pool_publish_change();
     return 1U;
 }
 
@@ -364,6 +381,7 @@ static uint8_t sample_global_pool_register_at(sample_global_kind_t kind,
         sample_global_pool_clear_slot(global_index);
         return 0U;
     }
+    sample_global_pool_publish_change();
     return 1U;
 }
 
@@ -391,6 +409,7 @@ uint8_t sample_global_pool_register_classic_at(uint16_t global_index,
         sample_global_pool_clear_slot(global_index);
         return 0U;
     }
+    sample_global_pool_publish_change();
     return 1U;
 }
 
@@ -610,6 +629,7 @@ void sample_global_pool_service(void)
         old->kind = SAMPLE_GLOBAL_KIND_EMPTY;
         old->state = SAMPLE_GLOBAL_STATE_EMPTY;
         old->backend_index = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        sample_global_pool_publish_change();
         if (g_sample_classic_operation.path[0] == '\0')
         {
             memset(&g_sample_classic_operation, 0,
@@ -665,6 +685,7 @@ void sample_global_pool_service(void)
         memcpy(next.path, g_sample_classic_operation.path,
             strlen(g_sample_classic_operation.path) + 1U);
         g_sample_global_pool[logical] = next;
+        sample_global_pool_publish_change();
         g_sample_classic_operation.phase = SAMPLE_CLASSIC_OPERATION_COMPLETE;
     }
 }
@@ -798,6 +819,8 @@ void sample_global_pool_clear_slot(uint16_t global_index)
     {
         return;
     }
+    const uint8_t was_published =
+        (g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_EMPTY) ? 1U : 0U;
 
     if (g_sample_global_pool[global_index].kind == SAMPLE_GLOBAL_KIND_CLASSIC)
     {
@@ -808,6 +831,10 @@ void sample_global_pool_clear_slot(uint16_t global_index)
     g_sample_global_pool[global_index].state = SAMPLE_GLOBAL_STATE_EMPTY;
     g_sample_global_pool[global_index].backend_index = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     g_sample_global_pool[global_index].entry_count = 0U;
+    if (was_published != 0U)
+    {
+        sample_global_pool_publish_change();
+    }
 }
 
 void sample_global_pool_clear_backend(sample_global_kind_t kind, uint16_t backend_index)

@@ -68,3 +68,25 @@ Pool RENAME remains dimmed while the asset is loaded because changing its
 source path would require a coordinated update of runtime and saved references.
 Multi DELETE checks that the folder is flat and bounded before removal; an SD
 error during removal reports failure and can leave part of that folder behind.
+
+## Cohérence du Sample Browser
+
+Le pool global est la source canonique de la projection runtime affichée dans
+la colonne Slots. Sa révision monotone change uniquement lors de la publication
+ou de l'invalidation effective d'un slot. Le Sample Browser mémorise la révision
+ayant produit son snapshot et reconstruit ce snapshot sur changement : un index
+conservé par l'UI ne constitue jamais une référence durable vers le pool.
+
+LOAD et CLEAR sont des requêtes, pas des résultats. Avec le transport actif,
+STORAGE peut terminer la préparation, le retrait des leases STREAM et la
+publication plusieurs tours coopératifs plus tard. L'UI conserve alors le type
+d'opération et le slot attendu, affiche `LOADING` ou `CLEARING`, et ne publie
+`LOAD OK`/`CLEAR OK` qu'après l'état terminal canonique. À ce moment la liste,
+la sélection et les compteurs sont reconstruits ensemble. Une erreur réelle de
+chargement reste issue de `sample_global_pool` et n'est pas convertie en succès.
+
+Les listes de fichiers WAV restent la projection du catalogue STORAGE. Une
+mutation SD invalide/reconstruit ce catalogue puis publie sa vue paginée ; la
+vue UI n'est remplacée qu'après `WAV_LOADER_CATALOG_VIEW_PUBLISHED`. Wavetable
+et Multi gardent leurs complétions dédiées, mais partagent la règle : aucune
+admission asynchrone ne doit être présentée comme une terminaison.

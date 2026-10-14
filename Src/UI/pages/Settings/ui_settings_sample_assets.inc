@@ -121,7 +121,8 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
             sample_global_pool_get_classic_state(global_slot);
         if (state == SAMPLE_CLASSIC_SLOT_PREPARING)
         {
-            g_ui_settings.sample_slot_selected = global_slot;
+            ui_page_settings_classic_pending_begin(
+                UI_SETTINGS_CLASSIC_PENDING_LOAD, global_slot);
             ui_page_settings_status("LOADING");
             return;
         }
@@ -313,16 +314,17 @@ static void ui_page_settings_sample_confirm_accept(void)
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CLEAR)
     {
         const uint16_t deleted_logical = g_ui_settings.confirm_logical;
-        ui_page_settings_select_neighbor_before_delete();
         if (project_control_remove_sample(deleted_logical) == 0U)
         {
             g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
             ui_page_settings_status("CLEAR BUSY");
             return;
         }
-        ui_page_settings_refresh_sampler_slots();
+        ui_page_settings_select_neighbor_before_delete();
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
-        ui_page_settings_status("CLEAR OK");
+        ui_page_settings_classic_pending_begin(
+            UI_SETTINGS_CLASSIC_PENDING_CLEAR, deleted_logical);
+        ui_page_settings_status("CLEARING");
         return;
     }
 

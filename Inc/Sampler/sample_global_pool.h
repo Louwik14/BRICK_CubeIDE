@@ -92,6 +92,8 @@ typedef struct
 
 void sample_global_pool_init(void);
 void sample_global_pool_reset(void);
+/* Changes whenever a published slot identity/state becomes visible or invalid. */
+uint32_t sample_global_pool_get_revision(void);
 
 uint16_t sample_global_pool_find_free_slot(void);
 uint16_t sample_global_pool_find_first_ready(sample_global_kind_t kind);
