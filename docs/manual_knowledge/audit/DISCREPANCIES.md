@@ -2,7 +2,7 @@
 
 ## D-01 — Version persistence documentee
 
-`docs/architecture/ARCHITECTURE_GLOBAL.md` annonce encore codec version 7 et `docs/architecture/z6_state_persistence_patterns_projects.md` version 15, tandis que `Inc/Storage/persistent_control_codec.h` fixe le code courant a B6CP version 18. Verdict : **INCOHERENT documentaire** ; la fiche retient v18.
+`docs/architecture/ARCHITECTURE_GLOBAL.md` annonce encore codec version 7 et `docs/architecture/z6_state_persistence_patterns_projects.md` version 15, tandis que `Inc/Storage/persistent_control_codec.h` fixe le code courant a B6CP version 19 avec lecture legacy v18. Verdict : **INCOHERENT documentaire** ; la fiche retient v19.
 
 ## D-02 — MIDI DIN/Host
 

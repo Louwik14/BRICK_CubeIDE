@@ -35,7 +35,7 @@ renderer est un succes silencieux, tandis qu'un renderer promis mais impossible
 declenche le fatal source du consumer.
 
 Prism, Stack, Wave et FM utilisent le meme filtre/VCA physique par voix pour
-`VOICES=1` et `VOICES=N`: le passage mono/poly ne change donc plus de
+Le pool synth global et le nombre de voix actives: le passage mono/poly ne change donc plus de
 representation d'enveloppe. Un resize conserve les slots portant les outputs
 HELD, puis autant de tails RELEASE que la nouvelle capacite le permet; seuls les
 slots retires sont reinitialises. Le mapping logique est compacte autour de ces

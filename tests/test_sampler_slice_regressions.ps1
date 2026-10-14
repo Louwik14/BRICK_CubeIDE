@@ -169,14 +169,14 @@ Assert-True ($paramSpecSource.Contains(
     'LENGTH parameter is still exposed as END'
 Assert-True (-not $paramSpecSource.Contains('PARAM_SAMPLER_END')) `
     'legacy END parameter still exists'
-Assert-True ($persistenceHeader.Contains('#define PERSIST_CODEC_VERSION 18U')) `
+Assert-True ($persistenceHeader.Contains('#define PERSIST_CODEC_VERSION 19U')) `
     'persistence format was not bumped for LENGTH semantics'
 
 $holdSource = Get-Content -Raw (Join-Path $PSScriptRoot `
     '../Src/Audio/Engines/Sampler/sampler_multi_voice.inc')
 Assert-True ($holdSource.Contains('brick6_sampler_mode_is_hold_value(')) `
     'HOLD policy guard missing'
-Assert-True ($holdSource.Contains('g_sampler_voice[track_id].mode) != 0U')) `
+Assert-True ($holdSource.Contains('g_sampler_voice[track_id].mode) == 0U')) `
     'HOLD release guard missing'
 Assert-True ($holdSource.Contains('g_sampler_voice[track_id].release_pending = 1U')) `
     'HOLD release action missing'

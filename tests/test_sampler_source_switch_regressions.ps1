@@ -15,7 +15,7 @@ $executor = Get-Content -Raw (Join-Path $root `
 Assert-True ($runtime.Contains(
     'g_sampler_clip_runtime[track_id].sample_id = UINT16_MAX;')) `
     'empty Stream source aliases valid sample 0'
-Assert-True ($dispatch.Contains('if (clip->sample_id != sample_id)') -and
+Assert-True ($dispatch.Contains('if (clip->source == next) return;') -and
              $dispatch.Contains(
                  'brick6_sampler_runtime_clip_stop_playback(track_id);')) `
     'source transition does not retire the reader/lease lifetime'

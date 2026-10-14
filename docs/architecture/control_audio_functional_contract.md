@@ -43,7 +43,7 @@ Les seuls opcodes sont:
 PROGRAM PARAM NOTE TRANSPORT RECORD PANIC AUDIO_STATE_COMMIT
 ```
 
-- `PROGRAM` porte directement `{family,type,flags,voice_count}` dans `value`.
+- `PROGRAM` porte directement `{family,type,flags}` dans `value`.
   Il n'existe aucun registre, ID, slot, lookup, release ou credit PROGRAM.
 - `PARAM` porte une propriete canonique finale. Son sous-type precise seulement
   la portee d'adressage; aucune provenance UI, p-lock ou encodeur ne traverse.
