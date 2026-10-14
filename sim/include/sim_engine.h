@@ -7,6 +7,9 @@
 #define SIM_FRAMEBUFFER_WIDTH 128U
 #define SIM_FRAMEBUFFER_HEIGHT 64U
 #define SIM_FRAMEBUFFER_SIZE 1024U
+#define SIM_DISPLAY_BORDER 1U
+#define SIM_WINDOW_LOGICAL_WIDTH (SIM_FRAMEBUFFER_WIDTH + (2U * SIM_DISPLAY_BORDER))
+#define SIM_WINDOW_LOGICAL_HEIGHT (SIM_FRAMEBUFFER_HEIGHT + (2U * SIM_DISPLAY_BORDER))
 
 typedef struct
 {
@@ -31,6 +34,16 @@ typedef struct
     const char *name;
     float value;
 } sim_parameter_snapshot_t;
+
+typedef struct
+{
+    uint8_t available;
+    uint8_t family_id;
+    uint8_t type_id;
+    uint8_t engine_id;
+    const char *family;
+    const char *type;
+} sim_track_snapshot_t;
 
 int sim_engine_init(sim_engine_t *engine);
 int sim_engine_advance(sim_engine_t *engine, uint32_t milliseconds);
@@ -60,5 +73,6 @@ uint8_t sim_engine_transport_running(const sim_engine_t *engine);
 uint32_t sim_engine_tempo_milli(const sim_engine_t *engine);
 void sim_engine_parameter_snapshot(const sim_engine_t *engine,
                                    sim_parameter_snapshot_t out[SIM_ENCODER_COUNT]);
+void sim_engine_track_snapshot(const sim_engine_t *engine, sim_track_snapshot_t *out);
 
 #endif

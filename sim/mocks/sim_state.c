@@ -5,6 +5,7 @@
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
 #include "Track/entity_topology.h"
+#include "Track/track_input_ownership.h"
 #include "Seq/seq_param_iface.h"
 #include "Mod/mod_lfo_v1_control.h"
 
@@ -24,14 +25,29 @@ static void ensure_state(void)
     if (g_ready) return;
     for (uint8_t i = 0U; i < BRICK_ENTITY_CAPACITY; ++i)
     {
-        g_tracks[i].family = TRACK_FAMILY_SYNTH;
-        g_tracks[i].type = TRACK_TYPE_PRISM;
+        const uint8_t top_level = (uint8_t)(i < BRICK_ENTITY_TOP_LEVEL_COUNT);
+        g_tracks[i].family = top_level ? TRACK_FAMILY_SYNTH : TRACK_FAMILY_OFF;
+        g_tracks[i].type = top_level ? TRACK_TYPE_PRISM : TRACK_TYPE_NONE;
         g_midi_channel[i] = (uint8_t)((i % 16U) + 1U);
-        g_runtime[i].family = TRACK_RUNTIME_FAMILY_SYNTH;
-        g_runtime[i].type = TRACK_RUNTIME_TYPE_PRISM;
+        g_runtime[i].family = top_level ? TRACK_RUNTIME_FAMILY_SYNTH : TRACK_RUNTIME_FAMILY_OFF;
+        g_runtime[i].type = top_level ? TRACK_RUNTIME_TYPE_PRISM : TRACK_RUNTIME_TYPE_NONE;
         g_runtime[i].midi_channel_1_16 = g_midi_channel[i];
     }
+    g_tracks[BRICK_ENTITY_MASTER_ID].family = TRACK_FAMILY_OFF;
+    g_tracks[BRICK_ENTITY_MASTER_ID].type = TRACK_TYPE_NONE;
+    g_runtime[BRICK_ENTITY_MASTER_ID].family = TRACK_RUNTIME_FAMILY_OFF;
+    g_runtime[BRICK_ENTITY_MASTER_ID].type = TRACK_RUNTIME_TYPE_NONE;
     g_ready = 1U;
+}
+
+static void sync_runtime(uint8_t entity)
+{
+    const track_family_t family = g_tracks[entity].family;
+    const track_type_t type = g_tracks[entity].type;
+    g_runtime[entity].family = (uint8_t)track_runtime_family_from_ui_config(family, type);
+    g_runtime[entity].type = (uint8_t)track_runtime_type_from_ui(type);
+    g_runtime[entity].midi_channel_1_16 = g_midi_channel[entity];
+    g_runtime[entity].midi_source = g_midi_source[entity];
 }
 
 const track_config_t *track_state_get_configs(void) { ensure_state(); return g_tracks; }
@@ -41,17 +57,102 @@ track_type_t track_state_get_type(uint8_t track) { return track_state_get_config
 uint8_t track_state_get_midi_channel(uint8_t track) { ensure_state(); return track < BRICK_ENTITY_CAPACITY ? g_midi_channel[track] : 1U; }
 track_midi_source_t track_state_get_midi_source(uint8_t track) { ensure_state(); return track < BRICK_ENTITY_CAPACITY ? (track_midi_source_t)g_midi_source[track] : TRACK_MIDI_SOURCE_INTERNAL; }
 uint8_t track_state_get_external_input(uint8_t track) { return track < TRACK_COUNT ? g_external_input[track] : 0U; }
-bool track_state_set_track_midi_channel(uint8_t track, uint8_t channel) { ensure_state(); if (track >= BRICK_ENTITY_CAPACITY || channel < 1U || channel > 16U) return false; g_midi_channel[track] = channel; return true; }
-bool track_state_set_track_midi_source(uint8_t track, track_midi_source_t source) { ensure_state(); if (track >= BRICK_ENTITY_CAPACITY) return false; g_midi_source[track] = (uint8_t)source; return true; }
-bool track_state_set_external_input(uint8_t track, uint8_t input) { if (track >= TRACK_COUNT) return false; g_external_input[track] = input; return true; }
+bool track_state_set_track_midi_channel(uint8_t track, uint8_t channel) { ensure_state(); if (track >= BRICK_ENTITY_CAPACITY || channel < 1U || channel > 16U) return false; g_midi_channel[track] = channel; sync_runtime(track); return true; }
+bool track_state_set_track_midi_source(uint8_t track, track_midi_source_t source) { ensure_state(); if (track >= BRICK_ENTITY_CAPACITY || source >= TRACK_MIDI_SOURCE_COUNT) return false; g_midi_source[track] = (uint8_t)source; sync_runtime(track); return true; }
+bool track_state_set_external_input(uint8_t track, uint8_t input) { ensure_state(); if (!track_input_ownership_can_claim(track, input)) return false; g_external_input[track] = input; return true; }
 uint8_t track_state_count_tracks_with_family(track_family_t family) { ensure_state(); uint8_t n=0U; for(uint8_t i=0U;i<TRACK_COUNT;++i) if(g_tracks[i].family==family)++n; return n; }
+
+bool track_structure_apply_entity_bulk_with_inputs(
+    const uint8_t family[BRICK_ENTITY_CAPACITY],
+    const uint8_t type[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
+    const uint8_t external_input[TRACK_COUNT])
+{
+    ensure_state();
+    if (!family || !type || !midi_channel || !midi_source || !external_input) return false;
+    track_config_t proposed[BRICK_ENTITY_CAPACITY];
+    for (uint8_t i = 0U; i < BRICK_ENTITY_CAPACITY; ++i)
+    {
+        if (family[i] >= TRACK_FAMILY_COUNT || type[i] >= TRACK_TYPE_COUNT
+                || midi_channel[i] < 1U || midi_channel[i] > 16U
+                || midi_source[i] >= TRACK_MIDI_SOURCE_COUNT) return false;
+        proposed[i].family = (track_family_t)family[i];
+        proposed[i].type = (track_type_t)type[i];
+        if (i == BRICK_ENTITY_MASTER_ID)
+        {
+            if (proposed[i].family != TRACK_FAMILY_OFF || proposed[i].type != TRACK_TYPE_NONE) return false;
+        }
+        else if (proposed[i].family == TRACK_FAMILY_OFF)
+        {
+            if (proposed[i].type != TRACK_TYPE_NONE) return false;
+        }
+        else if (!track_catalog_type_is_valid_for_family(proposed[i].family, proposed[i].type)) return false;
+    }
+    if (!track_input_ownership_validate_bulk(proposed, external_input)) return false;
+    memcpy(g_tracks, proposed, sizeof(g_tracks));
+    memcpy(g_midi_channel, midi_channel, sizeof(g_midi_channel));
+    memcpy(g_midi_source, midi_source, sizeof(g_midi_source));
+    memcpy(g_external_input, external_input, sizeof(g_external_input));
+    for (uint8_t i = 0U; i < BRICK_ENTITY_CAPACITY; ++i) sync_runtime(i);
+    return true;
+}
 
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track) { ensure_state(); return track < BRICK_ENTITY_CAPACITY ? &g_runtime[track] : NULL; }
 uint8_t track_runtime_is_ui_ensemble_available(uint8_t track, track_runtime_ui_ensemble_t ensemble) { (void)ensemble; return track < TRACK_COUNT ? 1U : 0U; }
 uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx) { return ctx != NULL ? 1U : 0U; }
-track_runtime_family_t track_runtime_family_from_ui(track_family_t family) { return family == TRACK_FAMILY_SYNTH ? TRACK_RUNTIME_FAMILY_SYNTH : TRACK_RUNTIME_FAMILY_OTHER; }
-track_runtime_type_t track_runtime_type_from_ui(track_type_t type) { return type == TRACK_TYPE_PRISM ? TRACK_RUNTIME_TYPE_PRISM : TRACK_RUNTIME_TYPE_OTHER; }
-uint8_t track_runtime_has_configurable_polyphony(track_runtime_family_t family, track_runtime_type_t type) { (void)family; (void)type; return 0U; }
+track_runtime_family_t track_runtime_family_from_ui(track_family_t family)
+{
+    switch (family) {
+        case TRACK_FAMILY_OFF: return TRACK_RUNTIME_FAMILY_OFF;
+        case TRACK_FAMILY_SYNTH: return TRACK_RUNTIME_FAMILY_SYNTH;
+        case TRACK_FAMILY_SAMPLER: return TRACK_RUNTIME_FAMILY_SAMPLER;
+        case TRACK_FAMILY_DRUM: return TRACK_RUNTIME_FAMILY_DRUM;
+        case TRACK_FAMILY_MIDI: return TRACK_RUNTIME_FAMILY_MIDI;
+        case TRACK_FAMILY_EXTERNAL: return TRACK_RUNTIME_FAMILY_EXTERNAL;
+        default: return TRACK_RUNTIME_FAMILY_OTHER;
+    }
+}
+track_runtime_family_t track_runtime_family_from_ui_config(track_family_t family, track_type_t type)
+{ return type == TRACK_TYPE_GROUP ? TRACK_RUNTIME_FAMILY_OTHER : track_runtime_family_from_ui(family); }
+track_runtime_type_t track_runtime_type_from_ui(track_type_t type)
+{
+    switch (type) {
+        case TRACK_TYPE_NONE: return TRACK_RUNTIME_TYPE_NONE;
+        case TRACK_TYPE_PRISM: return TRACK_RUNTIME_TYPE_PRISM;
+        case TRACK_TYPE_DRUM_MD: return TRACK_RUNTIME_TYPE_DRUM_MD;
+        case TRACK_TYPE_MIDI: return TRACK_RUNTIME_TYPE_MIDI;
+        case TRACK_TYPE_STREAM: return TRACK_RUNTIME_TYPE_STREAM;
+        case TRACK_TYPE_MULTI: return TRACK_RUNTIME_TYPE_MULTI;
+        case TRACK_TYPE_STACK: return TRACK_RUNTIME_TYPE_STACK;
+        case TRACK_TYPE_WAVE: return TRACK_RUNTIME_TYPE_WAVE;
+        case TRACK_TYPE_EXTERNAL: return TRACK_RUNTIME_TYPE_EXTERNAL;
+        case TRACK_TYPE_GROUP: return TRACK_RUNTIME_TYPE_GROUP;
+        case TRACK_TYPE_FM: return TRACK_RUNTIME_TYPE_FM;
+        case TRACK_TYPE_TB303: return TRACK_RUNTIME_TYPE_TB303;
+        case TRACK_TYPE_ACID: return TRACK_RUNTIME_TYPE_ACID;
+        default: return TRACK_RUNTIME_TYPE_OTHER;
+    }
+}
+track_runtime_engine_t track_runtime_choose_engine(track_runtime_family_t family, track_runtime_type_t type)
+{
+    if (family == TRACK_RUNTIME_FAMILY_EXTERNAL && type == TRACK_RUNTIME_TYPE_EXTERNAL) return TRACK_RUNTIME_ENGINE_AUDIO_TRACK;
+    if (family == TRACK_RUNTIME_FAMILY_DRUM && type == TRACK_RUNTIME_TYPE_DRUM_MD) return TRACK_RUNTIME_ENGINE_DRUM;
+    if (family == TRACK_RUNTIME_FAMILY_SAMPLER && (type == TRACK_RUNTIME_TYPE_STREAM || type == TRACK_RUNTIME_TYPE_MULTI)) return TRACK_RUNTIME_ENGINE_SAMPLER;
+    if (family != TRACK_RUNTIME_FAMILY_SYNTH) return TRACK_RUNTIME_ENGINE_NONE;
+    switch (type) {
+        case TRACK_RUNTIME_TYPE_PRISM: return TRACK_RUNTIME_ENGINE_PRISM;
+        case TRACK_RUNTIME_TYPE_STACK: return TRACK_RUNTIME_ENGINE_STACK;
+        case TRACK_RUNTIME_TYPE_WAVE: return TRACK_RUNTIME_ENGINE_WAVE;
+        case TRACK_RUNTIME_TYPE_FM: return TRACK_RUNTIME_ENGINE_FM;
+        case TRACK_RUNTIME_TYPE_TB303: return TRACK_RUNTIME_ENGINE_TB303;
+        case TRACK_RUNTIME_TYPE_ACID: return TRACK_RUNTIME_ENGINE_ACID;
+        default: return TRACK_RUNTIME_ENGINE_NONE;
+    }
+}
+uint8_t track_runtime_has_configurable_polyphony(track_runtime_family_t family, track_runtime_type_t type)
+{ return (uint8_t)((family == TRACK_RUNTIME_FAMILY_SAMPLER && type == TRACK_RUNTIME_TYPE_MULTI)
+    || (family == TRACK_RUNTIME_FAMILY_SYNTH && (type == TRACK_RUNTIME_TYPE_PRISM || type == TRACK_RUNTIME_TYPE_STACK || type == TRACK_RUNTIME_TYPE_WAVE || type == TRACK_RUNTIME_TYPE_FM))); }
 track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
 {
     (void)param;
@@ -62,9 +163,16 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
 { (void)param; return track < TRACK_COUNT ? TRACK_RUNTIME_PARAM_ALLOWED : TRACK_RUNTIME_PARAM_UNAVAILABLE; }
 uint8_t track_runtime_get_descriptor(uint8_t track, track_runtime_descriptor_t *out)
 {
-    if (!out || track >= TRACK_COUNT) return 0U;
-    memset(out, 0, sizeof(*out)); out->family = TRACK_RUNTIME_FAMILY_SYNTH;
-    out->type = TRACK_RUNTIME_TYPE_PRISM; out->engine = TRACK_RUNTIME_ENGINE_PRISM; out->active = 1U; return 1U;
+    ensure_state();
+    if (!out || track >= BRICK_ENTITY_CAPACITY) return 0U;
+    memset(out, 0, sizeof(*out));
+    out->family = (track_runtime_family_t)g_runtime[track].family;
+    out->type = (track_runtime_type_t)g_runtime[track].type;
+    out->engine = track_runtime_choose_engine(out->family, out->type);
+    out->active = entity_topology_is_active(track);
+    out->midi_channel_1_16 = g_midi_channel[track];
+    out->ui_ensemble_mask = (uint16_t)((1U << TRACK_RUNTIME_UI_ENSEMBLE_COUNT) - 1U);
+    return 1U;
 }
 uint8_t track_runtime_resolve_track(uint8_t track, track_runtime_resolved_track_t *out)
 {
@@ -75,29 +183,44 @@ uint8_t track_runtime_resolve_track(uint8_t track, track_runtime_resolved_track_
     out->supports_vca_gate = 1U; return 1U;
 }
 
-bool track_catalog_family_is_engine(track_family_t family) { return family == TRACK_FAMILY_SYNTH; }
-bool track_catalog_type_is_valid_for_family(track_family_t family, track_type_t type) { return family == TRACK_FAMILY_SYNTH && type == TRACK_TYPE_PRISM; }
-bool track_catalog_type_is_available(uint8_t track, track_family_t family, track_type_t type, const track_config_t configs[BRICK_ENTITY_CAPACITY]) { (void)track; (void)configs; return track_catalog_type_is_valid_for_family(family, type); }
-bool track_catalog_family_is_available(uint8_t track, track_family_t family, const track_config_t configs[BRICK_ENTITY_CAPACITY]) { (void)track; (void)configs; return family == TRACK_FAMILY_SYNTH; }
-uint8_t track_catalog_type_count_for_family(track_family_t family, uint8_t track, const track_config_t configs[BRICK_ENTITY_CAPACITY]) { (void)track; (void)configs; return family == TRACK_FAMILY_SYNTH ? 1U : 0U; }
-track_type_t track_catalog_type_at(track_family_t family, uint8_t index) { return family == TRACK_FAMILY_SYNTH && index == 0U ? TRACK_TYPE_PRISM : TRACK_TYPE_NONE; }
-track_type_t track_catalog_first_available_type(track_family_t family, uint8_t track, const track_config_t configs[BRICK_ENTITY_CAPACITY]) { (void)track; (void)configs; return track_catalog_default_type_for_family(family); }
-track_type_t track_catalog_default_type_for_family(track_family_t family) { return family == TRACK_FAMILY_SYNTH ? TRACK_TYPE_PRISM : TRACK_TYPE_NONE; }
-const char *track_catalog_family_short_name(track_family_t family) { return family == TRACK_FAMILY_SYNTH ? "SYN" : "OFF"; }
-
-uint8_t entity_topology_get(brick_entity_id_t entity, entity_topology_descriptor_t *out)
+uint8_t track_input_ownership_get_external_input(uint8_t track)
+{ ensure_state(); return track < TRACK_COUNT ? g_external_input[track] : 0U; }
+uint8_t track_input_ownership_get_external_owner(uint8_t input, uint8_t *out_track)
 {
-    if (out == NULL || entity >= BRICK_ENTITY_CAPACITY) return 0U;
-    memset(out, 0, sizeof(*out));
-    out->entity_id = entity;
-    out->parent_entity_id = entity;
-    out->role = ENTITY_ROLE_MAIN;
-    out->active = 1U;
+    ensure_state(); if (!out_track || input >= TRACK_AUDIO_INPUT_RESOURCE_COUNT) return 0U;
+    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
+        if (g_tracks[track].family == TRACK_FAMILY_EXTERNAL && g_external_input[track] == input)
+        { *out_track = track; return 1U; }
+    *out_track = TRACK_INPUT_OWNER_NONE; return 1U;
+}
+uint8_t track_input_ownership_can_claim(uint8_t track, uint8_t input)
+{
+    uint8_t owner = TRACK_INPUT_OWNER_NONE;
+    return (uint8_t)(track < TRACK_COUNT && input < TRACK_AUDIO_INPUT_RESOURCE_COUNT
+        && track_input_ownership_get_external_owner(input, &owner)
+        && (owner == TRACK_INPUT_OWNER_NONE || owner == track));
+}
+uint8_t track_input_ownership_any_available(uint8_t excluding_track)
+{ uint8_t input; return track_input_ownership_first_available(excluding_track, &input); }
+uint8_t track_input_ownership_first_available(uint8_t excluding_track, uint8_t *out_input)
+{
+    if (!out_input) return 0U;
+    for (uint8_t input = 0U; input < TRACK_AUDIO_INPUT_RESOURCE_COUNT; ++input)
+        if (track_input_ownership_can_claim(excluding_track, input)) { *out_input = input; return 1U; }
+    return 0U;
+}
+uint8_t track_input_ownership_validate_bulk(const track_config_t configs[TRACK_COUNT], const uint8_t external_input[TRACK_COUNT])
+{
+    if (!configs || !external_input) return 0U;
+    uint8_t used = 0U;
+    for (uint8_t track = 0U; track < TRACK_COUNT; ++track) if (configs[track].family == TRACK_FAMILY_EXTERNAL)
+    {
+        const uint8_t input = external_input[track];
+        if (input >= TRACK_AUDIO_INPUT_RESOURCE_COUNT || (used & (uint8_t)(1U << input))) return 0U;
+        used |= (uint8_t)(1U << input);
+    }
     return 1U;
 }
-uint8_t entity_topology_is_active(brick_entity_id_t entity) { return entity < BRICK_ENTITY_CAPACITY ? 1U : 0U; }
-uint8_t entity_topology_mod_owner(brick_entity_id_t entity, brick_entity_id_t *out)
-{ if (entity >= BRICK_ENTITY_CAPACITY || out == NULL) return 0U; *out = entity; return 1U; }
 
 void mod_lfo_v1_make_default(mod_lfo_control_bank_t *out) { if (out) memset(out, 0, sizeof(*out)); }
 void mod_lfo_v1_init(void) { memset(g_lfo, 0, sizeof(g_lfo)); }

@@ -8,6 +8,9 @@
 #include "sim_path.h"
 #include "sim_png.h"
 
+_Static_assert(SIM_WINDOW_LOGICAL_WIDTH == 130U, "SDL logical width must include the OLED border");
+_Static_assert(SIM_WINDOW_LOGICAL_HEIGHT == 66U, "SDL logical height must include the OLED border");
+
 static void capture_shortcut(sim_engine_t *engine)
 {
     char path[4096], error[256];
@@ -60,15 +63,15 @@ int sim_sdl_run(sim_engine_t *engine, int scale, unsigned frame_limit)
         return 1;
     }
     if (!SDL_CreateWindowAndRenderer("BRICK UI Simulator",
-                                     (int)SIM_FRAMEBUFFER_WIDTH * scale,
-                                     (int)SIM_FRAMEBUFFER_HEIGHT * scale,
+                                     (int)SIM_WINDOW_LOGICAL_WIDTH * scale,
+                                     (int)SIM_WINDOW_LOGICAL_HEIGHT * scale,
                                      0, &window, &renderer))
     {
         fprintf(stderr, "SDL window creation failed: %s\n", SDL_GetError());
         goto cleanup;
     }
-    if (!SDL_SetRenderLogicalPresentation(renderer, SIM_FRAMEBUFFER_WIDTH,
-                                           SIM_FRAMEBUFFER_HEIGHT,
+    if (!SDL_SetRenderLogicalPresentation(renderer, SIM_WINDOW_LOGICAL_WIDTH,
+                                           SIM_WINDOW_LOGICAL_HEIGHT,
                                            SDL_LOGICAL_PRESENTATION_INTEGER_SCALE))
     {
         fprintf(stderr, "SDL logical presentation failed: %s\n", SDL_GetError());
@@ -117,7 +120,11 @@ int sim_sdl_run(sim_engine_t *engine, int scale, unsigned frame_limit)
         }
         (void)SDL_SetRenderDrawColor(renderer, 0U, 0U, 0U, 255U);
         (void)SDL_RenderClear(renderer);
-        if (!SDL_RenderTexture(renderer, texture, NULL, NULL)
+        const SDL_FRect display_rect = {
+            (float)SIM_DISPLAY_BORDER, (float)SIM_DISPLAY_BORDER,
+            (float)SIM_FRAMEBUFFER_WIDTH, (float)SIM_FRAMEBUFFER_HEIGHT
+        };
+        if (!SDL_RenderTexture(renderer, texture, NULL, &display_rect)
                 || !SDL_RenderPresent(renderer))
         {
             fprintf(stderr, "SDL presentation failed: %s\n", SDL_GetError());

@@ -15,6 +15,8 @@
 #include "Seq/seq_runtime.h"
 #include "Param/param_registry.h"
 #include "ui_param.h"
+#include "ui_track_catalog.h"
+#include "Track/track_runtime.h"
 #include "sim_assets.h"
 
 static const char *const g_button_names[BTN_COUNT] = {
@@ -212,6 +214,23 @@ uint64_t sim_engine_held_mask(void) { return sim_input_button_mask(); }
 uint8_t sim_engine_active_track(const sim_engine_t *engine) { return (engine && engine->initialized) ? ui_get_active_track() : 0U; }
 uint8_t sim_engine_transport_running(const sim_engine_t *engine) { return (engine && engine->initialized) ? seq_runtime_is_running() : 0U; }
 uint32_t sim_engine_tempo_milli(const sim_engine_t *engine) { return (engine && engine->initialized) ? seq_runtime_get_tempo_bpm_milli() : 0U; }
+void sim_engine_track_snapshot(const sim_engine_t *engine, sim_track_snapshot_t *out)
+{
+    if (out == NULL) return;
+    memset(out, 0, sizeof(*out));
+    if (engine == NULL || engine->initialized == 0) return;
+    const uint8_t track = ui_get_active_track();
+    const track_family_t family = ui_get_track_family(track);
+    const track_type_t type = ui_get_track_type(track);
+    track_runtime_descriptor_t descriptor;
+    if (!track_runtime_get_descriptor(track, &descriptor)) return;
+    out->available = 1U;
+    out->family_id = (uint8_t)family;
+    out->type_id = (uint8_t)type;
+    out->engine_id = (uint8_t)descriptor.engine;
+    out->family = ui_track_catalog_family_display_name(family);
+    out->type = ui_track_catalog_type_display_name(family, type);
+}
 void sim_engine_parameter_snapshot(const sim_engine_t *engine,
                                    sim_parameter_snapshot_t out[SIM_ENCODER_COUNT])
 {

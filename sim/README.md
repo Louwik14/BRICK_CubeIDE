@@ -2,7 +2,9 @@
 
 Le simulateur Windows compile le pipeline UI BRICK original (entrées, navigation,
 pages, renderer OLED, U8g2 et framebuffer 128 × 64). SDL3 ne fait que présenter
-le framebuffer. Aucun DSP, MIDI, stockage réel ou asset du dépôt n'est modifié.
+le framebuffer. La fenêtre ajoute une bordure noire d'un pixel logique (surface
+130 × 66) ; les PNG restent en 128 × 64 sans bordure. Aucun DSP, MIDI, stockage
+réel ou asset du dépôt n'est modifié.
 
 ## Compiler et lancer
 

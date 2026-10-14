@@ -106,6 +106,8 @@ add_executable(brick-ui-sim
   "${BRICK_ROOT}/Src/Param/param_registry_catalog.c"
   "${BRICK_ROOT}/Src/Param/param_registry_value_contract.c"
   "${BRICK_ROOT}/Src/Param/param_value_policy.c"
+  "${BRICK_ROOT}/Src/Track/entity_topology.c"
+  "${BRICK_ROOT}/Src/Track/track_catalog.c"
   ${BRICK_UI_NAVIGATION_SOURCES}
   ${BRICK_UI_PAGES}
   ${U8G2_SOURCES}

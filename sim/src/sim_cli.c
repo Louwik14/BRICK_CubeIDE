@@ -34,7 +34,9 @@ static void response_inspect(FILE *output, const char *id,
     const int has_subpage = sim_engine_subpage(engine, &subpage);
     const uint64_t held = sim_engine_held_mask();
     sim_parameter_snapshot_t parameters[SIM_ENCODER_COUNT];
+    sim_track_snapshot_t track_state;
     sim_engine_parameter_snapshot(engine, parameters);
+    sim_engine_track_snapshot(engine, &track_state);
     sim_json_escape(engine->error, escaped_error, sizeof(escaped_error));
     response_prefix(output, id);
     fprintf(output,
@@ -49,9 +51,16 @@ static void response_inspect(FILE *output, const char *id,
             engine->error[0] ? escaped_error : "",
             engine->error[0] ? "\"" : "");
     if (has_subpage) fprintf(output, "%u", (unsigned)subpage); else fputs("null", output);
-    fprintf(output, ",\"active_track\":%u,\"engine\":{\"available\":false},"
-            "\"focus\":{\"available\":false},\"selected_parameters\":[",
+    fprintf(output, ",\"active_track\":%u,\"engine\":",
             (unsigned)sim_engine_active_track(engine));
+    if (track_state.available)
+        fprintf(output, "{\"available\":true,\"family_id\":%u,\"family\":\"%s\","
+                "\"type_id\":%u,\"type\":\"%s\",\"engine_id\":%u}",
+                (unsigned)track_state.family_id, track_state.family,
+                (unsigned)track_state.type_id, track_state.type,
+                (unsigned)track_state.engine_id);
+    else fputs("{\"available\":false}", output);
+    fputs(",\"focus\":{\"available\":false},\"selected_parameters\":[", output);
     for (unsigned i = 0U; i < SIM_ENCODER_COUNT; ++i)
     {
         if (!parameters[i].available) fprintf(output, "%snull", i ? "," : "");
@@ -379,6 +388,37 @@ int sim_cli_self_test(sim_engine_t *engine, const char *output_dir)
     static const char *const ensemble_pages[SIM_ENSEMBLE_COUNT] = {
         "CFG", "ENV", "TONE", "MOD", "MIX", "PLAY", "MIDI_FX", "AUDIO_FX"
     };
+    sim_track_snapshot_t track_snapshot;
+    sim_engine_track_snapshot(engine, &track_snapshot);
+    if (!track_snapshot.available || track_snapshot.family_id != 4U
+            || track_snapshot.type_id != 1U) goto fail;
+    static const uint8_t expected_synth_types[] = {7U, 6U, 10U, 11U, 12U};
+    static const uint8_t expected_synth_engines[] = {6U, 5U, 7U, 8U, 9U};
+    for (size_t i = 0U; i < sizeof(expected_synth_types); ++i)
+    {
+        if (!dispatch(engine, "{\"cmd\":\"rotate\",\"encoder\":\"A\",\"delta\":-1}", sink, &quit)) goto fail;
+        sim_engine_track_snapshot(engine, &track_snapshot);
+        if (track_snapshot.type_id != expected_synth_types[i]
+                || track_snapshot.engine_id != expected_synth_engines[i]) goto fail;
+    }
+    if (!dispatch(engine, "{\"cmd\":\"rotate\",\"encoder\":\"A\",\"delta\":8}", sink, &quit)) goto fail;
+    sim_engine_track_snapshot(engine, &track_snapshot);
+    if (track_snapshot.type_id != 1U || track_snapshot.engine_id != 3U) goto fail;
+    static const uint8_t expected_families[] = {5U, 6U, 8U, 7U};
+    for (size_t i = 0U; i < sizeof(expected_families); ++i)
+    {
+        if (!dispatch(engine, "{\"cmd\":\"rotate\",\"encoder\":\"PAGE\",\"delta\":1}", sink, &quit)) goto fail;
+        sim_engine_track_snapshot(engine, &track_snapshot);
+        if (track_snapshot.family_id != expected_families[i]) goto fail;
+    }
+    if (!dispatch(engine, "{\"cmd\":\"rotate\",\"encoder\":\"PAGE\",\"delta\":-4}", sink, &quit)
+            || !dispatch(engine, "{\"cmd\":\"rotate\",\"encoder\":\"A\",\"delta\":4}", sink, &quit)) goto fail;
+    sim_engine_track_snapshot(engine, &track_snapshot);
+    if (track_snapshot.family_id != 4U || track_snapshot.type_id != 1U) goto fail;
+    if (!dispatch(engine, "{\"cmd\":\"rotate\",\"encoder\":\"PAGE\",\"delta\":-1}", sink, &quit)) goto fail;
+    sim_engine_track_snapshot(engine, &track_snapshot);
+    if (track_snapshot.family_id != 0U || track_snapshot.type_id != 0U) goto fail;
+    if (!dispatch(engine, "{\"cmd\":\"rotate\",\"encoder\":\"PAGE\",\"delta\":1}", sink, &quit)) goto fail;
     for (sim_ensemble_t ensemble = SIM_ENSEMBLE_ENV;
          ensemble < SIM_ENSEMBLE_COUNT; ensemble = (sim_ensemble_t)(ensemble + 1))
     {
@@ -406,10 +446,18 @@ int sim_cli_self_test(sim_engine_t *engine, const char *output_dir)
     sim_parameter_snapshot_t before[SIM_ENCODER_COUNT];
     sim_parameter_snapshot_t after[SIM_ENCODER_COUNT];
     sim_engine_parameter_snapshot(engine, before);
-    if (!dispatch(engine, "{\"cmd\":\"rotate\",\"encoder\":\"A\",\"delta\":-8}", sink, &quit)) goto fail;
+    static const char *const rotate_all[] = {
+        "{\"cmd\":\"rotate\",\"encoder\":\"PAGE\",\"delta\":4}",
+        "{\"cmd\":\"rotate\",\"encoder\":\"A\",\"delta\":-4}",
+        "{\"cmd\":\"rotate\",\"encoder\":\"B\",\"delta\":4}",
+        "{\"cmd\":\"rotate\",\"encoder\":\"C\",\"delta\":4}"
+    };
+    for (size_t i = 0U; i < SIM_ENCODER_COUNT; ++i)
+        if (!dispatch(engine, rotate_all[i], sink, &quit)) goto fail;
     sim_engine_parameter_snapshot(engine, after);
-    if (!before[SIM_ENCODER_A].available || !after[SIM_ENCODER_A].available
-            || before[SIM_ENCODER_A].value == after[SIM_ENCODER_A].value) goto fail;
+    for (size_t i = 0U; i < SIM_ENCODER_COUNT; ++i)
+        if (!before[i].available || !after[i].available
+                || before[i].value == after[i].value) goto fail;
     if (!dispatch(engine, "{\"cmd\":\"tap\",\"button\":\"PAGE_2\"}", sink, &quit)) goto fail;
     uint8_t subpage = 0U;
     if (!sim_engine_subpage(engine, &subpage) || subpage != 1U) goto fail;
