@@ -26,8 +26,15 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
-    const brick_entity_id_t waveform_entity = audio_waveform_capture_get_entity();
-    audio_waveform_capture_begin_block(waveform_entity);
+    const audio_waveform_target_t waveform_target =
+        audio_waveform_capture_get_target();
+    const brick_entity_id_t waveform_requested_entity =
+        audio_waveform_capture_get_entity();
+    const brick_entity_id_t waveform_entity =
+        (waveform_target == AUDIO_WAVEFORM_TARGET_ENTITY)
+            ? waveform_requested_entity : BRICK_ENTITY_INVALID_ID;
+    audio_waveform_capture_begin_block(waveform_target,
+        waveform_requested_entity);
 
     const uint8_t group_active = g_mixer_static_group_active;
 
@@ -155,6 +162,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         audio_rec_projection.source_entity_mask != 0U);
     const uint8_t audio_rec_bus_active = (uint8_t)(
         (audio_rec_capture_active != 0U)
+            || ((waveform_target == AUDIO_WAVEFORM_TARGET_REC_BUS)
+                && (waveform_requested_entity != BRICK_ENTITY_INVALID_ID))
             || (audio_rec_projection.source_entity_mask != 0U)
             || ((audio_rec_projection.source_flags
                 & (AUDIO_REC_BUS_SOURCE_LINE_DIRECT
@@ -1262,6 +1271,17 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     if(audio_rec_overdub_mix(audio_rec_overdub_enabled,
                              audio_rec_bus_l, audio_rec_bus_r, frames) == 0U)
         audio_rec_capture_active = 0U;
+
+    if ((waveform_target == AUDIO_WAVEFORM_TARGET_REC_BUS)
+            && (waveform_requested_entity != BRICK_ENTITY_INVALID_ID)
+            && (audio_rec_bus_active != 0U))
+    {
+        audio_waveform_capture_tap_reference_stereo_block(
+            audio_rec_bus_l, audio_rec_bus_r, frames);
+        if (audio_waveform_capture_needs_final_samples() != 0U)
+            audio_waveform_capture_tap_stereo_block(
+                audio_rec_bus_l, audio_rec_bus_r, frames);
+    }
 
     float audio_rec_peak = 0.0f;
     if(audio_rec_bus_active != 0U)

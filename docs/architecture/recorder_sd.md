@@ -175,13 +175,28 @@ status produit; elle n'est pas reclassée en ring overflow. Les erreurs média,
 ## Waveform de prise
 
 AUDIO publie dans le ring le FLOAT32 final qui est l'unique point source du
-résumé. Avant de rendre les frames du ring recyclables, STORAGE alimente 4096
-couples min/max int16. Une longueur fixe utilise le mapping direct
-frames-vers-bins. Une longueur libre utilise des niveaux bornés et compacte
-progressivement, entièrement hors IRQ. Le résumé READY
+résumé. STORAGE n'alimente les 4096 couples min/max int16 qu'après le commit
+SD correspondant; une frame affichée comme enregistrée est donc déjà validée
+par le writer. Avant de rendre les frames du ring recyclables, STORAGE alimente 4096
+couples min/max int16. Les longueurs FREE et fixes commencent toutes à une
+frame PCM par bin puis compactent par deux seulement lorsque les 4096 bins sont
+pleins. La durée planifiée ne dégrade donc jamais une prise courte. Lors de
+DRAINING/FINALIZING, le reliquat borné par le ring est consommé immédiatement
+afin que la publication `REC_SOURCE CURRENT` ne reste pas bloquée sur un résumé
+incomplet. Le résumé READY
 (environ 16 KiB) est copié dans le descripteur `BUILDING` et publié avec lui.
 L'éditeur l'utilise directement pour une prise fraîche; le scan SD reste le
 fallback des fichiers externes, anciens, récupérés ou sans résumé valide.
+
+En REC MODE, l'état d'attente réutilise le scope AUDIO à 10 Hz, ciblé sur le
+bus REC canonique après sommation des routes LINE/MIC/USB et du chemin OVERDUB
+lorsqu'il est effectivement actif.
+Le démarrage AUDIO effectif, et non la seule commande quantifiée, bascule vers
+le résumé progressif ci-dessus. Sa projection utilise la durée réellement
+commitée, pas la limite programmée. STOPPING conserve ce résumé; TAKE_READY et
+REC EDIT consomment ensuite le même résumé final, sans relecture du WAV. Après
+RETURN/SAVE, REC MODE reprend explicitement la cible live REC BUS même si la
+dernière génération REC reste disponible pour l'undo ou le Streamer.
 
 ## Navigation waveform REC EDIT
 

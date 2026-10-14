@@ -2,10 +2,28 @@ static void ui_page_audio_rec_enter(void)
 {
     sample_capture_model_set_view(SAMPLE_CAPTURE_VIEW_AUDIO_REC);
     g_ui_audio_rec_smoothed_peak = 0U;
+    if (g_ui_audio_rec_scope_initialized == 0U)
+    {
+        uiw_audio_scope_reset(&g_ui_audio_rec_scope);
+        g_ui_audio_rec_scope_initialized = 1U;
+    }
+    (void)control_audio_visual_rec_waveform_request(1U, 0U);
+    g_ui_audio_rec_scope_requested = 1U;
+}
+
+static void ui_page_audio_rec_leave(void)
+{
+    if (g_ui_audio_rec_scope_requested != 0U)
+    {
+        (void)control_audio_visual_rec_waveform_request(0U, 0U);
+        g_ui_audio_rec_scope_requested = 0U;
+    }
 }
 
 static void ui_page_rec_edit_enter(void)
 {
+    (void)control_audio_visual_rec_waveform_request(0U, 0U);
+    g_ui_audio_rec_scope_requested = 0U;
     sample_capture_model_set_view(SAMPLE_CAPTURE_VIEW_REC_EDIT);
     g_ui_rec_edit_assign_popup = 0U;
     g_ui_rec_edit_save_requested = 0U;
@@ -127,6 +145,20 @@ static void ui_page_audio_rec_tick(void)
     sample_capture_model_service();
     sample_capture_state_t state;
     sample_capture_model_get_state(&state);
+    if (state.view == SAMPLE_CAPTURE_VIEW_AUDIO_REC)
+    {
+        const uint8_t live = (uint8_t)((state.recording_started == 0U)
+            && ((state.phase == SAMPLE_CAPTURE_PHASE_IDLE)
+                || (state.phase == SAMPLE_CAPTURE_PHASE_ARMED)
+                || (state.phase == SAMPLE_CAPTURE_PHASE_WAIT_QUANT)
+                || (state.phase == SAMPLE_CAPTURE_PHASE_SAVED)));
+        if (live != g_ui_audio_rec_scope_requested)
+        {
+            (void)control_audio_visual_rec_waveform_request(live, 0U);
+            g_ui_audio_rec_scope_requested = live;
+            if (live != 0U) uiw_audio_scope_reset(&g_ui_audio_rec_scope);
+        }
+    }
     if ((g_ui_rec_edit_assign_popup == 2U)
             && (sample_capture_model_assign_pending() == 0U))
         g_ui_rec_edit_assign_popup = (state.error == SAMPLE_CAPTURE_ERROR_NONE)

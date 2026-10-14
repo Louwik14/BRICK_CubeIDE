@@ -407,6 +407,56 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
     drv_display_clear_rect(x, y, w, h);
     drv_display_draw_rect(x, y, w, h);
     ui_page_audio_rec_draw_zero_line(x, y, w, h);
+    if (state->view == SAMPLE_CAPTURE_VIEW_AUDIO_REC)
+    {
+        if ((state->recording_started != 0U)
+                && ((state->phase == SAMPLE_CAPTURE_PHASE_RECORDING)
+                    || (state->phase == SAMPLE_CAPTURE_PHASE_STOPPING)))
+        {
+            waveform_column_t columns[126];
+            uint32_t captured_frames = 0U;
+            uint32_t domain_frames = 0U;
+            const uint8_t inner_w = (uint8_t)(w - 2);
+            if (waveform_request_recording_overview(inner_w, columns,
+                    &captured_frames, &domain_frames) == WAVEFORM_RESULT_READY)
+            {
+                uint16_t peak = 4096U;
+                for (uint8_t col = 0U; col < inner_w; ++col)
+                {
+                    const int16_t min = columns[col].min;
+                    const int16_t max = columns[col].max;
+                    const uint16_t amin = (min == INT16_MIN) ? 32768U
+                        : (uint16_t)((min < 0) ? -min : min);
+                    const uint16_t amax = (max == INT16_MIN) ? 32768U
+                        : (uint16_t)((max < 0) ? -max : max);
+                    if (amin > peak) peak = amin;
+                    if (amax > peak) peak = amax;
+                }
+                const int cy = y + (h / 2);
+                for (uint8_t col = 0U; col < inner_w; ++col)
+                    ui_page_audio_rec_draw_minmax_column(x + 1 + col,
+                        y + 1, h - 2, cy, columns[col].min,
+                        columns[col].max, peak, 256U);
+            }
+            (void)captured_frames;
+            (void)domain_frames;
+        }
+        else if ((state->phase == SAMPLE_CAPTURE_PHASE_TAKE_READY)
+                && (state->take_valid != 0U)
+                && (state->recorded_frames != 0U))
+        {
+            (void)ui_page_audio_rec_draw_rec_service_overview(x, y, w, h,
+                0U, state->recorded_frames,
+                ui_page_audio_rec_edit_vertical_ref(state), 256U, 0U);
+        }
+        else
+        {
+            (void)uiw_draw_audio_scope(AUDIO_WAVEFORM_TARGET_REC_BUS, 0U,
+                x + 1, y + 1, w - 2, h - 2,
+                &g_ui_audio_rec_scope);
+        }
+        return;
+    }
     if(!((state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
                 && (state->take_valid != 0U)
                 && (state->recorded_frames != 0U)))

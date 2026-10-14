@@ -35,7 +35,6 @@
 #include "Storage/waveform_service.h"
 #include "Sampler/wavetable_pool.h"
 #include "Param/spectral_window.h"
-#include "Audio/Publications/audio_waveform_reader.h"
 #include "Audio/Publications/synth_waveform_reader.h"
 
 #define UI_TEMPLATE_FRAME_W          32

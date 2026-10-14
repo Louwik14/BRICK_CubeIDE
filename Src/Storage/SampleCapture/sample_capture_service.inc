@@ -215,6 +215,10 @@ void sample_capture_model_service(void)
     {
         return;
     }
+    g_sample_capture.state.recording_committed_frames = status.frames_committed;
+    if ((status.frames_received != 0U)
+            || (audio_recorder_is_recording() != 0U))
+        g_sample_capture.state.recording_started = 1U;
 
     audio_rec_level_snapshot_t level;
     if(audio_rec_level_reader_read(&level) != 0U)

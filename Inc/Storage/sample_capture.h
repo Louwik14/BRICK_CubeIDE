@@ -110,9 +110,11 @@ typedef struct
     uint8_t route_enabled[SAMPLE_CAPTURE_TRACK_COUNT];
     uint8_t armed_pending;
     uint8_t recording;
+    uint8_t recording_started;
     uint8_t take_valid;
     uint8_t save_pending;
     uint32_t planned_frames;
+    uint32_t recording_committed_frames;
     uint32_t recorded_frames;
     uint32_t edit_start_frame;
     uint32_t edit_end_frame;

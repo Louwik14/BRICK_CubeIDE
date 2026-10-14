@@ -79,6 +79,13 @@ compris lorsqu'elle recoit un slot 8..15.
 
 Le mixer applique filtre, VCA, niveau, pan, inserts, sends puis traitements globaux. Reverb, delay, compresseur et gain Master sont globaux. Send3 ne conserve que Daisy Stereo et Junologue; VIBE, DRIFT, XFADE et DJ EQ sont des inserts par entite. VIBE utilise le kernel Deluge Float avec politique `dry + wet` 1:1. DRIFT expose DELAY et FEEDBACK, sans LFO interne.
 
+Le scope audio live est une publication seqlock AUDIO vers UI, double-buffer,
+sans allocation ni rendu dans l'IRQ. Sa cible explicite est soit une entite
+Audio FX, soit le bus REC canonique. La cible REC observe le bus admis par le
+Recorder, y compris OVERDUB lorsque celui-ci est effectivement actif; le reader
+OVERDUB ne s'active qu'apres le vrai demarrage de capture. La cadence est 10 Hz,
+ou 20 Hz pour les vues qui le demandent.
+
 La track EXT possede son entree physique via l'ownership CONTROL, puis AUDIO la publie dans la lane du programme. Son parametre TONE `GATE` est CONTROL-owned et publie vers AUDIO: `ON` desactive le VCA de gate et laisse passer l'entree en continu, tandis que `TRIG` active le VCA et reconstruit son compteur depuis le mapping AUDIO des `output_id` vivants. Les NOTE OFF inconnus et les NOTE ON deja presents ne modifient pas ce compteur; le dernier output ferme seul le gate. Le mute reste applique plus loin dans le mixer et conserve donc son autorite dans les deux modes.
 
 La reverb globale utilise le kernel Mutable/Deluge, son buffer float de 32768 elements et ses cinq controles normalises ROOM SIZE, DAMPING, WIDTH, HPF et LPF. WET reste exterieur au moteur.

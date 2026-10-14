@@ -1,9 +1,12 @@
 #include "ui_widgets.h"
 
+#include <limits.h>
 #include <string.h>
 
+#include "Audio/Publications/audio_waveform_reader.h"
 #include "drv_display.h"
 #include "font.h"
+#include "Platform/memory_layout.h"
 #include "UI/ui_algo_icons.h"
 
 #define UIW_SWITCH_W              18
@@ -28,6 +31,130 @@ static const uint32_t *const g_ui_algo_icons[32] = {
 
 _Static_assert((sizeof(g_ui_algo_icons) / sizeof(g_ui_algo_icons[0])) == 32U,
                "FM algorithm icon mapping must contain 32 entries");
+
+void uiw_audio_scope_reset(uiw_audio_scope_cache_t *cache)
+{
+    if (cache == NULL) return;
+    memset(cache, 0, sizeof(*cache));
+    cache->entity_id = BRICK_ENTITY_INVALID_ID;
+    cache->display_peak = 32U;
+}
+
+uint8_t uiw_draw_audio_scope(audio_waveform_target_t target,
+                             uint8_t entity_id,
+                             int x, int y, int w, int h,
+                             uiw_audio_scope_cache_t *cache)
+{
+    if ((cache == NULL) || (w < 2) || (w > (int)UIW_AUDIO_SCOPE_MAX_COLUMNS)
+            || (h < 3)) return 0U;
+    const int center = y + (h / 2);
+    const int positive_height = center - y;
+    const int negative_height = y + h - 1 - center;
+    UI_STATE_SDRAM static audio_waveform_capture_snapshot_t snapshot;
+    if (audio_waveform_capture_read(&snapshot) != 0U)
+    {
+        if ((snapshot.target != (uint8_t)target)
+                || (snapshot.entity_id != entity_id))
+            uiw_audio_scope_reset(cache);
+        else if ((snapshot.valid != 0U)
+                && ((cache->valid == 0U)
+                    || (cache->generation != snapshot.generation)))
+        {
+            uint8_t peak = 0U;
+            for (int column = 0; column < w; ++column)
+            {
+                int8_t column_min = INT8_MAX;
+                int8_t column_max = INT8_MIN;
+                if (snapshot.triggered != 0U)
+                {
+                    const uint32_t position_q8 =
+                        (((uint32_t)column
+                          * (AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES - 1U)) << 8)
+                        / (uint32_t)(w - 1) + snapshot.trigger_fraction_q8;
+                    uint32_t source = position_q8 >> 8;
+                    const uint16_t fraction = (uint16_t)(position_q8 & 0xffU);
+                    if (source >= AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES)
+                        source = AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES - 1U;
+                    const uint32_t next = (source + 1U
+                            < AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES)
+                        ? source + 1U : source;
+                    const int32_t a = snapshot.samples[source];
+                    const int32_t b = snapshot.samples[next];
+                    column_min = column_max = (int8_t)(a
+                        + (((b - a) * fraction) >> 8));
+                }
+                else
+                {
+                    const uint32_t begin = ((uint32_t)column
+                        * AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES) / (uint32_t)w;
+                    uint32_t end = ((uint32_t)(column + 1)
+                        * AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES) / (uint32_t)w;
+                    if (end <= begin) end = begin + 1U;
+                    for (uint32_t sample = begin; sample < end; ++sample)
+                    {
+                        const int8_t value = snapshot.samples[sample];
+                        if (value < column_min) column_min = value;
+                        if (value > column_max) column_max = value;
+                    }
+                }
+                const uint8_t min_peak = (column_min == INT8_MIN) ? 128U
+                    : (uint8_t)((column_min < 0) ? -column_min : column_min);
+                const uint8_t max_peak = (column_max == INT8_MIN) ? 128U
+                    : (uint8_t)((column_max < 0) ? -column_max : column_max);
+                if (min_peak > peak) peak = min_peak;
+                if (max_peak > peak) peak = max_peak;
+                cache->top[column] = column_max;
+                cache->bottom[column] = column_min;
+            }
+            const uint8_t target_peak = (peak > 32U) ? peak : 32U;
+            if ((cache->target != (uint8_t)target)
+                    || (cache->entity_id != entity_id)) cache->display_peak = 32U;
+            if (target_peak > cache->display_peak) cache->display_peak = target_peak;
+            else cache->display_peak = (uint8_t)(((uint16_t)cache->display_peak
+                * 7U + target_peak) / 8U);
+            if (cache->display_peak < 32U) cache->display_peak = 32U;
+            for (int column = 0; column < w; ++column)
+            {
+                int32_t high = ((int32_t)cache->top[column]
+                    * ((cache->top[column] >= 0) ? positive_height : negative_height))
+                    / cache->display_peak;
+                int32_t low = ((int32_t)cache->bottom[column]
+                    * ((cache->bottom[column] >= 0) ? positive_height : negative_height))
+                    / cache->display_peak;
+                if (high > positive_height) high = positive_height;
+                if (high < -negative_height) high = -negative_height;
+                if (low > positive_height) low = positive_height;
+                if (low < -negative_height) low = -negative_height;
+                cache->top[column] = (int8_t)(center - high);
+                cache->bottom[column] = (int8_t)(center - low);
+            }
+            cache->target = (uint8_t)target;
+            cache->entity_id = entity_id;
+            cache->generation = snapshot.generation;
+            cache->triggered = snapshot.triggered;
+            cache->valid = 1U;
+        }
+    }
+    for (int px = x; px < x + w; px += 2)
+        drv_display_draw_pixel(px, center, true);
+    if ((cache->valid == 0U) || (cache->target != (uint8_t)target)
+            || (cache->entity_id != entity_id)) return 1U;
+    if (cache->triggered != 0U)
+    {
+        int previous = cache->top[0];
+        for (int column = 1; column < w; ++column)
+        {
+            drv_display_draw_line(x + column - 1, previous,
+                x + column, cache->top[column]);
+            previous = cache->top[column];
+        }
+    }
+    else
+        for (int column = 0; column < w; ++column)
+            drv_display_draw_line(x + column, cache->top[column],
+                x + column, cache->bottom[column]);
+    return 1U;
+}
 
 static int uiw_center_x(int x, int w, const char *txt)
 {

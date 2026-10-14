@@ -3,7 +3,22 @@
 
 #include <stdint.h>
 
+#include "Audio/Publications/audio_waveform_contract.h"
 #include "param_registry.h"
+
+#define UIW_AUDIO_SCOPE_MAX_COLUMNS 126U
+
+typedef struct
+{
+    uint32_t generation;
+    uint8_t target;
+    uint8_t entity_id;
+    uint8_t valid;
+    uint8_t triggered;
+    uint8_t display_peak;
+    int8_t top[UIW_AUDIO_SCOPE_MAX_COLUMNS];
+    int8_t bottom[UIW_AUDIO_SCOPE_MAX_COLUMNS];
+} uiw_audio_scope_cache_t;
 
 typedef enum
 {
@@ -29,6 +44,11 @@ void uiw_draw_algo_icon(int x, int y, int w, int h, uint8_t algorithm);
 void uiw_draw_enum_text(int x, int y, int w, int h, const char *label);
 void uiw_draw_jack_icon(int x, int y, int w, int h);
 void uiw_draw_keyboard_icon(int x, int y, int w, int h);
+void uiw_audio_scope_reset(uiw_audio_scope_cache_t *cache);
+uint8_t uiw_draw_audio_scope(audio_waveform_target_t target,
+                             uint8_t entity_id,
+                             int x, int y, int w, int h,
+                             uiw_audio_scope_cache_t *cache);
 
 uiw_widget_type_t uiw_pick_widget_type(const param_desc_t *desc, const char *enum_label);
 

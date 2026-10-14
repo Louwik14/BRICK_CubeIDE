@@ -6,8 +6,11 @@
 #include "Storage/sample_capture.h"
 #include "Track/track_state.h"
 #include "Storage/waveform_service.h"
+#include "ControlRT/control_audio_visual.h"
+#include "Platform/memory_layout.h"
 #include "ui_event.h"
 #include "ui_page_manager.h"
+#include "ui_widgets.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -31,6 +34,9 @@
 static uint8_t g_ui_rec_edit_assign_popup;
 static uint8_t g_ui_rec_edit_save_requested;
 static uint32_t g_ui_audio_rec_smoothed_peak;
+UI_STATE_SDRAM static uiw_audio_scope_cache_t g_ui_audio_rec_scope;
+static uint8_t g_ui_audio_rec_scope_initialized;
+static uint8_t g_ui_audio_rec_scope_requested;
 
 static uint8_t ui_page_audio_rec_peak_to_meter(uint32_t peak_abs_pcm24,
                                                uint8_t width)

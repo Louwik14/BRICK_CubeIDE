@@ -304,152 +304,18 @@ static uint8_t ui_renderer_template_draw_audio_fx_group(
     const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
 {
     (void)plock_frame_ctx;
-    const int x = (int)AUDIO_WAVEFORM_CAPTURE_GRAPH_X;
-    const int top = UI_TEMPLATE_WAVE_WT_Y + 4;
-    const int bottom = UI_TEMPLATE_WAVE_WT_Y + UI_TEMPLATE_WAVE_WT_H - 2;
-    const int w = (int)AUDIO_WAVEFORM_CAPTURE_GRAPH_WIDTH;
-    const int center = top + ((bottom - top) / 2);
-    const int positive_height = center - top;
-    const int negative_height = bottom - center;
-    typedef struct
+    UI_STATE_SDRAM static uiw_audio_scope_cache_t cache;
+    static uint8_t cache_initialized;
+    if (cache_initialized == 0U)
     {
-        brick_entity_id_t entity_id;
-        uint32_t generation;
-        uint8_t valid;
-        uint8_t triggered;
-        int8_t y_top[AUDIO_WAVEFORM_CAPTURE_COLUMNS];
-        int8_t y_bottom[AUDIO_WAVEFORM_CAPTURE_COLUMNS];
-    } ui_audio_scope_cache_t;
-    UI_STATE_SDRAM static audio_waveform_capture_snapshot_t snapshot;
-    UI_STATE_SDRAM static ui_audio_scope_cache_t cache;
-    static brick_entity_id_t scale_entity = BRICK_ENTITY_INVALID_ID;
-    static uint8_t display_peak = 32U;
-    const brick_entity_id_t selected_entity =
-        (brick_entity_id_t)ui_renderer_template_get_selected_entity();
-    const uint8_t snapshot_read = audio_waveform_capture_read(&snapshot);
-    if ((snapshot_read != 0U) && (snapshot.entity_id != selected_entity))
-    {
-        cache.valid = 0U;
-        scale_entity = BRICK_ENTITY_INVALID_ID;
-        display_peak = 32U;
+        uiw_audio_scope_reset(&cache);
+        cache_initialized = 1U;
     }
-    else if ((snapshot_read != 0U)
-            && (snapshot.entity_id == selected_entity)
-            && (snapshot.valid != 0U)
-            && ((cache.valid == 0U) || (cache.generation != snapshot.generation)))
-    {
-        uint8_t peak = 0U;
-        for (uint16_t column = 0U; column < AUDIO_WAVEFORM_CAPTURE_COLUMNS; ++column)
-        {
-            int8_t column_min;
-            int8_t column_max;
-            if (snapshot.triggered != 0U)
-            {
-                const uint32_t position_q8 =
-                    (((uint32_t)column
-                      * (AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES - 1U)) << 8)
-                    / (AUDIO_WAVEFORM_CAPTURE_COLUMNS - 1U)
-                    + snapshot.trigger_fraction_q8;
-                uint32_t source = position_q8 >> 8;
-                const uint16_t fraction = (uint16_t)(position_q8 & 0xffU);
-                if (source >= AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES)
-                    source = AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES - 1U;
-                const uint32_t next = (source + 1U < AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES)
-                    ? source + 1U : source;
-                const int32_t a = snapshot.samples[source];
-                const int32_t b = snapshot.samples[next];
-                const int8_t value = (int8_t)(a
-                    + (((b - a) * fraction) >> 8));
-                column_min = value;
-                column_max = value;
-            }
-            else
-            {
-                const uint16_t begin = (uint16_t)(column * 16U);
-                const uint16_t end = (uint16_t)(begin + 16U);
-                column_min = INT8_MAX;
-                column_max = INT8_MIN;
-                for (uint16_t sample = begin; sample < end; ++sample)
-                {
-                    const int8_t value = snapshot.samples[sample];
-                    if (value < column_min) column_min = value;
-                    if (value > column_max) column_max = value;
-                }
-            }
-            const uint8_t min_peak = (column_min == INT8_MIN)
-                ? 128U : (uint8_t)((column_min < 0) ? -column_min : column_min);
-            const uint8_t max_peak = (column_max == INT8_MIN)
-                ? 128U : (uint8_t)((column_max < 0) ? -column_max : column_max);
-            if (min_peak > peak) peak = min_peak;
-            if (max_peak > peak) peak = max_peak;
-            cache.y_top[column] = column_max;
-            cache.y_bottom[column] = column_min;
-        }
-        const uint8_t target_peak = (peak > 32U) ? peak : 32U;
-        if (scale_entity != selected_entity)
-        {
-            scale_entity = selected_entity;
-            display_peak = 32U;
-        }
-        if (target_peak > display_peak)
-            display_peak = target_peak;
-        else
-            display_peak = (uint8_t)(((uint16_t)display_peak * 7U + target_peak) / 8U);
-        if (display_peak < 32U) display_peak = 32U;
-        for (uint16_t column = 0U; column < AUDIO_WAVEFORM_CAPTURE_COLUMNS; ++column)
-        {
-            const int8_t column_max = cache.y_top[column];
-            const int8_t column_min = cache.y_bottom[column];
-            const int max_height = (column_max >= 0) ? positive_height : negative_height;
-            const int min_height = (column_min >= 0) ? positive_height : negative_height;
-            int32_t max_scaled = ((int32_t)column_max * max_height) / display_peak;
-            int32_t min_scaled = ((int32_t)column_min * min_height) / display_peak;
-            if (max_scaled > positive_height) max_scaled = positive_height;
-            if (max_scaled < -negative_height) max_scaled = -negative_height;
-            if (min_scaled > positive_height) min_scaled = positive_height;
-            if (min_scaled < -negative_height) min_scaled = -negative_height;
-            cache.y_top[column] = (int8_t)(center - (int)max_scaled);
-            cache.y_bottom[column] = (int8_t)(center - (int)min_scaled);
-        }
-        cache.entity_id = selected_entity;
-        cache.generation = snapshot.generation;
-        cache.triggered = snapshot.triggered;
-        cache.valid = 1U;
-    }
-    const uint8_t snapshot_valid = (uint8_t)(
-        (cache.valid != 0U)
-        && (cache.entity_id == selected_entity));
-
-    for (int px = x; px < (x + w); px += 2)
-    {
-        drv_display_draw_pixel(px, center, true);
-    }
-
-    if (snapshot_valid == 0U) return 1U;
-    if (cache.triggered != 0U)
-    {
-        int previous_y = cache.y_top[0];
-        for (uint16_t column = 1U; column < AUDIO_WAVEFORM_CAPTURE_COLUMNS; ++column)
-        {
-            const int next_y = cache.y_top[column];
-            drv_display_draw_line(x + (int)column - 1,
-                                  previous_y,
-                                  x + (int)column,
-                                  next_y);
-            previous_y = next_y;
-        }
-    }
-    else
-    {
-        for (uint16_t column = 0U; column < AUDIO_WAVEFORM_CAPTURE_COLUMNS; ++column)
-        {
-            drv_display_draw_line(x + (int)column,
-                                  cache.y_top[column],
-                                  x + (int)column,
-                                  cache.y_bottom[column]);
-        }
-    }
-    return 1U;
+    return uiw_draw_audio_scope(AUDIO_WAVEFORM_TARGET_ENTITY,
+        (uint8_t)ui_renderer_template_get_selected_entity(),
+        (int)AUDIO_WAVEFORM_CAPTURE_GRAPH_X, UI_TEMPLATE_WAVE_WT_Y + 4,
+        (int)AUDIO_WAVEFORM_CAPTURE_GRAPH_WIDTH,
+        UI_TEMPLATE_WAVE_WT_H - 5, &cache);
 }
 
 typedef enum

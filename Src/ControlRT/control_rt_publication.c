@@ -112,7 +112,7 @@ static uint8_t control_rt_param_is_structural(
     if (command->id == CONTROL_AUDIO_PARAM_AUDIO_WAVEFORM_REQUEST)
         return (uint8_t)((scope == 0U)
             && (command->entity < BRICK_ENTITY_CAPACITY)
-            && ((command->value & ~3UL) == 0U));
+            && ((command->value & ~7UL) == 0U));
     if (command->id == CONTROL_AUDIO_PARAM_SYNTH_WAVEFORM_REQUEST)
         return (uint8_t)((scope == 0U)
             && (command->entity < BRICK_ENTITY_CAPACITY)

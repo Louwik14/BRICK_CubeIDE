@@ -11,6 +11,7 @@
 
 typedef struct
 {
+    audio_waveform_target_t target;
     brick_entity_id_t entity_id;
     uint16_t write_sample;
     uint16_t final_block_sample;
@@ -28,6 +29,7 @@ typedef struct
 } audio_waveform_capture_state_t;
 
 static AUDIO_HOT audio_waveform_capture_state_t g_capture;
+static AUDIO_HOT audio_waveform_target_t g_requested_target = AUDIO_WAVEFORM_TARGET_ENTITY;
 static AUDIO_HOT brick_entity_id_t g_requested_entity = BRICK_ENTITY_INVALID_ID;
 static AUDIO_HOT uint8_t g_fast_refresh;
 
@@ -57,20 +59,24 @@ static uint8_t crossing_fraction_q8(int16_t before, int16_t after)
     return (uint8_t)fraction;
 }
 
-static void reset_capture(brick_entity_id_t entity_id)
+static void reset_capture(audio_waveform_target_t target,
+                          brick_entity_id_t entity_id)
 {
     memset(&g_capture, 0, sizeof(g_capture));
+    g_capture.target = target;
     g_capture.entity_id = entity_id;
     g_capture.pending_trigger_sample = AUDIO_WAVEFORM_NO_TRIGGER;
     g_capture.write_buffer = (uint8_t)(g_audio_waveform_layout.buffer ^ 1U);
 }
 
-static void publish_invalid(brick_entity_id_t entity_id)
+static void publish_invalid(audio_waveform_target_t target,
+                            brick_entity_id_t entity_id)
 {
     uint32_t sequence = g_audio_waveform_layout.sequence;
     if ((sequence & 1U) != 0U) ++sequence;
     g_audio_waveform_layout.sequence = sequence + 1U;
     __DMB();
+    g_audio_waveform_layout.target = (uint8_t)target;
     g_audio_waveform_layout.entity_id = entity_id;
     g_audio_waveform_layout.valid = 0U;
     ++g_audio_waveform_layout.generation;
@@ -85,6 +91,7 @@ static void publish_capture(void)
     g_audio_waveform_layout.sequence = sequence + 1U;
     __DMB();
     g_audio_waveform_layout.buffer = g_capture.write_buffer;
+    g_audio_waveform_layout.target = (uint8_t)g_capture.target;
     g_audio_waveform_layout.entity_id = g_capture.entity_id;
     g_audio_waveform_layout.triggered = g_capture.frame_triggered;
     g_audio_waveform_layout.trigger_fraction_q8 = g_capture.pending_trigger_fraction_q8;
@@ -116,28 +123,37 @@ void audio_waveform_capture_init(void)
     g_capture.entity_id = BRICK_ENTITY_INVALID_ID;
     g_capture.pending_trigger_sample = AUDIO_WAVEFORM_NO_TRIGGER;
     g_requested_entity = BRICK_ENTITY_INVALID_ID;
+    g_requested_target = AUDIO_WAVEFORM_TARGET_ENTITY;
+    g_audio_waveform_layout.target = AUDIO_WAVEFORM_TARGET_ENTITY;
     g_audio_waveform_layout.entity_id = BRICK_ENTITY_INVALID_ID;
     g_fast_refresh = 0U;
     __DMB();
 }
 
-void audio_waveform_capture_audio_apply_control(brick_entity_id_t entity_id,
+void audio_waveform_capture_audio_apply_control(audio_waveform_target_t target,
+                                                brick_entity_id_t entity_id,
                                                 uint8_t enabled,
                                                 uint8_t fast_refresh)
 {
-    if ((enabled == 0U) || (entity_id >= BRICK_ENTITY_CAPACITY))
+    if ((enabled == 0U) || (target > AUDIO_WAVEFORM_TARGET_REC_BUS)
+            || ((target == AUDIO_WAVEFORM_TARGET_ENTITY)
+                && (entity_id >= BRICK_ENTITY_CAPACITY)))
         entity_id = BRICK_ENTITY_INVALID_ID;
+    g_requested_target = target;
     g_requested_entity = entity_id;
     g_fast_refresh = (fast_refresh != 0U) ? 1U : 0U;
 }
 
+audio_waveform_target_t audio_waveform_capture_get_target(void) { return g_requested_target; }
 brick_entity_id_t audio_waveform_capture_get_entity(void) { return g_requested_entity; }
 
-void audio_waveform_capture_begin_block(brick_entity_id_t observed_entity)
+void audio_waveform_capture_begin_block(audio_waveform_target_t observed_target,
+                                        brick_entity_id_t observed_entity)
 {
-    if (observed_entity == g_capture.entity_id) return;
-    reset_capture(observed_entity);
-    publish_invalid(observed_entity);
+    if ((observed_target == g_capture.target)
+            && (observed_entity == g_capture.entity_id)) return;
+    reset_capture(observed_target, observed_entity);
+    publish_invalid(observed_target, observed_entity);
 }
 
 uint8_t audio_waveform_capture_needs_final_samples(void)

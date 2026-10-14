@@ -26,6 +26,20 @@ uint8_t control_audio_visual_waveform_request(brick_entity_id_t entity,
     return (uint8_t)(g_waveform_pending == 0U);
 }
 
+uint8_t control_audio_visual_rec_waveform_request(uint8_t enabled,
+                                                   uint8_t fast_refresh)
+{
+    const brick_entity_id_t entity = 0U;
+    g_waveform_pending_entity = entity;
+    g_waveform_pending_value = (enabled ? 1U : 0U)
+        | ((fast_refresh ? 1U : 0U) << 1)
+        | (1UL << 2);
+    g_waveform_pending = (uint8_t)(control_audio_visual_publish(entity,
+        CONTROL_AUDIO_PARAM_AUDIO_WAVEFORM_REQUEST,
+        g_waveform_pending_value) == 0U);
+    return (uint8_t)(g_waveform_pending == 0U);
+}
+
 void control_audio_visual_service(void)
 {
     if (g_waveform_pending == 0U) return;

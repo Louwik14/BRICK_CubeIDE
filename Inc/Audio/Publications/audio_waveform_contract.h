@@ -9,9 +9,16 @@
 #define AUDIO_WAVEFORM_CAPTURE_FRAME_AUDIO_SAMPLES 1504U
 #define AUDIO_WAVEFORM_CAPTURE_FREE_RUN_SAMPLES (AUDIO_WAVEFORM_CAPTURE_FRAME_AUDIO_SAMPLES * 2U)
 
+typedef enum
+{
+    AUDIO_WAVEFORM_TARGET_ENTITY = 0,
+    AUDIO_WAVEFORM_TARGET_REC_BUS = 1
+} audio_waveform_target_t;
+
 typedef struct
 {
     uint32_t generation;
+    uint8_t target;
     uint8_t entity_id;
     uint8_t valid;
     uint8_t triggered;
@@ -23,6 +30,7 @@ typedef struct
 {
     volatile uint32_t sequence;
     volatile uint32_t generation;
+    volatile uint8_t target;
     volatile uint8_t entity_id;
     volatile uint8_t buffer;
     volatile uint8_t valid;

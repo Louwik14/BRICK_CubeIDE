@@ -88,6 +88,11 @@ waveform_result_t waveform_request_overview(const waveform_source_t *source,
                                    uint8_t pixel_width,
                                    waveform_column_t *columns,
                                    waveform_line_column_t *line);
+waveform_result_t waveform_request_recording_overview(
+                                   uint8_t pixel_width,
+                                   waveform_column_t *columns,
+                                   uint32_t *out_captured_frames,
+                                   uint32_t *out_domain_frames);
 waveform_result_t waveform_request_detailed(const waveform_source_t *source,
                                    uint32_t start_frame,
                                    uint32_t frame_count,

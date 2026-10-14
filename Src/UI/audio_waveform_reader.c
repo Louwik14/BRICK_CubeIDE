@@ -13,6 +13,7 @@ uint8_t audio_waveform_capture_read(audio_waveform_capture_snapshot_t *out_snaps
         __DMB();
         const uint8_t buffer = g_audio_waveform_layout.buffer;
         out_snapshot->generation = g_audio_waveform_layout.generation;
+        out_snapshot->target = g_audio_waveform_layout.target;
         out_snapshot->entity_id = g_audio_waveform_layout.entity_id;
         out_snapshot->valid = g_audio_waveform_layout.valid;
         out_snapshot->triggered = g_audio_waveform_layout.triggered;

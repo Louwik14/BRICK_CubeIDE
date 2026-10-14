@@ -844,6 +844,21 @@ waveform_result_t waveform_request_overview(const waveform_source_t *source,
     return WAVEFORM_RESULT_READY;
 }
 
+waveform_result_t waveform_request_recording_overview(
+    uint8_t pixel_width, waveform_column_t *columns,
+    uint32_t *out_captured_frames, uint32_t *out_domain_frames)
+{
+    _Static_assert(sizeof(waveform_column_t)
+        == sizeof(rec_source_waveform_column_t), "waveform column layout");
+    if ((columns == NULL) || (pixel_width == 0U)
+            || (out_captured_frames == NULL) || (out_domain_frames == NULL))
+        return WAVEFORM_RESULT_INVALID;
+    return (rec_source_waveform_active_overview(pixel_width,
+        (rec_source_waveform_column_t *)columns, out_captured_frames,
+        out_domain_frames) != 0U) ? WAVEFORM_RESULT_READY
+                                  : WAVEFORM_RESULT_PENDING;
+}
+
 waveform_result_t waveform_request(const waveform_source_t *source,
                                    uint32_t start_frame,
                                    uint32_t frame_count,

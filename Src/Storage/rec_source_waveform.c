@@ -4,8 +4,6 @@
 
 #include "Platform/memory_layout.h"
 
-#define REC_SOURCE_WAVEFORM_SERVICE_FRAMES 4096U
-
 typedef struct
 {
     rec_source_waveform_summary_t levels[2];
@@ -115,8 +113,8 @@ static void capture_frame(const float *lr, uint32_t frame)
 
 void rec_source_waveform_begin(uint32_t frame_limit)
 {
-    /* Use the captured timeline, not the planned REC limit: an early STOP
-       must not leave most of the 4096-bin overview unused. */
+    /* Every take starts at one PCM frame per bin.  Planned duration is a UI
+       limit, not a reason to discard temporal detail before it is needed. */
     (void)frame_limit;
     memset(&g_rec_source_waveform, 0, sizeof(g_rec_source_waveform));
     clear_level(&g_rec_source_waveform.levels[0]);
@@ -155,6 +153,82 @@ void rec_source_waveform_capture_service(const float *ring_interleaved,
 uint32_t rec_source_waveform_captured_frames(void)
 {
     return g_rec_source_waveform.captured_frames;
+}
+
+static void active_range(uint32_t frame0, uint32_t frame1,
+                         int16_t *out_min, int16_t *out_max)
+{
+    int16_t min = 32767;
+    int16_t max = -32768;
+    const uint8_t active_level = g_rec_source_waveform.active_level;
+    const rec_source_waveform_summary_t *const src =
+        &g_rec_source_waveform.levels[active_level];
+    const uint32_t split = (g_rec_source_waveform.compacting != 0U)
+        ? g_rec_source_waveform.compact_start_frame : frame1;
+    uint32_t part1 = (frame1 < split) ? frame1 : split;
+    if (frame0 < part1)
+    {
+        uint32_t bin0 = frame0 / src->frames_per_bin;
+        uint32_t bin1 = (part1 + src->frames_per_bin - 1U)
+            / src->frames_per_bin;
+        if (bin1 > REC_SOURCE_WAVEFORM_BINS) bin1 = REC_SOURCE_WAVEFORM_BINS;
+        for (uint32_t bin = bin0; bin < bin1; ++bin)
+        {
+            if (src->min[bin] < min) min = src->min[bin];
+            if (src->max[bin] > max) max = src->max[bin];
+        }
+    }
+    if ((g_rec_source_waveform.compacting != 0U) && (frame1 > split))
+    {
+        const rec_source_waveform_summary_t *const dst =
+            &g_rec_source_waveform.levels[active_level ^ 1U];
+        const uint32_t fpb = src->frames_per_bin * 2U;
+        const uint32_t begin = (frame0 > split) ? frame0 : split;
+        uint32_t bin0 = REC_SOURCE_WAVEFORM_BINS / 2U
+            + ((begin - split) / fpb);
+        uint32_t bin1 = REC_SOURCE_WAVEFORM_BINS / 2U
+            + ((frame1 - split + fpb - 1U) / fpb);
+        if (bin1 > REC_SOURCE_WAVEFORM_BINS) bin1 = REC_SOURCE_WAVEFORM_BINS;
+        for (uint32_t bin = bin0; bin < bin1; ++bin)
+        {
+            if (dst->min[bin] < min) min = dst->min[bin];
+            if (dst->max[bin] > max) max = dst->max[bin];
+        }
+    }
+    if ((min == 32767) && (max == -32768)) min = max = 0;
+    *out_min = min;
+    *out_max = max;
+}
+
+uint8_t rec_source_waveform_active_overview(uint8_t pixel_width,
+                                            rec_source_waveform_column_t *columns,
+                                            uint32_t *out_captured_frames,
+                                            uint32_t *out_domain_frames)
+{
+    if ((g_rec_source_waveform.active == 0U) || (pixel_width == 0U)
+            || (columns == NULL) || (out_captured_frames == NULL)
+            || (out_domain_frames == NULL)) return 0U;
+    const uint32_t domain = (g_rec_source_waveform.captured_frames != 0U)
+        ? g_rec_source_waveform.captured_frames : 1U;
+    for (uint8_t col = 0U; col < pixel_width; ++col)
+    {
+        const uint32_t frame0 = (uint32_t)(((uint64_t)col * domain)
+            / pixel_width);
+        uint32_t frame1 = (uint32_t)(((uint64_t)(col + 1U) * domain)
+            / pixel_width);
+        if (frame1 <= frame0) frame1 = frame0 + 1U;
+        if (frame0 >= g_rec_source_waveform.captured_frames)
+            columns[col] = (rec_source_waveform_column_t){0, 0};
+        else
+        {
+            if (frame1 > g_rec_source_waveform.captured_frames)
+                frame1 = g_rec_source_waveform.captured_frames;
+            active_range(frame0, frame1, &columns[col].min, &columns[col].max);
+        }
+    }
+    *out_captured_frames = g_rec_source_waveform.captured_frames;
+    *out_domain_frames = domain;
+    return 1U;
 }
 
 uint8_t rec_source_waveform_finish(rec_source_waveform_summary_t *out_summary)

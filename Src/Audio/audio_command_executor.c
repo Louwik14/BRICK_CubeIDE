@@ -355,7 +355,10 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
             (uint8_t)((command->value >> 8) & 0xFFU));
     if (command->id == CONTROL_AUDIO_PARAM_AUDIO_WAVEFORM_REQUEST)
     {
-        audio_waveform_capture_audio_apply_control(command->entity,
+        audio_waveform_capture_audio_apply_control(
+            ((command->value & (1UL << 2)) != 0U)
+                ? AUDIO_WAVEFORM_TARGET_REC_BUS : AUDIO_WAVEFORM_TARGET_ENTITY,
+            command->entity,
             (uint8_t)(command->value&1U),(uint8_t)((command->value>>1)&1U));
         return 1U;
     }

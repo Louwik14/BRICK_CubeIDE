@@ -644,13 +644,37 @@ void audio_recorder_storage_service(uint32_t session_id,
     if (capture_started != 0U) __DMB();
     trace_storage_change();
     if (((capture_is_active != 0U) && (capture_started != 0U))
+            || (runtime->phase == AUDIO_RECORDER_STORAGE_DRAINING)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_FINALIZING)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY))
     {
-        const uint32_t published_frames = g_audio_recorder_ring_state.produced_frames;
+        const uint32_t published_frames = (uint32_t)(
+            runtime->recorder.committed_tail / AUDIO_RECORDER_BYTES_PER_FRAME);
         __DMB();
         rec_source_waveform_capture_service(g_audio_recorder_ring,
             AUDIO_RECORDER_CAPTURE_RING_FRAMES, published_frames);
+        if ((runtime->phase == AUDIO_RECORDER_STORAGE_DRAINING)
+                || (runtime->phase == AUDIO_RECORDER_STORAGE_FINALIZING)
+                || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY))
+        {
+            /* Once AUDIO is closed, drain the bounded ring backlog now.  The
+               REC source must not stay BUILDING merely because the normal
+               cooperative waveform quantum needed another superloop turn. */
+            uint32_t before_waveform = rec_source_waveform_captured_frames();
+            for (uint8_t pass = 0U;
+                    (pass < (uint8_t)((AUDIO_RECORDER_CAPTURE_RING_FRAMES
+                        + REC_SOURCE_WAVEFORM_SERVICE_FRAMES - 1U)
+                        / REC_SOURCE_WAVEFORM_SERVICE_FRAMES))
+                        && (before_waveform < published_frames); ++pass)
+            {
+                rec_source_waveform_capture_service(g_audio_recorder_ring,
+                    AUDIO_RECORDER_CAPTURE_RING_FRAMES, published_frames);
+                const uint32_t after_waveform =
+                    rec_source_waveform_captured_frames();
+                if (after_waveform <= before_waveform) break;
+                before_waveform = after_waveform;
+            }
+        }
     }
     if ((runtime->phase == AUDIO_RECORDER_STORAGE_IDLE)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY)
