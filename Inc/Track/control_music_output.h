@@ -89,7 +89,7 @@ static inline uint8_t control_music_intent_channel(
         >> CONTROL_MUSIC_ACTION_CHANNEL_SHIFT);
 }
 
-#define CONTROL_MUSIC_OUTPUTS_PER_ENTITY 8U
+#define CONTROL_MUSIC_OUTPUTS_PER_ENTITY 16U
 #define CONTROL_MUSIC_OUTPUT_DEATH_OBSERVER_CAPACITY 2U
 
 typedef void (*control_music_output_death_observer_t)(
@@ -120,8 +120,6 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
 uint8_t control_music_output_legato(const control_music_intent_t *intent,
                                     uint32_t causal_source_id,
                                     uint32_t generation);
-uint8_t control_music_output_trim_to_limit(brick_entity_id_t entity_id,
-                                           uint8_t limit);
 uint8_t control_music_output_admit_multi_transition(
     brick_entity_id_t entity_id);
 uint8_t control_music_output_close_causal_sources(

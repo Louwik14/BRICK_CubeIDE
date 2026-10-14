@@ -75,38 +75,16 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
         else if (topology.role == ENTITY_ROLE_GROUP_CHILD)
             topology_flags |= CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD;
     }
-    const uint8_t uses_polyphony = (uint8_t)(
-        (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-        || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
-        || ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI)));
-    polyphony_control_state_t polyphony = { .voice_count = 1U };
-    if ((uses_polyphony != 0U)
-            && !polyphony_control_capture(entity_id, &polyphony))
-    {
-        Error_Handler();
-        return 0U;
-    }
-    polyphony.voice_count = track_runtime_effective_voice_count(
-        (track_runtime_family_t)ctx->family,
-        (track_runtime_type_t)ctx->type, polyphony.voice_count);
-    if ((uses_polyphony != 0U)
-            && !control_music_output_trim_to_limit(
-                entity_id, polyphony.voice_count))
-    {
-        Error_Handler();
-        return 0U;
-    }
-    if ((uses_polyphony != 0U)
-            && (polyphony_control_install_prepared(
-                entity_id, &polyphony) == 0U))
-    {
-        Error_Handler();
-        return 0U;
-    }
     const uint8_t is_multi = (uint8_t)(
         (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
         && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI));
+    const uint8_t uses_spread = track_runtime_supports_voice_spread(
+        (track_runtime_family_t)ctx->family,
+        (track_runtime_type_t)ctx->type);
+    polyphony_control_state_t polyphony = {0};
+    if ((uses_spread != 0U)
+            && (polyphony_control_capture(entity_id, &polyphony) == 0U))
+        return 0U;
     if ((is_multi != 0U)
             && (control_music_output_admit_multi_transition(entity_id) == 0U))
     {
@@ -119,16 +97,13 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
         Error_Handler();
         return 0U;
     }
-    const uint8_t voice_flags = ((ctx->family
-            == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH))
-        ? CONTROL_AUDIO_PROGRAM_ENCODE_VOICES(polyphony.voice_count) : 0U;
     const control_audio_program_descriptor_t descriptor = {
         .engine = (uint8_t)track_runtime_choose_engine(
             (track_runtime_family_t)ctx->family,
             (track_runtime_type_t)ctx->type),
         .family = ctx->family,
         .type = ctx->type,
-        .flags = (uint8_t)(ctx->flags | topology_flags | voice_flags)
+        .flags = (uint8_t)(ctx->flags | topology_flags)
     };
     /* PROGRAM only changes the renderer.  The NOTE ledger remains authoritative
      * even while the selected renderer cannot render a live output. */
@@ -148,7 +123,7 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
         Error_Handler();
         return 0U;
     }
-    if ((uses_polyphony != 0U)
+    if ((uses_spread != 0U)
             && (polyphony_control_restore(entity_id, &polyphony) == 0U))
     {
         Error_Handler();
@@ -340,7 +315,7 @@ uint8_t track_runtime_program_is_canonical(track_runtime_engine_t engine,
         && engine != TRACK_RUNTIME_ENGINE_NONE);
 }
 
-uint8_t track_runtime_has_configurable_polyphony(
+uint8_t track_runtime_supports_voice_spread(
     track_runtime_family_t family, track_runtime_type_t type)
 {
     if ((family == TRACK_RUNTIME_FAMILY_SAMPLER)
@@ -351,18 +326,6 @@ uint8_t track_runtime_has_configurable_polyphony(
             || (type == TRACK_RUNTIME_TYPE_STACK)
             || (type == TRACK_RUNTIME_TYPE_WAVE)
             || (type == TRACK_RUNTIME_TYPE_FM)));
-}
-
-uint8_t track_runtime_effective_voice_count(track_runtime_family_t family,
-                                            track_runtime_type_t type,
-                                            uint8_t configured_voice_count)
-{
-    if (track_runtime_has_configurable_polyphony(family, type) == 0U)
-        return 1U;
-    if (configured_voice_count < 1U) return 1U;
-    if (configured_voice_count > SYNTH_POLYPHONY_MAX_VOICES)
-        return SYNTH_POLYPHONY_MAX_VOICES;
-    return configured_voice_count;
 }
 
 static uint8_t track_runtime_logical_equal(const track_runtime_ctx_t *left,
@@ -442,33 +405,6 @@ uint8_t track_runtime_compute_flags(track_runtime_family_t family,
     }
 
     return flags;
-}
-
-uint8_t track_runtime_validate_polyphony_budget(uint8_t track,
-                                                uint8_t voice_count)
-{
-    if ((track >= BRICK_ENTITY_CAPACITY) || (voice_count < 1U)
-            || (voice_count > SYNTH_POLYPHONY_MAX_VOICES))
-        return 0U;
-    uint16_t required = 0U;
-    for (brick_entity_id_t entity = 0U;
-         entity < BRICK_ENTITY_CAPACITY; ++entity)
-    {
-        const track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[entity];
-        if (track_runtime_ctx_is_active(ctx) == 0U) continue;
-        const track_runtime_family_t family =
-            (track_runtime_family_t)ctx->family;
-        const track_runtime_type_t type = (track_runtime_type_t)ctx->type;
-        const track_runtime_engine_t engine =
-            track_runtime_choose_engine(family, type);
-        if ((engine == TRACK_RUNTIME_ENGINE_DRUM)
-                || (family == TRACK_RUNTIME_FAMILY_SYNTH))
-            required = (uint16_t)(required
-                + track_runtime_effective_voice_count(family, type,
-                    (entity == track) ? voice_count
-                        : polyphony_control_get_voice_count(entity)));
-    }
-    return (uint8_t)(required <= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET);
 }
 
 static uint8_t track_runtime_param_is_clip_only(param_id_t param)
@@ -1509,7 +1445,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             {
                 return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
-            return (track_runtime_has_configurable_polyphony(
+            return (track_runtime_supports_voice_spread(
                     (track_runtime_family_t)ctx->family,
                     (track_runtime_type_t)ctx->type) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED

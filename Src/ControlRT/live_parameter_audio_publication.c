@@ -29,7 +29,7 @@ static uint8_t live_parameter_audio_build_param_command(
 {
     if ((target == NULL) || (out_command == NULL)
             || ((target->parameter_id >= PARAM_COUNT)
-                && (target->parameter_id < CONTROL_AUDIO_CONFIG_POLY_VOICES))
+                && (target->parameter_id < CONTROL_AUDIO_MOD_ROUTE_SOURCE))
             || (target->track >= BRICK_ENTITY_CAPACITY))
         return 0U;
     uint8_t kind = 0U;

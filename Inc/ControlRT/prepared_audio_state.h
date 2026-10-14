@@ -116,9 +116,9 @@ typedef struct
     prepared_audio_state_t state;
 } prepared_audio_slot_t;
 
-_Static_assert(sizeof(prepared_audio_state_t) == 8728U,
+_Static_assert(sizeof(prepared_audio_state_t) == 8664U,
                "Prepared AUDIO state size changed");
-_Static_assert(sizeof(prepared_audio_slot_t) == 8736U,
+_Static_assert(sizeof(prepared_audio_slot_t) == 8672U,
                "Prepared AUDIO slot size changed");
 
 extern prepared_audio_slot_t g_prepared_audio_slots[PREPARED_AUDIO_SLOT_COUNT];

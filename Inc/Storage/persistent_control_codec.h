@@ -9,7 +9,8 @@
 extern "C" {
 #endif
 
-#define PERSIST_CODEC_VERSION 18U
+#define PERSIST_CODEC_VERSION 19U
+#define PERSIST_CODEC_LEGACY_VERSION 18U
 #define PERSIST_CODEC_HEADER_BYTES 24U
 #define PERSIST_CODEC_SECTION_HEADER_BYTES 8U
 #define PERSIST_CODEC_MAX_DOCUMENT_BYTES 0x3FFFFFFFUL
@@ -20,13 +21,19 @@ extern "C" {
  * + Note FX + modulation + non-master optionals + GROUP-master FM
  * + globals. */
 #define PERSIST_CODEC_PATTERN_BODY_MAX_BYTES \
-    (1U + (16U * 488U) + (15U * 512U * 10U) \
+    (1U + (16U * 487U) + (15U * 512U * 10U) \
         + (7U * 64U * 8U * 5U) + (8U * 64U * 1U * 5U) \
         + (16U * PERSIST_CONTROL_NOTE_FX_BYTES) + (8U * 209U) \
         + (15U * ((2U * 166U) + 191U)) + 191U + 231U)
-#define PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES \
+#define PERSIST_CODEC_PATTERN_CURRENT_DOCUMENT_MAX_BYTES \
     (PERSIST_CODEC_HEADER_BYTES + PERSIST_CODEC_SECTION_HEADER_BYTES \
         + PERSIST_CODEC_PATTERN_BODY_MAX_BYTES)
+/* Decode keeps accepting v18, whose 16 entity records each contain the
+ * removed VOICES byte.  Keep the public envelope large enough for that
+ * legacy document while current v19 writes remain 16 bytes smaller. */
+#define PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES \
+    (PERSIST_CODEC_PATTERN_CURRENT_DOCUMENT_MAX_BYTES \
+        + PERSIST_CONTROL_ENTITY_COUNT)
 
 /* Project envelope: CORE metadata, maximum asset catalog and 14 native
  * Macros. Patterns are separate canonical documents in the Project folder. */
@@ -39,8 +46,10 @@ extern "C" {
             * (1U + (PERSIST_CONTROL_MACRO_LOCK_COUNT \
                 * (1U + 4U + 4U)))))
 
-_Static_assert(PERSIST_CODEC_PATTERN_BODY_MAX_BYTES == 115284U,
+_Static_assert(PERSIST_CODEC_PATTERN_BODY_MAX_BYTES == 115268U,
                "Pattern codec body envelope changed");
+_Static_assert(PERSIST_CODEC_PATTERN_CURRENT_DOCUMENT_MAX_BYTES == 115300U,
+               "Current Pattern codec worst-case envelope changed");
 _Static_assert(PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES == 115316U,
                "Pattern codec worst-case envelope changed");
 _Static_assert(PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES == 174116U,

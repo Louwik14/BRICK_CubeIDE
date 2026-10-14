@@ -175,7 +175,6 @@ typedef struct
     uint16_t instrument_id;
     float gain;
     uint8_t loop_enabled;
-    uint8_t voice_count;
     float spread;
 } brick6_sampler_multi_track_state_t;
 
@@ -298,7 +297,6 @@ static uint8_t brick6_sampler_runtime_multi_voice_occupied(
 static void brick6_sampler_runtime_multi_assign_spread_index(
     brick6_sampler_voice_t *voice,
     uint8_t track_id);
-static void brick6_sampler_runtime_multi_reindex_spread(uint8_t track_id);
 static void brick6_sampler_runtime_multi_get_spread_pan(
     const brick6_sampler_voice_t *voice,
     float *out_pan_l,

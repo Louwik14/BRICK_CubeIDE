@@ -78,9 +78,8 @@ uint8_t audio_fx_control_entity_capabilities(brick_entity_id_t entity)
         & audio_fx_control_model_capabilities(state->model_b));
 }
 
-static uint8_t audio_fx_control_prepare_filter_position_for_voices(
+static uint8_t audio_fx_control_prepare_filter_position_for_engine(
     brick_entity_id_t entity, audio_fx_filter_pos_t requested,
-    uint8_t candidate_voice_count,
     audio_fx_filter_pos_t *out_canonical)
 {
     track_runtime_descriptor_t descriptor;
@@ -92,8 +91,7 @@ static uint8_t audio_fx_control_prepare_filter_position_for_voices(
         (descriptor.type == TRACK_RUNTIME_TYPE_GROUP)
         || ((descriptor.family == TRACK_RUNTIME_FAMILY_SAMPLER)
             && (descriptor.type == TRACK_RUNTIME_TYPE_MULTI))
-        || ((descriptor.family == TRACK_RUNTIME_FAMILY_SYNTH)
-            && (candidate_voice_count > 1U)));
+        || (descriptor.family == TRACK_RUNTIME_FAMILY_SYNTH));
     *out_canonical = (per_voice != 0U)
         ? AUDIO_FX_FILTER_POS_PRE : requested;
     return 1U;
@@ -103,8 +101,8 @@ static uint8_t audio_fx_control_prepare_filter_position(
     brick_entity_id_t entity, audio_fx_filter_pos_t requested,
     audio_fx_filter_pos_t *out_canonical)
 {
-    return audio_fx_control_prepare_filter_position_for_voices(entity,
-        requested, polyphony_control_get_voice_count(entity), out_canonical);
+    return audio_fx_control_prepare_filter_position_for_engine(entity,
+        requested, out_canonical);
 }
 
 uint8_t audio_fx_control_state_validate(const audio_fx_control_state_t *state)
@@ -366,12 +364,11 @@ uint8_t audio_fx_control_state_capture(brick_entity_id_t entity,
     return 1U;
 }
 
-uint8_t audio_fx_control_state_prepare_for_polyphony(
+uint8_t audio_fx_control_state_prepare(
     brick_entity_id_t entity, const audio_fx_control_state_t *state,
-    uint8_t candidate_voice_count, audio_fx_control_state_t *out_prepared)
+    audio_fx_control_state_t *out_prepared)
 {
     if ((entity >= BRICK_ENTITY_CAPACITY) || (out_prepared == NULL)
-            || (candidate_voice_count < 1U)
             || (audio_fx_control_state_validate(state) == 0U)) return 0U;
     *out_prepared=*state;
     for(uint8_t slot=0U;slot<AUDIO_FX_SLOT_COUNT;++slot)
@@ -381,9 +378,8 @@ uint8_t audio_fx_control_state_prepare_for_polyphony(
             entity,out_prepared->p2[slot]);
     }
     if((entity<BRICK_ENTITY_TOP_LEVEL_COUNT)
-            &&!audio_fx_control_prepare_filter_position_for_voices(entity,
+            &&!audio_fx_control_prepare_filter_position_for_engine(entity,
                 state->config.filter_position,
-                candidate_voice_count,
                 &out_prepared->config.filter_position))return 0U;
     static const param_id_t ids[10U]={PARAM_AUDIO_FX_MODEL,PARAM_AUDIO_FX_P1,
         PARAM_AUDIO_FX_P2,PARAM_AUDIO_FX_P3,PARAM_AUDIO_FX_B_MODEL,
@@ -507,8 +503,7 @@ uint8_t audio_fx_control_state_restore(brick_entity_id_t entity,
     audio_fx_control_state_t prepared;
     live_parameter_audio_bulk_t bulk={.capture_tick=brick_media_clock_now_tick(),
         .count=0U};
-    if(!audio_fx_control_state_prepare_for_polyphony(entity,state,
-            polyphony_control_get_voice_count(entity),&prepared)
+    if(!audio_fx_control_state_prepare(entity,state,&prepared)
             ||!audio_fx_control_state_bulk_add_prepared(entity,&prepared,&bulk)
             ||((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk)))return 0U;
     const uint8_t installed=audio_fx_control_state_install_prepared(entity,&prepared);

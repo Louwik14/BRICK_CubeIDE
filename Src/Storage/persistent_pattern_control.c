@@ -278,8 +278,7 @@ static uint8_t persistent_pattern_diag_validate_static(
         if (!polyphony_control_prepare(&target->polyphony, &canonical_poly))
             pattern_diag_static_failure(PATTERN_DIAG_SUBSYSTEM_POLYPHONY,
                 entity, 0U, PATTERN_DIAG_CODE_DOMAIN,
-                target->polyphony.voice_count, 1U,
-                SYNTH_POLYPHONY_MAX_VOICES,
+                0U, 0U, 0U,
                 pattern_diag_float_bits(target->polyphony.spread));
 
         if ((target->modulation_present != 0U)
@@ -707,7 +706,7 @@ persist_codec_result_t persistent_pattern_control_validate_decoded(
 {
     if (p == NULL) return PERSIST_CODEC_INVALID_ARGUMENT;
     const uint8_t active=(p->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type==PERSIST_TYPE_GROUP)?1U:0U;
-    track_config_t cfg[BRICK_ENTITY_CAPACITY];uint8_t inputs[TRACK_COUNT];uint8_t families[BRICK_ENTITY_CAPACITY];uint8_t types[BRICK_ENTITY_CAPACITY];uint8_t voice_counts[BRICK_ENTITY_CAPACITY];
+    track_config_t cfg[BRICK_ENTITY_CAPACITY];uint8_t inputs[TRACK_COUNT];uint8_t families[BRICK_ENTITY_CAPACITY];uint8_t types[BRICK_ENTITY_CAPACITY];
     for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
     {
         if(persist_key_family_from_disk(p->entities[e].family,&cfg[e].family)==0U
@@ -715,16 +714,15 @@ persist_codec_result_t persistent_pattern_control_validate_decoded(
         {
             persist_debug_validation_fail(PERSIST_DBG_VALIDATION_ENTITY_KEY,
                 PERSIST_CODEC_INVALID_ENTITY,e,p->entities[e].type,0U,0U,0U,0U,
-                polyphony_control_get_voice_count(e),p->entities[e].polyphony.voice_count);
+                1U,1U);
             return PERSIST_CODEC_INVALID_ENTITY;
         }
         families[e]=(uint8_t)cfg[e].family;types[e]=(uint8_t)cfg[e].type;
-        voice_counts[e]=p->entities[e].polyphony.voice_count;
         if(e<TRACK_COUNT&&persist_key_input_from_disk(p->entities[e].input_key,&inputs[e])==0U)
         {
             persist_debug_validation_fail(PERSIST_DBG_VALIDATION_INPUT_OWNERSHIP,
                 PERSIST_CODEC_INVALID_ENTITY,e,(uint32_t)cfg[e].type,0U,0U,0U,0U,
-                polyphony_control_get_voice_count(e),voice_counts[e]);
+                1U,1U);
             return PERSIST_CODEC_INVALID_ENTITY;
         }
     }
@@ -749,12 +747,11 @@ persist_codec_result_t persistent_pattern_control_validate_decoded(
                     ?PERSIST_DBG_VALIDATION_ENTITY_TOPOLOGY
                     :PERSIST_DBG_VALIDATION_ENTITY_TYPE,
                 PERSIST_CODEC_INVALID_ENTITY,e,(uint32_t)cfg[e].type,0U,0U,0U,0U,
-                polyphony_control_get_voice_count(e),voice_counts[e]);
+                1U,1U);
             return PERSIST_CODEC_INVALID_ENTITY;
         }
     }
-    if(track_structure_validate_entity_bulk_with_polyphony(
-            families,types,inputs,voice_counts)==0U)
+    if(track_structure_validate_entity_bulk(families,types,inputs)==0U)
     {
         uint16_t synth_voices=0U;
         uint8_t diagnosed=0U;
@@ -779,9 +776,7 @@ persist_codec_result_t persistent_pattern_control_validate_decoded(
                     current_runtime);
             if(target_family==TRACK_RUNTIME_FAMILY_SYNTH
                     ||target_engine==TRACK_RUNTIME_ENGINE_DRUM)
-                synth_voices=(uint16_t)(synth_voices
-                    +track_runtime_effective_voice_count(target_family,
-                        target_runtime,voice_counts[e]));
+                ++synth_voices;
             if((target_family!=TRACK_RUNTIME_FAMILY_OFF)
                     &&(target_family!=TRACK_RUNTIME_FAMILY_MIDI)
                     &&(target_runtime!=TRACK_RUNTIME_TYPE_GROUP)
@@ -792,7 +787,7 @@ persist_codec_result_t persistent_pattern_control_validate_decoded(
                     PERSIST_CODEC_INVALID_ENTITY,e,(uint32_t)cfg[e].type,
                     (uint32_t)current_runtime,(uint32_t)target_runtime,
                     (uint32_t)current_engine,(uint32_t)target_engine,
-                    polyphony_control_get_voice_count(e),voice_counts[e]);
+                    1U,1U);
                 diagnosed=1U;break;
             }
             if(synth_voices>SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
@@ -801,7 +796,7 @@ persist_codec_result_t persistent_pattern_control_validate_decoded(
                     PERSIST_CODEC_INVALID_ENTITY,e,(uint32_t)cfg[e].type,
                     (uint32_t)current_runtime,(uint32_t)target_runtime,
                     (uint32_t)current_engine,(uint32_t)target_engine,
-                    polyphony_control_get_voice_count(e),voice_counts[e]);
+                    1U,1U);
                 diagnosed=1U;break;
             }
         }
@@ -855,8 +850,7 @@ static uint8_t restore_polyphony_audio_fx(uint8_t entity,
     audio_fx_control_state_t pa;
     live_parameter_audio_bulk_t bulk={.capture_tick=brick_media_clock_now_tick()};
     if(!polyphony_control_prepare(polyphony,&pp)
-            ||!audio_fx_control_state_prepare_for_polyphony(
-                entity,audio_fx,pp.voice_count,&pa)
+            ||!audio_fx_control_state_prepare(entity,audio_fx,&pa)
             ||!polyphony_control_bulk_add(entity,&pp,&bulk)
             ||!audio_fx_control_state_bulk_add_prepared(entity,&pa,&bulk)
             ||((bulk.count!=0U)
@@ -930,7 +924,7 @@ static void persist_debug_entity_failure(persist_dbg_validation_step_t step,
         (uint32_t)track_runtime_choose_engine(
             track_runtime_family_from_ui_config(target_family,target_type),
             target_runtime),
-        polyphony_control_get_voice_count(entity),saved->polyphony.voice_count);
+        1U,1U);
 }
 
 static uint8_t persistent_pattern_prepare_control(
@@ -1044,14 +1038,10 @@ static uint8_t persistent_pattern_prepare_audio(
             flags |= CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER;
         else if (topology.role == ENTITY_ROLE_GROUP_CHILD)
             flags |= CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD;
-        polyphony_control_state_t polyphony = { .voice_count = 1U };
+        polyphony_control_state_t polyphony = { .spread = 0.0f };
         if ((topology.active != 0U)
                 && !polyphony_control_prepare(&source->polyphony, &polyphony))
             goto fail;
-        polyphony.voice_count = track_runtime_effective_voice_count(
-            family, type, polyphony.voice_count);
-        if (family == TRACK_RUNTIME_FAMILY_SYNTH)
-            flags |= CONTROL_AUDIO_PROGRAM_ENCODE_VOICES(polyphony.voice_count);
         target->program = (control_audio_program_descriptor_t){
             .engine = (uint8_t)track_runtime_choose_engine(family, type),
             .family = (uint8_t)family, .type = (uint8_t)type, .flags = flags };
@@ -1178,12 +1168,6 @@ static uint8_t persistent_pattern_finalize_audio_from_control(
                 flags |= CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD;
             polyphony_control_state_t polyphony;
             if (!polyphony_control_capture(entity, &polyphony)) return 0U;
-            polyphony.voice_count = track_runtime_effective_voice_count(
-                (track_runtime_family_t)runtime->family,
-                (track_runtime_type_t)runtime->type, polyphony.voice_count);
-            if (runtime->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-                flags |= CONTROL_AUDIO_PROGRAM_ENCODE_VOICES(
-                    polyphony.voice_count);
             final.program = (control_audio_program_descriptor_t){
                 .engine = (uint8_t)track_runtime_choose_engine(
                     (track_runtime_family_t)runtime->family,
@@ -1436,22 +1420,19 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
     uint8_t midi_channels[BRICK_ENTITY_CAPACITY];
     uint8_t midi_sources[BRICK_ENTITY_CAPACITY];
     uint8_t inputs[TRACK_COUNT];
-    uint8_t voice_counts[BRICK_ENTITY_CAPACITY];
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
         families[entity] = prepared->family[entity];
         types[entity] = prepared->type[entity];
         midi_channels[entity] = pattern->entities[entity].midi_channel;
         midi_sources[entity] = prepared->midi_source[entity];
-        voice_counts[entity] = pattern->entities[entity].polyphony.voice_count;
         if (entity < TRACK_COUNT)
             inputs[entity] = prepared->input[entity];
     }
 
     seq_runtime_set_groove_seed(pattern->globals.groove_seed);
-    if (track_structure_apply_entity_bulk_with_inputs_and_polyphony(
-            families, types, midi_channels, midi_sources, inputs,
-            voice_counts) == 0U)
+    if (track_structure_apply_entity_bulk_with_inputs(
+            families, types, midi_channels, midi_sources, inputs) == 0U)
         return PERSIST_CODEC_INVALID_ENTITY;
 
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)

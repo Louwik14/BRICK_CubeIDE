@@ -166,15 +166,10 @@ uint8_t track_runtime_program_is_canonical(track_runtime_engine_t engine,
                                            track_runtime_family_t family,
                                            track_runtime_type_t type,
                                            uint8_t flags);
-uint8_t track_runtime_has_configurable_polyphony(
+uint8_t track_runtime_supports_voice_spread(
     track_runtime_family_t family, track_runtime_type_t type);
-uint8_t track_runtime_effective_voice_count(track_runtime_family_t family,
-                                            track_runtime_type_t type,
-                                            uint8_t configured_voice_count);
 uint8_t track_runtime_compute_flags(track_runtime_family_t family,
                                     track_runtime_type_t type);
-uint8_t track_runtime_validate_polyphony_budget(uint8_t track,
-                                                uint8_t voice_count);
 
 #ifdef __cplusplus
 }

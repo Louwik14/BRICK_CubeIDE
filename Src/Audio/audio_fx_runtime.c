@@ -482,7 +482,7 @@ uint8_t audio_fx_runtime_pre_filter_supported(brick_entity_id_t e)
     track_audio_runtime_ctx_t s;if(e>=BRICK_ENTITY_CAPACITY||!audio_note_engine_adapter_current_ctx(e,&s)||s.program_route.active==0U)return 0U;
     if((s.flags&CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER)!=0U)return 1U;
     if(s.family==(uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER&&s.type==(uint8_t)TRACK_RUNTIME_TYPE_MULTI)return 0U;
-    if(s.family==(uint8_t)TRACK_RUNTIME_FAMILY_SYNTH&&synth_polyphony_get_voice_count(e)>1U)return 0U;
+    if(s.family==(uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)return 0U;
     return 1U;
 }
 audio_fx_placement_t audio_fx_runtime_get_placement(brick_entity_id_t e){(void)e;return AUDIO_FX_PLACEMENT_POST_FILTER;}

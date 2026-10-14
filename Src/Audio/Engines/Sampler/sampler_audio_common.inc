@@ -414,7 +414,6 @@ static void brick6_sampler_runtime_multi_track_reset(uint8_t track_id)
     g_sampler_multi_track_state[track_id].instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
     g_sampler_multi_track_state[track_id].gain = 1.0f;
     g_sampler_multi_track_state[track_id].loop_enabled = 0U;
-    g_sampler_multi_track_state[track_id].voice_count = 1U;
     g_sampler_multi_track_state[track_id].spread = 0.0f;
 }
 

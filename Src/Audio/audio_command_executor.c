@@ -158,8 +158,6 @@ static uint16_t g_audio_seq_track_mask;
 
 static audio_command_apply_result_t audio_command_apply(
     const control_audio_command_t *command);
-static void audio_command_executor_close_outputs_from(uint8_t track,
-                                                       uint8_t first);
 
 static void audio_command_close_entity(uint8_t entity)
 {
@@ -183,22 +181,6 @@ static void audio_command_close_entity(uint8_t entity)
     synth_polyphony_all_notes_off(entity);
     synth_polyphony_reset_track(entity);
     brick6_sampler_runtime_reset_track(entity);
-}
-
-static void audio_command_prepare_synth_program_change(
-    uint8_t entity, const control_audio_program_descriptor_t *target)
-{
-    if ((target == NULL) || (entity >= BRICK_ENTITY_CAPACITY)
-            || (target->family != TRACK_RUNTIME_FAMILY_SYNTH)
-            || ((target->type != TRACK_RUNTIME_TYPE_PRISM)
-                && (target->type != TRACK_RUNTIME_TYPE_STACK)
-                && (target->type != TRACK_RUNTIME_TYPE_WAVE)
-                && (target->type != TRACK_RUNTIME_TYPE_FM))) return;
-    const uint8_t target_voices =
-        CONTROL_AUDIO_PROGRAM_DECODE_VOICES(target->flags);
-    if (target_voices >= synth_polyphony_get_voice_count(entity)) return;
-    seq_engine_control_disarm_track(entity);
-    audio_command_executor_close_outputs_from(entity, target_voices);
 }
 
 static void audio_command_close_external_entities(void)
@@ -453,19 +435,6 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         brick6_wave_runtime_stop_wavetable_slot(command->entity, command->value);
         return 1U;
     }
-    if ((command->id == CONTROL_AUDIO_CONFIG_POLY_VOICES)
-            && (command->entity < SEQ_LANE_CAPACITY))
-    {
-        const float decoded = live_parameter_event_decode_float(
-            (int32_t)command->value);
-        const uint8_t voices = (uint8_t)decoded;
-        if ((decoded == (float)voices) && (voices >= 1U)
-                && (voices < synth_polyphony_get_voice_count(command->entity)))
-        {
-            seq_engine_control_disarm_track(command->entity);
-            audio_command_executor_close_outputs_from(command->entity, voices);
-        }
-    }
     return live_parameter_audio_runtime_apply_param(command->entity,
         command->id, command->value, CONTROL_AUDIO_COMMAND_KIND(command));
 }
@@ -631,9 +600,6 @@ static audio_command_apply_result_t audio_command_apply_patch_state_commit(
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
         if ((changed & (uint16_t)(1U << entity)) == 0U) continue;
-        const control_audio_program_descriptor_t target =
-            control_audio_program_unpack(programs[entity]->value);
-        audio_command_prepare_synth_program_change(entity, &target);
         audio_command_close_entity(entity);
         control_audio_command_t release = off;
         release.entity = entity;
@@ -808,11 +774,7 @@ static uint8_t audio_prepared_apply_common(
 #if BRICK_PATTERN_RECALL_DIAG
         pattern_recall_diag_phase(PATTERN_DIAG_PHASE_POLY_APPLY);
 #endif
-        const float voices = (float)state->polyphony.voice_count;
-        if (!audio_prepared_apply_float(entity,
-                (param_id_t)CONTROL_AUDIO_CONFIG_POLY_VOICES, voices,
-                CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)
-                || !audio_prepared_apply_float(entity, PARAM_CFG_POLY_SPREAD,
+        if (!audio_prepared_apply_float(entity, PARAM_CFG_POLY_SPREAD,
                     state->polyphony.spread,
                     CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)) return 0U;
     }
@@ -977,17 +939,6 @@ static uint8_t audio_pattern_diag_expected_engine(
     return 1U;
 }
 
-static uint8_t audio_pattern_diag_synth_renderer(uint8_t engine)
-{
-    return (uint8_t)((engine == TRACK_RUNTIME_ENGINE_DRUM)
-        || (engine == TRACK_RUNTIME_ENGINE_PRISM)
-        || (engine == TRACK_RUNTIME_ENGINE_STACK)
-        || (engine == TRACK_RUNTIME_ENGINE_WAVE)
-        || (engine == TRACK_RUNTIME_ENGINE_FM)
-        || (engine == TRACK_RUNTIME_ENGINE_TB303)
-        || (engine == TRACK_RUNTIME_ENGINE_ACID));
-}
-
 static void audio_pattern_diag_param(uint8_t subsystem, uint8_t entity,
                                      param_id_t id, float value)
 {
@@ -1134,7 +1085,6 @@ static uint8_t audio_pattern_diag_runtime_preflight(
 {
     const uint16_t failures_before =
         g_pattern_recall_diag.runtime_failure_count;
-    uint16_t target_voice_total = 0U;
     uint16_t input_seen = 0U;
     g_pattern_recall_diag.changed_program_mask = changed;
     pattern_recall_diag_phase(PATTERN_DIAG_PHASE_AUDIO_RUNTIME_PREFLIGHT);
@@ -1152,20 +1102,13 @@ static uint8_t audio_pattern_diag_runtime_preflight(
         const uint8_t held =
             audio_note_engine_adapter_diag_held_count(entity);
         uint8_t expected_engine = TRACK_RUNTIME_ENGINE_NONE;
-        uint8_t target_voices = CONTROL_AUDIO_PROGRAM_DECODE_VOICES(
-            program->flags);
-        if (target_voices == 0U) target_voices = 1U;
-        const uint8_t trim = ((changed & (uint16_t)(1U << entity)) != 0U
-                && program->family == TRACK_RUNTIME_FAMILY_SYNTH
-                && held > target_voices)
-            ? (uint8_t)(held - target_voices) : 0U;
         g_pattern_recall_diag.polyphony[entity] =
             (pattern_recall_diag_polyphony_t){
                 .current_renderer = has_current
                     ? current.program_route.engine : TRACK_RUNTIME_ENGINE_NONE,
                 .current_held_count = held,
-                .target_polyphony = target_voices,
-                .trim_count = trim,
+                .target_polyphony = SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET,
+                .trim_count = 0U,
                 .owner_renderer = program->engine,
                 .changed = (changed & (uint16_t)(1U << entity)) ? 1U : 0U
             };
@@ -1198,27 +1141,6 @@ static uint8_t audio_pattern_diag_runtime_preflight(
                 (uint32_t)target->midi_channel
                     | ((uint32_t)target->midi_source << 8U),
                 1U, TRACK_MIDI_SOURCE_COUNT, 16U);
-        if (audio_pattern_diag_synth_renderer(program->engine) != 0U)
-        {
-            const uint8_t owned = (program->engine == TRACK_RUNTIME_ENGINE_DRUM
-                    || program->engine == TRACK_RUNTIME_ENGINE_TB303
-                    || program->engine == TRACK_RUNTIME_ENGINE_ACID)
-                ? 1U : target_voices;
-            target_voice_total = (uint16_t)(target_voice_total + owned);
-            if ((owned < 1U) || (owned > SYNTH_POLYPHONY_MAX_VOICES))
-                audio_pattern_diag_failure(
-                    PATTERN_DIAG_SUBSYSTEM_POLYPHONY, entity, 0U,
-                    PATTERN_DIAG_CODE_RANGE, owned, 1U,
-                    SYNTH_POLYPHONY_MAX_VOICES,
-                    ((uint32_t)held << 16U) | trim);
-            if (((changed & (uint16_t)(1U << entity)) == 0U)
-                    && (held > owned))
-                audio_pattern_diag_failure(
-                    PATTERN_DIAG_SUBSYSTEM_REBIND, entity, 0U,
-                    PATTERN_DIAG_CODE_HELD_OUTPUTS, held, 0U, owned,
-                    ((uint32_t)current.program_route.engine << 8U)
-                        | program->engine);
-        }
         if ((target->modulation_present != 0U)
                 && (entity >= PREPARED_AUDIO_TEMP_OWNER_COUNT))
             audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_MOD,
@@ -1284,11 +1206,6 @@ static uint8_t audio_pattern_diag_runtime_preflight(
                 PREPARED_AUDIO_RESOURCE_NONE,
                 PREPARED_AUDIO_RESOURCE_WAVETABLE, program->type);
     }
-    if (target_voice_total > SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
-        audio_pattern_diag_failure(PATTERN_DIAG_SUBSYSTEM_POLYPHONY,
-            BRICK_ENTITY_INVALID_ID, 1U, PATTERN_DIAG_CODE_VOICE_BUDGET,
-            target_voice_total, 0U, SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET,
-            changed);
     for (uint8_t input = 0U; input < ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT;
          ++input)
     {
@@ -1454,18 +1371,9 @@ static audio_command_apply_result_t audio_command_apply_prepared_state_commit(
     }
     else
     {
-        /* PROGRAM installation below already materializes the target synth
-         * voice count encoded in flags.  Trim outputs against the old engine
-         * while its allocator still owns them; after installation,
-         * synth_polyphony_get_voice_count() already reports the target and a
-         * late comparison can no longer see that a shrink occurred. */
 #if BRICK_PATTERN_RECALL_DIAG
         pattern_recall_diag_phase(PATTERN_DIAG_PHASE_POLYPHONY_TRIM);
 #endif
-        for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
-            if ((changed & (uint16_t)(1U << entity)) != 0U)
-                audio_command_prepare_synth_program_change(
-                    entity, &state->entity[entity].program);
     }
     const control_audio_program_descriptor_t off = {
         .family = TRACK_RUNTIME_FAMILY_OFF, .type = TRACK_RUNTIME_TYPE_NONE };
@@ -1620,8 +1528,7 @@ static audio_command_apply_result_t audio_command_apply(
                 return AUDIO_COMMAND_APPLY_OK;
             if (command->id == CONTROL_AUDIO_SAMPLER_ASSET)
                 return AUDIO_COMMAND_APPLY_REBIND;
-            return (command->id == CONTROL_AUDIO_CONFIG_POLY_VOICES)
-                ? AUDIO_COMMAND_APPLY_POLYPHONY : AUDIO_COMMAND_APPLY_INVALID;
+            return AUDIO_COMMAND_APPLY_INVALID;
         case CONTROL_AUDIO_COMMAND_NOTE:
             return (audio_command_apply_note(command) != 0U)
                 ? AUDIO_COMMAND_APPLY_OK : AUDIO_COMMAND_APPLY_MAPPING;
@@ -1711,20 +1618,6 @@ static void audio_command_executor_close_step_outputs(uint8_t track)
     {
         if ((outputs[i].active == 0U)
                 || ((outputs[i].owner_tag & SEQ_ENGINE_NOTE_LIVE) != 0U)) continue;
-        if (audio_note_engine_adapter_apply_output(track, outputs[i].note, 0U,
-                0U, outputs[i].id) == 0U)
-            Error_Handler();
-        outputs[i] = (audio_seq_output_t){0};
-    }
-}
-
-static void audio_command_executor_close_outputs_from(uint8_t track,
-                                                       uint8_t first)
-{
-    audio_seq_output_t *const outputs = g_audio_seq_output[track];
-    for (uint8_t i = first; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
-    {
-        if (outputs[i].active == 0U) continue;
         if (audio_note_engine_adapter_apply_output(track, outputs[i].note, 0U,
                 0U, outputs[i].id) == 0U)
             Error_Handler();

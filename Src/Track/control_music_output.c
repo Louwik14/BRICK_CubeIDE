@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "Track/track_runtime.h"
-#include "Track/polyphony_control.h"
+#include "Track/synth_polyphony.h"
 #include "Sampler/brick6_sampler_multi_contract.h"
 #include "Sampler/multi_sample_config.h"
 #include "ControlRT/control_rt_publication.h"
@@ -263,7 +263,7 @@ static uint8_t control_music_output_stage(const control_music_transition_t *acti
 static uint8_t control_music_output_publish_batch(
     const control_music_transition_t *actions, uint16_t count);
 static int8_t control_music_output_find_oldest(brick_entity_id_t entity_id,
-                                               uint8_t excluded_mask);
+                                               uint16_t excluded_mask);
 static uint8_t control_music_output_cause_is_external(
     uint32_t causal_source_id);
 static void control_music_output_send_midi_off(
@@ -451,11 +451,9 @@ static uint8_t control_music_output_limit(brick_entity_id_t entity_id)
                 && !((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
                     && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))))
         return 1U;
-    float configured = 1.0f;
-    configured = (float)polyphony_control_get_voice_count(entity_id);
-    uint8_t limit = (configured >= 1.0f) ? (uint8_t)configured : 1U;
-    return (limit > CONTROL_MUSIC_OUTPUTS_PER_ENTITY)
-        ? CONTROL_MUSIC_OUTPUTS_PER_ENTITY : limit;
+    return (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+        ? SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET
+        : BRICK6_SAMPLER_MULTI_MAX_VOICES;
 }
 
 static uint8_t control_music_output_is_multi(brick_entity_id_t entity_id)
@@ -549,59 +547,6 @@ static uint8_t control_music_output_live_count(brick_entity_id_t entity_id)
     return count;
 }
 
-uint8_t control_music_output_trim_to_limit(brick_entity_id_t entity_id,
-                                           uint8_t limit)
-{
-    if ((entity_id >= BRICK_ENTITY_CAPACITY)
-            || (limit > CONTROL_MUSIC_OUTPUTS_PER_ENTITY))
-        return 0U;
-    const uint8_t live_count = control_music_output_live_count(entity_id);
-    if (live_count <= limit)
-        return 1U;
-
-    uint64_t due_sample = 0U;
-    if (g_control_music_window_active != 0U)
-        due_sample = g_control_music_window_first;
-    else if ((g_control_music_window_prepared != 0U)
-            || (control_rt_resolve_asap_sample(0U, &due_sample) == 0U))
-        return 0U;
-
-    control_music_transition_t stops[CONTROL_MUSIC_OUTPUTS_PER_ENTITY];
-    uint8_t victims[CONTROL_MUSIC_OUTPUTS_PER_ENTITY];
-    uint8_t excluded_mask = 0U;
-    const uint8_t stop_count = (uint8_t)(live_count - limit);
-    for (uint8_t i = 0U; i < stop_count; ++i)
-    {
-        const int8_t victim = control_music_output_find_oldest(entity_id,
-                                                               excluded_mask);
-        if (victim < 0)
-            return 0U;
-        victims[i] = (uint8_t)victim;
-        excluded_mask |= (uint8_t)(1U << victims[i]);
-        const control_music_output_t *const output =
-            &control_music_output_ledger()[entity_id][victims[i]];
-        stops[i] = (control_music_transition_t){
-            .due_sample = due_sample,
-            .output_handle = output->output_handle,
-            .entity_id = entity_id,
-            .kind = (uint8_t)(CONTROL_MUSIC_ACTION_STOP
-                | (control_music_output_cause_is_external(
-                    output->causal_source_id)
-                    ? CONTROL_MUSIC_ACTION_EXTERNAL_FLAG : 0U)),
-            .note = output->note
-        };
-    }
-    if (control_music_output_publish_batch(stops, stop_count) == 0U)
-        return 0U;
-    for (uint8_t i = 0U; i < stop_count; ++i)
-    {
-        control_music_output_send_midi_off(
-            &control_music_output_ledger()[entity_id][victims[i]]);
-        control_music_output_mark_dead(entity_id, victims[i]);
-    }
-    return 1U;
-}
-
 uint8_t control_music_output_admit_multi_transition(
     brick_entity_id_t entity_id)
 {
@@ -683,7 +628,7 @@ static int8_t control_music_output_find_free(brick_entity_id_t entity_id)
 }
 
 static int8_t control_music_output_find_oldest(brick_entity_id_t entity_id,
-                                               uint8_t excluded_mask)
+                                               uint16_t excluded_mask)
 {
     int8_t oldest_index = -1;
     uint32_t oldest_age = UINT32_MAX;
@@ -692,7 +637,7 @@ static int8_t control_music_output_find_oldest(brick_entity_id_t entity_id,
         const control_music_output_t *const output =
             &control_music_output_ledger()[entity_id][i];
         if ((output->alive == 0U)
-                || ((excluded_mask & (uint8_t)(1U << i)) != 0U))
+                || ((excluded_mask & (uint16_t)(1UL << i)) != 0U))
             continue;
         if (output->age < oldest_age)
         {
@@ -854,7 +799,7 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
     uint8_t victim_indices[CONTROL_MUSIC_OUTPUTS_PER_ENTITY + 1U];
     uint16_t count = 0U;
     uint8_t victim_count = 0U;
-    uint8_t excluded_mask = 0U;
+    uint16_t excluded_mask = 0U;
     /* Independent occurrences may have the same pitch.  The semantic id
      * above is the lifetime identity; pitch alone cannot select a victim.
      * Capacity pressure below remains the only reason to steal a voice. */
@@ -871,7 +816,7 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
                 return 0U;
             victim_entities[victim_count] = entity_id;
             victim_indices[victim_count] = (uint8_t)target;
-            excluded_mask |= (uint8_t)(1U << (uint8_t)target);
+            excluded_mask |= (uint16_t)(1UL << (uint8_t)target);
             ++victim_count;
         }
         const uint8_t multi_live_count = control_music_output_multi_live_count();
@@ -901,7 +846,7 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
                 return 0U;
             victim_entities[victim_count] = entity_id;
             victim_indices[victim_count] = (uint8_t)target;
-            excluded_mask |= (uint8_t)(1U << (uint8_t)target);
+            excluded_mask |= (uint16_t)(1UL << (uint8_t)target);
             ++victim_count;
         }
     }

@@ -37,9 +37,7 @@ static uint8_t track_state_audio_resources_are_valid(
             track_runtime_choose_engine(family, type);
         if ((family == TRACK_RUNTIME_FAMILY_SYNTH)
                 || (engine == TRACK_RUNTIME_ENGINE_DRUM))
-            synth_voices = (uint16_t)(synth_voices
-                + track_runtime_effective_voice_count(family, type,
-                    polyphony_control_get_voice_count(entity_id)));
+            ++synth_voices;
         else if ((family != TRACK_RUNTIME_FAMILY_OFF)
                 && (family != TRACK_RUNTIME_FAMILY_MIDI)
                 && (type != TRACK_RUNTIME_TYPE_GROUP)
@@ -49,14 +47,13 @@ static uint8_t track_state_audio_resources_are_valid(
     return (uint8_t)(synth_voices <= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET);
 }
 
-bool track_structure_validate_entity_bulk_with_polyphony(
+bool track_structure_validate_entity_bulk(
     const uint8_t family[BRICK_ENTITY_CAPACITY],
     const uint8_t type[BRICK_ENTITY_CAPACITY],
-    const uint8_t external_input[TRACK_COUNT],
-    const uint8_t voice_count[BRICK_ENTITY_CAPACITY])
+    const uint8_t external_input[TRACK_COUNT])
 {
-    if ((family == NULL) || (type == NULL) || (external_input == NULL)
-            || (voice_count == NULL)) return false;
+    if ((family == NULL) || (type == NULL) || (external_input == NULL))
+        return false;
     track_config_t configs[BRICK_ENTITY_CAPACITY];
     uint16_t synth_voices = 0U;
     const uint8_t group_active = (uint8_t)(
@@ -98,9 +95,7 @@ bool track_structure_validate_entity_bulk_with_polyphony(
             track_runtime_choose_engine(runtime_family, runtime_type);
         if ((runtime_family == TRACK_RUNTIME_FAMILY_SYNTH)
                 || (engine == TRACK_RUNTIME_ENGINE_DRUM))
-            synth_voices = (uint16_t)(synth_voices
-                + track_runtime_effective_voice_count(runtime_family,
-                    runtime_type, voice_count[entity]));
+            ++synth_voices;
         else if ((runtime_family != TRACK_RUNTIME_FAMILY_OFF)
                 && (runtime_family != TRACK_RUNTIME_FAMILY_MIDI)
                 && (runtime_type != TRACK_RUNTIME_TYPE_GROUP)
@@ -334,8 +329,7 @@ static bool track_state_apply_entity_bulk_with_inputs(
     const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
     const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
     const uint8_t external_input[TRACK_COUNT],
-    const uint8_t effective_mute_before[BRICK_ENTITY_CAPACITY],
-    const uint8_t target_voice_count[BRICK_ENTITY_CAPACITY])
+    const uint8_t effective_mute_before[BRICK_ENTITY_CAPACITY])
 {
     if ((family == NULL) || (type == NULL) || (midi_channel == NULL)
             || (midi_source == NULL) || (external_input == NULL)
@@ -440,21 +434,7 @@ static bool track_state_apply_entity_bulk_with_inputs(
         }
     }
 
-    if (target_voice_count != NULL)
-    {
-        uint8_t next_family[BRICK_ENTITY_CAPACITY];
-        uint8_t next_type[BRICK_ENTITY_CAPACITY];
-        for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
-        {
-            next_family[entity] = (uint8_t)next_configs[entity].family;
-            next_type[entity] = (uint8_t)next_configs[entity].type;
-        }
-        if (!track_structure_validate_entity_bulk_with_polyphony(
-                next_family, next_type, external_input, target_voice_count))
-            return false;
-    }
-    else if (track_state_audio_resources_are_valid(
-                 next_configs, group_active) == 0U)
+    if (track_state_audio_resources_are_valid(next_configs, group_active) == 0U)
         return false;
 
     if (track_input_ownership_apply_bulk(next_configs, external_input) == 0U)
@@ -497,7 +477,7 @@ bool track_structure_apply_entity_bulk_with_inputs(
     }
     if (!track_state_apply_entity_bulk_with_inputs(
             family, type, midi_channel, midi_source, external_input,
-            effective_mute_before, NULL))
+            effective_mute_before))
         return false;
     if (group_active_before != entity_topology_group_is_active())
     {
@@ -509,38 +489,6 @@ bool track_structure_apply_entity_bulk_with_inputs(
             if (revision_before[entity] != track_state_get_revision(entity))
                 track_runtime_rebuild_track(entity);
     }
-    track_mute_apply_topology_change(effective_mute_before);
-    return true;
-}
-
-bool track_structure_apply_entity_bulk_with_inputs_and_polyphony(
-    const uint8_t family[BRICK_ENTITY_CAPACITY],
-    const uint8_t type[BRICK_ENTITY_CAPACITY],
-    const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
-    const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
-    const uint8_t external_input[TRACK_COUNT],
-    const uint8_t voice_count[BRICK_ENTITY_CAPACITY])
-{
-    if (voice_count == NULL) return false;
-    uint8_t effective_mute_before[BRICK_ENTITY_CAPACITY];
-    uint32_t revision_before[BRICK_ENTITY_CAPACITY];
-    const uint8_t group_active_before = entity_topology_group_is_active();
-    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
-    {
-        const int8_t effective = track_mute_is_effectively_muted(entity);
-        if (effective < 0) return false;
-        effective_mute_before[entity] = (uint8_t)effective;
-        revision_before[entity] = track_state_get_revision(entity);
-    }
-    if (!track_state_apply_entity_bulk_with_inputs(
-            family, type, midi_channel, midi_source, external_input,
-            effective_mute_before, voice_count)) return false;
-    if (group_active_before != entity_topology_group_is_active())
-        track_runtime_rebuild_all();
-    else
-        for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
-            if (revision_before[entity] != track_state_get_revision(entity))
-                track_runtime_rebuild_track(entity);
     track_mute_apply_topology_change(effective_mute_before);
     return true;
 }

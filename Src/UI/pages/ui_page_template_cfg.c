@@ -31,29 +31,6 @@ static uint8_t ui_page_template_cfg_is_master(uint8_t track)
             && (topology.role == ENTITY_ROLE_MASTER));
 }
 
-static uint8_t ui_cfg_restore_polyphony_audio_fx(uint8_t track,uint8_t voices)
-{
-    polyphony_control_state_t polyphony,prepared_polyphony;
-    audio_fx_control_state_t audio_fx,prepared_audio_fx;
-    live_parameter_audio_bulk_t bulk={.capture_tick=brick_media_clock_now_tick(),
-        .count=0U};
-    if(!polyphony_control_capture(track,&polyphony)
-            ||!audio_fx_control_state_capture(track,&audio_fx))return 0U;
-    polyphony.voice_count=voices;
-    if(!polyphony_control_prepare(&polyphony,&prepared_polyphony)
-            ||!audio_fx_control_state_prepare_for_polyphony(track,&audio_fx,
-                prepared_polyphony.voice_count,&prepared_audio_fx)
-            ||!polyphony_control_bulk_add(track,&prepared_polyphony,&bulk)
-            ||!audio_fx_control_state_bulk_add_delta(track,&audio_fx,
-                &prepared_audio_fx,&bulk)
-            ||!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
-    const uint8_t installed=(uint8_t)(
-        polyphony_control_install_prepared(track,&prepared_polyphony)
-        &&audio_fx_control_state_install_prepared(track,&prepared_audio_fx));
-    if(installed==0U)Error_Handler();
-    return installed;
-}
-
 static const ui_template_family_t g_ui_template_cfg_family = {
     .family_title = "CFG",
     .nav_labels = { "MAIN", "MIDI", "-", "-" },
@@ -271,7 +248,6 @@ static uint8_t ui_page_template_cfg_virtual_slot_text(uint8_t slot,
     if(slot==0U){(void)snprintf(out_name,out_name_len,"TRACK");(void)snprintf(out_value,out_value_len,"%s",(ui_page_template_cfg_is_master(track)!=0U)?"MASTER":ui_track_catalog_family_display_name(family));return 1U;}
     if(slot==1U){(void)snprintf(out_name,out_name_len,"TYPE");(void)snprintf(out_value,out_value_len,"%s",ui_track_catalog_type_display_name(family,ui_get_track_type(track)));return 1U;}
     if(slot==2U&&family==TRACK_FAMILY_EXTERNAL){const uint8_t input=ui_get_track_external_input(track);(void)snprintf(out_name,out_name_len,"INPUT");(void)snprintf(out_value,out_value_len,"%s",(input==ENTITY_AUDIO_SOURCE_USB)?"USB":"LINE");return 1U;}
-    if(slot==2U&&track_runtime_has_configurable_polyphony(track_runtime_family_from_ui(family),track_runtime_type_from_ui(ui_get_track_type(track)))){(void)snprintf(out_name,out_name_len,"VOICES");(void)snprintf(out_value,out_value_len,"%u",(unsigned)polyphony_control_get_voice_count(track));return 1U;}
     return 0U;
 }
 
@@ -324,7 +300,7 @@ uint8_t ui_page_template_cfg_handle_encoder(uint8_t encoder,int16_t delta)
     if(encoder==0U){track_family_t next=ui_get_track_family(track);const int8_t step=(delta>0)?1:-1;uint16_t count=(delta>0)?(uint16_t)delta:(uint16_t)(-delta);while(count--!=0U)next=ui_track_catalog_cfg_family_step(next,step,track,track_state_get_configs());return ui_set_track_family(track,next)?1U:0U;}
     if(encoder==1U){const track_family_t family=ui_get_track_family(track);const uint8_t count=ui_track_catalog_type_count_for_family(family,track,track_state_get_configs());if(count==0U)return 1U;int32_t index=(int32_t)ui_track_catalog_type_index_for_family(family,ui_get_track_type(track),track,track_state_get_configs())+(int32_t)delta;if(index<0)index=0;if(index>=count)index=count-1;return ui_set_track_type(track,ui_track_catalog_type_from_family_index(family,(uint8_t)index,track,track_state_get_configs()))?1U:0U;}
     if(encoder==2U&&ui_get_track_family(track)==TRACK_FAMILY_EXTERNAL){int32_t v=(int32_t)ui_get_track_external_input(track)+((delta>0)?1:-1);if(v<0)v=0;if(v>=ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)v=ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT-1;return ui_set_track_external_input(track,(uint8_t)v)?1U:0U;}
-    if(encoder==2U){const track_family_t family=ui_get_track_family(track);if(!track_runtime_has_configurable_polyphony(track_runtime_family_from_ui(family),track_runtime_type_from_ui(ui_get_track_type(track))))return 1U;const uint8_t current=polyphony_control_get_voice_count(track);int32_t v=(int32_t)current+(int32_t)delta;if(v<1)v=1;if(v>8)v=8;if((uint8_t)v==current)return 1U;return ui_cfg_restore_polyphony_audio_fx(track,(uint8_t)v);}
+    if(encoder==2U)return 1U;
     return 0U;
 }
 

@@ -64,7 +64,7 @@ typedef struct
     } scratch;
 } persistence_pattern_io_workspace_t;
 
-_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 583632U,
+_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 583568U,
                "Pattern IO workspace size changed");
 
 persistence_project_save_workspace_t *persistence_workspace_acquire_project_save(void);

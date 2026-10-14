@@ -858,8 +858,6 @@ static uint8_t ui_track_clipboard_prevalidate(
                             payload->config.family, payload->config.type) == false))
                 || (payload->midi_channel < 1U) || (payload->midi_channel > 16U)
                 || (payload->midi_source >= TRACK_MIDI_SOURCE_COUNT)
-                || (payload->polyphony.voice_count < 1U)
-                || (payload->polyphony.voice_count > SYNTH_POLYPHONY_MAX_VOICES)
                 || !isfinite(payload->polyphony.spread)
                 || (payload->audio_fx.config.filter_position >= AUDIO_FX_FILTER_POS_COUNT)
                 || (payload->audio_fx.config.order >= AUDIO_FX_ORDER_COUNT)
@@ -1004,9 +1002,8 @@ static uint8_t ui_track_clipboard_restore_payload(
     track_runtime_resolved_track_t resolved;
     if ((track_runtime_resolve_track(target, &resolved) == 0U)
             || !polyphony_control_prepare(&payload->polyphony,&prepared_polyphony)
-            || !audio_fx_control_state_prepare_for_polyphony(target,
-                &payload->audio_fx,prepared_polyphony.voice_count,
-                &prepared_audio_fx)
+            || !audio_fx_control_state_prepare(target,
+                &payload->audio_fx,&prepared_audio_fx)
             || !polyphony_control_bulk_add(target,&prepared_polyphony,&owner_bulk)
             || !audio_fx_control_state_bulk_add_prepared(target,
                 &prepared_audio_fx,&owner_bulk)) return 0U;

@@ -239,43 +239,6 @@ static void brick6_sampler_runtime_multi_assign_spread_index(
     }
 }
 
-static void brick6_sampler_runtime_multi_reindex_spread(uint8_t track_id)
-{
-    uint8_t assigned[SAMPLER_MULTI_MAX_GLOBAL_VOICES] = { 0U };
-    if (track_id >= SEQ_TRACK_COUNT)
-    {
-        return;
-    }
-
-    const uint8_t count = brick6_sampler_runtime_multi_spread_voice_count(track_id);
-    for (uint8_t rank = 0U; rank < count; ++rank)
-    {
-        brick6_sampler_voice_t *oldest = NULL;
-        uint8_t oldest_index = 0U;
-        for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
-        {
-            brick6_sampler_voice_t *const candidate = &g_sampler_multi_voice[i];
-            if ((assigned[i] != 0U)
-                || (brick6_sampler_runtime_multi_voice_occupied(candidate) == 0U)
-                || (candidate->owner_track_id != track_id))
-            {
-                continue;
-            }
-            if ((oldest == NULL) || (candidate->trigger_order < oldest->trigger_order))
-            {
-                oldest = candidate;
-                oldest_index = i;
-            }
-        }
-        if (oldest == NULL)
-        {
-            break;
-        }
-        oldest->spread_index = rank;
-        assigned[oldest_index] = 1U;
-    }
-}
-
 static void brick6_sampler_runtime_multi_get_spread_pan(
     const brick6_sampler_voice_t *voice,
     float *out_pan_l,
@@ -312,41 +275,15 @@ static uint8_t brick6_sampler_runtime_multi_spread_voice_count(uint8_t track_id)
         return 1U;
     }
 
-    uint8_t count = g_sampler_multi_track_state[track_id].voice_count;
-    if (count < 1U)
+    uint8_t count = 0U;
+    for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
     {
-        count = 1U;
+        const brick6_sampler_voice_t *const voice = &g_sampler_multi_voice[i];
+        if ((brick6_sampler_runtime_multi_voice_occupied(voice) != 0U)
+                && (voice->owner_track_id == track_id))
+            ++count;
     }
-    if (count > SAMPLER_MULTI_MAX_VOICES_PER_TRACK)
-    {
-        count = SAMPLER_MULTI_MAX_VOICES_PER_TRACK;
-    }
-    return count;
-}
-
-void brick6_sampler_runtime_set_multi_voice_count(uint8_t track_id, uint8_t count)
-{
-    if (track_id >= SEQ_TRACK_COUNT)
-    {
-        return;
-    }
-
-    if (count < 1U)
-    {
-        count = 1U;
-    }
-    if (count > SAMPLER_MULTI_MAX_VOICES_PER_TRACK)
-    {
-        count = SAMPLER_MULTI_MAX_VOICES_PER_TRACK;
-    }
-    g_sampler_multi_track_state[track_id].voice_count = count;
-
-    brick6_sampler_runtime_multi_reindex_spread(track_id);
-}
-
-uint8_t brick6_sampler_runtime_get_multi_voice_count(uint8_t track_id)
-{
-    return brick6_sampler_runtime_multi_spread_voice_count(track_id);
+    return (count != 0U) ? count : 1U;
 }
 
 void brick6_sampler_runtime_set_multi_spread(uint8_t track_id, float spread)
@@ -379,20 +316,15 @@ static brick6_sampler_voice_t *brick6_sampler_runtime_multi_alloc_voice(uint8_t 
         return NULL;
     }
 
-    const uint8_t voice_limit =
-        brick6_sampler_runtime_multi_spread_voice_count(track_id);
-    uint8_t track_voice_count = 0U;
     brick6_sampler_voice_t *oldest_release = NULL;
     brick6_sampler_voice_t *oldest_held = NULL;
     for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
     {
         brick6_sampler_voice_t *const candidate = &g_sampler_multi_voice[i];
-        if ((brick6_sampler_runtime_multi_voice_occupied(candidate) == 0U)
-                || (candidate->owner_track_id != track_id))
+        if (brick6_sampler_runtime_multi_voice_occupied(candidate) == 0U)
         {
-            continue;
+            return candidate;
         }
-        ++track_voice_count;
         brick6_sampler_voice_t **const oldest =
             (candidate->release_pending != 0U)
                 ? &oldest_release : &oldest_held;
@@ -403,47 +335,14 @@ static brick6_sampler_voice_t *brick6_sampler_runtime_multi_alloc_voice(uint8_t 
             *oldest = candidate;
         }
     }
-    if (track_voice_count >= voice_limit)
-    {
-        brick6_sampler_voice_t *const victim = (oldest_release != NULL)
-            ? oldest_release : oldest_held;
-        if (victim == NULL)
-            return NULL;
-        brick6_sampler_runtime_multi_stop_voice(
-            victim, (uint8_t)((oldest_release != NULL)
-                ? BRICK6_SAMPLER_MULTI_DIAG_REASON_NONE
-                : BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_STEAL));
-        return victim;
-    }
-
-    for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
-    {
-        brick6_sampler_voice_t *const voice = &g_sampler_multi_voice[i];
-        if ((voice->active == 0U)
-            && (voice->dsp_slot == MULTI_VOICE_DSP_SLOT_INDEX_INVALID))
-        {
-            return voice;
-        }
-    }
-
-    /* A STOP already accepted by CONTROL may still have a physical release
-     * tail. Reclaim only that stopped resource; this is slot maintenance,
-     * never musical victim selection. */
-    for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
-    {
-        brick6_sampler_voice_t *const voice = &g_sampler_multi_voice[i];
-        if ((voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_MULTI)
-                && (voice->release_pending != 0U))
-        {
-            brick6_sampler_runtime_multi_stop_voice(
-                voice, (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_NONE);
-            return voice;
-        }
-    }
-
-    /* The configured per-track budgets fit the global pool by construction.
-     * Reaching this point therefore means that physical ownership diverged. */
-    return NULL;
+    brick6_sampler_voice_t *const victim = (oldest_release != NULL)
+        ? oldest_release : oldest_held;
+    if (victim == NULL) return NULL;
+    brick6_sampler_runtime_multi_stop_voice(victim,
+        (uint8_t)((oldest_release != NULL)
+            ? BRICK6_SAMPLER_MULTI_DIAG_REASON_NONE
+            : BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_STEAL));
+    return victim;
 }
 
 static brick6_sampler_note_result_t

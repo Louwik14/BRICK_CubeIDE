@@ -55,9 +55,9 @@ uint8_t audio_fx_control_state_capture(brick_entity_id_t entity,
                                        audio_fx_control_state_t *out_state);
 uint8_t audio_fx_control_state_restore(brick_entity_id_t entity,
                                        const audio_fx_control_state_t *state);
-uint8_t audio_fx_control_state_prepare_for_polyphony(
+uint8_t audio_fx_control_state_prepare(
     brick_entity_id_t entity, const audio_fx_control_state_t *state,
-    uint8_t candidate_voice_count, audio_fx_control_state_t *out_prepared);
+    audio_fx_control_state_t *out_prepared);
 uint8_t audio_fx_control_state_bulk_add_prepared(
     brick_entity_id_t entity, const audio_fx_control_state_t *prepared,
     live_parameter_audio_bulk_t *bulk);

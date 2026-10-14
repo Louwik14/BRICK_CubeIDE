@@ -470,13 +470,26 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             : synth_polyphony_note_off_output_from(
                 entity_id, SYNTH_POLY_SOURCE_MUSICAL_OUTPUT,
                 output_id));
+    uint8_t displaced_track = SYNTH_POLYPHONY_NO_VOICE;
+    uint32_t globally_displaced_output = 0U;
+    const uint8_t globally_displaced = (uint8_t)((is_note_on != 0U)
+        && (uses_voice_allocator != 0U)
+        && (synth_polyphony_take_displaced_output(&displaced_track,
+            &globally_displaced_output) != 0U));
     if ((uses_voice_allocator != 0U) && (voice == SYNTH_POLYPHONY_NO_VOICE))
     {
         (void)audio_note_engine_commit_output(entity_id, output_id,
             note, velocity, is_note_on);
         return 0U;
     }
-    if ((is_note_on != 0U) && (voice < SYNTH_POLYPHONY_MAX_VOICES)
+    if (globally_displaced != 0U)
+    {
+        (void)audio_note_engine_commit_output(displaced_track,
+            globally_displaced_output, 0U, 0U, 0U);
+        mod_lfo_v1_note_release(displaced_track);
+    }
+    if ((globally_displaced == 0U) && (is_note_on != 0U)
+            && (voice < SYNTH_POLYPHONY_MAX_VOICES)
             && (displaced_output[voice] != 0U)
             && (displaced_output[voice] != output_id))
     {
@@ -781,8 +794,7 @@ uint8_t audio_note_engine_adapter_install_prepared(
             spec->flags) == 0U)
         return 0U;
     track_audio_runtime_ctx_t *const ctx = &g_audio_track_ctx[entity_id];
-    const uint8_t requested_voices = track_runtime_effective_voice_count(
-        family, type, CONTROL_AUDIO_PROGRAM_DECODE_VOICES(spec->flags));
+    const uint8_t requested_voices = 1U;
     const uint8_t preserve_synth_slots = (uint8_t)(
         (ctx->program_route.active != 0U)
         && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
@@ -817,20 +829,6 @@ uint8_t audio_note_engine_adapter_install_prepared(
     else
         return 0U;
 
-    const uint8_t synth_renderer = (uint8_t)((installed.active != 0U)
-        && ((installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-            || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
-            || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-            || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
-            || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
-            || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB303)
-            || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_ACID)));
-    if ((synth_renderer != 0U)
-            && (synth_polyphony_can_activate(entity_id,
-                (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-                    ? 1U : requested_voices) == 0U))
-        return 0U;
-
     /* From here on every resource decision has been made.  Mutations are the
      * infallible commit of the prepared PROGRAM. */
     if ((ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
@@ -855,13 +853,7 @@ uint8_t audio_note_engine_adapter_install_prepared(
             : synth_polyphony_set_track_active(entity_id, 1U,
                                                 installed.engine);
         if (renderer_ready == 0U) return 0U;
-        {
-            if ((preserve_synth_slots == 0U)
-                    && (synth_polyphony_set_voice_count(entity_id,
-                            requested_voices) != requested_voices))
-                return 0U;
-            installed.instance_id = synth_polyphony_get_slot(entity_id, 0U);
-        }
+        installed.instance_id = synth_polyphony_get_slot(entity_id, 0U);
     }
 
     const uint8_t previous_drum = (uint8_t)(
@@ -1060,11 +1052,10 @@ void audio_note_engine_adapter_forget_outputs(brick_entity_id_t entity_id)
            sizeof(g_audio_physical_output[entity_id]));
 }
 
-uint8_t audio_note_engine_adapter_apply_polyphony(
-    brick_entity_id_t entity_id, uint8_t voice_count, float spread)
+uint8_t audio_note_engine_adapter_apply_spread(
+    brick_entity_id_t entity_id, float spread)
 {
-    if ((entity_id >= BRICK_ENTITY_CAPACITY) || (voice_count < 1U)
-            || (voice_count > SYNTH_POLYPHONY_MAX_VOICES))
+    if (entity_id >= BRICK_ENTITY_CAPACITY)
         return 0U;
     track_audio_runtime_ctx_t ctx;
     if ((audio_note_engine_adapter_current_ctx(entity_id, &ctx) == 0U)
@@ -1073,45 +1064,14 @@ uint8_t audio_note_engine_adapter_apply_polyphony(
     const audio_program_route_t *const program = &ctx.program_route;
     if (program->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
-        const uint8_t previous_voice_count =
-            brick6_sampler_runtime_get_multi_voice_count(entity_id);
-        brick6_sampler_runtime_set_multi_voice_count(entity_id, voice_count);
         brick6_sampler_runtime_set_multi_spread(entity_id, spread);
-        if (previous_voice_count
-                != brick6_sampler_runtime_get_multi_voice_count(entity_id))
-        {
-            audio_fx_runtime_rebuild_entity_plan(entity_id);
-        }
         return 1U;
     }
-    if (track_runtime_has_configurable_polyphony(
+    if (track_runtime_supports_voice_spread(
             (track_runtime_family_t)ctx.family,
             (track_runtime_type_t)ctx.type) == 0U)
         return 0U;
-    uint8_t held_count = 0U;
-    for (uint8_t i = 0U; i < AUDIO_PHYSICAL_OUTPUT_CAPACITY; ++i)
-        held_count += (g_audio_physical_output[entity_id][i].gate != 0U)
-            ? 1U : 0U;
-    if ((held_count > voice_count)
-            || (synth_polyphony_can_set_voice_count(
-                entity_id, voice_count) == 0U))
-        return 0U;
-    const uint8_t previous_voice_count =
-        synth_polyphony_get_voice_count(entity_id);
-    if (audio_note_engine_adapter_project_track_configuration(entity_id) == 0U)
-        return 0U;
-    if (synth_polyphony_set_voice_count(entity_id, voice_count) != voice_count)
-        return 0U;
-    g_audio_track_ctx[entity_id].program_route.instance_id =
-        synth_polyphony_get_slot(entity_id, 0U);
     synth_polyphony_set_spread(entity_id, spread);
-    if (audio_note_engine_adapter_project_track_configuration(entity_id) == 0U)
-        return 0U;
-    if (previous_voice_count != synth_polyphony_get_voice_count(entity_id))
-    {
-        audio_mod_matrix_rebuild_track(entity_id);
-        audio_fx_runtime_rebuild_entity_plan(entity_id);
-    }
     return 1U;
 }
 

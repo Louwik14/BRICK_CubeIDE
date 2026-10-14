@@ -60,16 +60,16 @@ persist_codec_result_t persistent_patch_control_validate_mask(const persist_cont
 {
     persist_codec_result_t r=persist_codec_validate_patch(p);if(r!=PERSIST_CODEC_OK)return r;if(mask==0U)return PERSIST_CODEC_INVALID_ENTITY;
     track_family_t f;track_type_t t;if(!persist_key_family_from_disk(p->family,&f)||!persist_key_type_from_disk(p->type,&t))return PERSIST_CODEC_UNKNOWN_KEY;
-    uint8_t fs[BRICK_ENTITY_CAPACITY],ts[BRICK_ENTITY_CAPACITY],voices[BRICK_ENTITY_CAPACITY],inputs[TRACK_COUNT];track_config_t c[BRICK_ENTITY_CAPACITY];
-    for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e){fs[e]=track_state_get_family(e);ts[e]=track_state_get_type(e);voices[e]=polyphony_control_get_voice_count(e);if(e<TRACK_COUNT)inputs[e]=track_state_get_external_input(e);if(mask&(uint16_t)(1UL<<e)){if(!entity_topology_is_active(e))return PERSIST_CODEC_INVALID_ENTITY;fs[e]=(uint8_t)f;ts[e]=(uint8_t)t;voices[e]=p->polyphony.voice_count;}}
+    uint8_t fs[BRICK_ENTITY_CAPACITY],ts[BRICK_ENTITY_CAPACITY],inputs[TRACK_COUNT];track_config_t c[BRICK_ENTITY_CAPACITY];
+    for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e){fs[e]=track_state_get_family(e);ts[e]=track_state_get_type(e);if(e<TRACK_COUNT)inputs[e]=track_state_get_external_input(e);if(mask&(uint16_t)(1UL<<e)){if(!entity_topology_is_active(e))return PERSIST_CODEC_INVALID_ENTITY;fs[e]=(uint8_t)f;ts[e]=(uint8_t)t;}}
     for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e)c[e]=(track_config_t){(track_family_t)fs[e],(track_type_t)ts[e]};
     polyphony_control_state_t pp;audio_fx_control_state_t pa;
     const uint8_t expect_fm=(uint8_t)(f==TRACK_FAMILY_SYNTH&&t==TRACK_TYPE_FM);
     if((p->fm_present!=expect_fm)||(p->tone_present==(uint8_t)expect_fm)
-            ||!validate_assets(p,f,t)||!track_structure_validate_entity_bulk_with_polyphony(fs,ts,inputs,voices)
+            ||!validate_assets(p,f,t)||!track_structure_validate_entity_bulk(fs,ts,inputs)
             ||((f==TRACK_FAMILY_SYNTH&&t==TRACK_TYPE_FM)?!fm_control_state_validate(&p->fm):!tone_program_control_validate(&p->tone,track_runtime_type_from_ui(t)))
             ||!param_filter_control_validate(&p->filter)||!vca_control_state_validate(&p->vca)||!audio_fx_control_state_validate(&p->audio_fx)||!polyphony_control_prepare(&p->polyphony,&pp))return PERSIST_CODEC_INVALID_ENTITY;
-    for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e)if(mask&(uint16_t)(1UL<<e)){brick_entity_id_t mod_owner=e;if(!entity_topology_mod_owner(e,&mod_owner)||(p->modulation_present!=(uint8_t)(mod_owner==e))||!audio_fx_control_state_prepare_for_polyphony(e,&p->audio_fx,pp.voice_count,&pa)||((p->modulation_present!=0U)&&!validate_mod(&p->modulation,c,e)))return PERSIST_CODEC_INVALID_ENTITY;}
+    for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e)if(mask&(uint16_t)(1UL<<e)){brick_entity_id_t mod_owner=e;if(!entity_topology_mod_owner(e,&mod_owner)||(p->modulation_present!=(uint8_t)(mod_owner==e))||!audio_fx_control_state_prepare(e,&p->audio_fx,&pa)||((p->modulation_present!=0U)&&!validate_mod(&p->modulation,c,e)))return PERSIST_CODEC_INVALID_ENTITY;}
     return PERSIST_CODEC_OK;
 }
 persist_codec_result_t persistent_patch_control_validate(const persist_control_patch_t*p,uint8_t target){return(target<PERSIST_CONTROL_ENTITY_COUNT)?persistent_patch_control_validate_mask(p,(uint16_t)(1UL<<target)):PERSIST_CODEC_INVALID_ENTITY;}
@@ -96,8 +96,7 @@ static uint8_t restore_polyphony_audio_fx(uint8_t entity,const polyphony_control
     audio_fx_control_state_t pa;
     live_parameter_audio_bulk_t bulk={.capture_tick=brick_media_clock_now_tick()};
     if(!polyphony_control_prepare(polyphony,&pp)
-            ||!audio_fx_control_state_prepare_for_polyphony(
-                entity,audio_fx,pp.voice_count,&pa)
+            ||!audio_fx_control_state_prepare(entity,audio_fx,&pa)
             ||!polyphony_control_bulk_add(entity,&pp,&bulk)
             ||!audio_fx_control_state_bulk_add_prepared(entity,&pa,&bulk)
             ||((bulk.count!=0U)

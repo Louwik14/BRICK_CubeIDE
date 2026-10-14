@@ -57,9 +57,6 @@ static uint8_t control_rt_param_is_structural(
                 || (scope == CONTROL_AUDIO_PARAM_KIND_SCENE_TRACK)
                 || (scope == CONTROL_AUDIO_PARAM_KIND_CLEAR_SCENE_TRACK)));
     }
-    if (command->id == CONTROL_AUDIO_CONFIG_POLY_VOICES)
-        return (uint8_t)((command->entity < BRICK_ENTITY_CAPACITY)
-            && (scope == CONTROL_AUDIO_PARAM_KIND_BASE_TRACK));
     const uint16_t fm_base_words =
         (uint16_t)((sizeof(track_tone_fm_base_voice_t) + 3U) / 4U);
     if ((command->id >= CONTROL_AUDIO_FM_BASE_WORD_FIRST)
