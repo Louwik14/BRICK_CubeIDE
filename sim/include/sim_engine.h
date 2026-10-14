@@ -18,6 +18,11 @@ typedef struct
 
 typedef enum { SIM_ENCODER_PAGE = 0, SIM_ENCODER_A, SIM_ENCODER_B, SIM_ENCODER_C,
                SIM_ENCODER_COUNT } sim_encoder_t;
+typedef enum {
+    SIM_ENSEMBLE_CFG = 0, SIM_ENSEMBLE_ENV, SIM_ENSEMBLE_TONE, SIM_ENSEMBLE_MOD,
+    SIM_ENSEMBLE_MIX, SIM_ENSEMBLE_PLAY, SIM_ENSEMBLE_MIDI_FX,
+    SIM_ENSEMBLE_AUDIO_FX, SIM_ENSEMBLE_COUNT
+} sim_ensemble_t;
 
 typedef struct
 {
@@ -46,6 +51,7 @@ int sim_engine_tap(sim_engine_t *engine, unsigned button, uint32_t down_ms);
 int sim_engine_combo(sim_engine_t *engine, const unsigned *buttons, size_t count,
                      uint32_t down_ms);
 int sim_engine_rotate(sim_engine_t *engine, unsigned encoder, int delta);
+int sim_engine_select_ensemble(sim_engine_t *engine, sim_ensemble_t ensemble);
 void sim_engine_release_all(sim_engine_t *engine);
 uint64_t sim_engine_held_mask(void);
 int sim_engine_subpage(const sim_engine_t *engine, uint8_t *subpage);

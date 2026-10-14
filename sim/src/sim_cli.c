@@ -7,6 +7,7 @@
 #include "sim_json.h"
 #include "sim_path.h"
 #include "sim_png.h"
+#include "sim_keymap.h"
 
 static void response_prefix(FILE *output, const char *id)
 {
@@ -372,6 +373,20 @@ int sim_cli_self_test(sim_engine_t *engine, const char *output_dir)
     FILE *sink = tmpfile();
     int quit = 0;
     if (sink == NULL) return 1;
+    char keymap_error[256];
+    if (!sim_keymap_validate_default(SIM_ROOT_DIR "/config/keymap.json",
+                                     keymap_error, sizeof(keymap_error))) goto fail;
+    static const char *const ensemble_pages[SIM_ENSEMBLE_COUNT] = {
+        "CFG", "ENV", "TONE", "MOD", "MIX", "PLAY", "MIDI_FX", "AUDIO_FX"
+    };
+    for (sim_ensemble_t ensemble = SIM_ENSEMBLE_ENV;
+         ensemble < SIM_ENSEMBLE_COUNT; ensemble = (sim_ensemble_t)(ensemble + 1))
+    {
+        if (!sim_engine_select_ensemble(engine, ensemble)
+                || strcmp(sim_engine_page_name(engine), ensemble_pages[ensemble]) != 0) goto fail;
+    }
+    if (!sim_engine_select_ensemble(engine, SIM_ENSEMBLE_CFG)
+            || strcmp(sim_engine_page_name(engine), "CFG") != 0) goto fail;
     (void)snprintf(first, sizeof(first), "%s/frame-a.png", output_dir);
     (void)snprintf(second, sizeof(second), "%s/frame-b.png", output_dir);
 

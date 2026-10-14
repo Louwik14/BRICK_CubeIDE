@@ -102,6 +102,9 @@ int sim_sdl_run(sim_engine_t *engine, int scale, unsigned frame_limit)
                 }
                 else if ((event.type == SDL_EVENT_KEY_DOWN) && binding->kind == SIM_KEY_ENCODER)
                     (void)sim_engine_rotate(engine, binding->id, binding->delta);
+                else if ((event.type == SDL_EVENT_KEY_DOWN) && !event.key.repeat
+                        && binding->kind == SIM_KEY_ENSEMBLE)
+                    (void)sim_engine_select_ensemble(engine, (sim_ensemble_t)binding->id);
                 else if ((event.type == SDL_EVENT_KEY_DOWN) && !event.key.repeat && binding->kind == SIM_KEY_CAPTURE)
                     capture_shortcut(engine);
             }

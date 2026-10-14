@@ -174,6 +174,39 @@ int sim_engine_rotate(sim_engine_t *engine, unsigned encoder, int delta)
     if (encoder >= SIM_ENCODER_COUNT || delta < -32768 || delta > 32767 || !sim_input_add_encoder((uint8_t)encoder, (int16_t)delta)) return 0;
     return sim_engine_advance(engine, (uint32_t)(delta < 0 ? -delta : delta) + 1U);
 }
+int sim_engine_select_ensemble(sim_engine_t *engine, sim_ensemble_t ensemble)
+{
+    static const unsigned direct_buttons[] = {
+        BTN_COUNT, BTN_PARAM_1, BTN_PARAM_2, BTN_PARAM_3,
+        BTN_PARAM_4, BTN_PARAM_5, BTN_COUNT, BTN_COUNT
+    };
+    static const uint8_t target_pages[] = {
+        UI_PAGE_TEMPLATE_CFG, UI_PAGE_TEMPLATE_ENV, UI_PAGE_TEMPLATE_TONE,
+        UI_PAGE_TEMPLATE_MOD, UI_PAGE_TEMPLATE_MIX, UI_PAGE_TEMPLATE_PLAY,
+        UI_PAGE_MIDI_FX, UI_PAGE_AUDIO_FX
+    };
+    if (engine == NULL || ensemble >= SIM_ENSEMBLE_COUNT) return 0;
+    if (ensemble >= SIM_ENSEMBLE_ENV && ensemble <= SIM_ENSEMBLE_PLAY)
+        return sim_engine_tap(engine, direct_buttons[ensemble], 40U);
+    if (ensemble == SIM_ENSEMBLE_CFG)
+    {
+        const unsigned step = (unsigned)BTN_STEP_1 + sim_engine_active_track(engine);
+        return step <= BTN_STEP_16
+            && sim_engine_press(engine, BTN_TRACK)
+            && sim_engine_tap(engine, step, 40U)
+            && sim_engine_advance(engine, 80U)
+            && sim_engine_tap(engine, step, 40U)
+            && sim_engine_release(engine, BTN_TRACK);
+    }
+    for (unsigned attempt = 0U; attempt < 3U; ++attempt)
+    {
+        if (sim_engine_page_id(engine) == target_pages[ensemble]) return 1;
+        if (!sim_engine_press(engine, BTN_SHIFT)
+                || !sim_engine_tap(engine, BTN_STEP_7, 40U)
+                || !sim_engine_release(engine, BTN_SHIFT)) return 0;
+    }
+    return sim_engine_page_id(engine) == target_pages[ensemble];
+}
 void sim_engine_release_all(sim_engine_t *engine) { sim_input_release_all(); if (engine != NULL) (void)sim_engine_advance(engine, 11U); }
 uint64_t sim_engine_held_mask(void) { return sim_input_button_mask(); }
 uint8_t sim_engine_active_track(const sim_engine_t *engine) { return (engine && engine->initialized) ? ui_get_active_track() : 0U; }
