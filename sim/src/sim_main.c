@@ -7,6 +7,7 @@
 #include "sim_path.h"
 #include "sim_png.h"
 #include "sim_sdl.h"
+#include "sim_keymap.h"
 
 static int capture_once(sim_engine_t *engine, const char *requested)
 {
@@ -35,6 +36,7 @@ int main(int argc, char **argv)
     const char *capture_path = NULL;
     const char *self_test_path = NULL;
     const char *scenario_path = NULL;
+    int validate_keymap = 0;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -45,6 +47,7 @@ int main(int argc, char **argv)
         else if ((strcmp(argv[i], "--frames") == 0) && (i + 1 < argc)) frame_limit = (unsigned)strtoul(argv[++i], NULL, 10);
         else if ((strcmp(argv[i], "--self-test") == 0) && (i + 1 < argc)) self_test_path = argv[++i];
         else if ((strcmp(argv[i], "--scenario") == 0) && (i + 1 < argc)) scenario_path = argv[++i];
+        else if (strcmp(argv[i], "--validate-keymap") == 0) validate_keymap = 1;
         else
         {
             fprintf(stderr, "unknown or incomplete argument: %s\n", argv[i]);
@@ -55,6 +58,19 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "scale must be between 1 and 16\n");
         return 2;
+    }
+
+    if (validate_keymap)
+    {
+        char error[256];
+        if (!sim_keymap_validate_default(SIM_ROOT_DIR "/config/keymap.json",
+                                         error, sizeof(error)))
+        {
+            fprintf(stderr, "keymap validation failed: %s\n", error);
+            return 1;
+        }
+        fprintf(stderr, "keymap validation passed\n");
+        return 0;
     }
 
     sim_engine_t engine;

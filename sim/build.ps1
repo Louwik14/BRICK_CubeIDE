@@ -9,6 +9,7 @@ Push-Location $simRoot
 try {
     cmake --preset windows-ucrt
     cmake --build --preset windows-ucrt
+    ctest --test-dir build/windows-ucrt -R keymap_contract --output-on-failure
 } finally {
     Pop-Location
 }

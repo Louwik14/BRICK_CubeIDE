@@ -165,6 +165,9 @@ add_custom_command(TARGET brick-ui-sim POST_BUILD
 )
 
 enable_testing()
+add_test(NAME keymap_contract
+  COMMAND brick-ui-sim --validate-keymap
+)
 add_test(NAME cli_smoke
   COMMAND brick-ui-sim --self-test "${CMAKE_CURRENT_SOURCE_DIR}/build/windows-ucrt/self-test"
 )

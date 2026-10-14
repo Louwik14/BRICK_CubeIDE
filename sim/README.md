@@ -15,6 +15,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\sim\build.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\sim\run.ps1
 ```
 
+La compilation valide aussi `config/keymap.json` avec l'exécutable qui vient
+d'être produit. Une action inconnue ou un conflit de scancode fait échouer le
+build au lieu de provoquer une erreur au prochain lancement graphique.
+
 La fenêtre est agrandie ×8 sans interpolation (`--scale 6` pour changer).
 Le mapping AZERTY est documenté dans `KEYBOARD.md` et défini dans
 `config/keymap.json`.
