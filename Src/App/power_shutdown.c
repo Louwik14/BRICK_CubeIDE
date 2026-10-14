@@ -9,6 +9,18 @@
 #include "drv_display.h"
 
 static power_shutdown_phase_t g_shutdown_phase;
+static uint8_t g_shutdown_quiesce_owned;
+
+static void power_shutdown_abort(void)
+{
+    if (g_shutdown_quiesce_owned != 0U)
+    {
+        resource_mutation_quiesce_end();
+        g_shutdown_quiesce_owned = 0U;
+    }
+    resource_mutation_ingress_open();
+    g_shutdown_phase = POWER_SHUTDOWN_FAILED;
+}
 
 uint8_t power_shutdown_service(uint32_t now_ms)
 {
@@ -30,10 +42,18 @@ uint8_t power_shutdown_service(uint32_t now_ms)
         if (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA
             || sd_access_storage_status() == SD_STORAGE_STATUS_FAULT)
         {
-            resource_mutation_ingress_open();
-            g_shutdown_phase = POWER_SHUTDOWN_FAILED;
+            power_shutdown_abort();
             return 0U;
         }
+        if (project_load_allowed() == 0U) return 0U;
+        resource_mutation_quiesce_request();
+        g_shutdown_quiesce_owned = 1U;
+        g_shutdown_phase = POWER_SHUTDOWN_WAIT_QUIESCE;
+        return 0U;
+    }
+    if (g_shutdown_phase == POWER_SHUTDOWN_WAIT_QUIESCE)
+    {
+        if (resource_mutation_quiesce_safe() == 0U) return 0U;
         if (project_product_resume_save_begin() != 0U)
             g_shutdown_phase = POWER_SHUTDOWN_CAPTURE_PATTERN;
         return 0U;
@@ -46,8 +66,7 @@ uint8_t power_shutdown_service(uint32_t now_ms)
         if (project_product_resume_save_take_result(&success) == 0U) return 0U;
         if (success == 0U)
         {
-            resource_mutation_ingress_open();
-            g_shutdown_phase = POWER_SHUTDOWN_FAILED;
+            power_shutdown_abort();
             return 0U;
         }
         g_shutdown_phase = POWER_SHUTDOWN_FINAL;

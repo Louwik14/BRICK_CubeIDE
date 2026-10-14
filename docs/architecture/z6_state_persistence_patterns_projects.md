@@ -85,10 +85,17 @@ existant. Reload reste donc saved-only, y compris apres un boot Resume.
 ## Resume d'extinction volontaire
 
 La demande OFF ferme l'ingress de mutation, stoppe le transport puis attend les
-operations Storage incompatibles. La machine Project Save existante reconcilie
-le Pattern actif dans Working, capture le core Project courant avec le codec
-`PROJECT.B6C`, puis publie Resume. AUDIO, ecran, USB et alimentation ne sont
-arretes qu'apres succes; une erreur rouvre l'ingress et refuse la coupure.
+operations Storage incompatibles. Elle emprunte ensuite le socle du quiesce
+canonique: PANIC CONTROL/AUDIO, arret Preview et annulation des reservations de
+pages. Contrairement au remplacement de Project, elle ne retire pas les pools
+Wavetable/Multi: un echec de sauvegarde peut ainsi rouvrir un runtime coherent.
+Le snapshot ne commence qu'apres liberation des leases et travaux SD
+concurrents; aucun producteur Stream/Preview ne peut donc affamer la transaction
+Resume pendant que l'UI est figee. La machine Project Save existante reconcilie
+alors le Pattern actif dans Working, capture le core Project courant avec le
+codec `PROJECT.B6C`, puis publie Resume. AUDIO, ecran, USB et alimentation ne
+sont arretes qu'apres succes; une erreur termine le quiesce, rouvre l'ingress et
+refuse la coupure.
 
 `BRICK/RESUME/S0` et `S1` sont deux generations alternantes. Chacune contient
 un `PROJECT.B6C` et un `RESUME.B6R` de 64 octets: magic/version, generation,
