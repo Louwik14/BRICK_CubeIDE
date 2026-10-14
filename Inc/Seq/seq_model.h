@@ -6,7 +6,7 @@
 #include "Seq/seq_types.h"
 #include "Track/entity_topology.h"
 
-#define SEQ_PLAY_MAX_CAPACITY 8U
+#define SEQ_PLAY_MAX_CAPACITY 4U
 
 typedef enum
 {
@@ -52,7 +52,7 @@ typedef struct
 
 _Static_assert(SEQ_STEP_PLAY_FIELD_COUNT == 4U, "PLAY field count changed");
 _Static_assert(sizeof(seq_play_item_t) == 5U, "PLAY voice storage size changed");
-_Static_assert(sizeof(seq_play_snapshot_t) == 40U, "PLAY snapshot storage size changed");
+_Static_assert(sizeof(seq_play_snapshot_t) == 20U, "PLAY snapshot storage size changed");
 
 typedef struct
 {

@@ -76,9 +76,9 @@ _Static_assert(SEQ_PARAM_RUNTIME_SLOT_COUNT < UNDO_V2_LOCK_KEY_FREE,
                "compact Undo key sentinel collides with a parameter key");
 _Static_assert(sizeof(undo_v2_compact_lock_t) == 4U,
                "compact Undo lock size changed");
-_Static_assert(sizeof(undo_v2_sequence_slot_t) == 10316U,
+_Static_assert(sizeof(undo_v2_sequence_slot_t) == 9292U,
                "compact Undo sequence slot size changed");
-_Static_assert(sizeof(undo_v2_arena_t) == 92872U,
+_Static_assert(sizeof(undo_v2_arena_t) == 83656U,
                "compact Undo arena size changed");
 
 UI_SDRAM static undo_v2_arena_t g_undo_v2;

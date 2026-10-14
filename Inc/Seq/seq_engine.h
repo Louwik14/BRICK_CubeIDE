@@ -317,7 +317,7 @@ uint32_t seq_engine_control_prepared_generation(void);
 const seq_pattern_t *seq_engine_pattern_capture(void);
 
 _Static_assert(SEQ_LANE_CAPACITY == 16U, "SEQ requires 16 lanes");
-_Static_assert(SEQ_PLAY_MAX_CAPACITY == 8U, "SEQ requires 8 PLAY per top lane");
+_Static_assert(SEQ_PLAY_MAX_CAPACITY == 4U, "SEQ requires 4 PLAY per top lane");
 _Static_assert(SEQ_STEP_MAX_LOCKS == 32U, "SEQ requires 32 locks per step");
 _Static_assert(NOTE_FX_CHAIN_STAGE_COUNT == 4U,
                "SEQ requires four fixed MIDI FX stages");
@@ -325,7 +325,7 @@ _Static_assert(SEQ_ENGINE_INGRESS_CAPACITY
                    == SEQ_INGRESS_EVENTS_PER_WINDOW_MAX,
                "inbox and raw ingress rate contracts diverged");
 _Static_assert(SEQ_ENGINE_LEDGER_CAPACITY == 64U, "SEQ logical ledger contract");
-_Static_assert(SEQ_ENGINE_SOURCE_CAPACITY == 768U, "SEQ source cursor contract");
+_Static_assert(SEQ_ENGINE_SOURCE_CAPACITY == 420U, "SEQ source cursor contract");
 _Static_assert(SEQ_ENGINE_TERMINAL_CAPACITY >= SEQ_PRODUCT_TERMINAL_EVENTS_PER_HORIZON,
                "SEQ terminal publication below legal fanout");
 _Static_assert(SEQ_ENGINE_FX_SCRATCH_CAPACITY == 32U, "SEQ scratch contract");

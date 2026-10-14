@@ -300,8 +300,8 @@ static void deferred_calendar_promote(uint64_t start,uint64_t end)
 static void hierarchical_calendar_insert(const note_event_t *event,
     uint64_t record_sample_abs,uint8_t record_velocity)
 {if(deferred_calendar_insert(event,record_sample_abs,record_velocity))return;
- /* The 8192 proof is shared: unused near nodes are the final overflow slice
- * when all 7680 compact descriptors are occupied by distant events. */
+ /* The 4480 proof is shared: unused near nodes are the final overflow slice
+ * when all 3968 compact descriptors are occupied by distant events. */
  if(final_calendar_insert(event,record_sample_abs,record_velocity)){
   const uint16_t index=g_final_calendar_tail[
       final_calendar_bucket(event->sample_abs)];

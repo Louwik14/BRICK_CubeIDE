@@ -10,7 +10,7 @@ Chaque lane active a 64 steps, quatre pages, longueur, masque de pages, division
 
 ## Commandes
 
-En mode SEQ, STEP bascule trig. STEP tenu + encodeur cree/met a jour un p-lock du parametre affiche ; relachement ferme le geste. Les PAGE sous SHIFT choisissent page, chordent un masque ou, par double tap 300 ms, isolent une page. PLAY ouvre l'edition V1..V8 ; encodeurs modifient les quatre champs, sur tous les steps tenus. COPY/PASTE choisit steps tenus sinon toute la sequence ; SHIFT+COPY clear. Undo/Redo s'appuie sur `undo_v2` et est invalide par restore global.
+En mode SEQ, STEP bascule trig. STEP tenu + encodeur cree/met a jour un p-lock du parametre affiche ; relachement ferme le geste. Les PAGE sous SHIFT choisissent page, chordent un masque ou, par double tap 300 ms, isolent une page. PLAY ouvre l'edition V1..V4 ; encodeurs modifient les quatre champs, sur tous les steps tenus. COPY/PASTE choisit steps tenus sinon toute la sequence ; SHIFT+COPY clear. Undo/Redo s'appuie sur `undo_v2` et est invalide par restore global.
 
 REC arme la capture live. Les evenements notes/params sont horodates, associes a une session et quantifies/microtimes dans la lane. STOP, changement structurel ou restore ferme les captures et gestes projetant l'ancien Pattern.
 

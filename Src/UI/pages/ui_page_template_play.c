@@ -10,12 +10,11 @@
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
 
-static uint8_t g_ui_template_play_subset;
 static ui_template_page_state_t g_ui_template_play_state;
 
-static const ui_template_family_t g_ui_template_play_families[2] = {{
+static const ui_template_family_t g_ui_template_play_family = {
     .family_title = "PLAY",
-    .set_page_index = 0U, .set_page_count = 2U,
+    .set_page_index = 0U, .set_page_count = 1U,
     .nav_labels = { "V1", "V2", "V3", "V4" },
     .subpages = {
         { .title = "Voice 1", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
@@ -24,22 +23,11 @@ static const ui_template_family_t g_ui_template_play_families[2] = {{
         { .title = "Voice 4", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
-}, {
-    .family_title = "PLAY",
-    .set_page_index = 1U, .set_page_count = 2U,
-    .nav_labels = { "V5", "V6", "V7", "V8" },
-    .subpages = {
-        { .title = "Voice 5", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "Voice 6", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "Voice 7", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "Voice 8", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-    },
-    .default_subpage = 0U,
-}};
+};
 
 static const ui_template_family_t *ui_page_template_play_resolve_family(void)
 {
-    return &g_ui_template_play_families[g_ui_template_play_subset];
+    return &g_ui_template_play_family;
 }
 
 static uint8_t ui_page_template_play_subpage_enabled(uint8_t subpage_index)
@@ -52,8 +40,7 @@ static uint8_t ui_page_template_play_subpage_enabled(uint8_t subpage_index)
         return 0U;
     }
 
-    const uint8_t play_index = (uint8_t)(g_ui_template_play_subset * 4U + subpage_index);
-    return (play_index < seq_model_play_capacity((seq_track_id_t)active_track)) ? 1U : 0U;
+    return (subpage_index < seq_model_play_capacity((seq_track_id_t)active_track)) ? 1U : 0U;
 }
 
 static uint8_t ui_page_template_play_virtual_slot_value(
@@ -123,8 +110,7 @@ static uint8_t ui_page_template_play_virtual_slot_value(
             || (slot >= SEQ_STEP_PLAY_FIELD_COUNT)) return 0U;
     if (out_inverted != NULL) *out_inverted = 0U;
     const seq_track_id_t track = (seq_track_id_t)ui_get_active_lane();
-    const uint8_t voice = (uint8_t)(g_ui_template_play_subset * 4U
-                                     + g_ui_template_play_state.active_subpage);
+    const uint8_t voice = g_ui_template_play_state.active_subpage;
     int16_t value = 0;
     seq_step_id_t held_steps[SEQ_STEPS_PER_PAGE];
     seq_track_id_t held_track = 0U;
@@ -170,8 +156,7 @@ uint8_t ui_page_template_play_handle_encoder(uint8_t encoder, int16_t delta)
 {
     if ((ui_page_get_id() != UI_PAGE_TEMPLATE_PLAY) || (encoder >= 4U) || (delta == 0)) return 0U;
     const seq_track_id_t track = (seq_track_id_t)ui_get_active_lane();
-    const uint8_t voice = (uint8_t)(g_ui_template_play_subset * 4U
-                                     + g_ui_template_play_state.active_subpage);
+    const uint8_t voice = g_ui_template_play_state.active_subpage;
     const seq_step_play_field_t field = (seq_step_play_field_t)encoder;
     seq_step_id_t held_steps[SEQ_STEPS_PER_PAGE];
     seq_track_id_t held_track = 0U;
@@ -209,7 +194,6 @@ uint8_t ui_page_template_play_handle_encoder(uint8_t encoder, int16_t delta)
 
 void ui_page_template_play_open_primary(void)
 {
-    g_ui_template_play_subset = 0U;
     g_ui_template_play_state.navigation_subset = 0U;
     g_ui_template_play_state.resolved_family = ui_page_template_play_resolve_family();
     ui_template_page_select_subpage(&g_ui_template_play_state, 0U);
@@ -217,13 +201,8 @@ void ui_page_template_play_open_primary(void)
 
 void ui_page_template_play_toggle_subset(void)
 {
-    const uint8_t active_track = ui_get_active_lane();
-    if (seq_model_play_capacity((seq_track_id_t)active_track) > 4U)
-    {
-        g_ui_template_play_subset ^= 1U;
-        g_ui_template_play_state.navigation_subset = g_ui_template_play_subset;
-        g_ui_template_play_state.resolved_family = ui_page_template_play_resolve_family();
-    }
+    g_ui_template_play_state.navigation_subset = 0U;
+    g_ui_template_play_state.resolved_family = ui_page_template_play_resolve_family();
     ui_template_page_select_subpage(&g_ui_template_play_state, g_ui_template_play_state.active_subpage);
 }
 
@@ -231,7 +210,7 @@ void ui_page_template_play_register_families(void)
 {
     ui_template_family_register_for_role(UI_TEMPLATE_FAMILY_PLAY,
                                          ENTITY_ROLE_MASTER,
-                                         &g_ui_template_play_families[0]);
+                                         &g_ui_template_play_family);
     for (uint8_t family = 0U; family < (uint8_t)TRACK_FAMILY_COUNT; ++family)
     {
         const track_family_t track_family = (track_family_t)family;
@@ -253,7 +232,7 @@ void ui_page_template_play_register_families(void)
             ui_template_family_register(UI_TEMPLATE_FAMILY_PLAY,
                                         track_family,
                                         track_type,
-                                        &g_ui_template_play_families[0]);
+                                        &g_ui_template_play_family);
         }
     }
 }

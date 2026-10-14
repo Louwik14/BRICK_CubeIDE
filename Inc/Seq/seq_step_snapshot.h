@@ -27,7 +27,7 @@ typedef struct
     seq_step_snapshot_plock_t locks[SEQ_STEP_SNAPSHOT_MAX_LOCKS];
 } seq_step_snapshot_t;
 
-_Static_assert(sizeof(seq_step_snapshot_t) == 240U, "step snapshot storage size changed");
+_Static_assert(sizeof(seq_step_snapshot_t) == 220U, "step snapshot storage size changed");
 
 typedef struct
 {

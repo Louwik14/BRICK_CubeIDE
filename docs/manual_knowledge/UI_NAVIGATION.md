@@ -43,7 +43,7 @@ La page d'ensemble est conditionnee par la topologie et le moteur de la lane. Ch
 | FX audio | FX A, FX B, ROUTING/SPATIAL ; child GROUP : LOCAL SENDS |
 | SEQ | COMMON, GROOVE 1, GROOVE 2 |
 | MIX | MIX, SEND3 |
-| PLAY | V1..V4 puis V5..V8 |
+| PLAY | V1..V4 |
 
 Sources : initialisateurs `ui_template_family_t` dans `Src/UI/pages/ui_page_template_*.c` et `Src/UI/pages/ui_page_midi_fx.c`.
 

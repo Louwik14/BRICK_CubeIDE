@@ -9,7 +9,7 @@
 #define NOTE_FX_BATCH_CAPACITY 32U
 #define NOTE_FX_HELD_STATE_CAPACITY SEQ_PRODUCT_HELD_STATE_CAPACITY
 
-_Static_assert(NOTE_FX_HELD_STATE_CAPACITY == 256U,
+_Static_assert(NOTE_FX_HELD_STATE_CAPACITY == 140U,
                "Note FX canonical held-state contract changed");
 
 typedef note_event_result_t (*note_fx_emit_fn)(const note_event_t *, void *);

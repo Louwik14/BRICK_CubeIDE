@@ -3,13 +3,18 @@
 
 #include "Seq/seq_product_contract.h"
 
-/* The physical source grid keeps 64 lanes. In GROUP topology, 63 lanes can
- * emit notes and the last lane carries the non-emitting harmonic Master. */
-#define SEQ_PRODUCT_MAX_EMITTING_VOICES \
-    (BRICK_ENTITY_TOP_LEVEL_COUNT * SEQ_PLAY_MAX_CAPACITY)
+/* GROUP is the worst topology: seven four-PLAY top lanes plus seven mono
+ * children. The harmonic Master owns state but does not add a musical lane. */
 #define SEQ_PRODUCT_GROUP_MAX_EMITTING_VOICES \
     (((BRICK_ENTITY_TOP_LEVEL_COUNT - 1U) * SEQ_PLAY_MAX_CAPACITY) \
         + BRICK_ENTITY_GROUP_CHILD_COUNT)
+#define SEQ_PRODUCT_TOP_MAX_EMITTING_VOICES \
+    (BRICK_ENTITY_TOP_LEVEL_COUNT * SEQ_PLAY_MAX_CAPACITY)
+#define SEQ_PRODUCT_MAX_EMITTING_VOICES \
+    ((SEQ_PRODUCT_GROUP_MAX_EMITTING_VOICES \
+        > SEQ_PRODUCT_TOP_MAX_EMITTING_VOICES) \
+        ? SEQ_PRODUCT_GROUP_MAX_EMITTING_VOICES \
+        : SEQ_PRODUCT_TOP_MAX_EMITTING_VOICES)
 
 /* At 300 BPM the shortest ROLL interval is 600 samples. A 64-frame horizon
  * can contain at most one point from each of two adjacent sources. Each On
@@ -69,19 +74,21 @@
         + SEQ_PRODUCT_PARAM_EVENTS_PER_HORIZON)
 
 
-_Static_assert(SEQ_PRODUCT_MAX_EMITTING_VOICES == 64U,
+_Static_assert(SEQ_PRODUCT_TOP_MAX_EMITTING_VOICES == 32U,
                "top-level sequencer voice proof changed");
-_Static_assert(SEQ_PRODUCT_GROUP_MAX_EMITTING_VOICES == 63U,
+_Static_assert(SEQ_PRODUCT_GROUP_MAX_EMITTING_VOICES == 35U,
                "GROUP sequencer voice proof changed");
-_Static_assert(SEQ_PRODUCT_MAX_ACTIVE_SOURCES == 768U,
+_Static_assert(SEQ_PRODUCT_MAX_EMITTING_VOICES == 35U,
+               "maximum sequencer voice proof changed");
+_Static_assert(SEQ_PRODUCT_MAX_ACTIVE_SOURCES == 420U,
                "active source owner proof changed");
-_Static_assert(SEQ_PRODUCT_MAX_NOTE_ONS_PER_HORIZON == 128U,
+_Static_assert(SEQ_PRODUCT_MAX_NOTE_ONS_PER_HORIZON == 70U,
                "source horizon On proof changed");
-_Static_assert(SEQ_PRODUCT_MAX_MUSIC_ACTIONS_PER_HORIZON == 256U,
+_Static_assert(SEQ_PRODUCT_MAX_MUSIC_ACTIONS_PER_HORIZON == 140U,
                "source horizon action proof changed");
-_Static_assert(SEQ_PRODUCT_HELD_STATE_CAPACITY == 256U,
+_Static_assert(SEQ_PRODUCT_HELD_STATE_CAPACITY == 140U,
                "held slot branch identity proof changed");
-_Static_assert(SEQ_PRODUCT_HELD_TOTAL_CAPACITY == 512U,
+_Static_assert(SEQ_PRODUCT_HELD_TOTAL_CAPACITY == 280U,
                "held global identity proof changed");
 _Static_assert(SEQ_PRODUCT_FINAL_CALENDAR_CAPACITY == 512U,
                "final calendar proof changed");
@@ -89,23 +96,23 @@ _Static_assert(SEQ_PRODUCT_ROLL_HITS_PER_STEP_MAX == 4U,
                "ROLL 1/64 hit count changed");
 _Static_assert(SEQ_PRODUCT_FINALIZED_OCCURRENCES_PER_LANE_MAX == 128U,
                "per-lane finalized occurrence proof changed");
-_Static_assert(SEQ_PRODUCT_FINALIZED_OCCURRENCES_MAX == 8192U,
+_Static_assert(SEQ_PRODUCT_FINALIZED_OCCURRENCES_MAX == 4480U,
                "ROLL 1/64 x VOICER finalized occurrence proof changed");
-_Static_assert(SEQ_PRODUCT_DEFERRED_CALENDAR_CAPACITY == 7680U,
+_Static_assert(SEQ_PRODUCT_DEFERRED_CALENDAR_CAPACITY == 3968U,
                "deferred occurrence partition proof changed");
 _Static_assert(SEQ_PRODUCT_DEFERRED_CALENDAR_CAPACITY
                    + SEQ_PRODUCT_FINAL_CALENDAR_CAPACITY
                == SEQ_PRODUCT_FINALIZED_OCCURRENCES_MAX,
                "hierarchical calendar partition is incomplete");
-_Static_assert(SEQ_PRODUCT_DEFERRED_CALENDAR_BYTES == 262144U,
+_Static_assert(SEQ_PRODUCT_DEFERRED_CALENDAR_BYTES == 143360U,
                "deferred calendar SDRAM budget changed");
-_Static_assert(SEQ_PRODUCT_TERMINAL_ONS_PER_HORIZON == 1024U,
+_Static_assert(SEQ_PRODUCT_TERMINAL_ONS_PER_HORIZON == 792U,
                "terminal On proof changed");
-_Static_assert(SEQ_PRODUCT_TERMINAL_NOTE_EVENTS_PER_HORIZON == 2112U,
+_Static_assert(SEQ_PRODUCT_TERMINAL_NOTE_EVENTS_PER_HORIZON == 1619U,
                "terminal note-event proof changed");
 _Static_assert(SEQ_PRODUCT_PARAM_EVENTS_PER_HORIZON == 1024U,
                "parameter transition proof changed");
-_Static_assert(SEQ_PRODUCT_TERMINAL_EVENTS_PER_HORIZON == 3136U,
+_Static_assert(SEQ_PRODUCT_TERMINAL_EVENTS_PER_HORIZON == 2643U,
                "terminal publication proof changed");
 
 #endif

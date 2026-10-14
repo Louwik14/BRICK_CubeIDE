@@ -3,12 +3,12 @@
 
 /* Source-driven work and autonomous temporal NOTE-FX work are independent
  * producers in one 64-frame CONTROL horizon.  Static NOTE-FX admission keeps
- * each producer below the 64-output product polyphony.  A transition can
+ * each producer below the 35-output product polyphony.  A transition can
  * require the old output STOP followed by the new output START. */
 #define CONTROL_MUSIC_SOURCE_MAX_HORIZON_BURST \
-    256U
+    140U
 #define CONTROL_MUSIC_NOTE_FX_MAX_TEMPORAL_OUTPUTS_PER_HORIZON \
-    64U
+    35U
 #define CONTROL_MUSIC_NOTE_FX_MAX_TEMPORAL_ACTIONS_PER_HORIZON \
     (2U * CONTROL_MUSIC_NOTE_FX_MAX_TEMPORAL_OUTPUTS_PER_HORIZON)
 #define CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST \
@@ -16,11 +16,11 @@
         + CONTROL_MUSIC_NOTE_FX_MAX_TEMPORAL_ACTIONS_PER_HORIZON)
 #define CONTROL_MUSIC_EXTERNAL_STAGING_CAPACITY 128U
 
-_Static_assert(CONTROL_MUSIC_SOURCE_MAX_HORIZON_BURST == 256U,
+_Static_assert(CONTROL_MUSIC_SOURCE_MAX_HORIZON_BURST == 140U,
                "source music horizon proof changed");
-_Static_assert(CONTROL_MUSIC_NOTE_FX_MAX_TEMPORAL_ACTIONS_PER_HORIZON == 128U,
+_Static_assert(CONTROL_MUSIC_NOTE_FX_MAX_TEMPORAL_ACTIONS_PER_HORIZON == 70U,
                "temporal Note FX horizon proof changed");
-_Static_assert(CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST == 384U,
+_Static_assert(CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST == 210U,
                "complete internal music horizon proof changed");
 
 #endif
