@@ -34,6 +34,7 @@ int main(int argc, char **argv)
     unsigned frame_limit = 0U;
     const char *capture_path = NULL;
     const char *self_test_path = NULL;
+    const char *scenario_path = NULL;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -43,6 +44,7 @@ int main(int argc, char **argv)
         else if ((strcmp(argv[i], "--scale") == 0) && (i + 1 < argc)) scale = atoi(argv[++i]);
         else if ((strcmp(argv[i], "--frames") == 0) && (i + 1 < argc)) frame_limit = (unsigned)strtoul(argv[++i], NULL, 10);
         else if ((strcmp(argv[i], "--self-test") == 0) && (i + 1 < argc)) self_test_path = argv[++i];
+        else if ((strcmp(argv[i], "--scenario") == 0) && (i + 1 < argc)) scenario_path = argv[++i];
         else
         {
             fprintf(stderr, "unknown or incomplete argument: %s\n", argv[i]);
@@ -62,6 +64,15 @@ int main(int argc, char **argv)
         return 1;
     }
     if (self_test_path != NULL) return sim_cli_self_test(&engine, self_test_path);
+    if (scenario_path != NULL)
+    {
+        if (!headless)
+        {
+            fprintf(stderr, "scenario mode requires --headless\n");
+            return 2;
+        }
+        return sim_cli_run_file(&engine, scenario_path);
+    }
     if (capture_path != NULL) return capture_once(&engine, capture_path);
     if (stdio_mode)
     {

@@ -20,6 +20,11 @@ les boutons; les touches encore enfoncées sont relâchées à la perte de focus
 | Encodeur C −/+ | [ / ] |
 | Capture simulateur | F12 |
 
+Raccourcis documentaires utiles : maintenir SHIFT puis appuyer une fois sur
+STEP 4 ouvre le Patch Browser; SHIFT + STEP 5 ouvre directement le Sample
+Browser. Dans les browsers, PAGE 1 revient, PAGE 2 charge, PAGE 3 sauvegarde ou
+renomme selon le contexte et PAGE 4 prévisualise lorsqu'elle est disponible.
+
 Les touches H, J, K et L couvrent les quatre identifiants physiques inutilisés.
 Sur certains claviers, le nombre de touches simultanées est limité par le matériel :
 utiliser alors la CLI `press`/`release`, qui ne présente pas de ghosting.

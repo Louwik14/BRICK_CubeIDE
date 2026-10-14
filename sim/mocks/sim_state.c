@@ -6,6 +6,7 @@
 #include "Track/track_state.h"
 #include "Track/entity_topology.h"
 #include "Seq/seq_param_iface.h"
+#include "Mod/mod_lfo_v1_control.h"
 
 static track_config_t g_tracks[BRICK_ENTITY_CAPACITY];
 static track_runtime_ctx_t g_runtime[BRICK_ENTITY_CAPACITY];
@@ -16,6 +17,7 @@ static uint8_t g_ready;
 static uint8_t g_transport_running;
 static uint32_t g_tempo_milli = 120000U;
 static float g_parameters[BRICK_ENTITY_CAPACITY][PARAM_COUNT];
+static mod_lfo_control_bank_t g_lfo[BRICK_ENTITY_CAPACITY];
 
 static void ensure_state(void)
 {
@@ -67,7 +69,10 @@ uint8_t track_runtime_get_descriptor(uint8_t track, track_runtime_descriptor_t *
 uint8_t track_runtime_resolve_track(uint8_t track, track_runtime_resolved_track_t *out)
 {
     if (!out || !track_runtime_get_descriptor(track, &out->descriptor)) return 0U;
-    out->track_id = track; out->supports_vca_gate = 1U; return 1U;
+    out->track_id = track;
+    out->has_mix_target = 1U; out->mix_track_id = track;
+    out->has_filter_target = 1U; out->filter_track_id = track;
+    out->supports_vca_gate = 1U; return 1U;
 }
 
 bool track_catalog_family_is_engine(track_family_t family) { return family == TRACK_FAMILY_SYNTH; }
@@ -91,6 +96,25 @@ uint8_t entity_topology_get(brick_entity_id_t entity, entity_topology_descriptor
     return 1U;
 }
 uint8_t entity_topology_is_active(brick_entity_id_t entity) { return entity < BRICK_ENTITY_CAPACITY ? 1U : 0U; }
+uint8_t entity_topology_mod_owner(brick_entity_id_t entity, brick_entity_id_t *out)
+{ if (entity >= BRICK_ENTITY_CAPACITY || out == NULL) return 0U; *out = entity; return 1U; }
+
+void mod_lfo_v1_make_default(mod_lfo_control_bank_t *out) { if (out) memset(out, 0, sizeof(*out)); }
+void mod_lfo_v1_init(void) { memset(g_lfo, 0, sizeof(g_lfo)); }
+uint8_t mod_lfo_v1_reset_track(uint8_t track) { if(track>=BRICK_ENTITY_CAPACITY)return 0U;memset(&g_lfo[track],0,sizeof(g_lfo[track]));return 1U; }
+uint8_t mod_lfo_v1_prepare_track_param(uint8_t track,uint8_t lfo,mod_lfo_param_t param,float value,uint8_t *owner,float *canonical)
+{ if(track>=BRICK_ENTITY_CAPACITY||lfo>=MOD_LFO_COUNT_PER_TRACK||(uint8_t)param>=MOD_LFO_PARAM_COUNT||!owner||!canonical)return 0U;*owner=track;*canonical=value;return 1U; }
+uint8_t mod_lfo_v1_install_prepared_track_param(uint8_t owner,uint8_t lfo,mod_lfo_param_t param,float value)
+{ if(owner>=BRICK_ENTITY_CAPACITY||lfo>=MOD_LFO_COUNT_PER_TRACK||(uint8_t)param>=MOD_LFO_PARAM_COUNT)return 0U;(&g_lfo[owner].lfo[lfo].rate)[(uint8_t)param]=value;return 1U; }
+uint8_t mod_lfo_v1_get_track_param(uint8_t track,uint8_t lfo,mod_lfo_param_t param,float *out)
+{ if(track>=BRICK_ENTITY_CAPACITY||lfo>=MOD_LFO_COUNT_PER_TRACK||(uint8_t)param>=MOD_LFO_PARAM_COUNT||!out)return 0U;*out=(&g_lfo[track].lfo[lfo].rate)[(uint8_t)param];return 1U; }
+uint8_t mod_lfo_v1_restore_track(uint8_t track,const mod_lfo_control_bank_t *state)
+{ if(track>=BRICK_ENTITY_CAPACITY||!state)return 0U;g_lfo[track]=*state;return 1U; }
+uint8_t mod_lfo_v1_prepare_bank(const mod_lfo_control_bank_t *state,mod_lfo_control_bank_t *out)
+{ if(!state||!out)return 0U;*out=*state;return 1U; }
+uint8_t mod_lfo_v1_shape_is_random(uint8_t track,uint8_t lfo){(void)track;(void)lfo;return 0U;}
+void mod_lfo_v1_invalidate_dest_cache_track(uint8_t track){(void)track;}
+void mod_lfo_v1_invalidate_dest_cache_all(void){}
 
 void seq_runtime_toggle_play_stop(void) { g_transport_running ^= 1U; }
 uint8_t seq_runtime_is_running(void) { return g_transport_running; }

@@ -96,6 +96,7 @@ add_executable(brick-ui-sim
   mocks/sim_display_transport.c
   mocks/sim_input_hw.c
   mocks/sim_state.c
+  mocks/sim_assets.c
   mocks/sim_unimplemented.c
   "${BRICK_ROOT}/Drivers/Drv_app/Src/drv_display.c"
   "${BRICK_ROOT}/Drivers/Drv_app/Src/buttons.c"
@@ -103,6 +104,7 @@ add_executable(brick-ui-sim
   "${BRICK_ROOT}/Src/App/name_contract.c"
   "${BRICK_ROOT}/Src/Param/param_registry.c"
   "${BRICK_ROOT}/Src/Param/param_registry_catalog.c"
+  "${BRICK_ROOT}/Src/Param/param_registry_value_contract.c"
   "${BRICK_ROOT}/Src/Param/param_value_policy.c"
   ${BRICK_UI_NAVIGATION_SOURCES}
   ${BRICK_UI_PAGES}
@@ -165,4 +167,13 @@ add_custom_command(TARGET brick-ui-sim POST_BUILD
 enable_testing()
 add_test(NAME cli_smoke
   COMMAND brick-ui-sim --self-test "${CMAKE_CURRENT_SOURCE_DIR}/build/windows-ucrt/self-test"
+)
+add_test(NAME scenario_core
+  COMMAND brick-ui-sim --headless --scenario "${CMAKE_CURRENT_SOURCE_DIR}/scenarios/manual-core.jsonl"
+)
+add_test(NAME scenario_browsers
+  COMMAND brick-ui-sim --headless --scenario "${CMAKE_CURRENT_SOURCE_DIR}/scenarios/manual-browsers.jsonl"
+)
+add_test(NAME scenario_patch_name
+  COMMAND brick-ui-sim --headless --scenario "${CMAKE_CURRENT_SOURCE_DIR}/scenarios/manual-patch-name.jsonl"
 )

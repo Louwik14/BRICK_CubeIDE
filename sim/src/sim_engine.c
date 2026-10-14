@@ -14,6 +14,8 @@
 #include "ui_template_page.h"
 #include "Seq/seq_runtime.h"
 #include "Param/param_registry.h"
+#include "ui_param.h"
+#include "sim_assets.h"
 
 static const char *const g_button_names[BTN_COUNT] = {
     "PARAM_1", "PARAM_2", "PARAM_3", "PARAM_4", "PARAM_5", "PARAM_6", "PARAM_7", "TRACK",
@@ -72,6 +74,7 @@ int sim_engine_init(sim_engine_t *engine)
     }
 
     sim_input_reset();
+    sim_assets_init();
     buttons_init();
     encoders_init();
     param_registry_init();
@@ -176,6 +179,25 @@ uint64_t sim_engine_held_mask(void) { return sim_input_button_mask(); }
 uint8_t sim_engine_active_track(const sim_engine_t *engine) { return (engine && engine->initialized) ? ui_get_active_track() : 0U; }
 uint8_t sim_engine_transport_running(const sim_engine_t *engine) { return (engine && engine->initialized) ? seq_runtime_is_running() : 0U; }
 uint32_t sim_engine_tempo_milli(const sim_engine_t *engine) { return (engine && engine->initialized) ? seq_runtime_get_tempo_bpm_milli() : 0U; }
+void sim_engine_parameter_snapshot(const sim_engine_t *engine,
+                                   sim_parameter_snapshot_t out[SIM_ENCODER_COUNT])
+{
+    if (out == NULL) return;
+    memset(out, 0, sizeof(*out) * SIM_ENCODER_COUNT);
+    if (engine == NULL || engine->initialized == 0) return;
+    ui_param_encoder_context_t context;
+    ui_param_capture_encoder_context(&context);
+    if (context.valid == 0U) return;
+    for (uint8_t i = 0U; i < SIM_ENCODER_COUNT; ++i)
+    {
+        const param_id_t id = context.bank.params[i];
+        if (id >= PARAM_COUNT) continue;
+        out[i].available = 1U;
+        out[i].id = (uint16_t)id;
+        out[i].name = param_registry[id].name;
+        out[i].value = ui_param_get_active_track_display_value(id, context.active_track);
+    }
+}
 int sim_engine_subpage(const sim_engine_t *engine, uint8_t *subpage)
 {
     if (!engine || !engine->initialized || !subpage) return 0;

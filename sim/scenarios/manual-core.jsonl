@@ -1,0 +1,9 @@
+{"id":"cfg","cmd":"capture","path":"sim/out/manual-cfg.png"}
+{"cmd":"tap","button":"PARAM_2"}
+{"cmd":"wait_until","page":"TONE","timeout_ms":50}
+{"cmd":"rotate","encoder":"A","delta":-12}
+{"id":"tone","cmd":"capture","path":"sim/out/manual-tone.png"}
+{"cmd":"tap","button":"PARAM_3"}
+{"cmd":"wait_until","page":"MOD","timeout_ms":50}
+{"id":"mod","cmd":"capture","path":"sim/out/manual-mod.png"}
+{"cmd":"quit"}

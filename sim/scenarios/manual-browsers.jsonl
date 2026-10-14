@@ -1,0 +1,12 @@
+{"cmd":"tap","button":"SETTINGS"}
+{"cmd":"wait_until","page":"SETTINGS","timeout_ms":50}
+{"cmd":"tap","button":"PAGE_2"}
+{"cmd":"rotate","encoder":"PAGE","delta":8}
+{"cmd":"tap","button":"PAGE_2"}
+{"id":"sample","cmd":"capture","path":"sim/out/manual-sample-browser.png"}
+{"cmd":"tap","button":"PAGE_1"}
+{"cmd":"tap","button":"PAGE_1"}
+{"cmd":"rotate","encoder":"PAGE","delta":4}
+{"cmd":"tap","button":"PAGE_2"}
+{"id":"project","cmd":"capture","path":"sim/out/manual-project-browser.png"}
+{"cmd":"quit"}

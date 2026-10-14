@@ -32,6 +32,8 @@ static void response_inspect(FILE *output, const char *id,
     uint8_t subpage = 0U;
     const int has_subpage = sim_engine_subpage(engine, &subpage);
     const uint64_t held = sim_engine_held_mask();
+    sim_parameter_snapshot_t parameters[SIM_ENCODER_COUNT];
+    sim_engine_parameter_snapshot(engine, parameters);
     sim_json_escape(engine->error, escaped_error, sizeof(escaped_error));
     response_prefix(output, id);
     fprintf(output,
@@ -47,9 +49,30 @@ static void response_inspect(FILE *output, const char *id,
             engine->error[0] ? "\"" : "");
     if (has_subpage) fprintf(output, "%u", (unsigned)subpage); else fputs("null", output);
     fprintf(output, ",\"active_track\":%u,\"engine\":{\"available\":false},"
-            "\"focus\":{\"available\":false},\"selected_parameters\":{\"available\":false},"
-            "\"overlay\":{\"available\":false},\"transport\":{\"running\":%s,\"tempo_bpm_milli\":%u},"
-            "\"held_buttons\":[", (unsigned)sim_engine_active_track(engine),
+            "\"focus\":{\"available\":false},\"selected_parameters\":[",
+            (unsigned)sim_engine_active_track(engine));
+    for (unsigned i = 0U; i < SIM_ENCODER_COUNT; ++i)
+    {
+        if (!parameters[i].available) fprintf(output, "%snull", i ? "," : "");
+        else
+        {
+            char escaped_name[128];
+            sim_json_escape(parameters[i].name, escaped_name, sizeof(escaped_name));
+            fprintf(output, "%s{\"encoder\":\"%s\",\"id\":%u,\"name\":\"%s\",\"value\":%.7g}",
+                    i ? "," : "", sim_engine_encoder_name(i),
+                    (unsigned)parameters[i].id, escaped_name, parameters[i].value);
+        }
+    }
+    fputs("],\"browser\":", output);
+    if (sim_engine_page_id(engine) == 18U)
+        fputs("{\"available\":true,\"id\":\"patch\"}", output);
+    else if (sim_engine_page_id(engine) == 20U)
+        fputs("{\"available\":false,\"reason\":\"settings view is private\"}", output);
+    else fputs("null", output);
+    fprintf(output, ",\"overlay\":{\"available\":%s,\"id\":%s},\"transport\":{\"running\":%s,\"tempo_bpm_milli\":%u},"
+            "\"held_buttons\":[",
+            sim_engine_page_id(engine) == 19U ? "true" : "false",
+            sim_engine_page_id(engine) == 19U ? "\"name_editor\"" : "null",
             sim_engine_transport_running(engine) ? "true" : "false",
             (unsigned)sim_engine_tempo_milli(engine));
     unsigned emitted = 0U;
@@ -96,11 +119,13 @@ static int dispatch(sim_engine_t *engine, const char *line, FILE *output,
             fprintf(output, "%s\"%s\"", i ? "," : "", sim_engine_button_name(i));
         fputs("],\"encoders\":[\"PAGE\",\"A\",\"B\",\"C\"],"
               "\"pages\":[\"CFG\",\"ENV\",\"TONE\",\"MOD\",\"MIX\",\"PLAY\",\"SEQ\","
-              "\"KEYBOARD\",\"MIDI_FX\",\"AUDIO_FX\",\"SETTINGS\"],"
+              "\"KEYBOARD\",\"MIDI_FX\",\"AUDIO_FX\",\"PATCH_ASSIGN\",\"NAME_EDIT\",\"SETTINGS\"],"
               "\"inspection_fields\":[\"page\",\"page_id\",\"subpage\",\"active_track\","
-              "\"renderer\",\"framebuffer\",\"time_ms\",\"held_buttons\",\"transport\",\"runtime_error\"],"
+              "\"renderer\",\"framebuffer\",\"time_ms\",\"selected_parameters\",\"browser\","
+              "\"overlay\",\"held_buttons\",\"transport\",\"runtime_error\"],"
               "\"initial_page\":\"CFG\",\"capabilities\":{\"sdl\":true,\"headless\":true,"
-              "\"png\":true,\"navigation\":true,\"input\":true,\"virtual_time\":true}}}\n", output);
+              "\"png\":true,\"navigation\":true,\"input\":true,\"virtual_time\":true,"
+              "\"scenarios\":true,\"deterministic_assets\":true}}}\n", output);
         fflush(output);
         return 1;
     }
@@ -286,6 +311,42 @@ int sim_cli_run(sim_engine_t *engine)
     return 0;
 }
 
+int sim_cli_run_file(sim_engine_t *engine, const char *path)
+{
+    FILE *input = fopen(path, "rb");
+    if (input == NULL)
+    {
+        fprintf(stderr, "cannot open scenario: %s\n", path);
+        return 2;
+    }
+    char line[8192];
+    unsigned line_number = 0U;
+    int should_quit = 0;
+    int failed = 0;
+    while (!should_quit && fgets(line, sizeof(line), input) != NULL)
+    {
+        ++line_number;
+        const char *p = line;
+        while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') ++p;
+        if (*p == '\0') continue;
+        if (strchr(line, '\n') == NULL && !feof(input))
+        {
+            fprintf(stderr, "scenario line %u exceeds 8191 bytes\n", line_number);
+            failed = 1;
+            break;
+        }
+        if (!dispatch(engine, line, stdout, &should_quit))
+        {
+            fprintf(stderr, "scenario failed at line %u\n", line_number);
+            failed = 1;
+            break;
+        }
+    }
+    if (ferror(input)) failed = 1;
+    fclose(input);
+    return failed;
+}
+
 static int files_equal(const char *left, const char *right)
 {
     FILE *a = fopen(left, "rb");
@@ -327,6 +388,13 @@ int sim_cli_self_test(sim_engine_t *engine, const char *output_dir)
     if (strcmp(sim_engine_page_name(engine), "CFG") != 0) goto fail;
     if (!dispatch(engine, "{\"cmd\":\"tap\",\"button\":\"PARAM_2\"}", sink, &quit)
             || strcmp(sim_engine_page_name(engine), "TONE") != 0) goto fail;
+    sim_parameter_snapshot_t before[SIM_ENCODER_COUNT];
+    sim_parameter_snapshot_t after[SIM_ENCODER_COUNT];
+    sim_engine_parameter_snapshot(engine, before);
+    if (!dispatch(engine, "{\"cmd\":\"rotate\",\"encoder\":\"A\",\"delta\":-8}", sink, &quit)) goto fail;
+    sim_engine_parameter_snapshot(engine, after);
+    if (!before[SIM_ENCODER_A].available || !after[SIM_ENCODER_A].available
+            || before[SIM_ENCODER_A].value == after[SIM_ENCODER_A].value) goto fail;
     if (!dispatch(engine, "{\"cmd\":\"tap\",\"button\":\"PAGE_2\"}", sink, &quit)) goto fail;
     uint8_t subpage = 0U;
     if (!sim_engine_subpage(engine, &subpage) || subpage != 1U) goto fail;

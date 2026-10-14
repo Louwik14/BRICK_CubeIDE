@@ -19,6 +19,14 @@ typedef struct
 typedef enum { SIM_ENCODER_PAGE = 0, SIM_ENCODER_A, SIM_ENCODER_B, SIM_ENCODER_C,
                SIM_ENCODER_COUNT } sim_encoder_t;
 
+typedef struct
+{
+    uint8_t available;
+    uint16_t id;
+    const char *name;
+    float value;
+} sim_parameter_snapshot_t;
+
 int sim_engine_init(sim_engine_t *engine);
 int sim_engine_advance(sim_engine_t *engine, uint32_t milliseconds);
 int sim_engine_render(sim_engine_t *engine);
@@ -44,5 +52,7 @@ int sim_engine_subpage(const sim_engine_t *engine, uint8_t *subpage);
 uint8_t sim_engine_active_track(const sim_engine_t *engine);
 uint8_t sim_engine_transport_running(const sim_engine_t *engine);
 uint32_t sim_engine_tempo_milli(const sim_engine_t *engine);
+void sim_engine_parameter_snapshot(const sim_engine_t *engine,
+                                   sim_parameter_snapshot_t out[SIM_ENCODER_COUNT]);
 
 #endif

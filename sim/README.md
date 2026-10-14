@@ -1,31 +1,23 @@
 # BRICK UI Simulator
 
-Le simulateur Windows compile le vrai pipeline BRICK : entrées physiques, événements,
-navigation, pages, renderer OLED, U8g2 et framebuffer 128 × 64. SDL3 ne présente que
-le framebuffer. Les services audio, DSP, MIDI et stockage restent exclus.
+Le simulateur Windows compile le pipeline UI BRICK original (entrées, navigation,
+pages, renderer OLED, U8g2 et framebuffer 128 × 64). SDL3 ne fait que présenter
+le framebuffer. Aucun DSP, MIDI, stockage réel ou asset du dépôt n'est modifié.
 
-## Prérequis et compilation
+## Compiler et lancer
 
-- Windows 10, CMake, Ninja
-- GCC UCRT64 dans `C:\msys64\ucrt64\bin`
-- MSYS2 `mingw-w64-ucrt-x86_64-sdl3`
+Prérequis : Windows 10, CMake, Ninja, GCC UCRT64 dans
+`C:\msys64\ucrt64\bin`, et le paquet MSYS2
+`mingw-w64-ucrt-x86_64-sdl3`.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\sim\build.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\sim\run.ps1
 ```
 
-La fenêtre est agrandie ×8 par défaut (`--scale 6` pour changer). Le clavier est
-décrit dans [KEYBOARD.md](KEYBOARD.md) et configuré par `config/keymap.json`.
-
-## Capture
-
-```powershell
-.\sim\build\windows-ucrt\brick-ui-sim.exe --capture sim/out/screen.png
-```
-
-Le PNG vient directement du framebuffer de 1 024 octets, sans bordure, en 128 × 64.
-En mode graphique, `F12` écrit `sim/out/keyboard-capture.png`.
+La fenêtre est agrandie ×8 sans interpolation (`--scale 6` pour changer).
+Le mapping AZERTY est documenté dans `KEYBOARD.md` et défini dans
+`config/keymap.json`.
 
 ## CLI JSON Lines
 
@@ -33,36 +25,52 @@ En mode graphique, `F12` écrit `sim/out/keyboard-capture.png`.
 .\sim\build\windows-ucrt\brick-ui-sim.exe --headless --stdio
 ```
 
-`stdout` ne contient que les réponses JSON; les diagnostics vont sur `stderr`.
-Les réponses sont `{"ok":true,"result":...}` ou
-`{"ok":false,"error":{"code":"...","message":"..."}}`.
+Une requête et une réponse JSON par ligne. `stdout` est réservé au protocole;
+les diagnostics utilisent `stderr`. Les commandes sont : `discover`, `inspect`,
+`advance`, `press`, `release`, `tap`, `hold`, `combo`, `double_tap`, `rotate`,
+`push_encoder`, `wait_until`, `capture` et `quit`.
 
-Commandes : `discover`, `inspect`, `advance`, `press`, `release`, `tap`, `hold`,
-`combo`, `double_tap`, `rotate`, `push_encoder`, `wait_until`, `capture`, `quit`.
-`discover` retourne les 44 boutons, les quatre encodeurs, les pages et champs
-d'inspection. Les durées sont en millisecondes virtuelles.
-
-Séquence testée :
+`inspect` expose la page, la sous-page, la piste, le transport, les touches
+maintenues et les quatre paramètres réellement publiés par la page (identifiant,
+libellé et valeur). Les états privés de Settings restent explicitement
+indisponibles. Exemple :
 
 ```jsonl
-{"id":1,"cmd":"tap","button":"PARAM_2"}
-{"id":2,"cmd":"tap","button":"PAGE_2"}
-{"id":3,"cmd":"rotate","encoder":"A","delta":2}
-{"id":4,"cmd":"inspect"}
-{"id":5,"cmd":"capture","path":"sim/out/tone-page-2.png"}
-{"id":6,"cmd":"tap","button":"SETTINGS"}
-{"id":7,"cmd":"tap","button":"PAGE_1"}
-{"id":8,"cmd":"wait_until","page":"TONE","subpage":1,"timeout_ms":50}
-{"id":9,"cmd":"quit"}
+{"cmd":"tap","button":"PARAM_2"}
+{"cmd":"rotate","encoder":"A","delta":-8}
+{"cmd":"inspect"}
+{"cmd":"capture","path":"sim/out/tone.png"}
+{"cmd":"quit"}
 ```
 
-`press` et `release` peuvent être séparés pour les maintiens et accords précis.
-`tap` accepte `duration_ms`; `double_tap` accepte `duration_ms` et `interval_ms`;
-`combo` reçoit `buttons`; `rotate` reçoit `encoder` et un `delta` signé.
+Les captures sont toujours issues du framebuffer BRICK, en PNG natif 128 × 64.
 
-## Limites de la passe 2
+## Scénarios documentaires
 
-Les pages CFG, ENV, TONE, MOD, MIX, PLAY et SETTINGS, leurs sous-pages, les
-encodeurs et les overlays accessibles sont issus du firmware. Les browsers et leurs
-catalogues sont réservés à la passe 3. Les états audio/séquenceur sont déterministes
-et minimaux; les champs privés sans API sont signalés `available:false` par `inspect`.
+Un scénario est un fichier JSONL composé uniquement des commandes CLI. Il utilise
+donc les vraies entrées BRICK et échoue au premier ordre invalide ou au premier
+`wait_until` expiré.
+
+```powershell
+.\sim\build\windows-ucrt\brick-ui-sim.exe --headless --scenario sim/scenarios/manual-core.jsonl
+.\sim\build\windows-ucrt\brick-ui-sim.exe --headless --scenario sim/scenarios/manual-browsers.jsonl
+.\sim\build\windows-ucrt\brick-ui-sim.exe --headless --scenario sim/scenarios/manual-patch-name.jsonl
+```
+
+Ces scénarios produisent sous `sim/out/` les pages CFG, TONE, MOD, le Sample
+Browser, le Patch Browser, le Project Browser et le Name Editor. Un code de
+sortie non nul signale un échec.
+
+## Simulation et limites
+
+Les paramètres TONE, ENV et MOD sont conservés en mémoire et relus par le vrai
+Param Registry et le renderer. Le catalogue WAV fictif contient dossiers,
+sous-dossiers, noms courts et longs; les projets et patches fictifs sont recréés
+au démarrage. Le Sample Browser, le Project Browser, le Patch Browser et le Name
+Editor réels sont rendus et navigables.
+
+Cette passe reste partielle : les opérations complètes LOAD/SAVE/DELETE/RENAME
+des assets Sample/Multi/Wavetable ne sont pas toutes raccordées, les browsers
+Multi/Wavetable reposant sur FatFs ne disposent pas encore d'un catalogue hôte,
+et les détails privés de sélection/confirmation de Settings ne sont pas exposés
+par `inspect`. Aucun état miroir n'est créé pour masquer ces limites.

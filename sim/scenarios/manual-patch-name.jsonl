@@ -1,0 +1,13 @@
+{"cmd":"press","button":"SHIFT"}
+{"cmd":"tap","button":"STEP_4"}
+{"cmd":"release","button":"SHIFT"}
+{"cmd":"wait_until","page":"PATCH_ASSIGN","timeout_ms":50}
+{"id":"patch","cmd":"capture","path":"sim/out/manual-patch-browser.png"}
+{"cmd":"tap","button":"PAGE_1"}
+{"cmd":"tap","button":"SETTINGS"}
+{"cmd":"rotate","encoder":"PAGE","delta":4}
+{"cmd":"tap","button":"PAGE_2"}
+{"cmd":"tap","button":"PAGE_3"}
+{"cmd":"wait_until","page":"NAME_EDIT","timeout_ms":50}
+{"id":"name","cmd":"capture","path":"sim/out/manual-name-editor.png"}
+{"cmd":"quit"}
