@@ -2,6 +2,9 @@
 #define SIM_MEMORY_LAYOUT_H
 
 #define ITCM_TEXT
+#ifndef ALIGN32
+#define ALIGN32
+#endif
 #define ITCM_TEXT_NAMED(name)
 #define AUDIO_CODE_HOT
 #define AUDIO_HOT
@@ -46,4 +49,3 @@
 #define CONTROL_STATE_SRAM2
 
 #endif
-

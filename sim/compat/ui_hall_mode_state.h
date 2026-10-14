@@ -1,4 +1,0 @@
-#ifndef SIM_UI_HALL_MODE_STATE_H
-#define SIM_UI_HALL_MODE_STATE_H
-#endif
-

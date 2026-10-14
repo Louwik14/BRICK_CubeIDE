@@ -67,16 +67,15 @@ int main(int argc, char **argv)
     {
         if (!headless)
         {
-            fprintf(stderr, "pass 1 JSONL mode requires --headless --stdio\n");
+            fprintf(stderr, "JSONL mode requires --headless --stdio\n");
             return 2;
         }
         return sim_cli_run(&engine);
     }
     if (headless)
     {
-        fprintf(stderr, "--headless requires --stdio in pass 1\n");
+        fprintf(stderr, "--headless requires --stdio\n");
         return 2;
     }
     return sim_sdl_run(&engine, scale, frame_limit);
 }
-

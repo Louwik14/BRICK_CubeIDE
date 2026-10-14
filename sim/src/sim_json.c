@@ -57,6 +57,44 @@ int sim_json_get_u32(const char *json, const char *key, uint32_t *out)
     return 1;
 }
 
+int sim_json_get_i32(const char *json, const char *key, int32_t *out)
+{
+    const char *p = find_value(json, key);
+    char *end = NULL;
+    if ((p == NULL) || (out == NULL) || ((*p != '-') && !isdigit((unsigned char)*p))) return 0;
+    const long value = strtol(p, &end, 10);
+    if ((end == p) || (value < INT32_MIN) || (value > INT32_MAX)) return 0;
+    *out = (int32_t)value;
+    return 1;
+}
+
+int sim_json_get_string_array(const char *json, const char *key,
+                              char values[][64], size_t capacity, size_t *count)
+{
+    const char *p = find_value(json, key);
+    size_t used = 0U;
+    if (!p || !values || !count || *p++ != '[') return 0;
+    for (;;)
+    {
+        while (isspace((unsigned char)*p)) ++p;
+        if (*p == ']') { *count = used; return 1; }
+        if (*p++ != '"' || used >= capacity) return 0;
+        size_t n = 0U;
+        while (*p && *p != '"')
+        {
+            if (*p == '\\') ++p;
+            if (!*p || n + 1U >= 64U) return 0;
+            values[used][n++] = *p++;
+        }
+        if (*p++ != '"') return 0;
+        values[used++][n] = '\0';
+        while (isspace((unsigned char)*p)) ++p;
+        if (*p == ',') { ++p; continue; }
+        if (*p == ']') { *count = used; return 1; }
+        return 0;
+    }
+}
+
 int sim_json_get_id(const char *json, char *out, size_t out_size)
 {
     const char *p = find_value(json, "id");
@@ -116,4 +154,3 @@ void sim_json_escape(const char *input, char *output, size_t output_size)
     }
     output[used] = '\0';
 }
-

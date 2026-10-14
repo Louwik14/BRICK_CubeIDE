@@ -3,5 +3,6 @@
 
 #include "stm32h7xx_hal.h"
 
-#endif
+void Error_Handler(void);
 
+#endif
