@@ -1,0 +1,7 @@
+{"cmd":"tap","button":"SETTINGS"}
+{"cmd":"wait_until","page":"SETTINGS","timeout_ms":50}
+{"cmd":"tap","button":"PAGE_2"}
+{"cmd":"rotate","encoder":"PAGE","delta":8}
+{"cmd":"tap","button":"PAGE_2"}
+{"cmd":"capture","path":"sim/out/manual/02-sample-browser.png"}
+{"cmd":"quit"}

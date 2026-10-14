@@ -1,0 +1,6 @@
+{"cmd":"press","button":"SHIFT"}
+{"cmd":"tap","button":"STEP_4"}
+{"cmd":"release","button":"SHIFT"}
+{"cmd":"wait_until","page":"PATCH_ASSIGN","timeout_ms":50}
+{"cmd":"capture","path":"sim/out/manual/08-patch-browser.png"}
+{"cmd":"quit"}

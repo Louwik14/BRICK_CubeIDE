@@ -1,0 +1,5 @@
+{"cmd":"tap","button":"PARAM_2"}
+{"cmd":"wait_until","page":"TONE","timeout_ms":50}
+{"cmd":"rotate","encoder":"A","delta":-12}
+{"cmd":"capture","path":"sim/out/manual/01-tone.png"}
+{"cmd":"quit"}

@@ -63,6 +63,18 @@ donc les vraies entrées BRICK et échoue au premier ordre invalide ou au premie
 .\sim\build\windows-ucrt\brick-ui-sim.exe --headless --scenario sim/scenarios/manual-patch-name.jsonl
 ```
 
+Les captures OLED documentaires actuellement accessibles se regenerent depuis CMD avec :
+
+```cmd
+sim\generate-manual-captures.cmd
+```
+
+Elles sont ecrites sans agrandissement dans `sim/out/manual/`. L'affichage des
+steps et du playhead du sequenceur appartient aux LED STEP physiques et ne fait
+pas partie du framebuffer OLED. Step Automation, Scenes/ASSIGN et REC EDIT
+restent bloques tant que leurs modeles firmware simules ne fournissent pas les
+contrats d'etat requis par les pages reelles.
+
 Ces scénarios produisent sous `sim/out/` les pages CFG, TONE, MOD, le Sample
 Browser, le Patch Browser, le Project Browser et le Name Editor. Un code de
 sortie non nul signale un échec.
