@@ -23,7 +23,7 @@ Le résultat est `docs/manual/BRICK_Manual.pdf`.
 - Ajouter une image sous `assets/images/` ou un schéma sous `assets/diagrams/`, puis utiliser `![Légende](assets/images/fichier.png)`; les figures sont centrées et légendées par le template.
 - Écrire une note, un avertissement ou un conseil comme une citation Markdown commençant par `**Note —**`, `**Avertissement —**` ou `**Conseil —**`; le template applique le cartouche commun.
 - Utiliser les ancres Markdown ordinaires pour les renvois internes, par exemple `[Voir le séquenceur](#sequencer)`.
-- Pour ajouter, retirer ou réordonner un chapitre, modifier la liste `CHAPTERS` dans `build.ps1` et la liste équivalente dans `build.bat`. Conserver des préfixes numériques rend l'ordre visible dans Git.
+- Pour ajouter, retirer ou réordonner un chapitre, modifier la liste `$Chapters` dans `build.ps1`; `build.bat` délègue à ce script. Conserver des préfixes numériques rend l'ordre visible dans Git.
 - La présentation globale appartient à `template.typ`; éviter les styles locaux dans les chapitres.
 
 Les placeholders `[IMAGE TODO: ...]` et `[DIAGRAM TODO: ...]` sont du texte volontairement compilable et peuvent être remplacés progressivement par de vrais médias.

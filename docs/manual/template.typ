@@ -13,7 +13,7 @@
   paper: "a4",
   margin: (top: 22mm, bottom: 20mm, left: 23mm, right: 20mm),
 )
-#set text(font: ("Arial", "Liberation Sans"), size: 10.5pt, fill: brick-ink)
+#set text(font: "Arial", size: 10.5pt, fill: brick-ink)
 #set par(justify: true, leading: 0.68em)
 #set list(indent: 1.25em, body-indent: 0.55em)
 #set enum(indent: 1.25em, body-indent: 0.55em)
@@ -45,7 +45,7 @@
   radius: 2pt,
   fill: rgb("f6f7f8"),
   stroke: 0.5pt + brick-rule,
-)[#set text(font: ("Cascadia Mono", "Consolas", "Liberation Mono"), size: 8.8pt); #it]
+)[#set text(font: ("Cascadia Mono", "Consolas"), size: 8.8pt); #it]
 #show figure: it => align(center, block(width: 88%, breakable: false)[#it])
 #show figure.caption: set text(size: 9pt, style: "italic", fill: brick-muted)
 
