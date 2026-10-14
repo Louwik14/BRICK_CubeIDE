@@ -1,0 +1,23 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "windows-ucrt",
+      "displayName": "BRICK UI Simulator (Windows UCRT64)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/windows-ucrt",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "C:/msys64/ucrt64/bin/gcc.exe",
+        "CMAKE_PREFIX_PATH": "C:/msys64/ucrt64"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-ucrt",
+      "configurePreset": "windows-ucrt"
+    }
+  ]
+}
+
