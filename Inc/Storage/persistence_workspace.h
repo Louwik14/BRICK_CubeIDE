@@ -2,6 +2,7 @@
 #define PERSISTENCE_WORKSPACE_H
 
 #include "Import/dx7_sysex.h"
+#include "Sampler/wavetable_config.h"
 #include "Storage/patch_product.h"
 #include "Storage/persistent_control_codec.h"
 #include "Storage/persistent_pattern_control.h"
@@ -13,7 +14,8 @@ typedef enum
     PERSISTENCE_WORKSPACE_PROJECT_RESTORE,
     PERSISTENCE_WORKSPACE_PATTERN_IO,
     PERSISTENCE_WORKSPACE_GROOVE_BUILD,
-    PERSISTENCE_WORKSPACE_PATCH_DX7_BOOT
+    PERSISTENCE_WORKSPACE_PATCH_DX7_BOOT,
+    PERSISTENCE_WORKSPACE_WAVETABLE_PREPARE
 } persistence_workspace_owner_t;
 
 #define PERSISTENCE_PATCH_DX7_FILE_BUFFER_BYTES (32U * 1024U)
@@ -38,6 +40,15 @@ typedef struct
 {
     seq_groove_compiled_t track[SEQ_TIMING_TRACK_COUNT];
 } persistence_groove_build_workspace_t;
+
+typedef struct
+{
+    float base[WAVETABLE_FLASH_MAX_FRAMES * WAVETABLE_FRAME_SAMPLE_COUNT];
+    float mipmap[WAVETABLE_FLASH_MAX_FRAMES * 2048U];
+} persistence_wavetable_prepare_workspace_t;
+
+_Static_assert(sizeof(persistence_wavetable_prepare_workspace_t) == 98304U,
+               "Wavetable prepare workspace size changed");
 
 #define PERSISTENCE_PATTERN_ENCODED_MAX_BYTES \
     PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES
@@ -99,6 +110,8 @@ persistence_project_restore_workspace_t *persistence_workspace_acquire_project_r
 persistence_pattern_io_workspace_t *persistence_workspace_acquire_pattern_io(void);
 persistence_groove_build_workspace_t *persistence_workspace_acquire_groove_build(void);
 persistence_patch_dx7_boot_workspace_t *persistence_workspace_acquire_patch_dx7_boot(void);
+persistence_wavetable_prepare_workspace_t *
+persistence_workspace_acquire_wavetable_prepare(void);
 void persistence_workspace_release(persistence_workspace_owner_t owner);
 persistence_workspace_owner_t persistence_workspace_owner(void);
 
