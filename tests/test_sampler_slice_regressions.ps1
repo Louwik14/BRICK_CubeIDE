@@ -139,6 +139,12 @@ $paramSpecSource = Get-Content -Raw (Join-Path $PSScriptRoot `
     '../Src/Param/param_spec_catalog.inc')
 $persistenceHeader = Get-Content -Raw (Join-Path $PSScriptRoot `
     '../Inc/Storage/persistent_control_codec.h')
+$streamManager = Get-Content -Raw (Join-Path $PSScriptRoot `
+    '../Src/Sampler/sample_stream_manager.c')
+$cacheLifecycle = Get-Content -Raw (Join-Path $PSScriptRoot `
+    '../Src/Sampler/PageCache/sample_page_cache_lifecycle.inc')
+$cacheConfig = Get-Content -Raw (Join-Path $PSScriptRoot `
+    '../Inc/Sampler/sample_page_cache_config.h')
 Assert-True ($runtimeSource.Contains(
     'source.total_frames, count, index, &region_begin, &region_end')) `
     'trigger slices are not resolved from the complete sample'
@@ -171,6 +177,21 @@ Assert-True (-not $paramSpecSource.Contains('PARAM_SAMPLER_END')) `
     'legacy END parameter still exists'
 Assert-True ($persistenceHeader.Contains('#define PERSIST_CODEC_VERSION 21U')) `
     'persistence format was not bumped for LENGTH semantics'
+Assert-True ($streamManager.Contains('sample_stream_manager_slice_service();') -and
+             $streamManager.Contains('sample_page_cache_slice_retain_page') -and
+             $streamManager.Contains('state->prepared = ready;') -and
+             $streamManager.Contains('sample_stream_manager_slice_has_pending_work()')) `
+    'cooperative slice preload/readiness contract missing'
+Assert-True ($cacheLifecycle.Contains(
+    'SAMPLE_PAGE_SLICE_REF_COUNT(page) != 0U') -and
+             $cacheLifecycle.Contains(
+    'SAMPLE_PAGE_SLICE_REF_COUNT(page) == 0U')) `
+    'slice retains do not protect reserved pages from cancellation'
+Assert-True ($cacheConfig.Contains(
+    '#define SAMPLE_PAGE_SLICE_CARRIER_COUNT        (512U)') -and
+             $cacheConfig.Contains(
+    '#define SAMPLE_PAGE_SLICE_DESCRIPTOR_COUNT     (512U)')) `
+    'fixed 512-page stereo slice reserve missing'
 
 $holdSource = Get-Content -Raw (Join-Path $PSScriptRoot `
     '../Src/Audio/Engines/Sampler/sampler_multi_voice.inc')

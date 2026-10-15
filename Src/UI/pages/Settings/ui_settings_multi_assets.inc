@@ -244,8 +244,9 @@ static uint16_t ui_page_settings_global_entry_count_used(void)
 static void ui_page_settings_draw_unified_sample_header(ui_settings_view_t view)
 {
     char capacity[12];
-    const uint16_t used = sample_global_pool_get_used_entries();
-    const uint16_t maximum = sample_global_pool_get_entry_capacity();
+    const uint16_t used = sample_global_pool_get_used_units();
+    const uint16_t maximum = (uint16_t)(SAMPLE_GLOBAL_POOL_BUDGET_BYTES
+                                        / SAMPLE_PAGE_BLOCK_BYTES);
     (void)snprintf(capacity, sizeof(capacity), "%u/%u",
                    (unsigned)used, (unsigned)maximum);
 

@@ -826,6 +826,12 @@ uint16_t sample_global_pool_get_used_entries(void)
     return (used > UINT16_MAX) ? UINT16_MAX : (uint16_t)used;
 }
 
+uint16_t sample_global_pool_get_used_units(void)
+{
+    return (uint16_t)(sample_global_pool_get_used_bytes()
+                      / SAMPLE_PAGE_BLOCK_BYTES);
+}
+
 uint32_t sample_global_pool_get_used_bytes(void)
 {
     uint32_t used = 0U;

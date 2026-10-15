@@ -27,7 +27,7 @@ typedef struct
     uint8_t canonical_float;
 } sample_page_stream_info_t;
 
-/* Immutable 128-byte snapshot retained by a physical page I/O job. */
+/* Immutable 108-byte snapshot retained by a physical page I/O job. */
 typedef struct
 {
     sample_audio_key_t key;
@@ -93,6 +93,7 @@ typedef enum
 {
     SAMPLE_PAGE_ALLOC_GENERAL = 0,
     SAMPLE_PAGE_ALLOC_SLOT_PERMANENT,
+    SAMPLE_PAGE_ALLOC_SLICE,
     SAMPLE_PAGE_ALLOC_VOICE_WINDOW
 } sample_page_alloc_type_t;
 
@@ -142,6 +143,12 @@ uint8_t sample_page_cache_clean_loading_payload(
     const sample_page_load_token_t *token, uint32_t modified_bytes);
 uint32_t sample_page_cache_slot_pool_total_bytes(void);
 uint32_t sample_page_cache_slot_pool_free_bytes(void);
+uint8_t sample_page_cache_slice_retain_page(sample_audio_key_t key,
+                                            uint32_t page_index);
+void sample_page_cache_slice_release_page(sample_audio_key_t key,
+                                          uint32_t page_index);
+uint8_t sample_page_cache_slice_page_ready(sample_audio_key_t key,
+                                           uint32_t page_index);
 uint8_t sample_page_cache_get_stream_info(uint16_t sample_id,
                                           sample_page_stream_info_t *out_info);
 uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,

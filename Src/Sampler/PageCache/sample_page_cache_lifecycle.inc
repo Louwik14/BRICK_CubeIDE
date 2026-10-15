@@ -13,6 +13,8 @@ void sample_page_cache_reset(void)
     memset(g_sample_page_sample_desc, 0, sizeof(g_sample_page_sample_desc));
     memset(g_sample_page_payload_owner, 0xFF, sizeof(g_sample_page_payload_owner));
     memset(g_sample_page_index, 0, sizeof(g_sample_page_index));
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_INDEX_SIZE; ++i)
+        g_sample_page_index[i].slot_index = SAMPLE_PAGE_INDEX_SLOT_EMPTY;
     memset(g_sample_page_reserved_count, 0, sizeof(g_sample_page_reserved_count));
     g_sample_page_free_cursor = 0U;
     g_sample_page_evict_cursor = 0U;
@@ -49,6 +51,7 @@ void sample_page_cache_clear_key(sample_audio_key_t key)
              * Keeping static_resident set here turns an unloaded Multi's
              * presocle into an unreclaimable FAILED page. */
             g_sample_page_desc[i].static_resident = 0U;
+            SAMPLE_PAGE_SLICE_REF_COUNT(&g_sample_page_desc[i]) = 0U;
             if (g_sample_page_desc[i].state == SAMPLE_PAGE_LOADING)
             {
                 g_sample_page_desc[i].load_cancel_requested = 1U;
@@ -58,7 +61,7 @@ void sample_page_cache_clear_key(sample_audio_key_t key)
             {
                 /* Withdraw immediately from new admissions, but preserve the
                  * storage until all AUDIO leases are gone. */
-                g_sample_page_desc[i].lifecycle_reserved[0] = 1U;
+                g_sample_page_desc[i].lifecycle_retired = 1U;
                 sample_page_cache_set_state(&g_sample_page_desc[i], SAMPLE_PAGE_FAILED);
                 continue;
             }
@@ -73,6 +76,44 @@ void sample_page_cache_clear_key(sample_audio_key_t key)
     g_sample_page_last_slot[key_slot] = UINT16_MAX;
 }
 
+uint8_t sample_page_cache_slice_retain_page(sample_audio_key_t key,
+                                            uint32_t page_index)
+{
+    sample_page_desc_t *page = sample_page_cache_find_page_mut_key(key, page_index);
+    if (page != 0)
+    {
+        const uint32_t slot = (uint32_t)(page - g_sample_page_desc);
+        if (sample_page_slot_is_voice_window_pool(slot) != 0U)
+        {
+            if (sample_page_cache_page_is_leased(page) != 0U) return 0U;
+            sample_page_cache_clear_desc(page, slot);
+            page = 0;
+        }
+    }
+    if (page == 0)
+        page = sample_page_cache_alloc_empty_slot_key(
+            key, page_index, SAMPLE_PAGE_ALLOC_SLICE, UINT32_MAX);
+    if (page == 0) return 0U;
+    if (SAMPLE_PAGE_SLICE_REF_COUNT(page) < 8U)
+        ++SAMPLE_PAGE_SLICE_REF_COUNT(page);
+    return 1U;
+}
+
+void sample_page_cache_slice_release_page(sample_audio_key_t key,
+                                          uint32_t page_index)
+{
+    sample_page_desc_t *const page = sample_page_cache_find_page_mut_key(key, page_index);
+    if ((page != 0) && (SAMPLE_PAGE_SLICE_REF_COUNT(page) != 0U))
+        --SAMPLE_PAGE_SLICE_REF_COUNT(page);
+}
+
+uint8_t sample_page_cache_slice_page_ready(sample_audio_key_t key,
+                                           uint32_t page_index)
+{
+    return (sample_page_cache_get_page_state_key(key, page_index)
+            == SAMPLE_PAGE_READY) ? 1U : 0U;
+}
+
 uint8_t sample_page_cache_cancel_reserved_page_key(sample_audio_key_t key,
                                                  uint32_t page_index,
                                                  uint8_t reason)
@@ -84,6 +125,7 @@ uint8_t sample_page_cache_cancel_reserved_page_key(sample_audio_key_t key,
         return 0U;
     }
     if ((page->static_resident != 0U)
+        || (SAMPLE_PAGE_SLICE_REF_COUNT(page) != 0U)
         || (sample_page_cache_page_is_leased(page) != 0U))
     {
         return 0U;
@@ -108,6 +150,7 @@ uint32_t sample_page_cache_cancel_reserved_key(sample_audio_key_t key, uint8_t r
         if ((page->state == SAMPLE_PAGE_RESERVED)
             && (sample_audio_key_equal(&page->key, &key) != 0U)
             && (page->static_resident == 0U)
+            && (SAMPLE_PAGE_SLICE_REF_COUNT(page) == 0U)
             && (sample_page_cache_page_is_leased(page) == 0U))
         {
             sample_page_cache_clear_desc(page, i);
@@ -127,6 +170,7 @@ uint32_t sample_page_cache_cancel_reserved_domain(sample_audio_domain_t domain, 
         if ((page->state == SAMPLE_PAGE_RESERVED)
             && (page->key.domain == domain)
             && (page->static_resident == 0U)
+            && (SAMPLE_PAGE_SLICE_REF_COUNT(page) == 0U)
             && (sample_page_cache_page_is_leased(page) == 0U))
         {
             sample_page_cache_clear_desc(page, i);
@@ -178,19 +222,33 @@ uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
         return 0U;
     }
 
-    int32_t start_slot =
-        sample_page_cache_find_contiguous_empty_run_in_range(page_count,
-                                                             SAMPLE_PAGE_SLOT_POOL_START,
-                                                             SAMPLE_PAGE_SLOT_POOL_COUNT);
-    if (start_slot < 0)
+    int32_t start_slot = -1;
+    int32_t start_carrier = -1;
+    for (uint32_t slot = SAMPLE_PAGE_SLOT_POOL_START;
+         (slot + page_count) <= (SAMPLE_PAGE_SLOT_POOL_START + SAMPLE_PAGE_SLOT_POOL_COUNT);
+         ++slot)
     {
-        sample_page_cache_reclaim_stream_pages_for_slot_allocation(SAMPLE_PAGE_SLOT_POOL_START,
-                                                                   SAMPLE_PAGE_SLOT_POOL_COUNT);
-        start_slot = sample_page_cache_find_contiguous_empty_run_in_range(page_count,
-                                                                         SAMPLE_PAGE_SLOT_POOL_START,
-                                                                         SAMPLE_PAGE_SLOT_POOL_COUNT);
+        uint32_t i = 0U;
+        for (; i < page_count; ++i)
+            if (g_sample_page_desc[slot + i].state != SAMPLE_PAGE_FREE) break;
+        if (i == page_count) { start_slot = (int32_t)slot; break; }
+        slot += i;
     }
-    if (start_slot < 0)
+    for (uint32_t carrier = SAMPLE_PAGE_ORDINARY_CARRIER_START;
+         (carrier + page_count) <= (SAMPLE_PAGE_ORDINARY_CARRIER_START + SAMPLE_PAGE_ORDINARY_CARRIER_COUNT);
+         ++carrier)
+    {
+        uint32_t i = 0U;
+        for (; i < page_count; ++i)
+        {
+            const uint32_t block = (carrier + i) * SAMPLE_PAGE_BLOCKS_PER_CARRIER;
+            if ((sample_page_cache_payload_block_used(block, 0) != 0U)
+                || (sample_page_cache_payload_block_used(block + 1U, 0) != 0U)) break;
+        }
+        if (i == page_count) { start_carrier = (int32_t)carrier; break; }
+        carrier += i;
+    }
+    if ((start_slot < 0) || (start_carrier < 0))
     {
         return 0U;
     }
@@ -201,14 +259,13 @@ uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
         sample_page_desc_t *const page = &g_sample_page_desc[slot_index];
         sample_page_cache_clear_desc(page, slot_index);
         page->key = sample_audio_key_classic(UINT16_MAX);
-        page->sample_id = UINT16_MAX;
         page->page_index = i;
         page->start_frame = 0U;
         page->frame_count = 0U;
         page->generation = ++g_sample_page_cache_state.generation_counter;
         page->last_touch = ++g_sample_page_cache_state.touch_counter;
         page->static_resident = 1U;
-        page->data_offset = slot_index * SAMPLE_PAGE_BYTES;
+        page->data_offset = ((uint32_t)start_carrier + i) * SAMPLE_PAGE_BYTES;
         sample_page_cache_claim_payload_blocks(page);
         /* Returning a writable raw allocation transfers CPU ownership. */
         page->payload_cpu_clean = 0U;
@@ -258,7 +315,7 @@ void sample_page_cache_release_slot_pool_allocation(uint16_t first_slot,
             sample_page_cache_clear_desc(page, slot_index);
         else
         {
-            page->lifecycle_reserved[0] = 1U;
+            page->lifecycle_retired = 1U;
             sample_page_cache_set_state(page, SAMPLE_PAGE_FAILED);
         }
     }
@@ -266,19 +323,18 @@ void sample_page_cache_release_slot_pool_allocation(uint16_t first_slot,
 
 uint32_t sample_page_cache_slot_pool_total_bytes(void)
 {
-    return SAMPLE_PAGE_SLOT_POOL_COUNT * SAMPLE_PAGE_BYTES;
+    return SAMPLE_PAGE_ORDINARY_CARRIER_COUNT * SAMPLE_PAGE_BYTES;
 }
 
 uint32_t sample_page_cache_slot_pool_free_bytes(void)
 {
     uint32_t free_pages = 0U;
-    for (uint32_t i = SAMPLE_PAGE_SLOT_POOL_START;
-         i < (SAMPLE_PAGE_SLOT_POOL_START + SAMPLE_PAGE_SLOT_POOL_COUNT);
+    for (uint32_t i = SAMPLE_PAGE_ORDINARY_CARRIER_START;
+         i < (SAMPLE_PAGE_ORDINARY_CARRIER_START + SAMPLE_PAGE_ORDINARY_CARRIER_COUNT);
          ++i)
     {
         const uint32_t block = i * SAMPLE_PAGE_BLOCKS_PER_CARRIER;
-        if ((g_sample_page_desc[i].state == SAMPLE_PAGE_FREE)
-            && (sample_page_cache_payload_block_used(block, 0) == 0U)
+        if ((sample_page_cache_payload_block_used(block, 0) == 0U)
             && (sample_page_cache_payload_block_used(block + 1U, 0) == 0U))
         {
             free_pages++;

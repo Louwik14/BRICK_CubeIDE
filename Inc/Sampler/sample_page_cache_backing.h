@@ -13,38 +13,50 @@
 typedef struct
 {
     sample_audio_key_t key;
-    uint16_t sample_id;
-    sample_audio_format_t format;
-    uint16_t stride_floats;
     uint32_t page_index;
     uint32_t start_frame;
-    uint32_t frame_count;
-    uint32_t frames_per_page;
     uint32_t registration_epoch;
     uint32_t data_offset;
-    volatile sample_page_state_t state;
-    uint8_t static_resident;
-    uint8_t reserved[3];
     uint32_t generation;
-    uint8_t load_cancel_requested;
-    uint8_t payload_cpu_clean;
-    uint8_t lifecycle_reserved[2];
     uint32_t last_touch;
-    volatile uint32_t available_frame_end;
+    uint16_t frame_count;
+    volatile uint16_t available_frame_end;
+    uint8_t stride_floats;
+    sample_audio_format_t format;
+    volatile sample_page_state_t state;
+    uint8_t static_resident : 1;
+    uint8_t load_cancel_requested : 1;
+    uint8_t payload_cpu_clean : 1;
+    uint8_t lifecycle_retired : 1;
+    uint8_t descriptor_reserved : 4;
 } sample_page_backing_descriptor_t;
+
+#define SAMPLE_PAGE_INDEX_SLOT_DELETED ((uint16_t)0xFFFEU)
+#define SAMPLE_PAGE_INDEX_SLOT_EMPTY   ((uint16_t)0xFFFFU)
 
 typedef struct
 {
-    volatile uint8_t used;
-    sample_audio_key_t key;
-    uint16_t slot_index;
+    uint32_t generation;
     uint32_t page_index;
+    uint16_t key_slot;
+    volatile uint16_t slot_index;
 } sample_page_backing_index_entry_t;
+
+_Static_assert(sizeof(sample_page_backing_descriptor_t) == 40U,
+               "page-cache descriptor must remain 40 bytes");
+_Static_assert(sizeof(sample_page_backing_index_entry_t) == 12U,
+               "page-cache index entry must remain 12 bytes");
+_Static_assert(SAMPLE_PAGE_MAX_COUNT < SAMPLE_PAGE_INDEX_SLOT_DELETED,
+               "page slots must not overlap hash sentinels");
+_Static_assert(SAMPLE_PAGE_FRAMES <= UINT16_MAX,
+               "page frame counters must fit in 16 bits");
+_Static_assert(SAMPLE_PAGE_CACHE_MAX_SAMPLES <= UINT16_MAX,
+               "cache key slots must fit in 16 bits");
 
 extern sample_page_backing_descriptor_t
     g_sample_page_descriptor[SAMPLE_PAGE_MAX_COUNT];
 extern float g_sample_page_data
-    [SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_SLOT_FLOAT_CAPACITY];
+    [SAMPLE_PAGE_CACHE_CARRIER_COUNT][SAMPLE_PAGE_SLOT_FLOAT_CAPACITY];
 extern volatile uint16_t
     g_sample_page_last_slot[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 extern sample_page_backing_index_entry_t
@@ -74,5 +86,17 @@ static inline uint16_t sample_page_cache_key_slot(sample_audio_key_t key)
 static inline uint32_t sample_page_cache_hash_key(sample_audio_key_t key,
                                                   uint32_t page_index)
 {
-    return sample_audio_key_page_hash(key, page_index, SAMPLE_PAGE_INDEX_SIZE);
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    return ((((uint32_t)key_slot * 2654435761UL)
+             ^ (key.generation * 3266489917UL)
+             ^ (page_index * 2246822519UL)) % SAMPLE_PAGE_INDEX_SIZE);
+}
+
+static inline uint32_t sample_page_cache_hash_index_fields(uint16_t key_slot,
+                                                            uint32_t generation,
+                                                            uint32_t page_index)
+{
+    return ((((uint32_t)key_slot * 2654435761UL)
+             ^ (generation * 3266489917UL)
+             ^ (page_index * 2246822519UL)) % SAMPLE_PAGE_INDEX_SIZE);
 }

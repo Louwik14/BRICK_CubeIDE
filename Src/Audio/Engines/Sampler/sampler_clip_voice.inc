@@ -903,6 +903,31 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     return 1U;
 }
 
+static void brick6_sampler_runtime_slice_preload_sync(uint8_t track_id)
+{
+    if (track_id >= SEQ_TRACK_COUNT) return;
+    const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    const brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
+    if ((voice->configured_slice_count == 0U) || (clip->source != 0U)
+        || (clip->sample_id >= SAMPLE_CLASSIC_CAPACITY))
+    {
+        sample_stream_manager_slice_cancel(track_id);
+        return;
+    }
+    sample_resolved_source_t source;
+    sample_resolved_source_init(&source);
+    if ((brick6_sampler_runtime_clip_resolve_source(clip, &source) == 0U)
+        || (source.total_frames == 0U))
+    {
+        sample_stream_manager_slice_prepare(track_id,
+            sample_audio_key_classic(clip->sample_id), 0U,
+            SAMPLE_AUDIO_FORMAT_INVALID, voice->configured_slice_count);
+        return;
+    }
+    sample_stream_manager_slice_prepare(track_id, source.key,
+        source.total_frames, source.format, voice->configured_slice_count);
+}
+
 static void brick6_sampler_runtime_clip_stop_playback(uint8_t track_id);
 
 static void brick6_sampler_runtime_clip_rebind_rec(uint8_t track_id)

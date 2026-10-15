@@ -35,9 +35,10 @@ les seqlocks et compteurs SPSC restent necessaires face aux interruptions.
 - D2 cacheable: etats locaux M7 partages entre IRQ et services cooperatifs.
 - SRAM3 et moitie haute de SRAM4 non-cacheables: objets `IRQ_SHARED_D2/D3`
   dont le placement deterministe est conserve pour Recorder trace, SEQ et USB.
-- SDRAM cacheable: payloads Sample, registries locaux, Preview et Recorder ring.
-- fenetre SDRAM Recorder non-cacheable: scratchs explicitement places qui
-  dependent encore de ce contrat physique.
+- SDRAM entière cacheable: payloads Sample, registries locaux, Preview et
+  Recorder ring. Le ring conserve son adresse mesurée `0xC1FA0000`; les
+  290 KiB qui le suivent sont disponibles pour une extension segmentée du
+  Page Cache.
 - D2 DMA non-cacheable: buffers peripheriques hardware-proven.
 
 Les sections linker et regions MPU expriment les proprietes cache/DMA, pas une

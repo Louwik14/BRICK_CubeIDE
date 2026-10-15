@@ -13,7 +13,6 @@
 #define UNDO_V2_SEQUENCE_SLOT_COUNT (UNDO_V2_MAX_SEQUENCE_TRANSACTIONS + 1U)
 #define UNDO_V2_HISTORY_AUDIO 0xFEU
 #define UNDO_V2_HISTORY_FREE  0xFFU
-#define UNDO_V2_LOCK_KEY_FREE 0xFFU
 
 #define UNDO_V2_PLAY_NOTE_SHIFT       0U
 #define UNDO_V2_PLAY_VELOCITY_SHIFT   8U
@@ -36,10 +35,10 @@ typedef struct
 /* The arrays are deliberately SoA: no alignment hole is paid per step. */
 typedef struct
 {
-    undo_v2_compact_lock_t locks[SEQ_STEP_SNAPSHOT_MAX_STEPS]
-                                      [SEQ_STEP_SNAPSHOT_MAX_LOCKS];
+    undo_v2_compact_lock_t locks[SEQ_PLOCK_POOL_CAP_PER_TRACK];
     uint32_t play[SEQ_STEP_SNAPSHOT_MAX_STEPS][SEQ_PLAY_MAX_CAPACITY];
     uint8_t state[SEQ_STEP_SNAPSHOT_MAX_STEPS];
+    uint8_t lock_count[SEQ_STEP_SNAPSHOT_MAX_STEPS];
     uint32_t step_bitmap[2];
     uint8_t track;
     uint8_t reserved[3];
@@ -72,13 +71,15 @@ _Static_assert(SEQ_STEP_SNAPSHOT_MAX_STEPS == 64U,
                "compact Undo bitmap requires 64 steps");
 _Static_assert(SEQ_STEP_SNAPSHOT_MAX_LOCKS == 32U,
                "compact Undo lock capacity changed");
-_Static_assert(SEQ_PARAM_RUNTIME_SLOT_COUNT < UNDO_V2_LOCK_KEY_FREE,
-               "compact Undo key sentinel collides with a parameter key");
+_Static_assert(SEQ_PLOCK_POOL_CAP_PER_TRACK == 512U,
+               "compact Undo lane pool capacity changed");
+_Static_assert(SEQ_PARAM_RUNTIME_SLOT_COUNT <= UINT8_MAX,
+               "compact Undo parameter key no longer fits");
 _Static_assert(sizeof(undo_v2_compact_lock_t) == 4U,
                "compact Undo lock size changed");
-_Static_assert(sizeof(undo_v2_sequence_slot_t) == 9292U,
+_Static_assert(sizeof(undo_v2_sequence_slot_t) == 3212U,
                "compact Undo sequence slot size changed");
-_Static_assert(sizeof(undo_v2_arena_t) == 83656U,
+_Static_assert(sizeof(undo_v2_arena_t) == 28936U,
                "compact Undo arena size changed");
 
 UI_SDRAM static undo_v2_arena_t g_undo_v2;
@@ -178,40 +179,56 @@ static uint8_t unpack_play_item(uint32_t packed, seq_play_item_t *item)
     return 1U;
 }
 
-static uint8_t compact_lock_count(const undo_v2_sequence_slot_t *slot,
-                                  uint8_t row)
+static uint8_t compact_lock_range(const undo_v2_sequence_slot_t *slot,
+                                  uint8_t row,
+                                  uint16_t *out_first,
+                                  uint8_t *out_count)
 {
-    uint8_t count = 0U;
-    while ((count < SEQ_STEP_SNAPSHOT_MAX_LOCKS)
-            && (slot->locks[row][count].key != UNDO_V2_LOCK_KEY_FREE))
-        ++count;
-    return count;
+    if ((slot == NULL) || (out_first == NULL) || (out_count == NULL)
+            || (row >= SEQ_STEP_SNAPSHOT_MAX_STEPS)) return 0U;
+    uint16_t first = 0U;
+    for (uint8_t i = 0U; i < row; ++i)
+    {
+        if (slot->lock_count[i] > SEQ_STEP_SNAPSHOT_MAX_LOCKS) return 0U;
+        first = (uint16_t)(first + slot->lock_count[i]);
+        if (first > SEQ_PLOCK_POOL_CAP_PER_TRACK) return 0U;
+    }
+    const uint8_t count = slot->lock_count[row];
+    if ((count > SEQ_STEP_SNAPSHOT_MAX_LOCKS)
+            || ((uint32_t)first + count > SEQ_PLOCK_POOL_CAP_PER_TRACK)) return 0U;
+    *out_first = first;
+    *out_count = count;
+    return 1U;
 }
 
 static uint8_t pack_step(undo_v2_sequence_slot_t *slot, uint8_t row,
+                         uint16_t *lock_cursor,
                          const seq_step_snapshot_t *snapshot)
 {
-    if ((slot == NULL) || (snapshot == NULL)
+    if ((slot == NULL) || (lock_cursor == NULL) || (snapshot == NULL)
             || (row >= SEQ_STEP_SNAPSHOT_MAX_STEPS)
-            || (snapshot->lock_count > SEQ_STEP_SNAPSHOT_MAX_LOCKS)) return 0U;
+            || (snapshot->lock_count > SEQ_STEP_SNAPSHOT_MAX_LOCKS)
+            || ((uint32_t)*lock_cursor + snapshot->lock_count
+                > SEQ_PLOCK_POOL_CAP_PER_TRACK)) return 0U;
 
     slot->state[row] = (uint8_t)((snapshot->trig & 1U)
                                  | ((snapshot->roll & 0x0FU) << 1U));
+    slot->lock_count[row] = snapshot->lock_count;
     for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
         slot->play[row][voice] = pack_play_item(&snapshot->play.items[voice]);
 
-    memset(slot->locks[row], 0, sizeof(slot->locks[row]));
-    for (uint8_t i = 0U; i < SEQ_STEP_SNAPSHOT_MAX_LOCKS; ++i)
-        slot->locks[row][i].key = UNDO_V2_LOCK_KEY_FREE;
     for (uint8_t i = 0U; i < snapshot->lock_count; ++i)
     {
         seq_plock_key_t key = 0U;
         if (seq_param_iface_address_to_key(snapshot->locks[i].set_id,
                 snapshot->locks[i].param_slot, &key) == 0U) return 0U;
-        slot->locks[row][i].value16 = snapshot->locks[i].value16;
-        slot->locks[row][i].key = key;
-        slot->locks[row][i].flags = snapshot->locks[i].flags;
+        undo_v2_compact_lock_t *const lock =
+            &slot->locks[(uint16_t)(*lock_cursor + i)];
+        lock->value16 = snapshot->locks[i].value16;
+        lock->key = key;
+        lock->flags = snapshot->locks[i].flags;
     }
+    *lock_cursor = (uint16_t)(*lock_cursor + snapshot->lock_count);
     return 1U;
 }
 
@@ -230,19 +247,18 @@ static uint8_t unpack_step(const undo_v2_sequence_slot_t *slot, uint8_t row,
         if (unpack_play_item(slot->play[row][voice],
                             &snapshot->play.items[voice]) == 0U) return 0U;
 
-    snapshot->lock_count = compact_lock_count(slot, row);
+    uint16_t first = 0U;
+    if (compact_lock_range(slot, row, &first, &snapshot->lock_count) == 0U)
+        return 0U;
     for (uint8_t i = 0U; i < snapshot->lock_count; ++i)
     {
-        const undo_v2_compact_lock_t *const lock = &slot->locks[row][i];
+        const undo_v2_compact_lock_t *const lock = &slot->locks[first + i];
         if (seq_param_iface_key_to_address(lock->key,
                 &snapshot->locks[i].set_id,
                 &snapshot->locks[i].param_slot) == 0U) return 0U;
         snapshot->locks[i].value16 = lock->value16;
         snapshot->locks[i].flags = lock->flags;
     }
-    for (uint8_t i = snapshot->lock_count;
-         i < SEQ_STEP_SNAPSHOT_MAX_LOCKS; ++i)
-        if (slot->locks[row][i].key != UNDO_V2_LOCK_KEY_FREE) return 0U;
     return 1U;
 }
 
@@ -251,8 +267,11 @@ static uint8_t step_matches(const undo_v2_sequence_slot_t *slot, uint8_t row,
 {
     const uint8_t state = (uint8_t)((snapshot->trig & 1U)
                                     | ((snapshot->roll & 0x0FU) << 1U));
+    uint16_t first = 0U;
+    uint8_t count = 0U;
     if ((slot->state[row] != state)
-            || (compact_lock_count(slot, row) != snapshot->lock_count)) return 0U;
+            || (compact_lock_range(slot, row, &first, &count) == 0U)
+            || (count != snapshot->lock_count)) return 0U;
     for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
         if (slot->play[row][voice] != pack_play_item(&snapshot->play.items[voice]))
             return 0U;
@@ -261,9 +280,9 @@ static uint8_t step_matches(const undo_v2_sequence_slot_t *slot, uint8_t row,
         seq_plock_key_t key = 0U;
         if ((seq_param_iface_address_to_key(snapshot->locks[i].set_id,
                  snapshot->locks[i].param_slot, &key) == 0U)
-                || (slot->locks[row][i].key != key)
-                || (slot->locks[row][i].value16 != snapshot->locks[i].value16)
-                || (slot->locks[row][i].flags != snapshot->locks[i].flags))
+                || (slot->locks[first + i].key != key)
+                || (slot->locks[first + i].value16 != snapshot->locks[i].value16)
+                || (slot->locks[first + i].flags != snapshot->locks[i].flags))
             return 0U;
     }
     return 1U;
@@ -278,12 +297,13 @@ static uint8_t capture_bitmap(seq_track_id_t track, const uint32_t bitmap[2],
     slot->step_bitmap[0] = bitmap[0];
     slot->step_bitmap[1] = bitmap[1];
     uint8_t row = 0U;
+    uint16_t lock_cursor = 0U;
     for (seq_step_id_t step = 0U; step < SEQ_STEP_SNAPSHOT_MAX_STEPS; ++step)
     {
         if (bitmap_has(bitmap, step) == 0U) continue;
         seq_step_snapshot_t snapshot;
         if ((seq_step_snapshot_capture(track, step, &snapshot) == 0U)
-                || (pack_step(slot, row, &snapshot) == 0U)) return 0U;
+                || (pack_step(slot, row, &lock_cursor, &snapshot) == 0U)) return 0U;
         ++row;
     }
     return 1U;
@@ -433,7 +453,10 @@ static undo_v2_status_t exchange_sequence(uint8_t history_index)
             &g_undo_v2.sequence_slots[new_slot_id]) == 0U)
         return UNDO_V2_STATUS_ERR_APPLY_FAILED;
     if (compact_apply(old_slot) == 0U)
+    {
+        (void)compact_apply(&g_undo_v2.sequence_slots[new_slot_id]);
         return UNDO_V2_STATUS_ERR_APPLY_FAILED;
+    }
     g_undo_v2.history[history_index] = new_slot_id;
     return UNDO_V2_STATUS_OK;
 }

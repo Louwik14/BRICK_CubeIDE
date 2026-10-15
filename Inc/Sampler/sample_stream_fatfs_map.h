@@ -17,6 +17,7 @@ extern "C" {
       + SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK - 1U) \
      / SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK)
 #define SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK    (UINT16_MAX)
+#define SAMPLE_STREAM_SECTOR_BYTES                  (512U)
 #define SAMPLE_STREAM_COOP_CLMT_ITEMS                (2U + (2U * SAMPLE_STREAM_PHYSICAL_MAP_MAX_EXTENTS))
 
 typedef struct
@@ -32,10 +33,9 @@ typedef struct
     uint32_t generation;
     uint32_t media_epoch;
     uint16_t extent_count;
-    uint16_t first_pool_block;
     uint16_t pool_block[SAMPLE_STREAM_PHYSICAL_MAP_MAX_BLOCKS];
     uint8_t valid;
-    uint8_t reserved[3];
+    uint8_t reserved;
 } sample_stream_physical_map_t;
 
 typedef struct
@@ -59,17 +59,18 @@ typedef struct
     sample_audio_key_t key;
     uint32_t data_offset_bytes;
     uint32_t total_frames;
-    uint32_t block_align;
-    uint32_t bytes_per_frame;
-    uint16_t channels;
-    uint16_t bits_per_sample;
     uint32_t sample_rate;
     uint32_t file_size;
-    uint32_t data_size;
-    uint16_t sector_size;
-    uint16_t data_sector_offset;
+    uint16_t block_align;
+    uint8_t channels;
+    uint8_t bits_per_sample;
     sample_stream_physical_map_t physical_map;
 } sample_stream_safe_metadata_t;
+
+_Static_assert(sizeof(sample_stream_physical_map_t) == 56U,
+               "physical map header must remain 56 bytes");
+_Static_assert(sizeof(sample_stream_safe_metadata_t) == 84U,
+               "stream-safe metadata must remain 84 bytes");
 
 typedef enum
 {

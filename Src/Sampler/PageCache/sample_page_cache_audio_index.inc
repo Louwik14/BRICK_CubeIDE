@@ -23,16 +23,17 @@ static sample_page_desc_t *sample_page_cache_audio_find_page_key(
     {
         sample_page_index_entry_t *const entry =
             &g_sample_page_index[(start + probe) % SAMPLE_PAGE_INDEX_SIZE];
-        const uint8_t used = entry->used;
+        const uint16_t slot_index = entry->slot_index;
         __DMB();
-        if (used == 0U) return 0;
-        if ((used == 1U)
-            && (sample_audio_key_equal(&entry->key, &key) != 0U)
+        if (slot_index == SAMPLE_PAGE_INDEX_SLOT_EMPTY) return 0;
+        if ((slot_index < SAMPLE_PAGE_MAX_COUNT)
+            && (entry->key_slot == key_slot)
+            && (entry->generation == key.generation)
             && (entry->page_index == page_index)
-            && (entry->slot_index < SAMPLE_PAGE_MAX_COUNT))
+            )
         {
             sample_page_desc_t *const page =
-                &g_sample_page_desc[entry->slot_index];
+                &g_sample_page_desc[slot_index];
             const sample_page_state_t state = page->state;
             __DMB();
             if ((sample_audio_key_equal(&page->key, &key) != 0U)

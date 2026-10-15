@@ -340,7 +340,7 @@ static void recover_promotion(void)
             recovered->media_epoch = journal.media_epoch;
             recovered->valid_file_bytes = stream.stream_safe.file_size;
             recovered->reserved_file_bytes = stream.stream_safe.file_size;
-            recovered->sector_size = stream.stream_safe.sector_size;
+            recovered->sector_size = SAMPLE_STREAM_SECTOR_BYTES;
             recovered->extent_count = stream.stream_safe.physical_map.extent_count;
             for (uint16_t i = 0U; i < recovered->extent_count; ++i)
                 if (sample_stream_physical_map_get_extent(

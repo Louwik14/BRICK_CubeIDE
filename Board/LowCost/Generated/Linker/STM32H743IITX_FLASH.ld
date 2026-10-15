@@ -59,9 +59,7 @@ MEMORY
   SRAM3_D2 (xrw) : ORIGIN = 0x30040000, LENGTH = 32K
   RAM_D3 (xrw)   : ORIGIN = 0x38000000, LENGTH = 64K
   BKPSRAM (xrw)  : ORIGIN = 0x38800000, LENGTH = 4K
-  SDRAM (xrw)          : ORIGIN = 0xC0000000, LENGTH = 32384K
-  SDRAM_RECORDER_RING (xrw) : ORIGIN = 0xC1FA0000, LENGTH = 128K
-  SDRAM_RECORDER (xrw) : ORIGIN = 0xC1FC0000, LENGTH = 256K
+  SDRAM (xrw)          : ORIGIN = 0xC0000000, LENGTH = 32M
   ITCMRAM (xrw)  : ORIGIN = 0x00000000, LENGTH = 64K
 }
 
@@ -72,12 +70,10 @@ __groove_flash_start__ = ORIGIN(GROOVE_FLASH);
 __groove_flash_end__ = ORIGIN(GROOVE_FLASH) + LENGTH(GROOVE_FLASH);
 ASSERT(LENGTH(GROOVE_FLASH) == 256K, "Groove Flash bank must span two sectors");
 __sdram_global_start__ = ORIGIN(SDRAM);
-__sdram_global_end__ = ORIGIN(SDRAM_RECORDER) + LENGTH(SDRAM_RECORDER);
+__sdram_global_end__ = ORIGIN(SDRAM) + LENGTH(SDRAM);
 __sdram_cacheable_start__ = ORIGIN(SDRAM);
-__sdram_cacheable_end__ = ORIGIN(SDRAM_RECORDER_RING) + LENGTH(SDRAM_RECORDER_RING);
-__sdram_general_end__ = ORIGIN(SDRAM) + LENGTH(SDRAM);
-__sdram_recorder_region_start__ = ORIGIN(SDRAM_RECORDER);
-__sdram_recorder_region_end__ = ORIGIN(SDRAM_RECORDER) + LENGTH(SDRAM_RECORDER);
+__sdram_cacheable_end__ = ORIGIN(SDRAM) + LENGTH(SDRAM);
+__sdram_recorder_ring_fixed_start__ = 0xC1FA0000;
 __sram1_d2_start__ = ORIGIN(SRAM1_D2_DMA_NC);
 __sram1_d2_end__ = ORIGIN(SRAM1_D2_CACHEABLE) + LENGTH(SRAM1_D2_CACHEABLE);
 __sram2_d2_start__ = ORIGIN(SRAM2_D2);
@@ -610,26 +606,8 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
-  .sdram_recorder_ring (NOLOAD) :
-  {
-    . = ALIGN(32);
-    __sdram_recorder_ring_start__ = .;
-    KEEP(*(.sdram_recorder_ring))
-    KEEP(*(.sdram_recorder_ring*))
-    . = ALIGN(32);
-    __sdram_recorder_ring_end__ = .;
-  } >SDRAM_RECORDER_RING
-
-  .sdram_recorder (NOLOAD) :
-  {
-    . = ALIGN(32);
-    __sdram_recorder_start__ = .;
-    *(.sdram_recorder)
-    *(.sdram_recorder*)
-    . = ALIGN(32);
-    __sdram_recorder_end__ = .;
-  } >SDRAM_RECORDER
-
+  /* Keep the active Recorder ring at its measured address while making the
+     complete 32 MiB SDRAM one cacheable MPU domain. */
   .sdram_audio_cold (NOLOAD) :
   {
     . = ALIGN(32);
@@ -637,28 +615,50 @@ SECTIONS
     *(.sdram_audio_cold*)
     . = ALIGN(32);
   } >SDRAM
+
+  ASSERT(ADDR(.sdram_audio_cold) + SIZEOF(.sdram_audio_cold) <= __sdram_recorder_ring_fixed_start__,
+         "General SDRAM sections overlap Recorder ring")
+
+  .sdram_recorder_ring __sdram_recorder_ring_fixed_start__ (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __sdram_recorder_ring_start__ = .;
+    KEEP(*(.sdram_recorder_ring))
+    KEEP(*(.sdram_recorder_ring*))
+    . = ALIGN(32);
+    __sdram_recorder_ring_end__ = .;
+  } >SDRAM
+
+  /* Reclaimed cacheable tail: 34 KiB formerly stranded by the 128 KiB ring
+     window plus the obsolete 256 KiB non-cacheable Recorder reservation. */
+  .sdram_page_pool_tail (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __sdram_page_pool_tail_start__ = .;
+    *(.sdram_page_pool_tail)
+    *(.sdram_page_pool_tail*)
+    . = ALIGN(32);
+    __sdram_page_pool_tail_end__ = .;
+  } >SDRAM
   ASSERT(__sdram_page_pool_start__ >= __sdram_cacheable_start__,
          "Sample page pool starts outside cacheable SDRAM")
   ASSERT(__sdram_page_pool_end__ <= __sdram_cacheable_end__,
          "Sample page pool exceeds cacheable SDRAM")
-  ASSERT(ADDR(.sdram_audio_cold) + SIZEOF(.sdram_audio_cold) <= __sdram_general_end__,
-         "General SDRAM sections exceed reserved Recorder ring")
-  ASSERT(ADDR(.sdram_ui) + SIZEOF(.sdram_ui) <= __sdram_general_end__,
+  ASSERT(ADDR(.sdram_ui) + SIZEOF(.sdram_ui) <= __sdram_recorder_ring_fixed_start__,
          "UI/Undo exceeds general SDRAM")
-  ASSERT(__sdram_recorder_ring_start__ == ORIGIN(SDRAM_RECORDER_RING),
-         "Recorder ring is not at its cacheable MPU window")
-  ASSERT(__sdram_recorder_ring_end__ <= ORIGIN(SDRAM_RECORDER_RING) + LENGTH(SDRAM_RECORDER_RING),
-         "Recorder ring exceeds cacheable MPU window")
+  ASSERT(__sdram_recorder_ring_start__ == __sdram_recorder_ring_fixed_start__,
+         "Recorder ring moved from its measured address")
+  ASSERT((__sdram_recorder_ring_end__ - __sdram_recorder_ring_start__) == 94K,
+         "Recorder ring footprint changed")
   ASSERT(__sdram_recorder_ring_end__ <= __sdram_cacheable_end__,
          "Recorder ring exceeds cacheable SDRAM")
-  ASSERT(__sdram_recorder_start__ >= __sdram_recorder_region_start__,
-         "Recorder starts outside dedicated SDRAM region")
-  ASSERT(__sdram_recorder_end__ <= __sdram_recorder_region_end__,
-         "Recorder exceeds dedicated SDRAM region")
-  ASSERT((ORIGIN(SDRAM_RECORDER) & (LENGTH(SDRAM_RECORDER) - 1)) == 0,
-         "Recorder SDRAM region is not MPU aligned")
-  ASSERT((LENGTH(SDRAM_RECORDER) & (LENGTH(SDRAM_RECORDER) - 1)) == 0,
-         "Recorder SDRAM region size is not a power of two")
+  ASSERT(__sdram_page_pool_tail_start__ == __sdram_recorder_ring_end__,
+         "Reclaimed SDRAM tail is not contiguous with Recorder ring")
+  ASSERT(__sdram_page_pool_tail_end__ <= __sdram_global_end__,
+         "Reclaimed SDRAM tail overflow")
+  __sdram_page_pool_tail_capacity__ = __sdram_global_end__ - __sdram_page_pool_tail_start__;
+  ASSERT(__sdram_page_pool_tail_capacity__ == 290K,
+         "Unexpected reclaimed SDRAM tail capacity")
   /* USER MEMORY SECTIONS END */
 
   /* User_heap_stack section, used to check that there is enough RAM left */

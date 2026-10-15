@@ -42,7 +42,7 @@ sample_stream_coop_file_t *sample_stream_coop_file_shared(void)
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(sizeof(sample_stream_physical_extent_t) == 12U,
                "physical extent budget changed");
-_Static_assert(sizeof(sample_stream_physical_map_t) == 60U,
+_Static_assert(sizeof(sample_stream_physical_map_t) == 56U,
                "physical map header budget changed");
 _Static_assert(sizeof(sample_stream_physical_pool_block_t) == 104U,
                "physical extent pool block budget changed");
@@ -61,7 +61,6 @@ static uint32_t sample_stream_physical_next_generation(void)
 static void sample_stream_physical_map_reset_blocks(
     sample_stream_physical_map_t *map)
 {
-    map->first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
     for (uint32_t i = 0U; i < SAMPLE_STREAM_PHYSICAL_MAP_MAX_BLOCKS; ++i)
     {
         map->pool_block[i] = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
@@ -88,7 +87,7 @@ void sample_stream_physical_map_release(sample_stream_physical_map_t *map)
         return;
     }
 
-    uint16_t block = map->first_pool_block;
+    uint16_t block = map->pool_block[0];
     uint16_t visited = 0U;
     while ((block < SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS)
            && (visited < SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS))
@@ -154,11 +153,7 @@ static uint8_t sample_stream_physical_map_append(sample_stream_physical_map_t *m
         if (allocated < 0) return 0U;
         block_index = (uint16_t)allocated;
         map->pool_block[required_block] = block_index;
-        if (required_block == 0U)
-        {
-            map->first_pool_block = block_index;
-        }
-        else
+        if (required_block != 0U)
         {
             const uint16_t previous = map->pool_block[required_block - 1U];
             if (previous >= SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS)
@@ -402,16 +397,12 @@ void sample_stream_safe_metadata_init_fatfs(sample_audio_key_t key,
     out_meta->key = key;
     out_meta->data_offset_bytes = data_offset;
     out_meta->total_frames = total_frames;
-    out_meta->sector_size = SAMPLE_STREAM_FATFS_SECTOR_SIZE;
     if (info != 0)
     {
         out_meta->block_align = info->block_align;
-        out_meta->bytes_per_frame = info->block_align;
-        out_meta->channels = info->channels;
-        out_meta->bits_per_sample = info->bits_per_sample;
+        out_meta->channels = (uint8_t)info->channels;
+        out_meta->bits_per_sample = (uint8_t)info->bits_per_sample;
         out_meta->sample_rate = info->sample_rate;
-        out_meta->data_size = info->data_size;
-        out_meta->data_sector_offset = (uint16_t)(data_offset & (SAMPLE_STREAM_FATFS_SECTOR_SIZE - 1U));
     }
 }
 

@@ -31,17 +31,23 @@ Assert-True ($render.Contains(
     'CLASSIC and MULTI do not share the browser header'
 Assert-True ($assets.Contains('"CLASSIC"') -and
              $assets.Contains('"MULTI"') -and
-             $assets.Contains('sample_global_pool_get_used_entries()') -and
-             $assets.Contains('sample_global_pool_get_entry_capacity()')) `
-    'header does not expose CLASSIC | MULTI | loaded sample capacity'
+             $assets.Contains('sample_global_pool_get_used_units()') -and
+             $assets.Contains('SAMPLE_GLOBAL_POOL_BUDGET_BYTES')) `
+    'header does not expose CLASSIC | MULTI | ordinary 8 KiB usage'
 Assert-True ($config.Contains(
-    '#define SAMPLE_PAGE_CACHE_TARGET_PAGE_COUNT    (376U)') -and
+    '#define SAMPLE_PAGE_CACHE_CARRIER_COUNT        (1660U)') -and
+             $config.Contains(
+    '#define SAMPLE_PAGE_ORDINARY_DESCRIPTOR_COUNT  (2224U)') -and
+             $config.Contains(
+    '#define SAMPLE_PAGE_SLICE_DESCRIPTOR_COUNT     (512U)') -and
              $config.Contains(
     '#if (SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES != 36U)') -and
              $config.Contains(
     '#define SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES') -and
              $pool.Contains(
-    '(SAMPLE_PAGE_SLOT_POOL_COUNT / SAMPLE_PAGE_MIN_READY_PAGES)')) `
+    '(SAMPLE_PAGE_ORDINARY_CARRIER_COUNT * SAMPLE_PAGE_BYTES)') -and
+             $pool.Contains(
+    '#define SAMPLE_GLOBAL_POOL_ENTRY_CAPACITY (340U)')) `
     'the browser capacity no longer derives from the protected pool'
 Assert-True (-not $navigation.Contains('return "STREAM";')) `
     'STREAM remains exposed in the Sample Browser menu'

@@ -76,9 +76,9 @@ typedef struct
     uint8_t voice_id;
     uint32_t lease_seq;
 } sample_stream_io_async_t;
-_Static_assert(sizeof(sample_page_stream_load_info_t) == 128U,
+_Static_assert(sizeof(sample_page_stream_load_info_t) == 108U,
                "stream load snapshot budget changed");
-_Static_assert(sizeof(sample_stream_io_async_t) == 928U,
+_Static_assert(sizeof(sample_stream_io_async_t) == 912U,
                "eight-page coalesced stream async job budget changed");
 STREAM_LOCAL_D2 static sample_stream_io_async_t
     g_sample_stream_io_async[SAMPLE_STREAM_IO_JOB_COUNT];

@@ -126,11 +126,9 @@ uint8_t sample_page_cache_finalize_live_frames_key(sample_audio_key_t key,
     {
         return 0U;
     }
-    const uint32_t data_bytes = final_frames * AUDIO_RECORDER_BYTES_PER_FRAME;
     const uint32_t primask = sample_page_cache_lock();
     sample->readable_frames = final_frames;
     sample->stream_safe.total_frames = final_frames;
-    sample->stream_safe.data_size = data_bytes;
     sample_page_cache_unlock(primask);
     return 1U;
 }

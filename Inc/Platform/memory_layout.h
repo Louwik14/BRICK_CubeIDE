@@ -115,10 +115,10 @@
 #define SDRAM_MULTI_IMPORT SEC_ATTR(".sdram_multi_import") ALIGN32
 #define SDRAM_CLASSIC_POOL SEC_ATTR(".sdram_classic_pool") ALIGN32
 
-/* Dedicated SDRAM arena for recorder/master-buffer history. */
-#define SDRAM_RECORDER SEC_ATTR(".sdram_recorder") ALIGN32
-/* CPU-produced Recorder PCM. Separate from the non-cacheable shared arena. */
+/* CPU-produced Recorder PCM at its stable measured address in cacheable SDRAM. */
 #define SDRAM_RECORDER_RING SEC_ATTR(".sdram_recorder_ring") ALIGN32
+/* Cacheable post-ring capacity reclaimed for a future segmented page pool. */
+#define SDRAM_PAGE_POOL_TAIL SEC_ATTR(".sdram_page_pool_tail") ALIGN32
 #define AUDIO_PUBLICATION_SDRAM SEC_ATTR(".sdram_audio_publication") ALIGN32
 
 /* Large cold audio history (delay/grain/reverb tails) */

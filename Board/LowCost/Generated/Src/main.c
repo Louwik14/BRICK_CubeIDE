@@ -93,7 +93,6 @@ extern uint32_t _estack;
 #define BACKUP_SRAM_MPU_BASE               (0x38800000UL)
 #define RAM_D3_IRQ_SHARED_MPU_BASE                 (0x38008000UL)
 #define SDRAM_MPU_BASE                     (0xC0000000UL)
-#define SDRAM_RECORDER_MPU_BASE            (0xC1FC0000UL)
 #define MSP_GUARD_BYTES                    (4UL * 1024UL)
 #define MSP_PROVISIONAL_STACK_BYTES        (24UL * 1024UL)
 #define MSP_STACK_FILL_WORD                (0xA55AA55AUL)
@@ -185,18 +184,6 @@ static void MPU_Config(void)
   MPU_InitStruct.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
   MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
   MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
-  HAL_MPU_ConfigRegion(&MPU_InitStruct);
-
-  MPU_InitStruct.Number = MPU_REGION_NUMBER4;
-  MPU_InitStruct.BaseAddress = SDRAM_RECORDER_MPU_BASE;
-  MPU_InitStruct.Size = MPU_REGION_SIZE_256KB;
-  MPU_InitStruct.SubRegionDisable = 0x00U;
-  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
-  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
-  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
-  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
-  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
-  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
 
   /* Region 7 overrides the privileged default map for the page immediately

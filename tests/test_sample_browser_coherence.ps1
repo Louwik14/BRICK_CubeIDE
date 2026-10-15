@@ -15,6 +15,7 @@ $navigation = Get-Content -Raw (Join-Path $root `
 $render = Get-Content -Raw (Join-Path $root `
     'Src/UI/pages/Settings/ui_settings_render.inc')
 $loader = Get-Content -Raw (Join-Path $root 'Src/Storage/wav_loader.c')
+$settings = Get-Content -Raw (Join-Path $root 'Src/UI/pages/ui_page_settings.c')
 
 Assert-True ($pool.Contains('sample_global_pool_publish_change();')) `
     'the canonical pool does not publish mutations'
@@ -34,6 +35,13 @@ Assert-True ($actions.Contains('ui_page_settings_status("CLEARING");') -and
 Assert-True ($browser.Contains(
     'g_ui_settings.sample_slot_selected = SAMPLE_GLOBAL_POOL_INVALID_INDEX;')) `
     'an empty projection retains a stale selected slot'
+Assert-True ($settings.Contains('union') -and
+             $settings.Contains('ui_settings_sample_entry_t sample_entries[') -and
+             $settings.Contains('ui_settings_multi_entry_t multi_entries[')) `
+    'Sample and Multi browser entry storage is not shared'
+Assert-True ($browser.Contains('ui_page_settings_wavetable_browser_stop();') -and
+             $browser.Contains('level->view != UI_SETTINGS_VIEW_WAVETABLE')) `
+    'the asynchronous Wavetable scan can outlive ownership of shared browser storage'
 
 Assert-True (-not $loader.Contains('g_wav_catalog_scratch_view')) `
     'the 56848-byte catalogue scratch view is still allocated'

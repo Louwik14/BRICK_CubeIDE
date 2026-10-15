@@ -40,6 +40,13 @@ uint8_t sample_stream_manager_key_busy(sample_audio_key_t key);
 void sample_stream_manager_release_sample(uint16_t sample_id);
 void sample_stream_manager_service(uint32_t byte_budget);
 uint8_t sample_stream_manager_has_pending_sd_work(void);
+void sample_stream_manager_slice_prepare(uint8_t track_id,
+                                         sample_audio_key_t key,
+                                         uint32_t total_frames,
+                                         sample_audio_format_t format,
+                                         uint8_t slice_count);
+void sample_stream_manager_slice_cancel(uint8_t track_id);
+uint8_t sample_stream_manager_slice_prepared(uint8_t track_id);
 
 #ifdef __cplusplus
 }

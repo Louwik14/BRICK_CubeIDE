@@ -169,7 +169,6 @@ uint8_t sample_page_cache_port_prepare_stream_mapped(
     registration.stream_safe.file_size = file_size;
     registration.stream_safe.physical_map = *map;
     memset(map, 0, sizeof(*map));
-    map->first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
     for (uint32_t i = 0U; i < SAMPLE_STREAM_PHYSICAL_MAP_MAX_BLOCKS; ++i)
         map->pool_block[i] = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
     if (sample_page_cache_register_prepared_stream(&registration) == 0U)

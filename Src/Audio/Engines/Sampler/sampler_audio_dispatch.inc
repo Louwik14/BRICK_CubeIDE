@@ -58,6 +58,7 @@ static void brick6_sampler_runtime_reset_track_internal(uint8_t track_id,
     {
         return;
     }
+    sample_stream_manager_slice_cancel(track_id);
 
     if (renderer_replace == 0U)
         brick6_sampler_runtime_begin_declick_tail(track_id,
@@ -116,6 +117,7 @@ void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id)
     /* This selector controls the next trigger. Existing readers retain their
      * key and lease until their normal NOTE OFF/STOP. */
     g_sampler_clip_runtime[track_id].sample_id = sample_id;
+    brick6_sampler_runtime_slice_preload_sync(track_id);
 }
 
 void brick6_sampler_runtime_stop_classic_sample(uint16_t sample_id)
@@ -135,6 +137,7 @@ void brick6_sampler_runtime_stop_classic_sample(uint16_t sample_id)
         if (g_sampler_clip_runtime[track_id].sample_id == sample_id)
         {
             g_sampler_clip_runtime[track_id].sample_id = UINT16_MAX;
+            sample_stream_manager_slice_cancel(track_id);
             affected = 1U;
         }
         if (affected != 0U) brick6_sampler_runtime_stream_live_reset(track_id);
@@ -370,6 +373,7 @@ void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_coun
     if (g_sampler_voice[track_id].active == 0U)
         g_sampler_voice[track_id].slice_count =
             g_sampler_voice[track_id].configured_slice_count;
+    brick6_sampler_runtime_slice_preload_sync(track_id);
 }
 
 void brick6_sampler_runtime_set_clip_source_bpm(uint8_t track_id, float source_bpm)
@@ -391,6 +395,7 @@ void brick6_sampler_runtime_set_clip_source(uint8_t track_id, uint8_t source)
     if (clip->source == next) return;
     brick6_sampler_runtime_clip_stop_playback(track_id);
     clip->source = next;
+    brick6_sampler_runtime_slice_preload_sync(track_id);
 }
 
 uint8_t brick6_sampler_runtime_clip_source_is_rec(uint8_t track_id)

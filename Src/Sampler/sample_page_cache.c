@@ -24,7 +24,7 @@ _Static_assert((SAMPLE_PAGE_BYTES % DCACHE_LINE_SIZE_BYTES) == 0U,
 #endif
 
 typedef sample_page_backing_descriptor_t sample_page_desc_t;
-_Static_assert(sizeof(sample_page_desc_t) == 64U,
+_Static_assert(sizeof(sample_page_desc_t) == 40U,
                "page-cache descriptor budget changed");
 
 typedef struct
@@ -51,7 +51,7 @@ typedef struct
 #define SAMPLE_PAGE_SAMPLE_LIVE_COMMITTED  (1U << 1U)
 #define SAMPLE_PAGE_SAMPLE_CANONICAL_FLOAT (1U << 2U)
 
-_Static_assert(sizeof(sample_page_sample_desc_t) == 116U,
+_Static_assert(sizeof(sample_page_sample_desc_t) == 96U,
                "STREAM sample descriptor budget changed");
 
 typedef sample_page_backing_index_entry_t sample_page_index_entry_t;
@@ -69,6 +69,8 @@ static CTRL_STATE uint64_t g_sample_page_runtime_ready_bitmap;
 /* Zero-initialized outside the NOLOAD page metadata.  Boot may not inspect
  * payload_cpu_clean until reset has established every descriptor. */
 static uint8_t g_sample_page_payload_clean_contract_active;
+
+#define SAMPLE_PAGE_SLICE_REF_COUNT(page_) ((page_)->descriptor_reserved)
 
 #define g_sample_page_desc g_sample_page_descriptor
 
@@ -124,7 +126,7 @@ uint8_t sample_page_cache_control_resolve_page(uint16_t sample_id,
     out_span->key = page->key;
     out_span->format = page->format;
     out_span->stride_floats = page->stride_floats;
-    out_span->frames_per_page = page->frames_per_page;
+    out_span->frames_per_page = SAMPLE_PAGE_FRAMES;
     out_span->registration_epoch = page->registration_epoch;
     out_span->slot_index = (uint32_t)(page - g_sample_page_desc);
     return 1U;
@@ -159,8 +161,6 @@ uint8_t sample_page_cache_control_resolve_page_key(sample_audio_key_t key,
             || page->format != (sample_audio_format_t)sample->format
             || page->stride_floats != sample_audio_format_stride_floats(
                 (sample_audio_format_t)sample->format)
-            || page->frames_per_page != sample_audio_format_frames_per_page(
-                (sample_audio_format_t)sample->format)
             || page->start_frame != (uint64_t)page_index
                 * sample_audio_format_frames_per_page(
                     (sample_audio_format_t)sample->format)
@@ -188,7 +188,7 @@ uint8_t sample_page_cache_control_resolve_page_key(sample_audio_key_t key,
     out_span->key = page->key;
     out_span->format = page->format;
     out_span->stride_floats = page->stride_floats;
-    out_span->frames_per_page = page->frames_per_page;
+    out_span->frames_per_page = SAMPLE_PAGE_FRAMES;
     out_span->registration_epoch = page->registration_epoch;
     out_span->slot_index = (uint32_t)(page - g_sample_page_desc);
     return 1U;

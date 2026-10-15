@@ -386,6 +386,10 @@ static void ui_page_settings_back(void)
 {
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     const ui_settings_menu_level_t *const level = ui_page_settings_current_level();
+    if ((level != 0) && (level->view == UI_SETTINGS_VIEW_WAVETABLE))
+    {
+        ui_page_settings_wavetable_browser_stop();
+    }
     if ((level != 0) && (level->view == UI_SETTINGS_VIEW_SAMPLER))
     {
         sd_preview_set_gain(1.0f);
@@ -633,6 +637,7 @@ static void ui_page_settings_enter(void)
 
 static void ui_page_settings_leave(void)
 {
+    ui_page_settings_wavetable_browser_stop();
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     sd_preview_set_gain(1.0f);
     if(g_ui_project_save_phase==UI_PROJECT_SAVE_IDLE)g_ui_settings.depth = 0U;

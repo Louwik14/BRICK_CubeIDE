@@ -31,6 +31,7 @@
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_page_cache_audio.h"
 #include "Sampler/sample_voice_reader.h"
+#include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_playhead_contract.h"
 
 /* The sampler voice table is a lane resource.  GROUP children reuse this
@@ -352,6 +353,7 @@ static void brick6_sampler_runtime_publish_playhead(uint8_t track_id);
 static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id);
 static void brick6_sampler_runtime_clip_stop_playback(uint8_t track_id);
 static void brick6_sampler_runtime_clip_stop_playback_silent(uint8_t track_id);
+static void brick6_sampler_runtime_slice_preload_sync(uint8_t track_id);
 static void brick6_sampler_runtime_clip_render_shifter(brick6_sampler_voice_t *voice,
                                                        brick6_sampler_clip_runtime_t *clip,
                                                        brick6_sampler_clip_slot_t *slot,

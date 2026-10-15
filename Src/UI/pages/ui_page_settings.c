@@ -183,8 +183,11 @@ typedef struct
 
 typedef struct
 {
-    ui_settings_sample_entry_t sample_entries[UI_SETTINGS_SAMPLE_BROWSER_MAX];
-    ui_settings_multi_entry_t multi_entries[UI_SETTINGS_MULTI_BROWSER_MAX];
+    union
+    {
+        ui_settings_sample_entry_t sample_entries[UI_SETTINGS_SAMPLE_BROWSER_MAX];
+        ui_settings_multi_entry_t multi_entries[UI_SETTINGS_MULTI_BROWSER_MAX];
+    };
     char sample_dir[WAV_LOADER_CATALOG_PATH_MAX];
     char confirm_path[MULTI_SAMPLE_POOL_PATH_MAX];
     char convert_path[SAMPLE_CLASSIC_PATH_MAX];

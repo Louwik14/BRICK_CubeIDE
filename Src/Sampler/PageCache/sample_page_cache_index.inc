@@ -45,8 +45,7 @@ static void sample_page_cache_set_page_geometry(sample_page_desc_t *page,
     }
 
     page->format = sample_page_cache_format_key(key);
-    page->stride_floats = (uint16_t)sample_audio_format_stride_floats(page->format);
-    page->frames_per_page = sample_audio_format_frames_per_page(page->format);
+    page->stride_floats = (uint8_t)sample_audio_format_stride_floats(page->format);
     const uint16_t key_slot = sample_page_cache_key_slot(key);
     page->registration_epoch = (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
                                    ? g_sample_page_sample_desc[key_slot].registration_epoch
@@ -93,6 +92,7 @@ static uint8_t sample_page_cache_page_is_contractual(const sample_page_desc_t *p
     }
 
     return ((page->static_resident != 0U)
+            || (SAMPLE_PAGE_SLICE_REF_COUNT(page) != 0U)
             || (sample_page_lease_control_protects(page->key,
                                                    page->registration_epoch,
                                                    page->page_index) != 0U)) ? 1U : 0U;
@@ -110,7 +110,8 @@ static uint8_t sample_page_cache_index_find_slot_key(sample_audio_key_t key,
     {
         const uint32_t index = (start + probe) % SAMPLE_PAGE_INDEX_SIZE;
         const sample_page_index_entry_t *const entry = &g_sample_page_index[index];
-        if (entry->used == 0U)
+        const uint16_t slot_index = entry->slot_index;
+        if (slot_index == SAMPLE_PAGE_INDEX_SLOT_EMPTY)
         {
             if (out_insert_index != 0)
                 *out_insert_index = (first_deleted != UINT32_MAX)
@@ -118,15 +119,17 @@ static uint8_t sample_page_cache_index_find_slot_key(sample_audio_key_t key,
             return 0U;
         }
 
-        if ((entry->used == 2U) && (first_deleted == UINT32_MAX))
+        if ((slot_index == SAMPLE_PAGE_INDEX_SLOT_DELETED) && (first_deleted == UINT32_MAX))
             first_deleted = index;
 
-        if ((entry->used == 1U) && (sample_audio_key_equal(&entry->key, &key) != 0U)
+        if ((slot_index < SAMPLE_PAGE_MAX_COUNT)
+            && (entry->key_slot == sample_page_cache_key_slot(key))
+            && (entry->generation == key.generation)
             && (entry->page_index == page_index))
         {
             if (out_slot != 0)
             {
-                *out_slot = entry->slot_index;
+                *out_slot = slot_index;
             }
             return 1U;
         }
@@ -143,17 +146,17 @@ static void sample_page_cache_index_put_new_key_at(
     uint32_t insert_index)
 {
     if ((insert_index >= SAMPLE_PAGE_INDEX_SIZE)
-        || (g_sample_page_index[insert_index].used == 1U))
+        || (g_sample_page_index[insert_index].slot_index < SAMPLE_PAGE_MAX_COUNT))
     {
         sample_page_cache_index_put_key(key, page_index, slot_index);
         return;
     }
     sample_page_index_entry_t *const dst = &g_sample_page_index[insert_index];
-    dst->key = key;
+    dst->key_slot = sample_page_cache_key_slot(key);
+    dst->generation = key.generation;
     dst->page_index = page_index;
-    dst->slot_index = slot_index;
     __DMB();
-    dst->used = 1U;
+    dst->slot_index = slot_index;
 }
 
 static void sample_page_cache_index_put_key(sample_audio_key_t key, uint32_t page_index, uint16_t slot_index)
@@ -165,26 +168,29 @@ static void sample_page_cache_index_put_key(sample_audio_key_t key, uint32_t pag
     {
         const uint32_t index = (start + probe) % SAMPLE_PAGE_INDEX_SIZE;
         sample_page_index_entry_t *const entry = &g_sample_page_index[index];
-        if ((entry->used == 1U) && (sample_audio_key_equal(&entry->key, &key) != 0U)
+        const uint16_t current_slot = entry->slot_index;
+        if ((current_slot < SAMPLE_PAGE_MAX_COUNT)
+            && (entry->key_slot == sample_page_cache_key_slot(key))
+            && (entry->generation == key.generation)
             && (entry->page_index == page_index))
         {
             __DMB();
             entry->slot_index = slot_index;
             return;
         }
-        if ((entry->used == 2U) && (first_deleted == UINT32_MAX))
+        if ((current_slot == SAMPLE_PAGE_INDEX_SLOT_DELETED) && (first_deleted == UINT32_MAX))
         {
             first_deleted = index;
         }
-        if (entry->used == 0U)
+        if (current_slot == SAMPLE_PAGE_INDEX_SLOT_EMPTY)
         {
             sample_page_index_entry_t *const dst =
                 (first_deleted != UINT32_MAX) ? &g_sample_page_index[first_deleted] : entry;
-            dst->key = key;
+            dst->key_slot = sample_page_cache_key_slot(key);
+            dst->generation = key.generation;
             dst->page_index = page_index;
-            dst->slot_index = slot_index;
             __DMB();
-            dst->used = 1U;
+            dst->slot_index = slot_index;
             return;
         }
     }
@@ -192,11 +198,11 @@ static void sample_page_cache_index_put_key(sample_audio_key_t key, uint32_t pag
     if (first_deleted != UINT32_MAX)
     {
         sample_page_index_entry_t *const dst = &g_sample_page_index[first_deleted];
-        dst->key = key;
+        dst->key_slot = sample_page_cache_key_slot(key);
+        dst->generation = key.generation;
         dst->page_index = page_index;
-        dst->slot_index = slot_index;
         __DMB();
-        dst->used = 1U;
+        dst->slot_index = slot_index;
     }
 }
 
@@ -207,15 +213,18 @@ static void sample_page_cache_index_remove_key(sample_audio_key_t key, uint32_t 
     {
         const uint32_t index = (start + probe) % SAMPLE_PAGE_INDEX_SIZE;
         sample_page_index_entry_t *const entry = &g_sample_page_index[index];
-        if (entry->used == 0U)
+        const uint16_t entry_slot = entry->slot_index;
+        if (entry_slot == SAMPLE_PAGE_INDEX_SLOT_EMPTY)
         {
             return;
         }
-        if ((entry->used == 1U) && (sample_audio_key_equal(&entry->key, &key) != 0U)
+        if ((entry_slot < SAMPLE_PAGE_MAX_COUNT)
+            && (entry->key_slot == sample_page_cache_key_slot(key))
+            && (entry->generation == key.generation)
             && (entry->page_index == page_index))
         {
             uint32_t hole = index;
-            entry->used = 2U;
+            entry->slot_index = SAMPLE_PAGE_INDEX_SLOT_DELETED;
             __DMB();
             for (uint32_t scan_probe = 1U;
                  scan_probe < SAMPLE_PAGE_INDEX_SIZE; ++scan_probe)
@@ -224,15 +233,17 @@ static void sample_page_cache_index_remove_key(sample_audio_key_t key, uint32_t 
                                       % SAMPLE_PAGE_INDEX_SIZE;
                 sample_page_index_entry_t *const candidate =
                     &g_sample_page_index[scan];
-                if (candidate->used == 0U)
+                const uint16_t candidate_slot = candidate->slot_index;
+                if (candidate_slot == SAMPLE_PAGE_INDEX_SLOT_EMPTY)
                 {
-                    g_sample_page_index[hole].used = 0U;
+                    g_sample_page_index[hole].slot_index = SAMPLE_PAGE_INDEX_SLOT_EMPTY;
                     __DMB();
                     return;
                 }
-                if (candidate->used != 1U) continue;
-                const uint32_t home = sample_page_cache_hash_key(
-                    candidate->key, candidate->page_index);
+                if (candidate_slot >= SAMPLE_PAGE_MAX_COUNT) continue;
+                const uint32_t home = sample_page_cache_hash_index_fields(
+                    candidate->key_slot, candidate->generation,
+                    candidate->page_index);
                 const uint32_t candidate_distance =
                     (scan + SAMPLE_PAGE_INDEX_SIZE - home)
                     % SAMPLE_PAGE_INDEX_SIZE;
@@ -243,17 +254,17 @@ static void sample_page_cache_index_remove_key(sample_audio_key_t key, uint32_t 
 
                 sample_page_index_entry_t *const dst =
                     &g_sample_page_index[hole];
-                dst->key = candidate->key;
+                dst->key_slot = candidate->key_slot;
+                dst->generation = candidate->generation;
                 dst->page_index = candidate->page_index;
-                dst->slot_index = candidate->slot_index;
                 __DMB();
-                dst->used = 1U;
+                dst->slot_index = candidate_slot;
                 __DMB();
-                candidate->used = 2U;
+                candidate->slot_index = SAMPLE_PAGE_INDEX_SLOT_DELETED;
                 __DMB();
                 hole = scan;
             }
-            g_sample_page_index[hole].used = 0U;
+            g_sample_page_index[hole].slot_index = SAMPLE_PAGE_INDEX_SLOT_EMPTY;
             __DMB();
             return;
         }
@@ -309,6 +320,7 @@ static uint8_t sample_page_cache_page_is_contractual_snapshot(
 {
     if (page == 0) return 0U;
     return ((page->static_resident != 0U)
+            || (SAMPLE_PAGE_SLICE_REF_COUNT(page) != 0U)
             || (sample_page_lease_control_snapshot_protects(
                     lease_snapshot,
                     page->key,
@@ -407,7 +419,7 @@ static uint8_t sample_page_cache_assign_payload(sample_page_desc_t *page,
                                                  uint32_t range_start,
                                                  uint32_t range_count)
 {
-    if ((page == 0) || ((range_start + range_count) > SAMPLE_PAGE_MAX_COUNT)) return 0U;
+    if ((page == 0) || ((range_start + range_count) > SAMPLE_PAGE_CACHE_CARRIER_COUNT)) return 0U;
     const uint8_t mono = (page->format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO) ? 1U : 0U;
     if (mono != 0U)
     {
@@ -557,7 +569,6 @@ static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot
     sample_page_cache_set_state(page, SAMPLE_PAGE_FREE);
 
     memset(page, 0, sizeof(*page));
-    page->sample_id = UINT16_MAX;
     page->key = sample_audio_key_classic(UINT16_MAX);
     page->page_index = UINT32_MAX;
     page->start_frame = UINT32_MAX;
@@ -625,7 +636,7 @@ static uint8_t sample_page_cache_fill_ref(const sample_page_desc_t *page,
     out_ref->page_generation = page->generation;
     out_ref->format = page->format;
     out_ref->stride_floats = page->stride_floats;
-    out_ref->frames_per_page = page->frames_per_page;
+    out_ref->frames_per_page = SAMPLE_PAGE_FRAMES;
     out_ref->registration_epoch = page->registration_epoch;
     out_ref->slot_index = (uint32_t)(page - g_sample_page_desc);
     return 1U;

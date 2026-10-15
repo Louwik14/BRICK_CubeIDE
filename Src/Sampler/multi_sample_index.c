@@ -236,10 +236,24 @@ static uint8_t multi_index_format_contract_valid(const multi_sample_index_t *idx
     return 1U;
 }
 
+static const multi_sample_index_source_sample_t *multi_index_source_sample_at(
+    const multi_sample_index_source_t *src,
+    uint16_t index,
+    uint32_t sample_stride)
+{
+    return (const multi_sample_index_source_sample_t *)
+        ((const uint8_t *)src->samples + ((uint32_t)index * sample_stride));
+}
+
 static uint8_t multi_index_source_to_static(const multi_sample_index_source_t *src,
+                                            uint32_t sample_stride,
                                             multi_sample_index_t *out)
 {
     if ((src == 0) || (out == 0)
+        || (sample_stride < sizeof(multi_sample_index_source_sample_t))
+        || ((sample_stride & 3U) != 0U)
+        || ((src->sample_count != 0U)
+            && (sample_stride > (UINT32_MAX / src->sample_count)))
         || (src->sample_count > MULTI_SAMPLE_POOL_MAX_SAMPLES)
         || (src->zone_count > MULTI_SAMPLE_POOL_MAX_ZONES)
         || ((src->sample_count != 0U) && (src->samples == 0))
@@ -267,8 +281,10 @@ static uint8_t multi_index_source_to_static(const multi_sample_index_source_t *s
     uint32_t string_bytes = 0U;
     for (uint16_t i = 0U; i < src->sample_count; ++i)
     {
+        const multi_sample_index_source_sample_t *const sample =
+            multi_index_source_sample_at(src, i, sample_stride);
         uint16_t path_len = 0U;
-        if (multi_index_path_len(src->samples[i].relative_path, &path_len) == 0U)
+        if (multi_index_path_len(sample->relative_path, &path_len) == 0U)
         {
             return 0U;
         }
@@ -280,18 +296,18 @@ static uint8_t multi_index_source_to_static(const multi_sample_index_source_t *s
 
         g_index_samples[i].path_offset = string_bytes;
         g_index_samples[i].path_len = path_len;
-        g_index_samples[i].total_frames = src->samples[i].total_frames;
-        g_index_samples[i].sample_rate = src->samples[i].sample_rate;
-        g_index_samples[i].channels = src->samples[i].channels;
-        g_index_samples[i].bits_per_sample = src->samples[i].bits_per_sample;
-        g_index_samples[i].encoding = src->samples[i].encoding;
+        g_index_samples[i].total_frames = sample->total_frames;
+        g_index_samples[i].sample_rate = sample->sample_rate;
+        g_index_samples[i].channels = sample->channels;
+        g_index_samples[i].bits_per_sample = sample->bits_per_sample;
+        g_index_samples[i].encoding = sample->encoding;
         g_index_samples[i].format = sample_audio_format_from_channels(g_index_samples[i].channels);
         if (sample_audio_format_is_valid(g_index_samples[i].format) == 0U)
         {
             return 0U;
         }
-        if ((sample_audio_format_is_valid(src->samples[i].format) != 0U)
-            && (src->samples[i].format != g_index_samples[i].format))
+        if ((sample_audio_format_is_valid(sample->format) != 0U)
+            && (sample->format != g_index_samples[i].format))
         {
             return 0U;
         }
@@ -299,18 +315,18 @@ static uint8_t multi_index_source_to_static(const multi_sample_index_source_t *s
             (uint16_t)sample_audio_format_stride_floats(g_index_samples[i].format);
         g_index_samples[i].frames_per_page =
             sample_audio_format_frames_per_page(g_index_samples[i].format);
-        g_index_samples[i].data_offset = src->samples[i].data_offset;
-        g_index_samples[i].data_size = src->samples[i].data_size;
-        g_index_samples[i].loop_begin = src->samples[i].loop_begin;
-        g_index_samples[i].loop_end = src->samples[i].loop_end;
-        g_index_samples[i].root_note = src->samples[i].root_note;
-        g_index_samples[i].vel_low = src->samples[i].vel_low;
-        g_index_samples[i].vel_high = src->samples[i].vel_high;
-        g_index_samples[i].has_loop = src->samples[i].has_loop;
-        g_index_samples[i].metadata_flags = src->samples[i].metadata_flags;
-        g_index_samples[i].wav_size = src->samples[i].wav_size;
-        g_index_samples[i].wav_mtime = src->samples[i].wav_mtime;
-        memcpy(&g_index_strings[string_bytes], src->samples[i].relative_path, path_len);
+        g_index_samples[i].data_offset = sample->data_offset;
+        g_index_samples[i].data_size = sample->data_size;
+        g_index_samples[i].loop_begin = sample->loop_begin;
+        g_index_samples[i].loop_end = sample->loop_end;
+        g_index_samples[i].root_note = sample->root_note;
+        g_index_samples[i].vel_low = sample->vel_low;
+        g_index_samples[i].vel_high = sample->vel_high;
+        g_index_samples[i].has_loop = sample->has_loop;
+        g_index_samples[i].metadata_flags = sample->metadata_flags;
+        g_index_samples[i].wav_size = sample->wav_size;
+        g_index_samples[i].wav_mtime = sample->wav_mtime;
+        memcpy(&g_index_strings[string_bytes], sample->relative_path, path_len);
         string_bytes += path_len;
 
         if (i == 0U)
@@ -555,13 +571,22 @@ multi_sample_index_result_t multi_sample_index_write(
     const char *path,
     const multi_sample_index_source_t *src)
 {
+    return multi_sample_index_write_strided(
+        path, src, sizeof(multi_sample_index_source_sample_t));
+}
+
+multi_sample_index_result_t multi_sample_index_write_strided(
+    const char *path,
+    const multi_sample_index_source_t *src,
+    uint32_t sample_stride)
+{
     if ((path == 0) || (path[0] == '\0') || (src == 0))
     {
         return MULTI_SAMPLE_INDEX_INVALID_ARG;
     }
 
     multi_sample_index_t idx;
-    if (multi_index_source_to_static(src, &idx) == 0U)
+    if (multi_index_source_to_static(src, sample_stride, &idx) == 0U)
     {
         return MULTI_SAMPLE_INDEX_BAD_FORMAT;
     }
@@ -1271,7 +1296,8 @@ multi_sample_index_result_t multi_sample_index_debug_make(
     const multi_sample_index_source_t *src,
     multi_sample_index_t *out)
 {
-    return (multi_index_source_to_static(src, out) != 0U)
+    return (multi_index_source_to_static(
+                src, sizeof(multi_sample_index_source_sample_t), out) != 0U)
         ? MULTI_SAMPLE_INDEX_OK
         : MULTI_SAMPLE_INDEX_BAD_FORMAT;
 }

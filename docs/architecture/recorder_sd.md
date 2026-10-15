@@ -50,6 +50,10 @@ DMA et la consommation waveform.
 Chaque descripteur de 32 KiB représente environ 85,3 ms d'audio FLOAT32. Le
 ring est un multiple exact de secteurs et reste protégé jusqu'au commit DMA ;
 seul le dernier secteur partiel passe par un buffer de terminaison de 512 octets.
+Le ring occupe 94 KiB à l'adresse fixe `0xC1FA0000` dans l'unique domaine SDRAM
+cacheable de 32 MiB. Le block device nettoie le D-cache avant chaque écriture
+SDMMC DMA. Il n'existe plus de fenêtre Recorder non-cacheable dédiée ; les
+290 KiB situés après le ring sont réservables par le Page Cache segmenté.
 
 ## Préparation, arrêt et finalisation
 

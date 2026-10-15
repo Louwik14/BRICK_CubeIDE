@@ -51,6 +51,188 @@ _Static_assert(SAMPLE_STREAM_IO_MAX_READERS == 10U,
                "eight musical readers plus Recorder and Preview");
 #endif
 static uint8_t g_sample_stream_manager_initialized;
+
+typedef struct
+{
+    volatile uint32_t seq;
+    sample_audio_key_t key;
+    uint32_t total_frames;
+    uint8_t format;
+    uint8_t slice_count;
+    uint8_t active;
+    uint8_t reserved;
+} sample_slice_preload_request_t;
+
+typedef struct
+{
+    sample_audio_key_t key;
+    uint32_t request_seq;
+    uint32_t page[64];
+    uint8_t page_count;
+    uint8_t retained_count;
+    uint8_t prepared;
+    uint8_t active;
+} sample_slice_preload_state_t;
+
+static STREAM_LOCAL_D2 sample_slice_preload_request_t
+    g_slice_preload_request[SAMPLE_STREAM_TARGET_MAX_VOICES];
+static STREAM_LOCAL_D2 sample_slice_preload_state_t
+    g_slice_preload_state[SAMPLE_STREAM_TARGET_MAX_VOICES];
+
+void sample_stream_manager_slice_prepare(uint8_t track_id,
+                                         sample_audio_key_t key,
+                                         uint32_t total_frames,
+                                         sample_audio_format_t format,
+                                         uint8_t slice_count)
+{
+    if ((track_id >= SAMPLE_STREAM_TARGET_MAX_VOICES)
+        || (slice_count == 0U) || (slice_count > 64U)) return;
+    sample_slice_preload_request_t *const request = &g_slice_preload_request[track_id];
+    if ((request->active != 0U) && (request->key.domain == key.domain)
+        && (request->key.object_id == key.object_id)
+        && (request->key.generation == key.generation)
+        && (request->total_frames == total_frames)
+        && (request->format == (uint8_t)format)
+        && (request->slice_count == slice_count)) return;
+    ++request->seq;
+    __DMB();
+    request->key = key;
+    request->total_frames = total_frames;
+    request->format = (uint8_t)format;
+    request->slice_count = slice_count;
+    request->active = 1U;
+    __DMB();
+    ++request->seq;
+}
+
+void sample_stream_manager_slice_cancel(uint8_t track_id)
+{
+    if (track_id >= SAMPLE_STREAM_TARGET_MAX_VOICES) return;
+    sample_slice_preload_request_t *const request = &g_slice_preload_request[track_id];
+    ++request->seq;
+    __DMB();
+    request->active = 0U;
+    __DMB();
+    ++request->seq;
+}
+
+uint8_t sample_stream_manager_slice_prepared(uint8_t track_id)
+{
+    if (track_id >= SAMPLE_STREAM_TARGET_MAX_VOICES) return 0U;
+    const uint32_t before = g_slice_preload_request[track_id].seq;
+    if ((before & 1U) != 0U) return 0U;
+    __DMB();
+    const uint8_t active = g_slice_preload_request[track_id].active;
+    __DMB();
+    if ((before != g_slice_preload_request[track_id].seq) || (active == 0U))
+        return 0U;
+    const sample_slice_preload_state_t *const state = &g_slice_preload_state[track_id];
+    return ((state->request_seq == before) && (state->prepared != 0U)) ? 1U : 0U;
+}
+
+static void sample_stream_manager_slice_release_state(sample_slice_preload_state_t *state)
+{
+    if (state == NULL) return;
+    for (uint8_t i = 0U; i < state->retained_count; ++i)
+        sample_page_cache_slice_release_page(state->key, state->page[i]);
+    memset(state, 0, sizeof(*state));
+}
+
+static void sample_stream_manager_slice_service(void)
+{
+    for (uint8_t track = 0U; track < SAMPLE_STREAM_TARGET_MAX_VOICES; ++track)
+    {
+        sample_slice_preload_request_t request;
+        uint32_t before;
+        uint32_t after;
+        do
+        {
+            before = g_slice_preload_request[track].seq;
+            if ((before & 1U) != 0U) continue;
+            __DMB();
+            request = g_slice_preload_request[track];
+            __DMB();
+            after = g_slice_preload_request[track].seq;
+        } while ((before != after) || ((after & 1U) != 0U));
+
+        sample_slice_preload_state_t *const state = &g_slice_preload_state[track];
+        if (state->request_seq != after)
+        {
+            sample_stream_manager_slice_release_state(state);
+            if (request.active != 0U)
+            {
+                if (request.total_frames == 0U)
+                {
+                    sample_page_stream_info_t stream;
+                    if (sample_page_cache_get_stream_info_key(request.key, &stream) == 0U)
+                        continue;
+                    request.total_frames = stream.total_frames;
+                    request.format = (uint8_t)stream.format;
+                    request.key = stream.key;
+                }
+                state->request_seq = after;
+                state->key = request.key;
+                state->active = 1U;
+                const uint32_t frames_per_page = sample_audio_format_frames_per_page(
+                    sample_audio_format_or_stereo((sample_audio_format_t)request.format));
+                for (uint8_t slice = 0U; slice < request.slice_count; ++slice)
+                {
+                    const uint32_t frame = (uint32_t)(((uint64_t)request.total_frames * slice)
+                                                      / request.slice_count);
+                    const uint32_t page = frame / frames_per_page;
+                    if ((state->page_count == 0U)
+                        || (state->page[state->page_count - 1U] != page))
+                        state->page[state->page_count++] = page;
+                }
+            }
+            else state->request_seq = after;
+        }
+        if (state->active == 0U) continue;
+        if (state->retained_count < state->page_count)
+        {
+            const uint32_t page = state->page[state->retained_count];
+            if (sample_page_cache_slice_retain_page(state->key, page) != 0U)
+                ++state->retained_count;
+            return;
+        }
+        uint8_t ready = 1U;
+        for (uint8_t i = 0U; i < state->page_count; ++i)
+            if (sample_page_cache_slice_page_ready(state->key, state->page[i]) == 0U)
+                ready = 0U;
+        state->prepared = ready;
+    }
+}
+
+static uint8_t sample_stream_manager_slice_has_pending_work(void)
+{
+    for (uint8_t track = 0U; track < SAMPLE_STREAM_TARGET_MAX_VOICES; ++track)
+    {
+        const uint32_t before = g_slice_preload_request[track].seq;
+        if ((before & 1U) != 0U) return 1U;
+        __DMB();
+        const uint8_t request_active = g_slice_preload_request[track].active;
+        __DMB();
+        if (before != g_slice_preload_request[track].seq) return 1U;
+
+        const sample_slice_preload_state_t *const state = &g_slice_preload_state[track];
+        if (state->request_seq != before) return 1U;
+        if ((request_active == 0U) || (state->active == 0U)) continue;
+        if (state->retained_count < state->page_count) return 1U;
+
+        uint8_t all_ready = 1U;
+        for (uint8_t i = 0U; i < state->page_count; ++i)
+        {
+            const sample_page_state_t page_state =
+                sample_page_cache_get_page_state_key(state->key, state->page[i]);
+            if ((page_state == SAMPLE_PAGE_RESERVED)
+                || (page_state == SAMPLE_PAGE_LOADING)
+                || (page_state == SAMPLE_PAGE_FREE)) return 1U;
+            if (page_state != SAMPLE_PAGE_READY) all_ready = 0U;
+        }
+        if ((all_ready != 0U) && (state->prepared == 0U)) return 1U;
+    }
+    return 0U;
+}
 STREAM_LOCAL_D2 volatile sample_stream_fastpath_diag_t
     g_sample_stream_fastpath_diag;
 static uint8_t sample_stream_manager_candidate_for_slot(
@@ -93,6 +275,9 @@ void sample_stream_manager_reset(void)
     sample_stream_scheduler_init();
     memset((void *)&g_sample_stream_fastpath_diag, 0,
            sizeof(g_sample_stream_fastpath_diag));
+    for (uint8_t i = 0U; i < SAMPLE_STREAM_TARGET_MAX_VOICES; ++i)
+        sample_stream_manager_slice_release_state(&g_slice_preload_state[i]);
+    memset((void *)g_slice_preload_request, 0, sizeof(g_slice_preload_request));
 }
 
 void sample_stream_manager_release_sample(uint16_t sample_id)
@@ -478,6 +663,8 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
         return;
     }
 
+    sample_stream_manager_slice_service();
+
     if (sample_stream_io_active_job_count() != 0U)
     {
         for (uint8_t slot = 0U; slot < SAMPLE_PAGE_LEASE_SLOT_COUNT; ++slot)
@@ -580,6 +767,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
 
 uint8_t sample_stream_manager_has_pending_sd_work(void)
 {
+    if (sample_stream_manager_slice_has_pending_work() != 0U)
+    {
+        return 1U;
+    }
     if (sample_stream_io_active_job_count() != 0U)
     {
         return 1U;

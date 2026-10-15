@@ -14,10 +14,10 @@ extern "C" {
 #define SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS   SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS
 #define SAMPLE_GLOBAL_POOL_MAX_SLOTS      SAMPLE_GLOBAL_POOL_FINAL_SLOTS
 /* Product-wide content entries: Classic, Multi samples and wavetables. */
-#define SAMPLE_GLOBAL_POOL_ENTRY_CAPACITY \
-    (SAMPLE_PAGE_SLOT_POOL_COUNT / SAMPLE_PAGE_MIN_READY_PAGES)
+/* Catalogue identity limit is independent from the ordinary memory budget. */
+#define SAMPLE_GLOBAL_POOL_ENTRY_CAPACITY (340U)
 #define SAMPLE_GLOBAL_POOL_BUDGET_BYTES \
-    (SAMPLE_PAGE_SLOT_POOL_COUNT * SAMPLE_PAGE_BYTES)
+    (SAMPLE_PAGE_ORDINARY_CARRIER_COUNT * SAMPLE_PAGE_BYTES)
 #define SAMPLE_GLOBAL_POOL_PATH_MAX       SAMPLE_CLASSIC_PATH_MAX
 #define SAMPLE_GLOBAL_POOL_INVALID_INDEX  (0xFFFFU)
 
@@ -142,6 +142,7 @@ uint16_t sample_global_pool_get_active_slot_capacity(void);
 uint16_t sample_global_pool_get_used_slots(void);
 uint16_t sample_global_pool_get_entry_capacity(void);
 uint16_t sample_global_pool_get_used_entries(void);
+uint16_t sample_global_pool_get_used_units(void);
 uint32_t sample_global_pool_get_used_bytes(void);
 uint32_t sample_global_pool_get_free_bytes(void);
 uint8_t sample_global_pool_validate_entries(sample_global_kind_t kind,

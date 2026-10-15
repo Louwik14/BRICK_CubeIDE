@@ -101,7 +101,7 @@ uint8_t sample_page_cache_get_load_target_key(sample_audio_key_t key,
     out_target->frame_count = page->frame_count;
     out_target->format = page->format;
     out_target->stride_floats = page->stride_floats;
-    out_target->frames_per_page = page->frames_per_page;
+    out_target->frames_per_page = SAMPLE_PAGE_FRAMES;
     out_target->registration_epoch = page->registration_epoch;
     out_target->page_generation = page->generation;
     out_target->frames_interleaved = data;
@@ -161,14 +161,14 @@ uint8_t sample_page_cache_resolve_loading_target(const sample_page_load_token_t 
     {
         memset(out_target, 0, sizeof(*out_target));
         out_target->key = page->key;
-        out_target->sample_id = page->sample_id;
+        out_target->sample_id = sample_page_cache_key_slot(page->key);
         out_target->slot_index = token->slot_index;
         out_target->page_index = page->page_index;
         out_target->start_frame = page->start_frame;
         out_target->frame_count = page->frame_count;
         out_target->format = page->format;
         out_target->stride_floats = page->stride_floats;
-        out_target->frames_per_page = page->frames_per_page;
+        out_target->frames_per_page = SAMPLE_PAGE_FRAMES;
         out_target->registration_epoch = page->registration_epoch;
         out_target->page_generation = page->generation;
         out_target->frames_interleaved = data;
@@ -274,7 +274,7 @@ uint8_t sample_page_cache_publish_loading_progress_isr(
     }
 
     __DMB();
-    page->available_frame_end = available_frame_end;
+    page->available_frame_end = (uint16_t)available_frame_end;
     __DMB();
     return 1U;
 }
@@ -461,7 +461,7 @@ uint8_t sample_page_cache_reserve_page_target_key_alloc(
 
     sample_page_cache_set_page_geometry(page, key);
     page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
-    page->frame_count = sample_page_cache_stream_page_frame_count_key(key, page_index);
+    page->frame_count = (uint16_t)sample_page_cache_stream_page_frame_count_key(key, page_index);
     if (page->frame_count == 0U)
     {
         sample_page_cache_set_state(page, SAMPLE_PAGE_FAILED);
@@ -475,14 +475,14 @@ uint8_t sample_page_cache_reserve_page_target_key_alloc(
         if ((page->state != SAMPLE_PAGE_RESERVED) || (data == 0)) return 0U;
         memset(out_target, 0, sizeof(*out_target));
         out_target->key = page->key;
-        out_target->sample_id = page->sample_id;
+        out_target->sample_id = sample_page_cache_key_slot(page->key);
         out_target->slot_index = (uint16_t)(page - g_sample_page_desc);
         out_target->page_index = page->page_index;
         out_target->start_frame = page->start_frame;
         out_target->frame_count = page->frame_count;
         out_target->format = page->format;
         out_target->stride_floats = page->stride_floats;
-        out_target->frames_per_page = page->frames_per_page;
+        out_target->frames_per_page = SAMPLE_PAGE_FRAMES;
         out_target->registration_epoch = page->registration_epoch;
         out_target->page_generation = page->generation;
         out_target->frames_interleaved = data;
@@ -525,7 +525,7 @@ uint8_t sample_page_cache_reserve_page_ref_key(sample_audio_key_t key,
 
     sample_page_cache_set_page_geometry(page, key);
     page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
-    page->frame_count = sample_page_cache_stream_page_frame_count_key(key, page_index);
+    page->frame_count = (uint16_t)sample_page_cache_stream_page_frame_count_key(key, page_index);
     if (page->frame_count == 0U)
     {
         sample_page_cache_set_state(page, SAMPLE_PAGE_FAILED);

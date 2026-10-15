@@ -48,13 +48,16 @@ static uint8_t sample_page_cache_sample_is_stream_loadable_key(sample_audio_key_
         && (sample_stream_physical_map_is_current(
             &sample->stream_safe.physical_map) != 0U)) ? 1U : 0U;
 }
-
 static void sample_page_cache_alloc_range(sample_page_alloc_type_t alloc_type,
                                           uint32_t *out_start,
-                                          uint32_t *out_count)
+                                          uint32_t *out_count,
+                                          uint32_t *out_carrier_start,
+                                          uint32_t *out_carrier_count)
 {
     uint32_t start = SAMPLE_PAGE_SLOT_POOL_START;
     uint32_t count = SAMPLE_PAGE_SLOT_POOL_COUNT;
+    uint32_t carrier_start = SAMPLE_PAGE_ORDINARY_CARRIER_START;
+    uint32_t carrier_count = SAMPLE_PAGE_ORDINARY_CARRIER_COUNT;
 
     switch (alloc_type)
     {
@@ -63,9 +66,18 @@ static void sample_page_cache_alloc_range(sample_page_alloc_type_t alloc_type,
             count = SAMPLE_PAGE_SLOT_POOL_COUNT;
             break;
 
+        case SAMPLE_PAGE_ALLOC_SLICE:
+            start = SAMPLE_PAGE_SLICE_POOL_START;
+            count = SAMPLE_PAGE_SLICE_POOL_COUNT;
+            carrier_start = SAMPLE_PAGE_SLICE_CARRIER_START;
+            carrier_count = SAMPLE_PAGE_SLICE_CARRIER_COUNT;
+            break;
+
         case SAMPLE_PAGE_ALLOC_VOICE_WINDOW:
             start = SAMPLE_PAGE_VOICE_WINDOW_POOL_START;
             count = SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT;
+            carrier_start = SAMPLE_PAGE_RUNTIME_CARRIER_START;
+            carrier_count = SAMPLE_PAGE_RUNTIME_CARRIER_COUNT;
             break;
 
         case SAMPLE_PAGE_ALLOC_GENERAL:
@@ -81,6 +93,8 @@ static void sample_page_cache_alloc_range(sample_page_alloc_type_t alloc_type,
     {
         *out_count = count;
     }
+    if (out_carrier_start != 0) *out_carrier_start = carrier_start;
+    if (out_carrier_count != 0) *out_carrier_count = carrier_count;
 }
 
 static uint32_t sample_page_cache_range_cursor_offset(uint16_t cursor,
@@ -121,7 +135,10 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
 
     uint32_t range_start = 0U;
     uint32_t range_count = SAMPLE_PAGE_MAX_COUNT;
-    sample_page_cache_alloc_range(alloc_type, &range_start, &range_count);
+    uint32_t carrier_start = 0U;
+    uint32_t carrier_count = 0U;
+    sample_page_cache_alloc_range(alloc_type, &range_start, &range_count,
+                                  &carrier_start, &carrier_count);
 
     uint32_t selected_free = UINT32_MAX;
     if ((range_start == SAMPLE_PAGE_VOICE_WINDOW_POOL_START)
@@ -149,21 +166,20 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     {
         sample_page_desc_t *const page = &g_sample_page_desc[selected_free];
         page->key = key;
-        page->sample_id = sample_page_cache_key_slot(key);
         page->page_index = page_index;
         sample_page_cache_set_page_geometry(page, key);
-        if ((sample_page_cache_assign_payload(page, range_start, range_count) == 0U)
+        if ((sample_page_cache_assign_payload(page, carrier_start, carrier_count) == 0U)
             && ((page->format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
-                || (((sample_page_cache_compact_mono_at_stop(range_start, range_count) != 0U)
+                || (((sample_page_cache_compact_mono_at_stop(carrier_start, carrier_count) != 0U)
                      || (sample_page_cache_recycle_carrier_for_stereo(
-                             key, range_start, range_count) != 0U))
-                    && (sample_page_cache_assign_payload(page, range_start, range_count) != 0U))))
+                             key, carrier_start, carrier_count) != 0U))
+                    && (sample_page_cache_assign_payload(page, carrier_start, carrier_count) != 0U))))
         {
             sample_page_cache_clear_desc(page, selected_free);
             return 0;
         }
         page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
-        page->frame_count = frame_count;
+        page->frame_count = (uint16_t)frame_count;
         page->generation = ++g_sample_page_cache_state.generation_counter;
         page->last_touch = ++g_sample_page_cache_state.touch_counter;
         page->static_resident = 0U;
@@ -230,21 +246,20 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     const uint32_t slot_index = (uint32_t)(evict_page - g_sample_page_desc);
     sample_page_cache_clear_desc(evict_page, slot_index);
     evict_page->key = key;
-    evict_page->sample_id = sample_page_cache_key_slot(key);
     evict_page->page_index = page_index;
     sample_page_cache_set_page_geometry(evict_page, key);
-    if ((sample_page_cache_assign_payload(evict_page, range_start, range_count) == 0U)
+    if ((sample_page_cache_assign_payload(evict_page, carrier_start, carrier_count) == 0U)
         && ((evict_page->format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
-            || (((sample_page_cache_compact_mono_at_stop(range_start, range_count) != 0U)
+            || (((sample_page_cache_compact_mono_at_stop(carrier_start, carrier_count) != 0U)
                  || (sample_page_cache_recycle_carrier_for_stereo(
-                         key, range_start, range_count) != 0U))
-                && (sample_page_cache_assign_payload(evict_page, range_start, range_count) != 0U))))
+                         key, carrier_start, carrier_count) != 0U))
+                && (sample_page_cache_assign_payload(evict_page, carrier_start, carrier_count) != 0U))))
     {
         sample_page_cache_clear_desc(evict_page, slot_index);
         return 0;
     }
     evict_page->start_frame = sample_audio_format_page_start_frame(evict_page->format, page_index);
-    evict_page->frame_count = frame_count;
+    evict_page->frame_count = (uint16_t)frame_count;
     evict_page->generation = ++g_sample_page_cache_state.generation_counter;
     evict_page->last_touch = ++g_sample_page_cache_state.touch_counter;
     evict_page->static_resident = 0U;
@@ -258,72 +273,4 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     g_sample_page_evict_cursor =
         (uint16_t)(range_start + (((slot_index - range_start) + 1U) % range_count));
     return evict_page;
-}
-
-static int32_t sample_page_cache_find_contiguous_empty_run_in_range(uint32_t page_count,
-                                                                    uint32_t range_start,
-                                                                    uint32_t range_count)
-{
-    if ((page_count == 0U) || (page_count > range_count)
-        || ((range_start + range_count) > SAMPLE_PAGE_MAX_COUNT))
-    {
-        return -1;
-    }
-
-    for (uint32_t start = range_start; (start + page_count) <= (range_start + range_count); ++start)
-    {
-        uint32_t i = 0U;
-        for (; i < page_count; ++i)
-        {
-            if (g_sample_page_desc[start + i].state != SAMPLE_PAGE_FREE)
-            {
-                break;
-            }
-            const uint32_t block = (start + i) * SAMPLE_PAGE_BLOCKS_PER_CARRIER;
-            if ((sample_page_cache_payload_block_used(block, 0) != 0U)
-                || (sample_page_cache_payload_block_used(block + 1U, 0) != 0U))
-            {
-                break;
-            }
-        }
-
-        if (i == page_count)
-        {
-            return (int32_t)start;
-        }
-
-        start += i;
-    }
-
-    return -1;
-}
-
-static void sample_page_cache_reclaim_stream_pages_for_slot_allocation(uint32_t range_start,
-                                                                       uint32_t range_count)
-{
-    if ((range_start + range_count) > SAMPLE_PAGE_MAX_COUNT)
-    {
-        return;
-    }
-
-    for (uint32_t i = range_start; i < (range_start + range_count); ++i)
-    {
-        sample_page_desc_t *const page = &g_sample_page_desc[i];
-        if ((page->state != SAMPLE_PAGE_READY)
-            || (sample_page_cache_page_is_contractual(page) != 0U)
-            || (sample_page_cache_key_slot(page->key) >= SAMPLE_PAGE_CACHE_MAX_SAMPLES))
-        {
-            continue;
-        }
-
-        const sample_page_sample_desc_t *const sample =
-            &g_sample_page_sample_desc[sample_page_cache_key_slot(page->key)];
-        if ((sample->flags & SAMPLE_PAGE_SAMPLE_VALID) != 0U)
-        {
-            if (sample_page_cache_claim_for_recycle(page) != 0U)
-            {
-                sample_page_cache_clear_desc(page, i);
-            }
-        }
-    }
 }

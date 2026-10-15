@@ -1,5 +1,6 @@
 #include "Sampler/multi_sample_import.h"
 
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -31,6 +32,8 @@
      + (MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS * 2U) + 4U)
 #define MULTI_SAMPLE_AUTO_LOOP_MAX_CANDIDATES (64U)
 #define MULTI_SAMPLE_AUTO_LOOP_IO_BYTES (4096U)
+#define MULTI_SAMPLE_AUTO_LOOP_MATCH_FRAMES \
+    ((MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS * 2U) + 1U)
 
 typedef struct
 {
@@ -43,6 +46,9 @@ typedef struct
     uint8_t velocity_center;
     multi_sample_zone_observation_t zone_observation;
 } multi_sample_import_sample_t;
+
+_Static_assert(offsetof(multi_sample_import_sample_t, sample) == 0U,
+               "strided index view requires sample as the first member");
 
 typedef struct
 {
@@ -115,8 +121,6 @@ typedef struct
 
 SDRAM_MULTI_IMPORT static multi_sample_import_sample_t
     g_import_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
-SDRAM_MULTI_IMPORT static multi_sample_index_source_sample_t
-    g_import_source_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 SDRAM_MULTI_IMPORT static multi_sample_index_zone_t g_import_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
 SDRAM_MULTI_IMPORT static multi_sample_zone_resolution_t
     g_import_zone_resolutions[MULTI_SAMPLE_POOL_MAX_SAMPLES];
@@ -130,7 +134,8 @@ SDRAM_MULTI_IMPORT static char g_import_last_diag[MULTI_SAMPLE_IMPORT_DIAG_MAX];
 SDRAM_MULTI_IMPORT static multi_sample_auto_loop_frame_t
     g_auto_loop_begin_frames[MULTI_SAMPLE_AUTO_LOOP_MAX_WINDOW_FRAMES];
 SDRAM_MULTI_IMPORT static multi_sample_auto_loop_frame_t
-    g_auto_loop_end_frames[MULTI_SAMPLE_AUTO_LOOP_MAX_WINDOW_FRAMES];
+    g_auto_loop_end_matches[MULTI_SAMPLE_AUTO_LOOP_MAX_CANDIDATES]
+                           [MULTI_SAMPLE_AUTO_LOOP_MATCH_FRAMES];
 SDRAM_MULTI_IMPORT static multi_sample_auto_loop_candidate_t
     g_auto_loop_begin_candidates[MULTI_SAMPLE_AUTO_LOOP_MAX_CANDIDATES];
 SDRAM_MULTI_IMPORT static multi_sample_auto_loop_candidate_t
@@ -500,7 +505,7 @@ static uint8_t multi_import_auto_loop_make_window(const wav_info_t *info,
                                                   multi_sample_auto_loop_frame_t *frames,
                                                   multi_sample_auto_loop_window_t *out)
 {
-    if ((info == 0) || (frames == 0) || (out == 0) || (info->sample_rate == 0U)
+    if ((info == 0) || (out == 0) || (info->sample_rate == 0U)
         || (info->block_align == 0U))
     {
         return 0U;
@@ -691,6 +696,34 @@ static void multi_import_auto_loop_candidate_insert(
     }
 }
 
+static int32_t multi_import_auto_loop_candidate_insert_slot(
+    multi_sample_auto_loop_candidate_t *candidates,
+    uint32_t *count,
+    const multi_sample_auto_loop_candidate_t *candidate)
+{
+    if ((candidates == 0) || (count == 0) || (candidate == 0)) return -1;
+    if (*count < MULTI_SAMPLE_AUTO_LOOP_MAX_CANDIDATES)
+    {
+        const uint32_t slot = (*count)++;
+        candidates[slot] = *candidate;
+        return (int32_t)slot;
+    }
+
+    uint32_t worst = 0U;
+    uint32_t worst_amp = candidates[0].amp;
+    for (uint32_t i = 1U; i < MULTI_SAMPLE_AUTO_LOOP_MAX_CANDIDATES; ++i)
+    {
+        if (candidates[i].amp > worst_amp)
+        {
+            worst = i;
+            worst_amp = candidates[i].amp;
+        }
+    }
+    if (candidate->amp >= worst_amp) return -1;
+    candidates[worst] = *candidate;
+    return (int32_t)worst;
+}
+
 static uint32_t multi_import_auto_loop_collect_candidates(
     const multi_sample_auto_loop_window_t *window,
     multi_sample_auto_loop_candidate_t *candidates)
@@ -740,24 +773,142 @@ static uint32_t multi_import_auto_loop_collect_candidates(
     return count;
 }
 
-static uint32_t multi_import_auto_loop_match_score(
+static const multi_sample_auto_loop_frame_t *multi_import_auto_loop_ring_frame(
+    const multi_sample_auto_loop_frame_t *ring,
+    uint32_t local)
+{
+    return &ring[local % MULTI_SAMPLE_AUTO_LOOP_MATCH_FRAMES];
+}
+
+static uint32_t multi_import_auto_loop_collect_streamed_candidates(
+    FIL *fp,
+    const wav_info_t *info,
+    const multi_sample_auto_loop_window_t *window,
+    multi_sample_auto_loop_candidate_t *candidates,
+    multi_sample_auto_loop_frame_t
+        matches[MULTI_SAMPLE_AUTO_LOOP_MAX_CANDIDATES]
+               [MULTI_SAMPLE_AUTO_LOOP_MATCH_FRAMES])
+{
+    if ((fp == 0) || (info == 0) || (window == 0) || (candidates == 0)
+        || (matches == 0)
+        || (window->frame_count < ((MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS * 2U) + 3U))
+        || (info->block_align == 0U)) return 0U;
+
+    const uint64_t byte_offset =
+        (uint64_t)info->data_offset + ((uint64_t)window->start_frame * info->block_align);
+    const uint64_t byte_end = byte_offset + ((uint64_t)window->frame_count * info->block_align);
+    const uint64_t data_end = (uint64_t)info->data_offset + info->data_size;
+    if ((byte_end < byte_offset) || (byte_end > data_end)
+        || (byte_end > (uint64_t)f_size(fp))
+        || (f_lseek(fp, (FSIZE_t)byte_offset) != FR_OK)) return 0U;
+
+    multi_sample_auto_loop_frame_t ring[MULTI_SAMPLE_AUTO_LOOP_MATCH_FRAMES];
+    uint32_t count = 0U;
+    uint32_t frames_done = 0U;
+    uint32_t next_candidate = 1U;
+    while (frames_done < window->frame_count)
+    {
+        uint32_t request_frames = window->frame_count - frames_done;
+        uint32_t request_bytes = request_frames * info->block_align;
+        if (request_bytes > sizeof(g_auto_loop_io))
+            request_bytes = sizeof(g_auto_loop_io) - (sizeof(g_auto_loop_io) % info->block_align);
+        if (request_bytes == 0U) return 0U;
+
+        UINT br = 0U;
+        if ((f_read(fp, g_auto_loop_io, request_bytes, &br) != FR_OK) || (br == 0U))
+            return 0U;
+        const uint32_t valid_bytes = br - (br % info->block_align);
+        if (valid_bytes == 0U) return 0U;
+
+        uint32_t pos = 0U;
+        while ((pos + info->block_align <= valid_bytes)
+               && (frames_done < window->frame_count))
+        {
+            float left = 0.0f;
+            float right = 0.0f;
+            wav_audio_codec_decode_stereo_frame(&g_auto_loop_io[pos],
+                                                info->encoding,
+                                                info->channels,
+                                                info->bits_per_sample,
+                                                &left,
+                                                &right);
+            multi_sample_auto_loop_frame_t *const decoded =
+                &ring[frames_done % MULTI_SAMPLE_AUTO_LOOP_MATCH_FRAMES];
+            decoded->left = multi_import_float_to_i16(left);
+            decoded->right = multi_import_float_to_i16(right);
+
+            const uint32_t decoded_local = frames_done++;
+            pos += info->block_align;
+            while ((next_candidate + 1U) < window->frame_count)
+            {
+                uint32_t required = next_candidate + MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS;
+                if (required >= window->frame_count) required = window->frame_count - 1U;
+                if (decoded_local < required) break;
+
+                const multi_sample_auto_loop_frame_t *const prev =
+                    multi_import_auto_loop_ring_frame(ring, next_candidate - 1U);
+                const multi_sample_auto_loop_frame_t *const curr =
+                    multi_import_auto_loop_ring_frame(ring, next_candidate);
+                const multi_sample_auto_loop_frame_t *const next =
+                    multi_import_auto_loop_ring_frame(ring, next_candidate + 1U);
+                const int32_t prev_mono = multi_import_auto_loop_mono(prev);
+                const int32_t curr_mono = multi_import_auto_loop_mono(curr);
+                int8_t direction = 0;
+                if ((prev_mono <= 0) && (curr_mono > 0)) direction = 1;
+                else if ((prev_mono >= 0) && (curr_mono < 0)) direction = -1;
+
+                if (direction != 0)
+                {
+                    const uint32_t begin = (next_candidate > MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS)
+                        ? (next_candidate - MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS) : 0U;
+                    uint32_t end = next_candidate + MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS + 1U;
+                    if (end > window->frame_count) end = window->frame_count;
+                    uint64_t sum = 0U;
+                    for (uint32_t i = begin; i < end; ++i)
+                        sum += multi_import_auto_loop_amp(
+                            multi_import_auto_loop_ring_frame(ring, i));
+                    const multi_sample_auto_loop_candidate_t candidate = {
+                        .frame = window->start_frame + next_candidate,
+                        .local = next_candidate,
+                        .amp = multi_import_auto_loop_amp(curr),
+                        .energy = (uint32_t)(sum / (end - begin)),
+                        .slope_left = (int32_t)next->left - (int32_t)prev->left,
+                        .slope_right = (int32_t)next->right - (int32_t)prev->right,
+                        .direction = direction,
+                    };
+                    const int32_t slot = multi_import_auto_loop_candidate_insert_slot(
+                        candidates, &count, &candidate);
+                    if ((slot >= 0)
+                        && (next_candidate >= MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS)
+                        && ((next_candidate + MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS)
+                            < window->frame_count))
+                    {
+                        for (uint32_t k = 0U; k < MULTI_SAMPLE_AUTO_LOOP_MATCH_FRAMES; ++k)
+                            matches[(uint32_t)slot][k] = *multi_import_auto_loop_ring_frame(
+                                ring, next_candidate - MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS + k);
+                    }
+                }
+                next_candidate++;
+            }
+        }
+    }
+    return count;
+}
+
+static uint32_t multi_import_auto_loop_match_score_compact_end(
     const multi_sample_auto_loop_window_t *begin_window,
     const multi_sample_auto_loop_candidate_t *begin,
     const multi_sample_auto_loop_window_t *end_window,
-    const multi_sample_auto_loop_candidate_t *end)
+    const multi_sample_auto_loop_candidate_t *end,
+    const multi_sample_auto_loop_frame_t
+        end_match[MULTI_SAMPLE_AUTO_LOOP_MATCH_FRAMES])
 {
     if ((begin_window == 0) || (begin == 0) || (end_window == 0) || (end == 0)
-        || (begin_window->frames == 0) || (end_window->frames == 0))
-    {
-        return UINT32_MAX;
-    }
-
+        || (end_match == 0) || (begin_window->frames == 0)) return UINT32_MAX;
     const uint32_t radius = MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS;
     if ((begin->local < radius) || ((begin->local + radius) >= begin_window->frame_count)
         || (end->local < radius) || ((end->local + radius) >= end_window->frame_count))
-    {
         return UINT32_MAX;
-    }
 
     uint64_t diff = 0U;
     uint32_t count = 0U;
@@ -765,20 +916,16 @@ static uint32_t multi_import_auto_loop_match_score(
     {
         const multi_sample_auto_loop_frame_t *const a =
             &begin_window->frames[(uint32_t)((int32_t)begin->local + k)];
-        const multi_sample_auto_loop_frame_t *const b =
-            &end_window->frames[(uint32_t)((int32_t)end->local + k)];
+        const multi_sample_auto_loop_frame_t *const b = &end_match[k + (int32_t)radius];
         diff += multi_import_abs_i32((int32_t)a->left - (int32_t)b->left);
         diff += multi_import_abs_i32((int32_t)a->right - (int32_t)b->right);
         count += 2U;
     }
-
     const uint32_t avg_diff = (count != 0U) ? (uint32_t)(diff / count) : UINT32_MAX;
     const uint32_t slope_diff =
         multi_import_abs_i32(begin->slope_left - end->slope_left)
         + multi_import_abs_i32(begin->slope_right - end->slope_right);
-    return ((begin->amp + end->amp) / 2U)
-           + (slope_diff / 8U)
-           + (avg_diff * 4U);
+    return ((begin->amp + end->amp) / 2U) + (slope_diff / 8U) + (avg_diff * 4U);
 }
 
 static uint8_t multi_import_try_auto_loop(FIL *fp,
@@ -814,10 +961,9 @@ static uint8_t multi_import_try_auto_loop(FIL *fp,
                                             &begin_window) == 0U)
         || (multi_import_auto_loop_make_window(info,
                                                end_center,
-                                               g_auto_loop_end_frames,
+                                               0,
                                                &end_window) == 0U)
-        || (multi_import_auto_loop_read_window(fp, info, &begin_window) == 0U)
-        || (multi_import_auto_loop_read_window(fp, info, &end_window) == 0U))
+        || (multi_import_auto_loop_read_window(fp, info, &begin_window) == 0U))
     {
         return multi_import_auto_loop_mechanical_bounds(info, out_begin, out_end);
     }
@@ -825,7 +971,8 @@ static uint8_t multi_import_try_auto_loop(FIL *fp,
     const uint32_t begin_count =
         multi_import_auto_loop_collect_candidates(&begin_window, g_auto_loop_begin_candidates);
     const uint32_t end_count =
-        multi_import_auto_loop_collect_candidates(&end_window, g_auto_loop_end_candidates);
+        multi_import_auto_loop_collect_streamed_candidates(
+            fp, info, &end_window, g_auto_loop_end_candidates, g_auto_loop_end_matches);
     if ((begin_count == 0U) || (end_count == 0U))
     {
         return multi_import_auto_loop_mechanical_bounds(info, out_begin, out_end);
@@ -848,8 +995,8 @@ static uint8_t multi_import_try_auto_loop(FIL *fp,
                 continue;
             }
 
-            uint32_t score =
-                multi_import_auto_loop_match_score(&begin_window, begin, &end_window, end);
+            uint32_t score = multi_import_auto_loop_match_score_compact_end(
+                &begin_window, begin, &end_window, end, g_auto_loop_end_matches[j]);
             if (score == UINT32_MAX)
             {
                 continue;
@@ -1654,10 +1801,9 @@ static multi_sample_import_result_t multi_import_write_index(void)
     src.sample_count = g_import_sample_count;
     src.zone_count = g_import_zone_count;
     src.zones = g_import_zones;
-    for (uint16_t i = 0U; i < g_import_sample_count; ++i)
-        g_import_source_samples[i] = g_import_samples[i].sample;
-    src.samples = g_import_source_samples;
-    return multi_import_index_write_result(multi_sample_index_write(g_import_index_path, &src));
+    src.samples = &g_import_samples[0].sample;
+    return multi_import_index_write_result(multi_sample_index_write_strided(
+        g_import_index_path, &src, sizeof(g_import_samples[0])));
 }
 
 void multi_sample_import_service(uint32_t byte_budget)

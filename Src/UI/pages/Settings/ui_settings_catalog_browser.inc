@@ -896,9 +896,33 @@ static uint8_t ui_page_settings_wavetable_browser_refresh(void)
     return ui_page_settings_wavetable_browser_request(g_ui_settings.sample_dir);
 }
 
+static void ui_page_settings_wavetable_browser_stop(void)
+{
+    g_ui_settings.wavetable_scan_active = 0U;
+    g_ui_settings.wavetable_restore_pending = 0U;
+    if ((g_ui_settings.wavetable_scan_dir_open != 0U)
+        && (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) != 0U))
+    {
+        (void)f_closedir(&g_ui_settings.wavetable_scan_dir);
+        g_ui_settings.wavetable_scan_dir_open = 0U;
+        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+    }
+}
+
 static void ui_page_settings_wavetable_browser_service(void)
 {
+    if ((g_ui_settings.wavetable_scan_active == 0U)
+        && (g_ui_settings.wavetable_scan_dir_open != 0U))
+    {
+        if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U) return;
+        (void)f_closedir(&g_ui_settings.wavetable_scan_dir);
+        g_ui_settings.wavetable_scan_dir_open = 0U;
+        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+        return;
+    }
     if (g_ui_settings.wavetable_scan_active == 0U) return;
+    const ui_settings_menu_level_t *const level = ui_page_settings_current_level();
+    if ((level == 0) || (level->view != UI_SETTINGS_VIEW_WAVETABLE)) return;
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U) return;
     (void)ui_page_settings_wavetable_scan_slice();
     sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
@@ -1101,6 +1125,7 @@ static uint8_t ui_page_settings_multi_browser_refresh(void)
 
 static void ui_page_settings_sample_browser_enter_root(void)
 {
+    ui_page_settings_wavetable_browser_stop();
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", UI_SETTINGS_SAMPLE_ROOT);
     g_ui_settings.sample_parent_id = WAV_LOADER_CATALOG_ROOT_PARENT;
@@ -1121,6 +1146,7 @@ static void ui_page_settings_sample_browser_enter_root(void)
 
 static void ui_page_settings_multi_browser_enter_root(void)
 {
+    ui_page_settings_wavetable_browser_stop();
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", UI_SETTINGS_MULTI_ROOT);
     g_ui_settings.sample_selected = 0U;

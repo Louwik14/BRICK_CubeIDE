@@ -39,6 +39,12 @@ Name/Edit commun charge le nom pour Rename et place le curseur apres le dernier
 caractere du nom charge ou genere.
 Les browsers dynamiques de SETTINGS appliquent le meme contrat de separation
 entre statut et footer.
+Leurs tableaux d'entrees Sample/Wavetable et Multi partagent une union: les
+vues sont exclusives et conservent leurs capacites respectives de 256 et 240
+entrees. Quitter Wavetable annule son scan cooperatif avant de rendre l'union a
+une autre vue; son `DIR` est ferme sous le gate Preview des que celui-ci est
+disponible. Cette mutualisation retire 48 128 octets de `.ui_state_sdram` sans
+modifier la pagination ni la navigation.
 
 Le contexte temporaire TRACK est resolu par `ui_hall_mode_track_overlay_active`,
 utilise par le dispatch Hall et la projection LED. Il prime sur la page active

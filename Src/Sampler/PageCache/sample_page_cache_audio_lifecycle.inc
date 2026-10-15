@@ -50,7 +50,7 @@ uint8_t sample_page_cache_audio_resolve_page_key(sample_audio_key_t key,
     out_span->key = snapshot.key;
     out_span->format = snapshot.format;
     out_span->stride_floats = snapshot.stride_floats;
-    out_span->frames_per_page = snapshot.frames_per_page;
+    out_span->frames_per_page = SAMPLE_PAGE_FRAMES;
     out_span->registration_epoch = snapshot.registration_epoch;
     out_span->slot_index = (uint32_t)(page - g_sample_page_desc);
     return 1U;
@@ -94,7 +94,7 @@ uint8_t sample_page_cache_audio_resolve_page_ref_key(sample_audio_key_t key,
         || ((ref->registration_epoch != 0U)
             && (snapshot.registration_epoch != ref->registration_epoch))
         || (ref->stride_floats != snapshot.stride_floats)
-        || (ref->frames_per_page != snapshot.frames_per_page))
+        || (ref->frames_per_page != SAMPLE_PAGE_FRAMES))
     {
         return 0U;
     }
@@ -108,7 +108,7 @@ uint8_t sample_page_cache_audio_resolve_page_ref_key(sample_audio_key_t key,
     out_span->key = snapshot.key;
     out_span->format = snapshot.format;
     out_span->stride_floats = snapshot.stride_floats;
-    out_span->frames_per_page = snapshot.frames_per_page;
+    out_span->frames_per_page = SAMPLE_PAGE_FRAMES;
     out_span->registration_epoch = snapshot.registration_epoch;
     out_span->slot_index = ref->slot_index;
     return 1U;

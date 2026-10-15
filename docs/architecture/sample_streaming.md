@@ -3,23 +3,18 @@
 ## Contrat
 
 Classic STREAM, Multi et REC_SOURCE utilisent un seul Page Cache. Le backing
-reste forme de 376 carriers physiques de 16 KiB, chacun divisible en deux
+reste forme de 1660 carriers physiques de 16 KiB, chacun divisible en deux
 blocs alignes de 8 KiB. Une page FLOAT32 mono occupe un bloc (2048 frames) et
 une page FLOAT32 stereo entrelace occupe les deux blocs contigus du carrier
-(2048 frames). Deux pages mono peuvent donc partager un carrier. Les 376
-descriptors logiques sont conserves: 340 generaux et 36 reserves
+(2048 frames). Deux pages mono peuvent donc partager un carrier. Les 2772
+descriptors logiques sont independants des carriers: 2224 ordinaires, 512
+reserves aux departs de slices et 36 reserves
 aux neuf readers garantis et a leurs quatre roles `CURRENT`, `NEXT`,
-`LOOP_START`, `LOOP_START_NEXT`. Le payload occupe donc 6 160 384 octets en
+`LOOP_START`, `LOOP_START_NEXT`. Le payload occupe donc 27 197 440 octets en
 SDRAM. Un presocle mono coute 8192 octets, un presocle stereo 16384 octets;
-le backing statique ne retrecit pas, mais sa capacite utile mono double jusqu'a
-la limite actuelle des 376 descriptors. Le passage depuis 64 KiB libere
-18 481 152 octets de SDRAM sans changer
-le nombre de slots, les identifiants, les leases, les generations, l'eviction
-ou les refcounts/protections existants. Ce choix libere la SDRAM au lieu de
-porter le cache a 1504 slots: le pool general partage par Classic STREAM, Multi et
-Wavetable passe mecaniquement de 22 282 240 a 5 570 560 octets. Augmenter le
-nombre de slots aurait ajoute environ 154 KiB de metadata chaude et depasse le
-budget D1 actuel; aucun placement agressif du prototype n'est repris.
+les zones physiques fixes comprennent 1112 carriers ordinaires, 512 carriers
+slices et 36 carriers runtime. Elles partagent le meme backing continu, le meme
+index et le meme Streamer, sans redistribution dynamique.
 
 Une page suit toujours `FREE -> RESERVED -> LOADING -> READY`, avec les chemins
 `EVICTING` et `FAILED` existants. `LOADING` porte en plus un watermark monotone
@@ -27,20 +22,20 @@ Une page suit toujours `FREE -> RESERVED -> LOADING -> READY`, avec les chemins
 64 frames stereo par chunk de 512 octets, puis vaut 2048. Une completion n'est publiee que si la
 cle, le slot, la generation et l'epoch d'enregistrement correspondent encore.
 
-Les 772 identifiants STREAM possedent chacun un descriptor froid de 116 octets
-en SDRAM: 104 octets de metadata physique (cle, geometrie source et map FAT),
+Les 772 identifiants STREAM possedent chacun un descriptor froid de 96 octets
+en SDRAM: 84 octets de metadata physique (cle, geometrie source et map FAT),
 `readable_frames`, l'epoch d'enregistrement, le format, l'encoding et les flags
 `valid/live/canonical`. Les chemins et le resultat WAV complet restent chez
 leurs proprietaires Classic, Multi ou REC_SOURCE; ils ne sont pas recopies dans
-le registre STREAM. Le tableau occupe 89 552 octets, contre 262 480 auparavant,
-soit 172 928 octets recuperes.
+le registre STREAM. Le tableau occupe 74 112 octets, contre 262 480 auparavant,
+soit 188 368 octets recuperes.
 
 Toute registration jouable exige une map physique valide et appartenant a
 l'epoch media courant. Un echec de construction, une map trop fragmentee ou un
 pool d'extents epuise refuse la registration avant publication. Le runtime de
 lecture ne possede plus de fallback FatFs: FatFs reste utilise en amont pour
 ouvrir, parser, importer, convertir et construire les maps, ainsi que par
-Preview et Waveform. Le snapshot fige par un job I/O reste exactement 128
+Preview et Waveform. Le snapshot fige par un job I/O reste exactement 108
 octets et le cycle de remplacement reste `STOP -> DELETE -> LOAD`.
 
 ## Lecture SD progressive
@@ -102,29 +97,36 @@ jamais un mono en stereo dans STORAGE et la duplication L/R reste dans les
 kernels AUDIO. Les maps physiques, epochs, leases, slices, reverse et boucles
 restent communs aux deux formats.
 
-Le build Release H743 de cette refonte conserve exactement 6 160 384 octets
-de payload Page Cache et les descriptors de 64 octets. La table d'occupation
-bornee des 752 demi-blocs ajoute 1504 octets en `sdram_page_meta`. Le passage
-du job coalesce de quatre a huit destinations ajoute 576 octets en D2
-cacheable. D1 et D3 ne changent pas. Ces valeurs sont des mesures MAP
-statiques; les latences AUDIO/SD restent a confirmer sur cible avec les memes
-scenarios du 8 octobre. Les 376 descriptors logiques restent la premiere
-limite: sans leur futur redimensionnement, 752 demi-blocs physiques ne peuvent
-pas rendre plus de 376 pages mono simultanement adressables.
+Le build Release final porte 27 197 440 octets de payload, 2772 descriptors
+de 40 octets, 5544 entrees hash de 12 octets et 6640 octets d'occupation des
+3320 demi-carriers. Le nombre de descriptors est independant du nombre de
+carriers; AUDIO conserve la resolution directe par `data_offset`.
 
-Pour le catalogue produit affiche par le Sample Browser, la capacite est de
-340 samples charges. Les 36 carriers runtime sont soustraits avant admission;
-il reste donc 340 descriptors generaux et 340 carriers generaux. Chaque sample
-Classic ou sample constitutif d'un Multi protege exactement sa page de presocle
-et consomme un descriptor: 8 KiB en mono, 16 KiB en stereo. Le packing mono
-peut laisser du payload libre, mais ne cree aucun descriptor general
-supplementaire. Les slices sont des bornes de lecture dans un sample et ne
-consomment ni descriptor, ni page, ni carrier. La limite effective est donc
-`min(340 descriptors generaux, 680 demi-carriers)` en mono et
-`min(340 descriptors generaux, 340 carriers)` en stereo, soit 340 samples dans
-les deux cas. Le compteur UI compte les samples (`Classic = 1`, `Multi = nombre
-de samples de l'instrument`) et affiche `X/340`; il ne compte jamais les pages
-ou les carriers.
+La MAP Release mesure le passage suivant pour les structures du Page Cache:
+
+| Structure | Avant | Apres | Delta |
+|---|---:|---:|---:|
+| Payload SDRAM | 6 160 384 | 27 197 440 | +21 037 056 |
+| Descriptors D1 | 15 040 (376) | 110 880 (2772) | +95 840 |
+| Index hash D1 | 9 024 (752) | 66 528 (5544) | +57 504 |
+| Occupation SDRAM | 1 504 | 6 640 | +5 136 |
+
+Apres liaison, l'arene D1 non affectee mesure 51 744 octets. Le dernier objet
+SDRAM general finit 12 512 octets avant l'anneau Recorder fixe; les 296 960
+octets situes apres cet anneau restent la reserve de fin existante.
+
+Le Sample Browser admet au plus 2224 unites ordinaires de 8 KiB et affiche
+`X/2224`. Un presocle mono coute une unite et un presocle stereo deux. Les
+pages slices et runtime ne participent pas a ce compteur. La capacite
+d'identifiants CLASSIC/MULTI reste un contrat distinct: 152 slots globaux et
+340 entrees de catalogue, inchanges par le redimensionnement memoire.
+
+Le Slicer publie une demande de preparation par piste. STORAGE calcule les
+departs reguliers, elimine les pages dupliquees, reutilise toute page globale
+deja presente, puis retient et charge cooperativement les pages manquantes par
+le Streamer existant. Une configuration est `prepared` seulement lorsque
+toutes ses pages uniques sont READY. Les lectures de voix gardent la priorite;
+la reserve garantit la residence finale, pas une latence instantanee.
 
 Les pages partielles et les formats non canoniques restent sur le chemin de
 lecture asynchrone complet existant. Les writes Recorder/Looper/Overdub ne sont
@@ -375,11 +377,11 @@ Aucune autre priorite n'est changee.
 Le placement produit reste celui de `main`: payload en SDRAM, descriptors et
 index chauds en D1, cursors/emplois Stream locaux en D2, et controle du cache en
 D3. Aucun placement DTCM agressif du prototype n'est repris. Sur le build
-Release de reference, le payload fait 6 160 384 octets, les 376 descriptors
-font 24 064 octets, l'index fait 15 040 octets et la table last-slot fait
-1 544 octets. Les occupations globales sont DTCM 130 816, D1 515 904,
-D2 non-cacheable 6 592, D2 cacheable 107 776, SRAM2/D2 130 240,
-SRAM3/D2 23 264, D3 52 768 et SDRAM 14 030 944 octets.
+Release de reference, le payload fait 27 197 440 octets, les 2 772
+descriptors font 110 880 octets, l'index fait 66 528 octets, la table
+last-slot fait 1 544 octets et la table d'occupation des carriers fait
+6 640 octets. La D1 conserve 51 744 octets libres apres liaison; la fin du
+pool continu reste 12 512 octets avant l'anneau recorder fixe.
 
 ## Fastpath sequentiel
 
@@ -643,11 +645,21 @@ candidats, puis au plus 4096 paires de 33 frames. `R=16` et `C=64` la bornent,
 mais le pire cas tres riche en zero crossings effectue plusieurs millions
 d'operations entieres simples dans l'appel de scan.
 
-Les buffers statiques propres a l'auto-loop occupent 123 168 octets de
-`.sdram_multi_import`: 115 488 octets de frames, 3 584 octets de candidats et
-4096 octets d'I/O. La section d'import complete mesure 291 200 octets dans le
-build Release de reference; elle est NOLOAD et n'est pas une allocation par
-voix. Le rendu ne paie aucun de ces calculs.
+Les buffers statiques propres a l'auto-loop occupent 73 872 octets de
+`.sdram_multi_import`: 57 744 octets pour la fenetre START, 8 448 octets pour
+les 64 voisinages END de 33 frames stereo, 3 584 octets de candidats et
+4096 octets d'I/O. La fenetre END est decodee en flux dans un ring local; le
+classement, les amplitudes, energies, pentes et 33 frames employees par le
+score restent identiques a l'algorithme plein. Cette representation economise
+49 296 octets sans reduire la fenetre ni passer le score en mono.
+
+L'indexeur consomme en outre les samples d'import par une vue stridee sur le
+premier membre de `g_import_samples`. Il ne conserve plus la copie contigue de
+768 entrees, soit 30 720 octets retires. Le writer reste synchrone et copie les
+donnees dans l'arene d'index avant de rendre la main. La section d'import
+complete mesure 211 168 octets dans le build Release de reference; elle est
+NOLOAD et n'est pas une allocation par voix. Le rendu ne paie aucun de ces
+calculs.
 
 Verdict **B -- correct mais ameliorable**. Le choix borne, sans allocation,
 avec zero crossing, pentes et comparaison L/R est encore raisonnable pour un
