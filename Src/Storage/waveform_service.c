@@ -540,13 +540,15 @@ static const rec_source_waveform_summary_t *waveform_rec_summary(
     const waveform_source_t *source)
 {
     rec_source_snapshot_t current;
-    if((source == 0) || (rec_source_current_snapshot(&current) == 0U)
+    const char *path = 0;
+    if((source == 0) || (rec_source_current_path(&path, &current) == 0U)
             || (sample_audio_key_equal(&source->key, &current.key) == 0U)
             || (source->registration_epoch != current.registration_epoch)
             || (source->frame_count != current.frame_count))
     {
         return 0;
     }
+    (void)path;
     const rec_source_waveform_summary_t *const summary =
         rec_source_current_waveform();
     if((summary == 0) || (summary->ready == 0U)
@@ -849,17 +851,28 @@ waveform_result_t waveform_request_overview(const waveform_source_t *source,
 
 waveform_result_t waveform_request_recording_overview(
     uint8_t pixel_width, waveform_column_t *columns,
+    waveform_line_column_t *line,
     uint32_t *out_captured_frames, uint32_t *out_domain_frames)
 {
-    _Static_assert(sizeof(waveform_column_t)
-        == sizeof(rec_source_waveform_column_t), "waveform column layout");
-    if ((columns == NULL) || (pixel_width == 0U)
+    if ((columns == NULL) || (line == NULL) || (pixel_width == 0U)
             || (out_captured_frames == NULL) || (out_domain_frames == NULL))
         return WAVEFORM_RESULT_INVALID;
-    return (rec_source_waveform_active_overview(pixel_width,
-        (rec_source_waveform_column_t *)columns, out_captured_frames,
-        out_domain_frames) != 0U) ? WAVEFORM_RESULT_READY
-                                  : WAVEFORM_RESULT_PENDING;
+    rec_source_waveform_column_t active[126];
+    if (pixel_width > (uint8_t)(sizeof(active) / sizeof(active[0])))
+        return WAVEFORM_RESULT_INVALID;
+    if (rec_source_waveform_active_overview(pixel_width, active,
+            out_captured_frames, out_domain_frames) == 0U)
+        return WAVEFORM_RESULT_PENDING;
+    const uint8_t trace_ready = (uint8_t)(*out_domain_frames
+        <= (uint32_t)pixel_width * REC_SOURCE_WAVEFORM_LIVE_FRAMES_PER_BIN);
+    for (uint8_t col = 0U; col < pixel_width; ++col)
+    {
+        columns[col].min = active[col].min;
+        columns[col].max = active[col].max;
+        line[col].point = active[col].last;
+        line[col].ready = trace_ready;
+    }
+    return WAVEFORM_RESULT_READY;
 }
 
 waveform_result_t waveform_request(const waveform_source_t *source,
@@ -917,6 +930,14 @@ waveform_result_t waveform_request(const waveform_source_t *source,
 
     const uint32_t frames_per_pixel = (uint32_t)(((uint64_t)frame_count
         + pixel_width - 1U) / pixel_width);
+    if(summary != 0 && summary->frames_per_bin != 0U
+            && summary->frames_per_bin <= frames_per_pixel)
+    {
+        waveform_render_rec_overview(summary, start_frame, frame_count,
+            pixel_width, columns);
+        waveform_diag_ready();
+        return WAVEFORM_RESULT_READY;
+    }
     uint8_t ideal = WAVEFORM_CACHE_LEVEL_L4_VERY_FINE;
     for(uint8_t level = WAVEFORM_CACHE_LEVEL_L0_COARSE;
             level < WAVEFORM_CACHE_LEVEL_COUNT; ++level)
@@ -1034,13 +1055,9 @@ waveform_result_t waveform_request_detailed(const waveform_source_t *source,
         return waveform_request(source, start_frame, frame_count,
             pixel_width, columns);
     }
+    waveform_local_request(source, start_frame, frame_count);
     const rec_source_waveform_summary_t *const summary =
         waveform_rec_summary(source);
-    if(summary == 0)
-    {
-        return WAVEFORM_RESULT_PENDING;
-    }
-    waveform_local_request(source, start_frame, frame_count);
     int32_t reused_shift = INT32_MAX;
     if(g_waveform_local_line_hot.valid != 0U
             && waveform_source_equal(&g_waveform_local_line_hot.source,
@@ -1099,6 +1116,12 @@ waveform_result_t waveform_request_detailed(const waveform_source_t *source,
             line[col].point = waveform_local_line_point(col,
                 pixel_width, &point);
             line[col].ready = 1U;
+            continue;
+        }
+        if(summary == 0)
+        {
+            columns[col].min = 0;
+            columns[col].max = 0;
             continue;
         }
         uint32_t bin0, bin1;

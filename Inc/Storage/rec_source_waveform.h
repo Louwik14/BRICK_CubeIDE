@@ -4,6 +4,7 @@
 
 #define REC_SOURCE_WAVEFORM_BINS 4096U
 #define REC_SOURCE_WAVEFORM_SERVICE_FRAMES 4096U
+#define REC_SOURCE_WAVEFORM_LIVE_FRAMES_PER_BIN 32U
 
 typedef struct
 {
@@ -17,12 +18,16 @@ typedef struct
     uint8_t reserved;
     int16_t min[REC_SOURCE_WAVEFORM_BINS];
     int16_t max[REC_SOURCE_WAVEFORM_BINS];
+    int16_t first[REC_SOURCE_WAVEFORM_BINS];
+    int16_t last[REC_SOURCE_WAVEFORM_BINS];
 } rec_source_waveform_summary_t;
 
 typedef struct
 {
     int16_t min;
     int16_t max;
+    int16_t first;
+    int16_t last;
 } rec_source_waveform_column_t;
 
 void rec_source_waveform_begin(uint32_t frame_limit);

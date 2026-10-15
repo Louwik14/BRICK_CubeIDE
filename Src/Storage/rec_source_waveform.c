@@ -11,6 +11,8 @@ typedef struct
     uint32_t compact_cursor;
     uint32_t compact_start_frame;
     uint32_t clear_cursor;
+    rec_source_waveform_column_t live[REC_SOURCE_WAVEFORM_BINS];
+    uint32_t live_block[REC_SOURCE_WAVEFORM_BINS];
     uint8_t active_level;
     uint8_t compacting;
     uint8_t active;
@@ -29,11 +31,15 @@ static void clear_level(rec_source_waveform_summary_t *level)
 }
 
 static void accumulate(rec_source_waveform_summary_t *level, uint32_t bin,
-                       int16_t min, int16_t max)
+                       int16_t min, int16_t max, int16_t first, int16_t last)
 {
     if (bin >= REC_SOURCE_WAVEFORM_BINS) return;
+    const uint8_t empty = (uint8_t)((level->min[bin] == 32767)
+        && (level->max[bin] == -32768));
     if (min < level->min[bin]) level->min[bin] = min;
     if (max > level->max[bin]) level->max[bin] = max;
+    if (empty != 0U) level->first[bin] = first;
+    level->last[bin] = last;
 }
 
 static void compact_one(void)
@@ -48,7 +54,12 @@ static void compact_one(void)
         ? src->min[i * 2U] : src->min[i * 2U + 1U];
     const int16_t max = (src->max[i * 2U] > src->max[i * 2U + 1U])
         ? src->max[i * 2U] : src->max[i * 2U + 1U];
-    accumulate(dst, i, min, max);
+    const uint32_t left = i * 2U;
+    const uint32_t right = left + 1U;
+    const uint8_t right_seen = (uint8_t)((src->min[right] != 32767)
+        || (src->max[right] != -32768));
+    accumulate(dst, i, min, max, src->first[left],
+        (right_seen != 0U) ? src->last[right] : src->last[left]);
     g_rec_source_waveform.compact_cursor++;
 }
 
@@ -66,6 +77,23 @@ static void capture_frame(const float *lr, uint32_t frame)
     const int16_t r = float_to_i16(lr[1]);
     const int16_t sample_min = (l < r) ? l : r;
     const int16_t sample_max = (l > r) ? l : r;
+    const int16_t mono = (int16_t)(((int32_t)l + r) / 2);
+    const uint32_t live_block = frame / REC_SOURCE_WAVEFORM_LIVE_FRAMES_PER_BIN;
+    const uint32_t live_bin = live_block % REC_SOURCE_WAVEFORM_BINS;
+    rec_source_waveform_column_t *const live =
+        &g_rec_source_waveform.live[live_bin];
+    if (g_rec_source_waveform.live_block[live_bin] != live_block + 1U)
+    {
+        *live = (rec_source_waveform_column_t){ sample_min, sample_max,
+            mono, mono };
+        g_rec_source_waveform.live_block[live_bin] = live_block + 1U;
+    }
+    else
+    {
+        if (sample_min < live->min) live->min = sample_min;
+        if (sample_max > live->max) live->max = sample_max;
+        live->last = mono;
+    }
     rec_source_waveform_summary_t *active =
         &g_rec_source_waveform.levels[g_rec_source_waveform.active_level];
     const uint32_t frames_per_bin = active->frames_per_bin;
@@ -84,7 +112,7 @@ static void capture_frame(const float *lr, uint32_t frame)
         const uint32_t next_fpb = frames_per_bin * 2U;
         const uint32_t bin = (REC_SOURCE_WAVEFORM_BINS / 2U)
             + ((frame - g_rec_source_waveform.compact_start_frame) / next_fpb);
-        accumulate(dst, bin, sample_min, sample_max);
+        accumulate(dst, bin, sample_min, sample_max, mono, mono);
         if (g_rec_source_waveform.compact_cursor
                 >= (REC_SOURCE_WAVEFORM_BINS / 2U))
         {
@@ -97,7 +125,8 @@ static void capture_frame(const float *lr, uint32_t frame)
     }
     else
     {
-        accumulate(active, frame / frames_per_bin, sample_min, sample_max);
+        accumulate(active, frame / frames_per_bin, sample_min, sample_max,
+            mono, mono);
         rec_source_waveform_summary_t *const spare =
             &g_rec_source_waveform.levels[g_rec_source_waveform.active_level ^ 1U];
         for (uint8_t n = 0U; (n < 2U)
@@ -106,6 +135,8 @@ static void capture_frame(const float *lr, uint32_t frame)
         {
             spare->min[g_rec_source_waveform.clear_cursor] = 32767;
             spare->max[g_rec_source_waveform.clear_cursor] = -32768;
+            spare->first[g_rec_source_waveform.clear_cursor] = 0;
+            spare->last[g_rec_source_waveform.clear_cursor] = 0;
             g_rec_source_waveform.clear_cursor++;
         }
     }
@@ -155,49 +186,28 @@ uint32_t rec_source_waveform_captured_frames(void)
     return g_rec_source_waveform.captured_frames;
 }
 
-static void active_range(uint32_t frame0, uint32_t frame1,
-                         int16_t *out_min, int16_t *out_max)
+static void live_range(uint32_t frame0, uint32_t frame1,
+                       rec_source_waveform_column_t *out)
 {
-    int16_t min = 32767;
-    int16_t max = -32768;
-    const uint8_t active_level = g_rec_source_waveform.active_level;
-    const rec_source_waveform_summary_t *const src =
-        &g_rec_source_waveform.levels[active_level];
-    const uint32_t split = (g_rec_source_waveform.compacting != 0U)
-        ? g_rec_source_waveform.compact_start_frame : frame1;
-    uint32_t part1 = (frame1 < split) ? frame1 : split;
-    if (frame0 < part1)
+    uint8_t seen = 0U;
+    const uint32_t first_block = frame0 / REC_SOURCE_WAVEFORM_LIVE_FRAMES_PER_BIN;
+    const uint32_t last_block = (frame1 - 1U)
+        / REC_SOURCE_WAVEFORM_LIVE_FRAMES_PER_BIN;
+    for (uint32_t block = first_block; block <= last_block; ++block)
     {
-        uint32_t bin0 = frame0 / src->frames_per_bin;
-        uint32_t bin1 = (part1 + src->frames_per_bin - 1U)
-            / src->frames_per_bin;
-        if (bin1 > REC_SOURCE_WAVEFORM_BINS) bin1 = REC_SOURCE_WAVEFORM_BINS;
-        for (uint32_t bin = bin0; bin < bin1; ++bin)
+        const uint32_t bin = block % REC_SOURCE_WAVEFORM_BINS;
+        if (g_rec_source_waveform.live_block[bin] != block + 1U) continue;
+        const rec_source_waveform_column_t *const value =
+            &g_rec_source_waveform.live[bin];
+        if (seen == 0U) { *out = *value; seen = 1U; }
+        else
         {
-            if (src->min[bin] < min) min = src->min[bin];
-            if (src->max[bin] > max) max = src->max[bin];
+            if (value->min < out->min) out->min = value->min;
+            if (value->max > out->max) out->max = value->max;
+            out->last = value->last;
         }
     }
-    if ((g_rec_source_waveform.compacting != 0U) && (frame1 > split))
-    {
-        const rec_source_waveform_summary_t *const dst =
-            &g_rec_source_waveform.levels[active_level ^ 1U];
-        const uint32_t fpb = src->frames_per_bin * 2U;
-        const uint32_t begin = (frame0 > split) ? frame0 : split;
-        uint32_t bin0 = REC_SOURCE_WAVEFORM_BINS / 2U
-            + ((begin - split) / fpb);
-        uint32_t bin1 = REC_SOURCE_WAVEFORM_BINS / 2U
-            + ((frame1 - split + fpb - 1U) / fpb);
-        if (bin1 > REC_SOURCE_WAVEFORM_BINS) bin1 = REC_SOURCE_WAVEFORM_BINS;
-        for (uint32_t bin = bin0; bin < bin1; ++bin)
-        {
-            if (dst->min[bin] < min) min = dst->min[bin];
-            if (dst->max[bin] > max) max = dst->max[bin];
-        }
-    }
-    if ((min == 32767) && (max == -32768)) min = max = 0;
-    *out_min = min;
-    *out_max = max;
+    if (seen == 0U) *out = (rec_source_waveform_column_t){0, 0, 0, 0};
 }
 
 uint8_t rec_source_waveform_active_overview(uint8_t pixel_width,
@@ -208,26 +218,30 @@ uint8_t rec_source_waveform_active_overview(uint8_t pixel_width,
     if ((g_rec_source_waveform.active == 0U) || (pixel_width == 0U)
             || (columns == NULL) || (out_captured_frames == NULL)
             || (out_domain_frames == NULL)) return 0U;
-    const uint32_t domain = (g_rec_source_waveform.captured_frames != 0U)
-        ? g_rec_source_waveform.captured_frames : 1U;
+    const uint32_t capacity = REC_SOURCE_WAVEFORM_BINS
+        * REC_SOURCE_WAVEFORM_LIVE_FRAMES_PER_BIN;
+    const uint32_t domain = (g_rec_source_waveform.captured_frames < capacity)
+        ? g_rec_source_waveform.captured_frames : capacity;
+    const uint32_t start = g_rec_source_waveform.captured_frames - domain;
+    const uint32_t safe_domain = (domain != 0U) ? domain : 1U;
     for (uint8_t col = 0U; col < pixel_width; ++col)
     {
-        const uint32_t frame0 = (uint32_t)(((uint64_t)col * domain)
+        const uint32_t frame0 = start + (uint32_t)(((uint64_t)col * safe_domain)
             / pixel_width);
-        uint32_t frame1 = (uint32_t)(((uint64_t)(col + 1U) * domain)
+        uint32_t frame1 = start + (uint32_t)(((uint64_t)(col + 1U) * safe_domain)
             / pixel_width);
         if (frame1 <= frame0) frame1 = frame0 + 1U;
         if (frame0 >= g_rec_source_waveform.captured_frames)
-            columns[col] = (rec_source_waveform_column_t){0, 0};
+            columns[col] = (rec_source_waveform_column_t){0, 0, 0, 0};
         else
         {
             if (frame1 > g_rec_source_waveform.captured_frames)
                 frame1 = g_rec_source_waveform.captured_frames;
-            active_range(frame0, frame1, &columns[col].min, &columns[col].max);
+            live_range(frame0, frame1, &columns[col]);
         }
     }
     *out_captured_frames = g_rec_source_waveform.captured_frames;
-    *out_domain_frames = domain;
+    *out_domain_frames = safe_domain;
     return 1U;
 }
 

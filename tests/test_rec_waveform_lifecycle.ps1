@@ -11,6 +11,8 @@ function Compact-MinMax([object[]]$Bins) {
         $out.Add([pscustomobject]@{
             Min = [math]::Min($Bins[$index].Min, $Bins[$right].Min)
             Max = [math]::Max($Bins[$index].Max, $Bins[$right].Max)
+            First = $Bins[$index].First
+            Last = $Bins[$right].Last
         })
     }
     return $out.ToArray()
@@ -19,7 +21,7 @@ function Compact-MinMax([object[]]$Bins) {
 # Pairwise reductions used by rec_source_waveform must preserve transients at
 # every temporal scale.
 $bins = for ($index = 0; $index -lt 4096; $index++) {
-    [pscustomobject]@{ Min = 0; Max = 0 }
+    [pscustomobject]@{ Min = 0; Max = 0; First = $index; Last = $index }
 }
 $bins[17].Max = 32767
 $bins[3001].Min = -32768
@@ -27,6 +29,9 @@ for ($level = 0; $level -lt 5; $level++) {
     $bins = Compact-MinMax $bins
     Assert-True (($bins.Max -contains 32767) -and ($bins.Min -contains -32768)) `
         "peak lost at compaction level $level"
+    Assert-True (($bins[0].First -eq 0) -and
+        ($bins[$bins.Count - 1].Last -eq 4095)) `
+        "temporal endpoints lost at compaction level $level"
 }
 
 $root = Split-Path -Parent $PSScriptRoot
@@ -35,13 +40,16 @@ $storage = Get-Content -Raw (Join-Path $root 'Src/Storage/audio_recorder_storage
 $page = Get-Content -Raw (Join-Path $root 'Src/UI/pages/AudioRec/ui_audio_rec_page.inc')
 $render = Get-Content -Raw (Join-Path $root 'Src/UI/pages/AudioRec/ui_audio_rec_take_editor.inc')
 $source = Get-Content -Raw (Join-Path $root 'Src/Storage/rec_source.c')
+$service = Get-Content -Raw (Join-Path $root 'Src/Storage/waveform_service.c')
 
 Assert-True ($capture.Contains('g_rec_source_waveform.levels[0].frames_per_bin = 1U;')) `
     'REC waveform no longer starts at one PCM frame per bin'
 Assert-True ($capture.Contains('(void)frame_limit;')) `
     'planned duration is influencing initial REC waveform resolution'
-Assert-True ($capture.Contains('? g_rec_source_waveform.captured_frames : 1U;')) `
-    'active projection is not based on acquired duration'
+Assert-True ($capture.Contains('REC_SOURCE_WAVEFORM_LIVE_FRAMES_PER_BIN')) `
+    'progressive waveform no longer owns a bounded recent-detail window'
+Assert-True ($capture.Contains('live->last = mono;')) `
+    'progressive waveform no longer preserves a continuous trace endpoint'
 Assert-True ($storage.Contains('runtime->recorder.committed_tail / AUDIO_RECORDER_BYTES_PER_FRAME')) `
     'waveform visibility is no longer tied to SD committed frames'
 Assert-True ($storage.Contains('AUDIO_RECORDER_STORAGE_TAKE_READY')) `
@@ -54,5 +62,13 @@ Assert-True (-not $page.Contains('(state.take_valid == 0U)')) `
     'stale take validity still masks the live REC BUS scope'
 Assert-True ($render.Contains('state->phase == SAMPLE_CAPTURE_PHASE_TAKE_READY')) `
     'recorded overview is not limited to the post-record review state'
+Assert-True ($render.Contains('previous_min_y')) `
+    'progressive waveform no longer renders a connected peak contour'
+Assert-True ($service.Contains('rec_source_current_path(&path, &current)')) `
+    'REC waveform identity still depends on the playback projection'
+Assert-True (-not $service.Contains('(source == 0) || (rec_source_current_snapshot(&current)')) `
+    'REC summary is still gated by Streamer playback readiness'
+Assert-True ($service.Contains('summary->frames_per_bin <= frames_per_pixel')) `
+    'resident REC overview no longer bypasses redundant WAV reconstruction'
 
 Write-Output 'REC waveform lifecycle regressions: PASS'

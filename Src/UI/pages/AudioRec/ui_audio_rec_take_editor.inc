@@ -115,8 +115,7 @@ static uint8_t ui_page_audio_rec_draw_rec_service_overview(int x,
 {
     const int inner_w = w - 2;
     const int inner_h = h - 2;
-    if((inner_w <= 0) || (inner_w > 126) || (inner_h <= 2)
-            || (vertical_ref == 0U))
+    if((inner_w <= 0) || (inner_w > 126) || (inner_h <= 2))
     {
         return 0U;
     }
@@ -127,6 +126,10 @@ static uint8_t ui_page_audio_rec_draw_rec_service_overview(int x,
     }
     waveform_column_t columns[126];
     waveform_line_column_t line[126];
+    if(vertical_ref == 0U)
+    {
+        vertical_ref = SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE;
+    }
     const waveform_result_t result =
         (detailed != 0U)
         ? waveform_request_detailed(&source, view_start_frame, view_frames,
@@ -414,18 +417,58 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
                     || (state->phase == SAMPLE_CAPTURE_PHASE_STOPPING)))
         {
             waveform_column_t columns[126];
+            waveform_line_column_t line[126];
             uint32_t captured_frames = 0U;
             uint32_t domain_frames = 0U;
             const uint8_t inner_w = (uint8_t)(w - 2);
-            if (waveform_request_recording_overview(inner_w, columns,
+            if (waveform_request_recording_overview(inner_w, columns, line,
                     &captured_frames, &domain_frames) == WAVEFORM_RESULT_READY)
             {
                 const int cy = y + (h / 2);
+                const int inner_h = h - 2;
+                const int max_amp = (inner_h / 2) - 2;
+                const int32_t scale_q16 = ui_page_audio_rec_vertical_scale_q16(
+                    max_amp, SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE, 256U);
+                const uint8_t draw_trace = line[0].ready;
+                int previous_min_y = cy;
+                int previous_max_y = cy;
+                int previous_point_y = cy;
                 for (uint8_t col = 0U; col < inner_w; ++col)
-                    ui_page_audio_rec_draw_minmax_column(x + 1 + col,
-                        y + 1, h - 2, cy, columns[col].min,
-                        columns[col].max,
-                        SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE, 256U);
+                {
+                    int min_y = cy - (int)(((int64_t)columns[col].min
+                        * scale_q16) / 65536LL);
+                    int max_y = cy - (int)(((int64_t)columns[col].max
+                        * scale_q16) / 65536LL);
+                    int point_y = cy - (int)(((int64_t)line[col].point
+                        * scale_q16) / 65536LL);
+                    if (min_y < y + 1) min_y = y + 1;
+                    if (min_y > y + inner_h) min_y = y + inner_h;
+                    if (max_y < y + 1) max_y = y + 1;
+                    if (max_y > y + inner_h) max_y = y + inner_h;
+                    if (point_y < y + 1) point_y = y + 1;
+                    if (point_y > y + inner_h) point_y = y + inner_h;
+                    const int point_x = x + 1 + col;
+                    if (col != 0U)
+                    {
+                        drv_display_draw_line(point_x - 1, previous_min_y,
+                            point_x, min_y);
+                        drv_display_draw_line(point_x - 1, previous_max_y,
+                            point_x, max_y);
+                        if (draw_trace != 0U)
+                            drv_display_draw_line(point_x - 1,
+                                previous_point_y, point_x, point_y);
+                    }
+                    else
+                    {
+                        drv_display_draw_pixel(point_x, min_y, true);
+                        drv_display_draw_pixel(point_x, max_y, true);
+                        if (draw_trace != 0U)
+                            drv_display_draw_pixel(point_x, point_y, true);
+                    }
+                    previous_min_y = min_y;
+                    previous_max_y = max_y;
+                    previous_point_y = point_y;
+                }
             }
             (void)captured_frames;
             (void)domain_frames;
