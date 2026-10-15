@@ -112,6 +112,11 @@ DJ EQ reutilise l'unique DSP trois bandes CMSIS dans chaque slot Insert FX et su
 
 ## Wave
 
+Les Wavetables utilisateur résident dans le pool persistant des secteurs 4–5
+de la banque Flash 2. Les descripteurs AUDIO adressent directement le payload
+float32 préparé et ses mipmaps ; aucune page Sampler, décompression ou lecture
+SD n'intervient dans l'IRQ. Voir [wavetable_flash_pool.md](wavetable_flash_pool.md).
+
 Wave possede OSC1, OSC2 et COMMON. TABLE est un slot logique projete vers un slot/generation AUDIO. CONTROL adresse `{entite logique, oscillateur}`; AUDIO resout cette destination vers les slots physiques courants du mapping `synth_polyphony` et applique la selection a chaque voix allouee. Les deux oscillateurs sont independants; WAVE ne possede aucun routage ou etat de modulation croisee. L'interpolation de frame et de sample est permanente, POS reste l'axe des frames et aucun smoothing POS n'est applique. START (0..100 %) et LEN (1..100 %) definissent une fenetre lineaire interne bornee a la fin du cycle : `effective_len = min(LEN, 1 - START)`, puis `read_phase = START + phase_porteuse * effective_len`. La phase porteuse et le pitch restent possedes par la voix, aucun wrap de lecture n'est applique, et START=0/LEN=100 conserve le chemin historique bit-identique.
 
 Le snapshot de waveform est une publication seqlock AUDIO->CONTROL fixe et sans pointeur. Il capture au plus 48 points par oscillateur, a 20 Hz maximum, sans second rendu. Desactive, il n'ajoute aucun cout par sample.

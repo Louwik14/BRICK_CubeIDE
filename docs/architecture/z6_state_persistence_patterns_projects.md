@@ -404,6 +404,9 @@ sont pas appliquees au data-plane AUDIO.
 # Asset identity and FM ownership
 
 Persistent asset selections are typed canonical references `{kind, path}`.
+For Wavetable assets this legacy-compatible path resolves first against the
+persistent Flash catalogue; an SD import is attempted only when the stable
+Flash record is absent.
 An empty reference is the single persistent OFF representation. Asset selectors
 always expose OFF before their compatible loaded assets. Pool removal clears and
 publishes every matching Track reference before retiring the STREAM, RAM, MULTI
