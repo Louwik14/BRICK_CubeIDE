@@ -17,13 +17,16 @@
 #include <string.h>
 
 /* Single CONTROL writer. Published slots are never modified while SEQ reads. */
-static seq_pattern_t g_pattern_slot_a;
+static SEQ_SNAPSHOT_SRAM2 seq_pattern_t g_pattern_slot_a;
 static SEQ_STATE_D2 seq_pattern_t g_pattern_slot_b;
-static IRQ_SHARED_D3 harmony_track_plan_t
+static SEQ_SNAPSHOT_SRAM2 harmony_track_plan_t
     g_harmony_plan[SEQ_ENGINE_SNAPSHOT_SLOTS][SEQ_LANE_CAPACITY];
-static seq_lock_pattern_t g_locks_a_d1[4][SEQ_ENGINE_LOCK_POOL_CAPACITY];
-static CONTROL_STATE_SRAM2 seq_lock_pattern_t g_locks_a_sram2[7][SEQ_ENGINE_LOCK_POOL_CAPACITY];
-static IRQ_SHARED_D3 seq_lock_pattern_t g_locks_a_d3[5][SEQ_ENGINE_LOCK_POOL_CAPACITY];
+static SEQ_SNAPSHOT_SRAM2 seq_lock_pattern_t
+    g_locks_a_d1[4][SEQ_ENGINE_LOCK_POOL_CAPACITY];
+static SEQ_SNAPSHOT_SRAM2 seq_lock_pattern_t
+    g_locks_a_sram2[7][SEQ_ENGINE_LOCK_POOL_CAPACITY];
+static SEQ_SNAPSHOT_SRAM2 seq_lock_pattern_t
+    g_locks_a_d3[5][SEQ_ENGINE_LOCK_POOL_CAPACITY];
 static SEQ_STATE_D2 seq_lock_pattern_t g_locks_b[SEQ_LANE_CAPACITY][SEQ_ENGINE_LOCK_POOL_CAPACITY];
 static seq_pattern_t *const g_pattern[SEQ_ENGINE_SNAPSHOT_SLOTS] = {
     &g_pattern_slot_a, &g_pattern_slot_b

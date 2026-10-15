@@ -17,7 +17,7 @@ CONTROL_STATE_SDRAM patch_preview_publication_t
 CONTROL_STATE_SDRAM volatile uint32_t g_patch_preview_audio_consumed_generation;
 
 #if BRICK_PATTERN_RECALL_DIAG
-IRQ_SHARED_D2 pattern_recall_diag_t g_pattern_recall_diag;
+IRQ_SHARED_D3 pattern_recall_diag_t g_pattern_recall_diag;
 
 void pattern_recall_diag_reset(uint32_t candidate_generation,
                                uint32_t prepared_seq_generation,

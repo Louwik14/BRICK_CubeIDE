@@ -315,6 +315,22 @@ SECTIONS
   ASSERT(SIZEOF(.ram_seq_state_sram2) <= LENGTH(SRAM2_D2),
          "SRAM2 D2 SEQ state overflow")
 
+  .ram_storage_work_sram2 (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_storage_work_sram2)
+    *(.ram_storage_work_sram2.*)
+    . = ALIGN(32);
+  } >SRAM2_D2
+
+  .ram_seq_snapshot_sram2 (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_seq_snapshot_sram2)
+    *(.ram_seq_snapshot_sram2.*)
+    . = ALIGN(32);
+  } >SRAM2_D2
+
   .ram_control_state_sram2 (NOLOAD) :
   {
     . = ALIGN(32);
@@ -326,6 +342,10 @@ SECTIONS
   } >SRAM2_D2
   ASSERT(SIZEOF(.ram_control_state_sram2) <= LENGTH(SRAM2_D2),
          "SRAM2 D2 CONTROL state overflow")
+  ASSERT(SIZEOF(.ram_seq_state_sram2) + SIZEOF(.ram_storage_work_sram2)
+         + SIZEOF(.ram_seq_snapshot_sram2)
+         + SIZEOF(.ram_control_state_sram2) <= LENGTH(SRAM2_D2),
+         "SRAM2 D2 combined state overflow")
 
   .ram_seq_state_sram3 (NOLOAD) :
   {
@@ -336,6 +356,18 @@ SECTIONS
   } >SRAM3_D2
   ASSERT(SIZEOF(.ram_seq_state_sram3) <= LENGTH(SRAM3_D2),
          "SRAM3 D2 SEQ state overflow")
+
+  .ram_control_state_sram3 (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_control_state_sram3)
+    *(.ram_control_state_sram3.*)
+    . = ALIGN(32);
+  } >SRAM3_D2
+
+  ASSERT(SIZEOF(.ram_seq_state_sram3) + SIZEOF(.ram_control_state_sram3)
+         <= LENGTH(SRAM3_D2),
+         "SRAM3 D2 combined state overflow")
 
   .ram_d2_irq_shared (NOLOAD) :
   {
@@ -430,6 +462,14 @@ SECTIONS
     . = ALIGN(32);
     *(.seq_state_sdram)
     *(.seq_state_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .seq_model_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.seq_model_sdram)
+    *(.seq_model_sdram*)
     . = ALIGN(32);
   } >SDRAM
 

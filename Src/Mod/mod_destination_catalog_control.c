@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "Param/param_registry.h"
+#include "Platform/memory_layout.h"
 #include "Seq/seq_param_iface.h"
 #include "Track/entity_topology.h"
 #include "Track/track_runtime.h"
@@ -33,7 +34,7 @@ typedef struct
     param_id_t param[MOD_DESTINATION_LOCAL_CAPACITY];
 } mod_destination_local_catalog_t;
 
-static mod_destination_local_catalog_t
+static CONTROL_STATE_SRAM3 mod_destination_local_catalog_t
     g_mod_destination_local_catalog[BRICK_ENTITY_CAPACITY];
 
 static uint8_t mod_destination_control_set_capacity(uint8_t set_id)

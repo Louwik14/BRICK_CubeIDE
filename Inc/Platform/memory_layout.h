@@ -47,11 +47,17 @@
 
 /* Sequencer runtime/model state placed in internal D2 (non-SDRAM). */
 #define SEQ_STATE_D2 SEC_ATTR(".ram_seq_state")
+#define SEQ_SNAPSHOT_SRAM2 SEC_ATTR(".ram_seq_snapshot_sram2") ALIGN32
 #define SEQ_HOT_D1 SEC_ATTR(".ram_d1_audio")
 #define SEQ_STATE_SDRAM SEC_ATTR(".seq_state_sdram") ALIGN32
+#define SEQ_MODEL_SDRAM SEC_ATTR(".seq_model_sdram") ALIGN32
 
 /* CONTROL state local to SRAM2/D2. */
 #define CONTROL_STATE_SRAM2 SEC_ATTR(".ram_control_state_sram2")
+
+/* CPU-only storage workspace and warm CONTROL state in cacheable D2. */
+#define STORAGE_WORK_SRAM2 SEC_ATTR(".ram_storage_work_sram2") ALIGN32
+#define CONTROL_STATE_SRAM3 SEC_ATTR(".ram_control_state_sram3")
 
 /* IRQ/superloop publications requiring deterministic uncached visibility. */
 #define IRQ_SHARED_D3 SEC_ATTR(".ram_d3_irq_shared") ALIGN32

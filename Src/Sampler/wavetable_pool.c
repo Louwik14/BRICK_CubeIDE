@@ -53,7 +53,7 @@ typedef struct
 
 STORAGE_STATE_SDRAM static wavetable_pool_state_t g_wavetable_pool;
 STORAGE_STATE_SDRAM static wavetable_slot_t g_wavetable_candidate;
-AUDIO_WARM ALIGN32 static uint8_t g_wavetable_pool_io[WAVETABLE_POOL_IO_BYTES];
+STORAGE_WORK_SRAM2 static uint8_t g_wavetable_pool_io[WAVETABLE_POOL_IO_BYTES];
 STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_real[WAVETABLE_SOURCE_2048_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float

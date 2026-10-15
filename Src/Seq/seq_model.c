@@ -42,7 +42,7 @@ typedef struct
 _Static_assert(sizeof(seq_runtime_project_data_t) == 70272U,
                "sequencer project storage size changed");
 
-SEC_ATTR(".ram_seq_state_sram2") static seq_runtime_project_data_t g_seq_project;
+SEQ_MODEL_SDRAM static seq_runtime_project_data_t g_seq_project;
 SEC_ATTR(".ram_seq_state_sram3") static seq_play_item_t
     g_master_play[SEQ_MAX_STEPS][SEQ_PLAY_MAX_CAPACITY];
 

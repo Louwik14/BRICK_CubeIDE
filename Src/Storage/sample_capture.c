@@ -119,7 +119,7 @@ typedef struct
     sample_capture_save_job_t save_job;
 } sample_capture_model_t;
 
-static sample_capture_model_t g_sample_capture;
+static CONTROL_STATE_SRAM3 sample_capture_model_t g_sample_capture;
 static uint32_t g_trace_start_reject_epoch;
 static uint32_t g_trace_start_reject_reason;
 RECORDER_SCRATCH_SDRAM static uint8_t

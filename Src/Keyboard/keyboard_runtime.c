@@ -18,6 +18,7 @@
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_params.h"
 #include "Keyboard/keyboard_input.h"
+#include "Platform/memory_layout.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_engine.h"
 #include "Track/control_music_output.h"
@@ -29,8 +30,10 @@
 #define KEYBOARD_RUNTIME_MIDI_CHANNEL_COUNT 16U
 #define KEYBOARD_RUNTIME_MIDI_NOTE_COUNT 128U
 
-static uint8_t g_keyboard_runtime_midi_held_count[KEYBOARD_RUNTIME_MIDI_CHANNEL_COUNT][KEYBOARD_RUNTIME_MIDI_NOTE_COUNT];
-static uint8_t g_keyboard_runtime_midi_sustained_release[KEYBOARD_RUNTIME_MIDI_CHANNEL_COUNT][KEYBOARD_RUNTIME_MIDI_NOTE_COUNT];
+static CONTROL_STATE_SRAM3 uint8_t
+    g_keyboard_runtime_midi_held_count[KEYBOARD_RUNTIME_MIDI_CHANNEL_COUNT][KEYBOARD_RUNTIME_MIDI_NOTE_COUNT];
+static CONTROL_STATE_SRAM3 uint8_t
+    g_keyboard_runtime_midi_sustained_release[KEYBOARD_RUNTIME_MIDI_CHANNEL_COUNT][KEYBOARD_RUNTIME_MIDI_NOTE_COUNT];
 static uint8_t g_keyboard_runtime_midi_sustain_down[KEYBOARD_RUNTIME_MIDI_CHANNEL_COUNT];
 static uint8_t g_keyboard_runtime_timed_context_active;
 static uint32_t g_keyboard_runtime_capture_tick;
