@@ -242,6 +242,8 @@ const char *wavetable_pool_result_label(wavetable_result_t result)
             return "STOP TO LOAD";
         case WAVETABLE_RESULT_RECORDER_ACTIVE:
             return "STOP REC TO LOAD";
+        case WAVETABLE_RESULT_WORKSPACE_BUSY:
+            return "WORKSPACE BUSY";
         case WAVETABLE_RESULT_INVALID_ARG:
         default:
             return "LOAD FAIL";

@@ -802,7 +802,7 @@ patch_product_result_t patch_product_load_begin(uint16_t slot, uint16_t target_m
     if (g_invalid[slot] != 0U) return PATCH_PRODUCT_INVALID;
     if (patch_io_common_available() == 0U) return PATCH_PRODUCT_IO_BUSY;
     if ((project_control_asset_loads_pending() != 0U)
-            || (wavetable_pool_load_async_busy() != 0U)
+            || (wavetable_pool_import_async_busy() != 0U)
             || (multi_sample_load_has_pending() != 0U))
         return PATCH_PRODUCT_IO_BUSY;
     if (!path(g_patch_io.final_path, sizeof(g_patch_io.final_path), slot))

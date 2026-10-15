@@ -686,7 +686,7 @@ static uint8_t ui_page_settings_asset_action_enabled(ui_settings_view_t view,
             || project_control_asset_loads_pending() != 0U
             || multi_sample_import_is_active() != 0U
             || multi_sample_load_has_pending() != 0U
-            || wavetable_pool_load_async_busy() != 0U))
+            || wavetable_pool_import_async_busy() != 0U))
         return 0U;
     if (action == UI_BROWSER_ACTION_PREVIEW)
     {
@@ -957,8 +957,8 @@ static void ui_page_settings_tick(void)
     }
 
 
-    project_control_wavetable_load_result_t wavetable_completion;
-    if (project_control_wavetable_load_take_result(&wavetable_completion) != 0U)
+    project_control_wavetable_import_result_t wavetable_completion;
+    if (project_control_wavetable_import_take_result(&wavetable_completion) != 0U)
     {
         const wavetable_result_t wavetable_result =
             (wavetable_result_t)wavetable_completion.result;

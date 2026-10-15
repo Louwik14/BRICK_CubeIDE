@@ -159,7 +159,7 @@ static uint8_t ui_asset_mutation_allowed(const char *source, uint8_t folder)
         || sample_cache_has_pending_sd_work() != 0U
         || multi_sample_import_is_active() != 0U
         || multi_sample_load_has_pending() != 0U
-        || wavetable_pool_load_async_busy() != 0U)
+        || wavetable_pool_import_async_busy() != 0U)
     {
         ui_page_settings_status("STOP AUDIO / BUSY");
         return 0U;

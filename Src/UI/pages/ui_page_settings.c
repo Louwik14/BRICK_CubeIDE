@@ -280,7 +280,7 @@ static const char *ui_page_settings_preview_error_label(sd_preview_error_t error
 static void ui_page_settings_back(void);
 static void ui_page_settings_project_name_begin(uint8_t mode,uint8_t slot);
 static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path);
-static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *path);
+static void ui_page_settings_wavetable_import_to_slot(uint16_t slot, const char *path);
 static void ui_page_settings_sample_copy_left(uint8_t shift_down);
 static void ui_page_settings_wavetable_copy_left(uint8_t shift_down);
 static void ui_page_settings_wavetable_copy_right(uint8_t shift_down);

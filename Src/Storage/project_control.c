@@ -47,16 +47,17 @@ static uint8_t
     g_track_asset_selection[BRICK_ENTITY_CAPACITY][PROJECT_CONTROL_ASSET_ROLE_COUNT];
 
 typedef struct {
-    project_control_wavetable_load_result_t result;
+    project_control_wavetable_import_result_t result;
     char expected_path[WAVETABLE_POOL_PATH_MAX];
     uint16_t expected_backend;
     uint16_t expected_logical;
     uint16_t replaced_logical;
+    uint8_t logical_preexisting;
     uint8_t pending;
     uint8_t valid;
-} project_control_wavetable_load_t;
+} project_control_wavetable_import_t;
 
-CONTROL_STATE_SDRAM static project_control_wavetable_load_t g_wavetable_load;
+CONTROL_STATE_SDRAM static project_control_wavetable_import_t g_wavetable_import;
 
 static uint8_t bank_set(project_control_bank_slot_t*bank,uint16_t capacity,uint16_t logical,uint32_t kind,const char*path,uint16_t runtime){persist_control_asset_ref_t ref;if(bank==NULL||logical>=capacity||asset_ref_make_canonical(kind,path,&ref)==0U)return 0U;project_control_bank_slot_t next={.used=1U,.kind=kind,.runtime=runtime,.pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME};memcpy(next.canonical_path,ref.canonical_path,ref.path_length);next.canonical_path[ref.path_length]='\0';bank[logical]=next;return 1U;}
 static uint8_t bank_find(const project_control_bank_slot_t*bank,uint16_t capacity,uint32_t kind,const char*path,uint16_t*out_logical){persist_control_asset_ref_t ref;if(bank==NULL||out_logical==NULL||asset_ref_make_canonical(kind,path,&ref)==0U)return 0U;for(uint16_t i=0U;i<capacity;++i)if(bank[i].used!=0U&&bank[i].kind==kind&&strcmp(bank[i].canonical_path,ref.canonical_path)==0){*out_logical=i;return 1U;}return 0U;}
@@ -168,6 +169,7 @@ static project_control_asset_result_t classic_start_failure_result(void)
 static project_control_asset_result_t classic_asset_status(uint16_t logical);
 static uint8_t project_control_publish_sampler_asset(uint8_t entity,
                                                       uint16_t logical);
+static uint8_t project_control_rebind_wavetable_tracks(uint16_t logical);
 
 static uint8_t project_control_wavetable_runtime_valid(uint16_t logical)
 {
@@ -194,7 +196,7 @@ void project_control_init(void)
 {
     project_control_reset_macros();
     project_control_reset_asset_banks();
-    memset(&g_wavetable_load, 0, sizeof(g_wavetable_load));
+    memset(&g_wavetable_import, 0, sizeof(g_wavetable_import));
 }
 uint8_t project_control_get_macro_lock(uint8_t macro,uint8_t lock,project_control_macro_lock_t*out){if(out==NULL||macro>=PERSIST_CONTROL_MACRO_COUNT||lock>=PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;const persist_control_macro_t*m=&g_macros.macros[macro];if(lock>=m->lock_count){*out=(project_control_macro_lock_t){0xFFU,PARAM_COUNT,0.0f};return 1U;}if(persist_key_param_from_disk(m->locks[lock].parameter,&out->param)==0U)return 0U;out->track=m->locks[lock].entity;out->target_value=m->locks[lock].target_value;return 1U;}
 uint8_t project_control_set_macro_lock(uint8_t macro,uint8_t lock,const project_control_macro_lock_t*in)
@@ -240,14 +242,14 @@ uint16_t project_control_asset_count(void){uint16_t n=g_unavailable_asset_count;
 uint8_t project_control_get_asset_ordinal(uint16_t ordinal,persist_control_asset_ref_t*out){if(out==NULL)return 0U;for(uint16_t i=0U;i<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS;++i){const sample_global_slot_t*s=sample_global_pool_get_slot(i);if(s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC){if(ordinal--==0U)return classic_asset(i,out);}}const project_control_bank_slot_t*banks[2]={g_wavetable_bank,g_multi_bank};const uint16_t caps[2]={SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS};for(uint8_t b=0U;b<2U;++b)for(uint16_t i=0U;i<caps[b];++i)if(banks[b][i].used!=0U){if(ordinal--==0U)return asset_ref_make_canonical(banks[b][i].kind,banks[b][i].canonical_path,out);}if(ordinal<g_unavailable_asset_count){*out=g_unavailable_assets[ordinal];return 1U;}return 0U;}
 
 uint8_t project_control_register_sample_runtime(uint32_t kind,const char*path,uint16_t runtime,uint16_t*out_logical){uint16_t found;if(kind!=PERSIST_ASSET_SAMPLE_STREAM||runtime>=SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS||classic_find(path,&found)==0U||found!=runtime)return 0U;if(out_logical!=NULL)*out_logical=runtime;unavailable_remove(kind,path);return 1U;}
-uint8_t project_control_register_wavetable_runtime(const char*path,uint16_t runtime,uint16_t*out_logical){if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&runtime>=WAVETABLE_POOL_MAX_SLOTS)return 0U;const uint8_t ok=bank_register(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,PERSIST_ASSET_WAVETABLE,path,runtime,out_logical);if(ok!=0U&&runtime!=PROJECT_CONTROL_INVALID_RUNTIME)unavailable_remove(PERSIST_ASSET_WAVETABLE,path);return ok;}
 static uint8_t project_control_rebind_multi_tracks(uint16_t logical);
+uint8_t project_control_register_wavetable_runtime(const char*path,uint16_t runtime,uint16_t*out_logical){uint16_t logical=PROJECT_CONTROL_INVALID_RUNTIME;if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&runtime>=WAVETABLE_POOL_MAX_SLOTS)return 0U;const uint8_t ok=bank_register(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,PERSIST_ASSET_WAVETABLE,path,runtime,&logical);if(ok!=0U){if(out_logical!=NULL)*out_logical=logical;if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME){unavailable_remove(PERSIST_ASSET_WAVETABLE,path);return project_control_rebind_wavetable_tracks(logical);}}return ok;}
 uint8_t project_control_register_multi_runtime(const char*path,uint16_t runtime,uint16_t*out_logical){if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)return 0U;uint16_t published=PROJECT_CONTROL_INVALID_RUNTIME;if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME){const multi_sample_instrument_t*i=multi_sample_pool_get_instrument(runtime);if(i!=NULL&&multi_sample_pool_get_state(runtime)==MULTI_SAMPLE_INSTRUMENT_READY&&strcmp(i->index_path,path)==0)published=runtime;}uint16_t registered=0U;const uint8_t ok=bank_register(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,PERSIST_ASSET_MULTI,path,published,&registered);if(ok!=0U){if(out_logical!=NULL)*out_logical=registered;if(published!=PROJECT_CONTROL_INVALID_RUNTIME){unavailable_remove(PERSIST_ASSET_MULTI,path);return project_control_rebind_multi_tracks(registered);}}return ok;}
 uint8_t project_control_find_asset(uint32_t kind,const char*path,uint16_t*out_logical){if(kind==PERSIST_ASSET_SAMPLE_STREAM)return classic_find(path,out_logical);if(kind==PERSIST_ASSET_WAVETABLE)return bank_find(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,kind,path,out_logical);if(kind==PERSIST_ASSET_MULTI)return bank_find(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,kind,path,out_logical);return 0U;}
 
-uint8_t project_control_wavetable_load_begin(uint16_t backend_slot,const char*path)
+uint8_t project_control_wavetable_import_begin(uint16_t backend_slot,const char*path)
 {
-    if(g_wavetable_load.pending!=0U||g_wavetable_load.valid!=0U)return 0U;
+    if(g_wavetable_import.pending!=0U||g_wavetable_import.valid!=0U)return 0U;
     uint16_t existing_backend=WAVETABLE_POOL_INVALID_SLOT;
     if(wavetable_pool_find_by_path(path,&existing_backend)!=0U)
     {
@@ -257,13 +259,13 @@ uint8_t project_control_wavetable_load_begin(uint16_t backend_slot,const char*pa
         if(existing==NULL||existing->state!=WAVETABLE_SLOT_READY
             ||project_control_register_wavetable_runtime(
                 path,existing->global_slot,&logical)==0U)return 0U;
-        g_wavetable_load.result=(project_control_wavetable_load_result_t){
+        g_wavetable_import.result=(project_control_wavetable_import_result_t){
             .backend_slot=existing_backend,
             .global_slot=existing->global_slot,
             .logical_slot=logical,
             .result=(uint16_t)WAVETABLE_RESULT_OK,
             .success=1U};
-        g_wavetable_load.valid=1U;
+        g_wavetable_import.valid=1U;
         return 1U;
     }
     const wavetable_slot_t*const old=wavetable_pool_get_slot(backend_slot);
@@ -272,20 +274,28 @@ uint8_t project_control_wavetable_load_begin(uint16_t backend_slot,const char*pa
             PERSIST_ASSET_WAVETABLE,old->global_slot)
         :PROJECT_CONTROL_INVALID_RUNTIME;
     uint16_t logical=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    uint16_t prior_logical=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    const uint8_t logical_preexisting=bank_find(g_wavetable_bank,
+        SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,PERSIST_ASSET_WAVETABLE,path,
+        &prior_logical);
     if(bank_reserve_runtime(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
             PERSIST_ASSET_WAVETABLE,path,backend_slot,&logical)==0U)return 0U;
-    if(wavetable_pool_load_async_begin_with_geometry(
+    if(wavetable_pool_import_async_begin_with_geometry(
             backend_slot,path,WAVETABLE_SOURCE_GEOMETRY_2048)==0U)
     {
-        (void)bank_remove(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);
+        if(logical_preexisting!=0U)
+            g_wavetable_bank[logical].pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME;
+        else
+            (void)bank_remove(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);
         return 0U;
     }
-    g_wavetable_load.expected_backend=backend_slot;
-    g_wavetable_load.expected_logical=logical;
-    g_wavetable_load.replaced_logical=replaced;
-    (void)snprintf(g_wavetable_load.expected_path,
-                   sizeof(g_wavetable_load.expected_path),"%s",path);
-    g_wavetable_load.pending=1U;
+    g_wavetable_import.expected_backend=backend_slot;
+    g_wavetable_import.expected_logical=logical;
+    g_wavetable_import.replaced_logical=replaced;
+    g_wavetable_import.logical_preexisting=logical_preexisting;
+    (void)snprintf(g_wavetable_import.expected_path,
+                   sizeof(g_wavetable_import.expected_path),"%s",path);
+    g_wavetable_import.pending=1U;
     return 1U;
 }
 
@@ -313,26 +323,26 @@ void project_control_asset_load_service(void)
         sample_global_pool_complete_classic_load_registration(
             (uint8_t)(ok != 0U && registered == classic_logical));
     }
-    if(g_wavetable_load.pending!=0U&&g_wavetable_load.valid==0U)
+    if(g_wavetable_import.pending!=0U&&g_wavetable_import.valid==0U)
     {
         wavetable_result_t result=WAVETABLE_RESULT_INVALID_ARG;
         uint16_t backend=WAVETABLE_POOL_INVALID_SLOT;
         uint16_t global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
         const char*path=NULL;
-        if(wavetable_pool_load_async_take_result(
+        if(wavetable_pool_import_async_take_result(
                 &result,&backend,&global,&path)!=0U)
         {
-            project_control_wavetable_load_result_t terminal={
+            project_control_wavetable_import_result_t terminal={
                 .backend_slot=backend,.global_slot=global,
                 .logical_slot=SAMPLE_GLOBAL_POOL_INVALID_INDEX,
                 .result=(uint16_t)result,.success=0U};
             if(result==WAVETABLE_RESULT_OK
-                &&backend==g_wavetable_load.expected_backend
-                &&path!=NULL&&strcmp(path,g_wavetable_load.expected_path)==0
+                &&backend==g_wavetable_import.expected_backend
+                &&path!=NULL&&strcmp(path,g_wavetable_import.expected_path)==0
                 &&project_control_wavetable_completion_valid(
                     backend,global,path)!=0U)
             {
-                const uint16_t logical=g_wavetable_load.expected_logical;
+                const uint16_t logical=g_wavetable_import.expected_logical;
                 uint16_t resolved=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
                 if(logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
                     &&g_wavetable_bank[logical].used!=0U
@@ -349,12 +359,12 @@ void project_control_asset_load_service(void)
                         logical,&resolved)!=0U&&resolved==global)
                 {
                     terminal.logical_slot=logical;
-                    terminal.success=1U;
-                    if(g_wavetable_load.replaced_logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
-                        &&g_wavetable_load.replaced_logical!=logical)
+                    terminal.success=project_control_rebind_wavetable_tracks(logical);
+                    if(g_wavetable_import.replaced_logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
+                        &&g_wavetable_import.replaced_logical!=logical)
                         (void)bank_remove(g_wavetable_bank,
                             SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
-                            g_wavetable_load.replaced_logical);
+                            g_wavetable_import.replaced_logical);
                 }
                 else BRICK_FATAL_CONTEXT(
                         "PROJECT_WAVETABLE_RUNTIME_RESOLUTION_FAILED",
@@ -364,25 +374,31 @@ void project_control_asset_load_service(void)
             else if(result==WAVETABLE_RESULT_OK)
                 BRICK_FATAL_CONTEXT("PROJECT_WAVETABLE_COMPLETION_MISMATCH",
                         BRICK_FATAL_PROJECT_COMMIT, backend, global,
-                        g_wavetable_load.expected_logical,
+                        g_wavetable_import.expected_logical,
                         SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
-            else if(g_wavetable_load.expected_logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
-                (void)bank_remove(g_wavetable_bank,
-                                  SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
-                                  g_wavetable_load.expected_logical);
-            g_wavetable_load.result=terminal;
-            g_wavetable_load.pending=0U;
-            g_wavetable_load.valid=1U;
+            else if(g_wavetable_import.expected_logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+            {
+                if(g_wavetable_import.logical_preexisting!=0U)
+                    g_wavetable_bank[g_wavetable_import.expected_logical].pending_runtime=
+                        PROJECT_CONTROL_INVALID_RUNTIME;
+                else
+                    (void)bank_remove(g_wavetable_bank,
+                                      SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
+                                      g_wavetable_import.expected_logical);
+            }
+            g_wavetable_import.result=terminal;
+            g_wavetable_import.pending=0U;
+            g_wavetable_import.valid=1U;
         }
     }
 }
 
-uint8_t project_control_wavetable_load_take_result(
-    project_control_wavetable_load_result_t*out)
+uint8_t project_control_wavetable_import_take_result(
+    project_control_wavetable_import_result_t*out)
 {
-    if(out==NULL||g_wavetable_load.valid==0U)return 0U;
-    *out=g_wavetable_load.result;
-    g_wavetable_load.valid=0U;
+    if(out==NULL||g_wavetable_import.valid==0U)return 0U;
+    *out=g_wavetable_import.result;
+    g_wavetable_import.valid=0U;
     return 1U;
 }
 uint8_t project_control_begin_multi_runtime(uint16_t logical,const char*path,uint16_t runtime)
@@ -538,7 +554,7 @@ uint8_t project_control_sample_ordinal_for_logical(uint32_t kind,uint16_t logica
 uint8_t project_control_has_wavetable(uint16_t logical){return bank_has(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical,NULL);}
 uint8_t project_control_has_multi(uint16_t logical){return bank_has(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,logical,NULL);}
 uint16_t project_control_list_samples(uint32_t kind,uint16_t*out,uint16_t capacity){uint16_t n=0U;if(kind!=PERSIST_ASSET_SAMPLE_STREAM||out==NULL)return 0U;for(uint16_t i=0U;i<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS&&n<capacity;++i)if(sample_global_pool_get_slot(i)->kind==SAMPLE_GLOBAL_KIND_CLASSIC)out[n++]=i;return n;}
-uint16_t project_control_list_wavetables(uint16_t*out,uint16_t capacity){return bank_list(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,0U,out,capacity);}
+uint16_t project_control_list_wavetables(uint16_t*out,uint16_t capacity){uint16_t n=0U;if(out==NULL)return 0U;for(uint16_t i=0U;i<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS&&n<capacity;++i)if(g_wavetable_bank[i].used!=0U)out[n++]=i;return n;}
 uint16_t project_control_list_multis(uint16_t*out,uint16_t capacity){return bank_list(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,0U,out,capacity);}
 uint16_t project_control_sampler_choice_count(uint8_t entity)
 {
@@ -808,6 +824,37 @@ static uint8_t project_control_rebind_multi_tracks(uint16_t logical)
     return 1U;
 }
 
+static uint8_t project_control_rebind_wavetable_tracks(uint16_t logical)
+{
+    persist_control_asset_ref_t asset;
+    if (project_control_get_logical_asset(
+            PERSIST_ASSET_WAVETABLE, logical, &asset) == 0U)
+        return 0U;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        track_runtime_descriptor_t descriptor;
+        if (entity_topology_is_active(entity) == 0U
+            || track_runtime_get_descriptor(entity, &descriptor) == 0U
+            || descriptor.engine != TRACK_RUNTIME_ENGINE_WAVE)
+            continue;
+        for (project_control_asset_role_t role = PROJECT_CONTROL_ASSET_WAVE_OSC1;
+             role <= PROJECT_CONTROL_ASSET_WAVE_OSC2;
+             role = (project_control_asset_role_t)(role + 1U))
+        {
+            const persist_control_asset_ref_t *const selected =
+                &g_track_assets[entity][role];
+            if (selected->kind == asset.kind
+                && selected->path_length == asset.path_length
+                && memcmp(selected->canonical_path, asset.canonical_path,
+                          asset.path_length) == 0
+                && project_control_track_asset_select_logical(
+                    entity, role, logical) == 0U)
+                return 0U;
+        }
+    }
+    return 1U;
+}
+
 uint8_t project_control_track_asset_assign_logical(uint8_t entity,
                                                    project_control_asset_role_t role,
                                                    uint16_t logical)
@@ -991,7 +1038,7 @@ project_control_asset_result_t project_control_asset_reference_status(
             return PROJECT_CONTROL_ASSET_PENDING;
         return (project_control_wavetable_runtime_valid(logical) != 0U)
             ? PROJECT_CONTROL_ASSET_READY
-            : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+            : PROJECT_CONTROL_ASSET_FAILED;
     }
     return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
 }
@@ -1052,6 +1099,7 @@ project_control_asset_result_t project_control_put_asset(
     const project_control_asset_result_t result =
         project_control_ensure_asset(asset->kind, path, &logical);
     if (result == PROJECT_CONTROL_ASSET_FAILED
+        && asset->kind != PERSIST_ASSET_WAVETABLE
         && unavailable_set(asset->kind, path) == 0U)
         return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
     if (result == PROJECT_CONTROL_ASSET_READY)
@@ -1084,24 +1132,6 @@ static project_control_asset_result_t classic_asset_status(uint16_t logical)
     return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
 }
 
-static project_control_asset_result_t wavetable_start_failure_result(void)
-{
-    switch(wavetable_pool_get_last_result())
-    {
-        case WAVETABLE_RESULT_INVALID_ARG:
-        case WAVETABLE_RESULT_POOL_FULL:
-        case WAVETABLE_RESULT_GLOBAL_SLOT_FULL:
-        case WAVETABLE_RESULT_PATH_TOO_LONG:
-        case WAVETABLE_RESULT_SD_BUSY:
-        case WAVETABLE_RESULT_REGISTER_FAIL:
-        case WAVETABLE_RESULT_TRANSPORT_ACTIVE:
-        case WAVETABLE_RESULT_RECORDER_ACTIVE:
-            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-        default:
-            return PROJECT_CONTROL_ASSET_FAILED;
-    }
-}
-
 static project_control_asset_result_t multi_load_result_classify(
     multi_sample_load_result_t result)
 {
@@ -1118,6 +1148,29 @@ static project_control_asset_result_t multi_load_result_classify(
         default:
             return PROJECT_CONTROL_ASSET_FAILED;
     }
+}
+
+/* Restore-time Wavetable resolution is deliberately Flash-only.  Keeping an
+ * invalid logical entry preserves the canonical path without granting any
+ * restore path authority to inspect SD or start an import. */
+static project_control_asset_result_t project_control_resolve_wavetable_at(
+    uint16_t logical, const char *canonical_path)
+{
+    uint16_t backend = WAVETABLE_POOL_INVALID_SLOT;
+    uint16_t runtime = PROJECT_CONTROL_INVALID_RUNTIME;
+    if (wavetable_pool_find_by_path(canonical_path, &backend) != 0U)
+    {
+        const wavetable_slot_t *const slot = wavetable_pool_get_slot(backend);
+        if (slot == NULL || slot->state != WAVETABLE_SLOT_READY)
+            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        runtime = slot->global_slot;
+    }
+    if (bank_set(g_wavetable_bank, SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
+                 logical, PERSIST_ASSET_WAVETABLE, canonical_path,
+                 runtime) == 0U)
+        return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+    return (runtime != PROJECT_CONTROL_INVALID_RUNTIME)
+        ? PROJECT_CONTROL_ASSET_READY : PROJECT_CONTROL_ASSET_FAILED;
 }
 
 static project_control_asset_result_t apply_bank_asset(uint32_t kind,uint16_t logical,const char*path)
@@ -1138,30 +1191,7 @@ static project_control_asset_result_t apply_bank_asset(uint32_t kind,uint16_t lo
         return PROJECT_CONTROL_ASSET_READY;
     }
     if(kind==PERSIST_ASSET_WAVETABLE)
-    {
-        uint16_t persistent_slot = WAVETABLE_POOL_INVALID_SLOT;
-        if (wavetable_pool_find_by_path(canonical_path, &persistent_slot) != 0U)
-        {
-            if (bank_set(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
-                         logical,kind,canonical_path,persistent_slot) == 0U)
-                return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-            return PROJECT_CONTROL_ASSET_READY;
-        }
-        const uint16_t backend=wavetable_pool_find_free_slot();
-        if (backend >= WAVETABLE_POOL_MAX_SLOTS)
-            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-        if (bank_set(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
-                     logical,kind,canonical_path,runtime) == 0U)
-            return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-        g_wavetable_bank[logical].pending_runtime=backend;
-        if (wavetable_pool_load_async_begin_with_geometry(
-                    backend,canonical_path,WAVETABLE_SOURCE_GEOMETRY_2048) == 0U)
-        {
-            (void)bank_remove(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);
-            return wavetable_start_failure_result();
-        }
-        return PROJECT_CONTROL_ASSET_PENDING;
-    }
+        return project_control_resolve_wavetable_at(logical, canonical_path);
     if(kind==PERSIST_ASSET_MULTI)
     {
         if (bank_set(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,logical,
@@ -1210,7 +1240,11 @@ project_control_asset_result_t project_control_ensure_asset(uint32_t kind,const 
     {
         if(bank[*out_logical].pending_runtime!=PROJECT_CONTROL_INVALID_RUNTIME)return PROJECT_CONTROL_ASSET_PENDING;
         if (bank[*out_logical].runtime == PROJECT_CONTROL_INVALID_RUNTIME)
+        {
+            if (kind == PERSIST_ASSET_WAVETABLE)
+                return project_control_resolve_wavetable_at(*out_logical, path);
             return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        }
         if (kind == PERSIST_ASSET_WAVETABLE)
             return (project_control_wavetable_runtime_valid(*out_logical) != 0U)
                 ? PROJECT_CONTROL_ASSET_READY
@@ -1238,52 +1272,8 @@ project_control_asset_result_t project_control_prepare_asset(
     project_control_asset_result_t status =
         project_control_ensure_asset(kind, path, out_logical);
     if (status != PROJECT_CONTROL_ASSET_PENDING) return status;
-    if (kind == PERSIST_ASSET_WAVETABLE)
-    {
-        wavetable_result_t result;
-        uint16_t backend, runtime;
-        const char *completed_path;
-        if (wavetable_pool_load_async_take_result(
-                &result, &backend, &runtime, &completed_path) == 0U)
-            return PROJECT_CONTROL_ASSET_PENDING;
-        if (completed_path == NULL) return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-        return project_control_complete_wavetable_runtime(completed_path,
-            backend, runtime, (result == WAVETABLE_RESULT_OK) ? 1U : 0U);
-    }
     return (kind == PERSIST_ASSET_MULTI)
         ? PROJECT_CONTROL_ASSET_PENDING : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-}
-
-project_control_asset_result_t project_control_complete_wavetable_runtime(const char*path,
-                                                uint16_t backend,
-                                                uint16_t runtime,
-                                                uint8_t success)
-{
-    uint16_t logical=0U;
-    if (path==NULL || backend>=WAVETABLE_POOL_MAX_SLOTS
-        || bank_find(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
-                     PERSIST_ASSET_WAVETABLE,path,&logical)==0U
-        || g_wavetable_bank[logical].pending_runtime!=backend)
-        return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-    if (success == 0U)
-    {
-        (void)bank_remove(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);
-        return (unavailable_set(PERSIST_ASSET_WAVETABLE,path)!=0U)
-            ? PROJECT_CONTROL_ASSET_FAILED
-            : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-    }
-    const wavetable_slot_t *const slot = wavetable_pool_get_slot(backend);
-    if (runtime >= WAVETABLE_POOL_MAX_SLOTS || slot == NULL
-        || slot->state != WAVETABLE_SLOT_READY
-        || slot->global_slot != runtime)
-    {
-        (void)bank_remove(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);
-        return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-    }
-    g_wavetable_bank[logical].runtime=runtime;
-    g_wavetable_bank[logical].pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME;
-    unavailable_remove(PERSIST_ASSET_WAVETABLE,path);
-    return PROJECT_CONTROL_ASSET_READY;
 }
 
 uint8_t project_control_asset_loads_pending(void)

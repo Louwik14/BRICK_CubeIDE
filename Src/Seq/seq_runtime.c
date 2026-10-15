@@ -330,7 +330,7 @@ void seq_runtime_make_default_track_control(
 void seq_runtime_start(void)
 {
     if (project_replacement_is_active() != 0U) return;
-    if ((wavetable_pool_load_async_busy() != 0U)
+    if ((wavetable_pool_import_async_busy() != 0U)
         || (multi_sample_load_has_pending() != 0U)) return;
     uint8_t begin_running_now = 0U;
     if (g_seq_runtime_trigger_start_bypass == 0U)

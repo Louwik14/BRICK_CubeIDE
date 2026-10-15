@@ -10,6 +10,7 @@ typedef union
     persistence_pattern_io_workspace_t pattern_io;
     persistence_groove_build_workspace_t groove_build;
     persistence_patch_dx7_boot_workspace_t patch_dx7_boot;
+    persistence_wavetable_import_workspace_t wavetable_import;
 } persistence_workspace_storage_t;
 
 #define PERSISTENCE_WORKSPACE_ALIGN_BYTES (32U)
@@ -23,7 +24,7 @@ _Static_assert(PERSISTENCE_WORKSPACE_ALIGN_UP(
                    sizeof(persistence_workspace_storage_t)) == 268544U,
                "Aligned persistence workspace size changed");
 
-STORAGE_STATE_SDRAM static persistence_workspace_storage_t g_persistence_workspace;
+STORAGE_STATE_SDRAM ALIGN32 static persistence_workspace_storage_t g_persistence_workspace;
 static persistence_workspace_owner_t g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_FREE;
 
 persistence_project_save_workspace_t *persistence_workspace_acquire_project_save(void)
@@ -72,6 +73,14 @@ persistence_patch_dx7_boot_workspace_t *persistence_workspace_acquire_patch_dx7_
     g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_PATCH_DX7_BOOT;
     persist_debug_workspace_owner(g_persistence_workspace_owner);
     return &g_persistence_workspace.patch_dx7_boot;
+}
+
+persistence_wavetable_import_workspace_t *persistence_workspace_acquire_wavetable_import(void)
+{
+    if (g_persistence_workspace_owner != PERSISTENCE_WORKSPACE_FREE) return 0;
+    g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_WAVETABLE_IMPORT;
+    persist_debug_workspace_owner(g_persistence_workspace_owner);
+    return &g_persistence_workspace.wavetable_import;
 }
 
 void persistence_workspace_release(persistence_workspace_owner_t owner)

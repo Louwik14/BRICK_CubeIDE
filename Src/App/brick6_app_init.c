@@ -132,7 +132,7 @@ static void brick6_app_service_storage(void)
     {
         multi_sample_pool_service_retire();
         wavetable_pool_service_retire();
-        wavetable_pool_load_async_service();
+        wavetable_pool_import_async_service();
         project_control_asset_load_service();
         multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
         pattern_load_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES / 2U);

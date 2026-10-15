@@ -5,6 +5,7 @@
 #include "Storage/patch_product.h"
 #include "Storage/persistent_control_codec.h"
 #include "Storage/persistent_pattern_control.h"
+#include "Sampler/wavetable_config.h"
 
 typedef enum
 {
@@ -13,7 +14,8 @@ typedef enum
     PERSISTENCE_WORKSPACE_PROJECT_RESTORE,
     PERSISTENCE_WORKSPACE_PATTERN_IO,
     PERSISTENCE_WORKSPACE_GROOVE_BUILD,
-    PERSISTENCE_WORKSPACE_PATCH_DX7_BOOT
+    PERSISTENCE_WORKSPACE_PATCH_DX7_BOOT,
+    PERSISTENCE_WORKSPACE_WAVETABLE_IMPORT
 } persistence_workspace_owner_t;
 
 #define PERSISTENCE_PATCH_DX7_FILE_BUFFER_BYTES (32U * 1024U)
@@ -85,6 +87,12 @@ typedef struct
     } scratch;
 } persistence_pattern_io_workspace_t;
 
+typedef struct
+{
+    float base[WAVETABLE_FLASH_MAX_FRAMES * WAVETABLE_FRAME_SAMPLE_COUNT];
+    float mipmap[WAVETABLE_FLASH_MAX_FRAMES * 2048U];
+} persistence_wavetable_import_workspace_t;
+
 _Static_assert(sizeof(persistence_project_save_workspace_t) == 137308U,
                "Project Save workspace size changed");
 _Static_assert(sizeof(persistence_groove_build_workspace_t) == 82560U,
@@ -93,12 +101,15 @@ _Static_assert(sizeof(persistence_pattern_io_workspace_t) == 261312U,
                "Pattern IO workspace size changed");
 _Static_assert(sizeof(persistence_project_restore_workspace_t) == 268544U,
                "Project Restore workspace size changed");
+_Static_assert(sizeof(persistence_wavetable_import_workspace_t) == 98304U,
+               "Wavetable import workspace size changed");
 
 persistence_project_save_workspace_t *persistence_workspace_acquire_project_save(void);
 persistence_project_restore_workspace_t *persistence_workspace_acquire_project_restore(void);
 persistence_pattern_io_workspace_t *persistence_workspace_acquire_pattern_io(void);
 persistence_groove_build_workspace_t *persistence_workspace_acquire_groove_build(void);
 persistence_patch_dx7_boot_workspace_t *persistence_workspace_acquire_patch_dx7_boot(void);
+persistence_wavetable_import_workspace_t *persistence_workspace_acquire_wavetable_import(void);
 void persistence_workspace_release(persistence_workspace_owner_t owner);
 persistence_workspace_owner_t persistence_workspace_owner(void);
 

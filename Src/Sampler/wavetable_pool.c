@@ -22,6 +22,7 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/wavetable_flash_store.h"
+#include "Storage/persistence_workspace.h"
 
 #define WAVETABLE_POOL_IO_BYTES (SD_SCHEDULER_HEAVY_MAX_DATA_BYTES)
 #define WAVETABLE_LOAD_SERVICE_BUDGET_MS (2U)
@@ -52,10 +53,6 @@ typedef struct
 
 STORAGE_STATE_SDRAM static wavetable_pool_state_t g_wavetable_pool;
 STORAGE_STATE_SDRAM static wavetable_slot_t g_wavetable_candidate;
-STORAGE_STATE_SDRAM static wavetable_slot_t g_wavetable_old_commit_snapshot;
-STORAGE_STATE_SDRAM static FIL g_wavetable_transaction_files[2];
-STORAGE_STATE_SDRAM static char
-    g_wavetable_transaction_paths[2][WAVETABLE_POOL_PATH_MAX];
 AUDIO_WARM ALIGN32 static uint8_t g_wavetable_pool_io[WAVETABLE_POOL_IO_BYTES];
 STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_real[WAVETABLE_SOURCE_2048_SAMPLE_COUNT];
@@ -65,11 +62,8 @@ STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_work_real[WAVETABLE_FRAME_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_work_imag[WAVETABLE_FRAME_SAMPLE_COUNT];
-STORAGE_SCRATCH_SDRAM static float
-    g_wavetable_prepare_base[WAVETABLE_FLASH_MAX_FRAMES
-                             * WAVETABLE_FRAME_SAMPLE_COUNT];
-STORAGE_SCRATCH_SDRAM static float
-    g_wavetable_prepare_mipmap[WAVETABLE_FLASH_MAX_FRAMES * 2048U];
+static float *g_wavetable_prepare_base;
+static float *g_wavetable_prepare_mipmap;
 static const uint8_t g_wavetable_mipmap_upstream_commit_sha1[20] = {
     0x0dU, 0x9cU, 0xbfU, 0x04U, 0x40U, 0xf0U, 0x55U, 0x5eU, 0x25U, 0x44U,
     0xccU, 0x1eU, 0xb0U, 0x19U, 0xb3U, 0x16U, 0x75U, 0x63U, 0x70U, 0x08U
@@ -235,7 +229,7 @@ static void wavetable_load_job_boot_init(void);
 
 uint8_t wavetable_pool_purge_source_cache(const char *source_path)
 {
-    if (source_path == NULL || wavetable_pool_load_async_busy() != 0U
+    if (source_path == NULL || wavetable_pool_import_async_busy() != 0U
         || sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
         return 0U;
     uint8_t ok = sd_access_fs_mount_if_needed();

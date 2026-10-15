@@ -65,7 +65,8 @@ typedef enum
     WAVETABLE_RESULT_WRITE_FAIL,
     WAVETABLE_RESULT_REGISTER_FAIL,
     WAVETABLE_RESULT_TRANSPORT_ACTIVE,
-    WAVETABLE_RESULT_RECORDER_ACTIVE
+    WAVETABLE_RESULT_RECORDER_ACTIVE,
+    WAVETABLE_RESULT_WORKSPACE_BUSY
 } wavetable_result_t;
 
 typedef struct
@@ -112,29 +113,12 @@ uint8_t wavetable_pool_inspect_source(const wav_info_t *info,
                                       uint32_t *out_cost_bytes);
 
 uint16_t wavetable_pool_find_free_slot(void);
-wavetable_result_t wavetable_pool_load_file(uint16_t wavetable_slot,
-                                            const char *path,
-                                            uint16_t *out_global_slot);
-wavetable_result_t wavetable_pool_load_wav(uint16_t wavetable_slot,
-                                           const char *path,
-                                           uint16_t *out_global_slot);
-wavetable_result_t wavetable_pool_load_wav_with_geometry(
-    uint16_t wavetable_slot,
-    const char *path,
-    wavetable_source_geometry_t source_geometry,
-    uint16_t *out_global_slot);
-wavetable_result_t wavetable_pool_load_file_at(uint16_t wavetable_slot,
-                                               uint16_t global_slot,
-                                               const char *path);
-wavetable_result_t wavetable_pool_load_file_auto(const char *path,
-                                                 uint16_t *out_wavetable_slot,
-                                                 uint16_t *out_global_slot);
-uint8_t wavetable_pool_load_async_begin(uint16_t wavetable_slot, const char *path);
-uint8_t wavetable_pool_load_async_begin_with_geometry(
+uint8_t wavetable_pool_import_async_begin(uint16_t wavetable_slot, const char *path);
+uint8_t wavetable_pool_import_async_begin_with_geometry(
     uint16_t wavetable_slot,
     const char *path,
     wavetable_source_geometry_t source_geometry);
-uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
+uint8_t wavetable_pool_import_async_begin_prepared_with_geometry(
     uint16_t wavetable_slot,
     const char *path,
     wavetable_source_geometry_t source_geometry,
@@ -142,10 +126,10 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
     uint32_t source_file_size,
     uint32_t source_crc32);
 uint8_t wavetable_pool_source_crc32_file(FIL *file, uint32_t *out_crc32);
-void wavetable_pool_load_async_service(void);
-uint8_t wavetable_pool_load_async_busy(void);
-void wavetable_pool_load_async_cancel(void);
-uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
+void wavetable_pool_import_async_service(void);
+uint8_t wavetable_pool_import_async_busy(void);
+void wavetable_pool_import_async_cancel(void);
+uint8_t wavetable_pool_import_async_take_result(wavetable_result_t *out_result,
                                               uint16_t *out_wavetable_slot,
                                               uint16_t *out_global_slot,
                                               const char **out_path);

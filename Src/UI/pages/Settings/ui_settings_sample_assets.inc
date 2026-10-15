@@ -170,7 +170,7 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
 }
 
 
-static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *path)
+static void ui_page_settings_wavetable_import_to_slot(uint16_t slot, const char *path)
 {
     if (project_replacement_is_active() != 0U) return;
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
@@ -182,7 +182,7 @@ static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *p
         ui_page_settings_status("ALREADY LOADED");
         return;
     }
-    if (project_control_wavetable_load_begin(slot, path) != 0U)
+    if (project_control_wavetable_import_begin(slot, path) != 0U)
     {
         ui_page_settings_status("IMPORTING");
     }
@@ -191,7 +191,8 @@ static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *p
         const wavetable_result_t result = wavetable_pool_get_last_result();
         ui_page_settings_status(
             ((result == WAVETABLE_RESULT_TRANSPORT_ACTIVE)
-             || (result == WAVETABLE_RESULT_RECORDER_ACTIVE))
+             || (result == WAVETABLE_RESULT_RECORDER_ACTIVE)
+             || (result == WAVETABLE_RESULT_WORKSPACE_BUSY))
                 ? wavetable_pool_result_label(result) : "LOAD BUSY");
     }
 }
@@ -492,7 +493,7 @@ static void ui_page_settings_wavetable_request_replace(uint16_t global_slot, con
         ui_page_settings_status("SELECT WAVE");
         return;
     }
-    ui_page_settings_wavetable_load_to_slot(backend_slot, path);
+    ui_page_settings_wavetable_import_to_slot(backend_slot, path);
 }
 
 static void ui_page_settings_wavetable_copy_left(uint8_t shift_down)
@@ -527,7 +528,7 @@ static void ui_page_settings_wavetable_copy_left(uint8_t shift_down)
     uint16_t existing_backend = WAVETABLE_POOL_INVALID_SLOT;
     if (wavetable_pool_find_by_path(entry->path, &existing_backend) != 0U)
     {
-        ui_page_settings_wavetable_load_to_slot(existing_backend, entry->path);
+        ui_page_settings_wavetable_import_to_slot(existing_backend, entry->path);
         return;
     }
 
@@ -538,7 +539,7 @@ static void ui_page_settings_wavetable_copy_left(uint8_t shift_down)
         return;
     }
 
-    ui_page_settings_wavetable_load_to_slot((uint16_t)free_slot, entry->path);
+    ui_page_settings_wavetable_import_to_slot((uint16_t)free_slot, entry->path);
 }
 
 static void ui_page_settings_wavetable_copy_right(uint8_t shift_down)

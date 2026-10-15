@@ -209,7 +209,6 @@ typedef enum
     PROJECT_LOAD_INSTALL_WAIT_MULTI,
     PROJECT_LOAD_INSTALL_ASSETS,
     PROJECT_LOAD_INSTALL_WAIT_STREAM,
-    PROJECT_LOAD_INSTALL_WAIT_WAVETABLE,
     PROJECT_LOAD_INSTALL_PREPARE_CONTROL,
     PROJECT_LOAD_INSTALL_CONTROL,
     /* Terminal safe state.  Ingress deliberately remains closed. */
@@ -1845,7 +1844,6 @@ static uint8_t project_product_prevalidate_candidate(
     }
     return (uint8_t)((classic_slots + wavetable_slots
                            + multi_instruments <= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
-        && (wavetable_slots <= WAVETABLE_POOL_MAX_SLOTS)
         && (multi_instruments <= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS));
 }
 
@@ -1869,7 +1867,7 @@ static void project_product_enter_failed_forward_media(void)
         PROJECT_PRODUCT_FATAL("PROJECT_FORWARD_MEDIA_BEFORE_BOUNDARY",
                               PROJECT_FATAL_STATE);
     persist_debug_error(PERSIST_DBG_STAGE_READ,PERSIST_DBG_ERROR_FILESYSTEM);
-    wavetable_pool_load_async_cancel();
+    wavetable_pool_import_async_cancel();
     multi_sample_cancel_all_loads();
     /* Retire any replacement payload that became READY before the media loss.
      * This is forward cleanup, never restoration of the previous Project. */
@@ -1894,7 +1892,7 @@ static void project_product_enter_failed_forward_media(void)
 static uint8_t project_product_asset_loads_pending(void)
 {
     return (uint8_t)(project_control_asset_loads_pending() != 0U
-        || wavetable_pool_load_async_busy() != 0U
+        || wavetable_pool_import_async_busy() != 0U
         || multi_sample_load_has_pending() != 0U
         || sample_cache_has_pending_sd_work() != 0U);
 }
@@ -1941,18 +1939,6 @@ static void project_product_load_finish_success(void)
                           (uint32_t)g_progress.result);
     persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
     project_load_quiesce_end();
-}
-
-static uint8_t project_wavetable_result_internal(wavetable_result_t result)
-{
-    return (uint8_t)(result == WAVETABLE_RESULT_INVALID_ARG
-        || result == WAVETABLE_RESULT_POOL_FULL
-        || result == WAVETABLE_RESULT_GLOBAL_SLOT_FULL
-        || result == WAVETABLE_RESULT_PATH_TOO_LONG
-        || result == WAVETABLE_RESULT_SD_BUSY
-        || result == WAVETABLE_RESULT_REGISTER_FAIL
-        || result == WAVETABLE_RESULT_TRANSPORT_ACTIVE
-        || result == WAVETABLE_RESULT_RECORDER_ACTIVE);
 }
 
 static uint8_t project_multi_result_internal(multi_sample_load_result_t result)
@@ -2230,32 +2216,6 @@ void project_product_load_service(void)
         sd_scheduler_runtime_exclusive_end();
         return;
     }
-    if (g_project_load.state == PROJECT_LOAD_INSTALL_WAIT_WAVETABLE)
-    {
-        wavetable_result_t result = WAVETABLE_RESULT_INVALID_ARG;
-        uint16_t backend = UINT16_MAX;
-        uint16_t runtime = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        const char *path_value = NULL;
-        if (wavetable_pool_load_async_take_result(&result, &backend,
-                                                  &runtime, &path_value) == 0U)
-            return;
-        (void)backend;
-        project_control_asset_result_t completion = PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-        if (path_value != NULL)
-            completion = project_control_complete_wavetable_runtime(
-                path_value, backend, runtime,
-                (result == WAVETABLE_RESULT_OK) ? 1U : 0U);
-        if (completion == PROJECT_CONTROL_ASSET_FAILED_INTERNAL
-            || project_wavetable_result_internal(result) != 0U)
-        {
-            PROJECT_PRODUCT_FATAL("PROJECT_WAVETABLE_ASSET_COMPLETION_FAILED",
-                                  PROJECT_FATAL_ASSET_COMPLETION);
-        }
-        if (result != WAVETABLE_RESULT_OK) ++g_progress.asset_warning_count;
-        ++g_project_load.asset_index;
-        project_load_progress_assets(restore,0U,0U);
-        g_project_load.state = PROJECT_LOAD_INSTALL_ASSETS;
-    }
     if(g_project_load.state==PROJECT_LOAD_INSTALL_ASSETS)
     {
         g_persist_dbg.project_phase=PERSIST_DBG_PROJECT_PHASE_LOAD_ASSETS;
@@ -2272,11 +2232,12 @@ void project_product_load_service(void)
             if(result==PROJECT_CONTROL_ASSET_PENDING)
             {
                 const uint32_t kind=restore->assets[g_project_load.asset_index].kind;
+                if(kind==PERSIST_ASSET_WAVETABLE)
+                    PROJECT_PRODUCT_FATAL("PROJECT_WAVETABLE_RESOLVE_PENDING",
+                                          PROJECT_FATAL_ASSET_REGISTRATION);
                 g_project_load.state=(kind==PERSIST_ASSET_SAMPLE_STREAM)
                     ? PROJECT_LOAD_INSTALL_WAIT_STREAM
-                    : (kind==PERSIST_ASSET_WAVETABLE
-                        ? PROJECT_LOAD_INSTALL_WAIT_WAVETABLE
-                        : PROJECT_LOAD_INSTALL_WAIT_MULTI);
+                    : PROJECT_LOAD_INSTALL_WAIT_MULTI;
                 return;
             }
             if(result==PROJECT_CONTROL_ASSET_FAILED_INTERNAL)

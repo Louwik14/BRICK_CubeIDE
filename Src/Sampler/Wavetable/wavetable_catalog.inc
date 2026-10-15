@@ -69,13 +69,6 @@ static uint32_t wavetable_pool_crc32_update(uint32_t crc,
     return ~crc;
 }
 
-static uint32_t wavetable_pool_crc32_memory(const void *data, uint32_t size)
-{
-    return (data != 0)
-        ? wavetable_pool_crc32_update(0U, (const uint8_t *)data, size)
-        : 0U;
-}
-
 static void wavetable_pool_copy_float_exact(float *dst,
                                             const float *src,
                                             uint32_t sample_count)
@@ -328,34 +321,6 @@ static uint8_t wavetable_pool_path_ext_is_wav(const char *path)
                      && ((path[len - 1U] == 'v') || (path[len - 1U] == 'V')));
 }
 
-static void wavetable_pool_slot_error_at(uint16_t wavetable_slot,
-                                         wavetable_result_t result,
-                                         uint16_t forced_global_slot)
-{
-    if (wavetable_slot < WAVETABLE_POOL_MAX_SLOTS)
-    {
-        g_wavetable_pool.slots[wavetable_slot].generation = wavetable_pool_next_generation();
-        g_wavetable_pool.slots[wavetable_slot].format = WAVETABLE_FORMAT_NONE;
-        g_wavetable_pool.slots[wavetable_slot].data = 0;
-        g_wavetable_pool.slots[wavetable_slot].data_offset = 0U;
-        g_wavetable_pool.slots[wavetable_slot].first_page_slot = UINT16_MAX;
-        g_wavetable_pool.slots[wavetable_slot].page_count = 0U;
-        g_wavetable_pool.slots[wavetable_slot].data_bytes = 0U;
-        g_wavetable_pool.slots[wavetable_slot].cost_bytes_aligned = 0U;
-        memset(&g_wavetable_pool.slots[wavetable_slot].mipmap,
-               0,
-               sizeof(g_wavetable_pool.slots[wavetable_slot].mipmap));
-        g_wavetable_pool.slots[wavetable_slot].mipmap.first_page_slot = UINT16_MAX;
-        wavetable_pool_preview_clear(&g_wavetable_pool.slots[wavetable_slot].preview);
-        g_wavetable_pool.slots[wavetable_slot].state = WAVETABLE_SLOT_ERROR;
-        g_wavetable_pool.slots[wavetable_slot].error = result;
-        g_wavetable_pool.slots[wavetable_slot].global_slot =
-            (forced_global_slot < WAVETABLE_POOL_MAX_SLOTS)
-                ? forced_global_slot : wavetable_slot;
-    }
-    wavetable_pool_set_last(result);
-}
-
 void wavetable_pool_init(void)
 {
     wavetable_load_job_boot_init();
@@ -380,7 +345,7 @@ void wavetable_pool_init(void)
 
 void wavetable_pool_reset(void)
 {
-    wavetable_pool_load_async_cancel();
+    wavetable_pool_import_async_cancel();
     memset(g_wavetable_retire_not_before_sample, 0,
            sizeof(g_wavetable_retire_not_before_sample));
     memset(g_wavetable_retire_stop_committed, 0,
@@ -417,35 +382,4 @@ uint16_t wavetable_pool_find_free_slot(void)
         }
     }
     return WAVETABLE_POOL_INVALID_SLOT;
-}
-
-wavetable_result_t wavetable_pool_load_file_auto(const char *path,
-                                                 uint16_t *out_wavetable_slot,
-                                                 uint16_t *out_global_slot)
-{
-    const uint16_t wavetable_slot = wavetable_pool_find_free_slot();
-    if (out_wavetable_slot != 0)
-    {
-        *out_wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
-    }
-    if (wavetable_slot == WAVETABLE_POOL_INVALID_SLOT)
-    {
-        wavetable_pool_set_last(WAVETABLE_RESULT_POOL_FULL);
-        return WAVETABLE_RESULT_POOL_FULL;
-    }
-
-    const wavetable_result_t result =
-        wavetable_pool_load_file(wavetable_slot, path, out_global_slot);
-    if ((result == WAVETABLE_RESULT_OK) && (out_wavetable_slot != 0))
-    {
-        *out_wavetable_slot = wavetable_slot;
-    }
-    return result;
-}
-
-wavetable_result_t wavetable_pool_load_file(uint16_t wavetable_slot,
-                                            const char *path,
-                                            uint16_t *out_global_slot)
-{
-    return wavetable_pool_load_wav(wavetable_slot, path, out_global_slot);
 }

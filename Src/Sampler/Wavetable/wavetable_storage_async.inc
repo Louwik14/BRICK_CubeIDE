@@ -5,7 +5,15 @@ static void wavetable_load_job_boot_init(void)
     wavetable_pool_candidate_init(&g_wavetable_candidate);
 }
 
-void wavetable_pool_load_async_cancel(void)
+static void wavetable_import_workspace_release(void)
+{
+    if (g_wavetable_prepare_base == NULL) return;
+    g_wavetable_prepare_base = NULL;
+    g_wavetable_prepare_mipmap = NULL;
+    persistence_workspace_release(PERSISTENCE_WORKSPACE_WAVETABLE_IMPORT);
+}
+
+void wavetable_pool_import_async_cancel(void)
 {
     wavetable_load_job_t *const job = &g_wavetable_load_job;
     wavetable_restore_retained_old();
@@ -24,6 +32,7 @@ void wavetable_pool_load_async_cancel(void)
         (void)f_unlink(job->temp_path);
     }
     wavetable_pool_candidate_release(&g_wavetable_candidate);
+    wavetable_import_workspace_release();
     memset(job, 0, sizeof(*job));
     job->state = WAVETABLE_LOAD_IDLE;
 }
@@ -58,16 +67,16 @@ static uint32_t wavetable_load_io_quantum(void)
         : WAVETABLE_POOL_IO_BYTES;
 }
 
-uint8_t wavetable_pool_load_async_begin_with_geometry(
+uint8_t wavetable_pool_import_async_begin_with_geometry(
     uint16_t wavetable_slot,
     const char *path,
     wavetable_source_geometry_t source_geometry)
 {
-    return wavetable_pool_load_async_begin_prepared_with_geometry(
+    return wavetable_pool_import_async_begin_prepared_with_geometry(
         wavetable_slot, path, source_geometry, NULL, 0U, 0U);
 }
 
-uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
+uint8_t wavetable_pool_import_async_begin_prepared_with_geometry(
     uint16_t wavetable_slot,
     const char *path,
     wavetable_source_geometry_t source_geometry,
@@ -101,10 +110,20 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
     }
     if (g_wavetable_pool.slots[wavetable_slot].state
         == WAVETABLE_SLOT_RETIRING) return 0U;
+    persistence_wavetable_import_workspace_t *const workspace =
+        persistence_workspace_acquire_wavetable_import();
+    if (workspace == NULL)
+    {
+        wavetable_pool_set_last(WAVETABLE_RESULT_WORKSPACE_BUSY);
+        return 0U;
+    }
+    g_wavetable_prepare_base = workspace->base;
+    g_wavetable_prepare_mipmap = workspace->mipmap;
     memset(job, 0, sizeof(*job));
     wavetable_pool_candidate_init(&g_wavetable_candidate);
     if (wavetable_pool_copy_path(job->path, sizeof(job->path), path) == 0U)
     {
+        wavetable_import_workspace_release();
         return 0U;
     }
     job->wavetable_slot = wavetable_slot;
@@ -124,13 +143,13 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
     return 1U;
 }
 
-uint8_t wavetable_pool_load_async_begin(uint16_t wavetable_slot, const char *path)
+uint8_t wavetable_pool_import_async_begin(uint16_t wavetable_slot, const char *path)
 {
-    return wavetable_pool_load_async_begin_with_geometry(
+    return wavetable_pool_import_async_begin_with_geometry(
         wavetable_slot, path, WAVETABLE_DEFAULT_SOURCE_GEOMETRY);
 }
 
-uint8_t wavetable_pool_load_async_busy(void)
+uint8_t wavetable_pool_import_async_busy(void)
 {
     return ((g_wavetable_load_job.state != WAVETABLE_LOAD_IDLE)
             && (g_wavetable_load_job.state != WAVETABLE_LOAD_DONE)) ? 1U : 0U;
@@ -799,7 +818,7 @@ static void wavetable_pool_load_async_step(void)
     sd_scheduler_runtime_background_end();
 }
 
-void wavetable_pool_load_async_service(void)
+void wavetable_pool_import_async_service(void)
 {
     const uint32_t started_at = HAL_GetTick();
     for (uint32_t step = 0U; step < WAVETABLE_LOAD_SERVICE_MAX_STEPS; ++step)
@@ -811,6 +830,8 @@ void wavetable_pool_load_async_service(void)
         const uint32_t old_cycle = job->cycle;
         const uint16_t old_band = job->band;
         wavetable_pool_load_async_step();
+        if (job->state == WAVETABLE_LOAD_DONE)
+            wavetable_import_workspace_release();
         if ((job->state == WAVETABLE_LOAD_IDLE)
             || (job->state == WAVETABLE_LOAD_DONE))
             break;
@@ -826,7 +847,7 @@ void wavetable_pool_load_async_service(void)
     }
 }
 
-uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
+uint8_t wavetable_pool_import_async_take_result(wavetable_result_t *out_result,
                                               uint16_t *out_wavetable_slot,
                                               uint16_t *out_global_slot,
                                               const char **out_path)
@@ -839,241 +860,4 @@ uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
     if (out_path != 0) *out_path = job->path;
     job->state = WAVETABLE_LOAD_IDLE;
     return 1U;
-}
-
-static wavetable_result_t wavetable_pool_load_wav_transactional(
-    uint16_t wavetable_slot,
-    uint16_t forced_global_slot,
-    const char *path,
-    wavetable_source_geometry_t source_geometry,
-    uint16_t *out_global_slot)
-{
-    if ((seq_runtime_is_running() != 0U)
-        || (seq_runtime_is_start_pending() != 0U))
-    {
-        wavetable_pool_set_last(WAVETABLE_RESULT_TRANSPORT_ACTIVE);
-        return WAVETABLE_RESULT_TRANSPORT_ACTIVE;
-    }
-    if (audio_recorder_is_active() != 0U)
-    {
-        wavetable_pool_set_last(WAVETABLE_RESULT_RECORDER_ACTIVE);
-        return WAVETABLE_RESULT_RECORDER_ACTIVE;
-    }
-    FIL *const source_fp = &g_wavetable_transaction_files[0];
-    FILINFO source_info;
-    wav_info_t wav_info;
-    wavetable_slot_t *const candidate = &g_wavetable_candidate;
-    wavetable_pool_candidate_init(candidate);
-    if (out_global_slot != 0)
-    {
-        *out_global_slot = WAVETABLE_POOL_INVALID_SLOT;
-    }
-    if ((wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
-        || ((forced_global_slot != WAVETABLE_POOL_INVALID_SLOT)
-            && (forced_global_slot >= WAVETABLE_POOL_MAX_SLOTS))
-        || (path == 0) || (path[0] == '\0')
-        || ((source_geometry != WAVETABLE_SOURCE_GEOMETRY_1024)
-            && (source_geometry != WAVETABLE_SOURCE_GEOMETRY_2048)))
-    {
-        wavetable_pool_set_last(WAVETABLE_RESULT_INVALID_ARG);
-        return WAVETABLE_RESULT_INVALID_ARG;
-    }
-    char *const cache_path = g_wavetable_transaction_paths[0];
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
-    {
-        wavetable_pool_set_last(WAVETABLE_RESULT_SD_BUSY);
-        return WAVETABLE_RESULT_SD_BUSY;
-    }
-    wavetable_result_t result = WAVETABLE_RESULT_OK;
-    uint8_t source_open = 0U;
-    if (sd_access_fs_mount_if_needed() == 0U)
-    {
-        result = WAVETABLE_RESULT_SD_MOUNT_FAIL;
-        goto done;
-    }
-    if ((f_stat(path, &source_info) != FR_OK)
-        || (f_open(source_fp, path, FA_READ) != FR_OK))
-    {
-        result = WAVETABLE_RESULT_OPEN_FAIL;
-        goto done;
-    }
-    source_open = 1U;
-
-    uint32_t source_crc32 = 0U;
-    if (wavetable_pool_source_crc32(source_fp, &source_crc32) == 0U)
-    {
-        result = WAVETABLE_RESULT_READ_FAIL;
-        goto done;
-    }
-    if ((wav_parser_parse_info(source_fp, &wav_info) == 0)
-        || (wavetable_pool_wav_info_valid(&wav_info) == 0U))
-    {
-        result = WAVETABLE_RESULT_UNSUPPORTED;
-        goto done;
-    }
-    const uint32_t source_samples = wav_info.data_size / wav_info.block_align;
-    const uint32_t source_cycle_sample_count =
-        wavetable_pool_source_cycle_sample_count(source_geometry);
-    if ((source_samples % source_cycle_sample_count) != 0U)
-    {
-        result = WAVETABLE_RESULT_UNSUPPORTED;
-        goto done;
-    }
-    result = wavetable_pool_candidate_allocate(
-        wavetable_slot,
-        path,
-        source_samples / source_cycle_sample_count,
-        candidate);
-    if (result != WAVETABLE_RESULT_OK)
-    {
-        goto done;
-    }
-    if (wavetable_pool_make_cache_path(cache_path,
-                                       WAVETABLE_POOL_PATH_MAX,
-                                       path,
-                                       &source_info) == 0U)
-    {
-        result = WAVETABLE_RESULT_PATH_TOO_LONG;
-        goto done;
-    }
-    char *const temp_path = g_wavetable_transaction_paths[1];
-    if (wavetable_pool_make_temp_path(temp_path,
-                                      WAVETABLE_POOL_PATH_MAX,
-                                      cache_path) == 0U)
-    {
-        result = WAVETABLE_RESULT_PATH_TOO_LONG;
-        goto done;
-    }
-    (void)f_unlink(temp_path);
-
-    if (wavetable_pool_load_prepared_cache(cache_path,
-                                           path,
-                                           &source_info,
-                                           source_crc32,
-                                           candidate) == 0U)
-    {
-        (void)f_unlink(cache_path);
-        result = wavetable_pool_candidate_decode_wav(source_fp,
-                                                     &wav_info,
-                                                     source_geometry,
-                                                     candidate);
-        if (result != WAVETABLE_RESULT_OK)
-        {
-            goto done;
-        }
-        const uint32_t base_crc32 =
-            wavetable_pool_crc32_memory(candidate->data, candidate->data_bytes);
-        const uint32_t payload_crc32 =
-            wavetable_pool_crc32_memory(candidate->mipmap.data,
-                                        candidate->mipmap.data_bytes);
-        if (wavetable_pool_write_cache_transactional(cache_path,
-                                                     candidate,
-                                                     &source_info,
-                                                     source_crc32,
-                                                     base_crc32,
-                                                     payload_crc32) == 0U)
-        {
-            result = WAVETABLE_RESULT_WRITE_FAIL;
-            goto done;
-        }
-    }
-
-done:
-    if (source_open != 0U)
-    {
-        (void)f_close(source_fp);
-    }
-    sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
-    if (result == WAVETABLE_RESULT_OK)
-    {
-        result = wavetable_pool_commit_candidate(wavetable_slot,
-                                                 forced_global_slot,
-                                                 candidate,
-                                                 out_global_slot,
-                                                 source_crc32,
-                                                 wavetable_pool_crc32_memory(
-                                                     candidate->data,
-                                                     candidate->data_bytes),
-                                                 wavetable_pool_crc32_memory(
-                                                     candidate->mipmap.data,
-                                                     candidate->mipmap.data_bytes));
-    }
-    if (result != WAVETABLE_RESULT_OK)
-    {
-        wavetable_pool_candidate_release(candidate);
-    }
-    wavetable_pool_set_last(result);
-    return result;
-}
-
-wavetable_result_t wavetable_pool_load_wav(uint16_t wavetable_slot,
-                                           const char *path,
-                                           uint16_t *out_global_slot)
-{
-    return wavetable_pool_load_wav_with_geometry(
-        wavetable_slot,
-        path,
-        WAVETABLE_DEFAULT_SOURCE_GEOMETRY,
-        out_global_slot);
-}
-
-wavetable_result_t wavetable_pool_load_wav_with_geometry(
-    uint16_t wavetable_slot,
-    const char *path,
-    wavetable_source_geometry_t source_geometry,
-    uint16_t *out_global_slot)
-{
-    return wavetable_pool_load_wav_transactional(
-        wavetable_slot,
-        WAVETABLE_POOL_INVALID_SLOT,
-        path,
-        source_geometry,
-        out_global_slot);
-}
-
-wavetable_result_t wavetable_pool_load_file_at(uint16_t wavetable_slot,
-                                               uint16_t global_slot,
-                                               const char *path)
-{
-    if (global_slot >= WAVETABLE_POOL_MAX_SLOTS)
-    {
-        wavetable_pool_set_last(WAVETABLE_RESULT_INVALID_ARG);
-        return WAVETABLE_RESULT_INVALID_ARG;
-    }
-    if (wavetable_pool_path_ext_is_wav(path) != 0U)
-    {
-        uint16_t loaded_global = WAVETABLE_POOL_INVALID_SLOT;
-        const wavetable_result_t result =
-            wavetable_pool_load_wav_transactional(wavetable_slot,
-                                                  global_slot,
-                                                  path,
-                                                  WAVETABLE_DEFAULT_SOURCE_GEOMETRY,
-                                                  &loaded_global);
-        if ((result != WAVETABLE_RESULT_OK)
-            && (wavetable_slot < WAVETABLE_POOL_MAX_SLOTS)
-            && (g_wavetable_pool.slots[wavetable_slot].state
-                != WAVETABLE_SLOT_READY)
-            && (path != 0)
-            && (path[0] != '\0'))
-        {
-            (void)wavetable_pool_copy_path(g_wavetable_pool.slots[wavetable_slot].path,
-                                           sizeof(g_wavetable_pool.slots[wavetable_slot].path),
-                                           path);
-            wavetable_pool_slot_error_at(wavetable_slot, result, global_slot);
-        }
-        return result;
-    }
-
-    const wavetable_result_t result = WAVETABLE_RESULT_UNSUPPORTED;
-    if ((result != WAVETABLE_RESULT_OK)
-        && (wavetable_slot < WAVETABLE_POOL_MAX_SLOTS)
-        && (path != 0)
-        && (path[0] != '\0'))
-    {
-        (void)wavetable_pool_copy_path(g_wavetable_pool.slots[wavetable_slot].path,
-                                       sizeof(g_wavetable_pool.slots[wavetable_slot].path),
-                                       path);
-        wavetable_pool_slot_error_at(wavetable_slot, result, global_slot);
-    }
-    return result;
 }

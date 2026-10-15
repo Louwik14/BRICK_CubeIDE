@@ -250,7 +250,11 @@ static void ui_page_settings_wavetable_slot_label(uint16_t global_slot,
 
     if (table == 0)
     {
-        (void)snprintf(raw, sizeof(raw), "%03u BADREF", (unsigned)global_slot);
+        persist_control_asset_ref_t asset;
+        (void)snprintf(raw, sizeof(raw), "%03u %s", (unsigned)global_slot,
+            (project_control_get_logical_asset(PERSIST_ASSET_WAVETABLE,
+                                               global_slot,&asset)!=0U)
+                ? "UNAVAILABLE" : "BADREF");
     }
     else if (table->state == WAVETABLE_SLOT_READY)
     {
@@ -298,7 +302,10 @@ static void ui_page_settings_draw_wavetable_name_label(void)
         }
         else
         {
-            label = "EMPTY";
+            persist_control_asset_ref_t asset;
+            label = (project_control_get_logical_asset(
+                PERSIST_ASSET_WAVETABLE,g_ui_settings.sample_slot_selected,
+                &asset)!=0U) ? "UNAVAILABLE" : "EMPTY";
         }
         ui_page_settings_draw_browser_context_label("SLOT", label);
         return;
