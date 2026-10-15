@@ -20,6 +20,7 @@
  */
 
 #include "fx_dj_eq3_cmsis.h"
+#include "Audio/audio_lut_bank2.h"
 
 #include <math.h>
 #include <string.h>
@@ -35,12 +36,9 @@
 
 /*
  * The DJ EQ uses fixed crossover frequencies in the mixer. Its complete RBJ
- * coefficient curves are therefore prepared once during audio initialization.
- * IRQ-side parameter changes only interpolate this table.
+ * coefficient curves are pre-generated with the ARM Release toolchain and
+ * stored bit-for-bit in Flash bank 2. Parameter changes only interpolate it.
  */
-static float g_fx_dj_eq3_coeff_lut[FX_DJ_EQ3_NUM_STAGES]
-                                      [FX_DJ_EQ3_LUT_INTERVALS + 1U][5U];
-static uint8_t g_fx_dj_eq3_coeff_lut_ready = 0U;
 
 /**
  * @brief Point d'entrée fx_clamp.
@@ -83,6 +81,7 @@ static inline float fx_clamp(float x, float lo, float hi)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+#if 0 /* LUT generator retained in history; production uses audio_lut_bank2.S. */
 static inline float fx_safe(float x)
 {
     return isfinite(x) ? x : 0.0f;
@@ -304,6 +303,12 @@ static void fx_dj_eq3_prepare_coeff_lut(float sample_rate)
                        g_fx_dj_eq3_coeff_lut[2U][i]);
     }
     g_fx_dj_eq3_coeff_lut_ready = 1U;
+}
+#endif
+
+static inline float fx_clamp_db(float db)
+{
+    return fx_clamp(db, FX_DJ_EQ3_MIN_DB, FX_DJ_EQ3_MAX_DB);
 }
 
 static void fx_dj_eq3_lookup_coeffs(uint32_t stage, float gain_db, float *out)
@@ -552,7 +557,6 @@ void fx_dj_eq3_init(fx_dj_eq3_t *eq,
     eq->high_freq = 4000.0f;
     eq->mid_q = 0.8f;
 
-    fx_dj_eq3_prepare_coeff_lut(eq->sample_rate);
 
     arm_biquad_cascade_df1_init_f32(&eq->inst_l, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state_l);
     arm_biquad_cascade_df1_init_f32(&eq->inst_r, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state_r);
@@ -755,7 +759,6 @@ void fx_dj_eq3_mono_init(fx_dj_eq3_mono_t *eq,
     eq->high_freq = 4000.0f;
     eq->mid_q = 0.8f;
 
-    fx_dj_eq3_prepare_coeff_lut(eq->sample_rate);
     arm_biquad_cascade_df1_init_f32(&eq->inst, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state);
 
     fx_dj_eq3_mono_update_coeffs(eq);

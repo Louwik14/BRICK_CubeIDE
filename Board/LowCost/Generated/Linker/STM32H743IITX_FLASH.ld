@@ -118,6 +118,21 @@ SECTIONS
   } >ITCMRAM AT> FLASH
   __itcm_text_load__ = LOADADDR(.itcm_text);
 
+  /* Cold immutable audio LUTs: physical Flash bank 2, never copied to RAM. */
+  .flash_bank2_lut 0x08100000 :
+  {
+    . = ALIGN(4);
+    __flash_bank2_lut_start__ = .;
+    KEEP(*(.flash_bank2_lut))
+    KEEP(*(.flash_bank2_lut*))
+    . = ALIGN(4);
+    __flash_bank2_lut_end__ = .;
+  } >FLASH
+  ASSERT(__flash_bank2_lut_end__ <= ORIGIN(GROOVE_FLASH),
+         "Flash bank 2 LUTs overlap reserved Groove sectors")
+  ASSERT((__flash_bank2_lut_end__ - __flash_bank2_lut_start__) == 9796,
+         "Unexpected Flash bank 2 LUT footprint")
+
   /* Constant data goes into FLASH */
   .rodata :
   {

@@ -108,7 +108,7 @@ TRACK 1..8 lit uniquement la source moteur/externe de la track cible, capturee a
 
 Les gains de courbe XFADE sont calcules lors de la preparation du parametre puis lisses lineairement sur un bloc. La boucle sample ne fait aucun lookup, routage, trigonometrie ou recherche de bus: seulement les multiplications/additions du mix stereo et les increments de gains.
 
-DJ EQ reutilise l'unique DSP trois bandes CMSIS dans chaque slot Insert FX et suit toutes les capabilities generiques. FILTER POS place le filtre avant les deux FX (`PRE`), entre eux (`MID`) ou apres eux (`POST`); FX ORDER choisit A puis B ou B puis A. MONO traite la somme mono, MID seulement la composante centrale, SIDE seulement la composante laterale et STEREO les deux canaux. Les coefficients sont prepares par la LUT existante; le hot-path ne fait ni allocation, ni lock, ni recherche de routage.
+DJ EQ reutilise l'unique DSP trois bandes CMSIS dans chaque slot Insert FX et suit toutes les capabilities generiques. FILTER POS place le filtre avant les deux FX (`PRE`), entre eux (`MID`) ou apres eux (`POST`); FX ORDER choisit A puis B ou B puis A. MONO traite la somme mono, MID seulement la composante centrale, SIDE seulement la composante laterale et STEREO les deux canaux. Ses coefficients et les deux LUT d'enveloppe du Mixer sont pre-generes bit a bit par la toolchain ARM Release, places dans `.flash_bank2_lut` a partir de `0x08100000` et lus uniquement aux changements de parametres. La LUT TPT frequemment modulee reste en D1. Le hot-path sample ne fait ni allocation, ni lock, ni recherche de routage, ni nouvelle lecture Flash.
 
 ## Wave
 

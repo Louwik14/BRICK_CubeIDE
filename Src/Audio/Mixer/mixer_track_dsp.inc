@@ -268,37 +268,6 @@ enum
 #define MIXER_FILTER_INV_LOG2_TIME_RANGE 0.08138130233100371f
 #define MIXER_FILTER_INV_LOG2 1.4426950408889634f
 
-static uint16_t g_mixer_filter_time_lut[MIXER_FILTER_TIME_LUT_SIZE + 1U];
-static float g_mixer_filter_log2_lut[257U];
-static uint8_t g_mixer_filter_time_lut_ready = 0U;
-
-static void mixer_track_filter_init_time_lut(void)
-{
-    if(g_mixer_filter_time_lut_ready != 0U)
-        return;
-
-    const float time_log_ratio = logf(MIXER_FILTER_ATTACK_MAX_S / MIXER_FILTER_ATTACK_MIN_S);
-    const float max_segment_samples = MIXER_FILTER_SAMPLE_RATE_DEFAULT * MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS;
-
-    for(uint32_t i = 0U; i <= 256U; ++i)
-    {
-        const float x = 1.0f + ((float)i * (1.0f / 256.0f));
-        g_mixer_filter_log2_lut[i] = logf(x) * MIXER_FILTER_INV_LOG2;
-    }
-
-    for(uint32_t i = 0U; i <= MIXER_FILTER_TIME_LUT_SIZE; ++i)
-    {
-        const float norm = (float)i * (1.0f / (float)MIXER_FILTER_TIME_LUT_SIZE);
-        const float time_s = MIXER_FILTER_ATTACK_MIN_S * expf(time_log_ratio * norm);
-        const float desired_samples = clampf_local(time_s * MIXER_FILTER_SAMPLE_RATE_DEFAULT, 1.0f, max_segment_samples);
-        const float normalized = cbrtf((desired_samples - 1.0f) / max_segment_samples);
-        const float scaled = clampf_local(normalized, 0.0f, 1.0f) * 65535.0f;
-        g_mixer_filter_time_lut[i] = (uint16_t)(scaled + 0.5f);
-    }
-
-    g_mixer_filter_time_lut_ready = 1U;
-}
-
 static float mixer_track_filter_log2_lut(float x)
 {
     union

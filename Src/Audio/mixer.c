@@ -51,6 +51,7 @@
 #include "Audio/multi_voice_dsp.h"
 
 #include "Audio/audio_recorder_capture_audio.h"
+#include "Audio/audio_lut_bank2.h"
 
 #include <math.h>
 #include <string.h>

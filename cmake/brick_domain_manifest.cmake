@@ -257,6 +257,7 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_fx_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_global_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_io.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_lut_bank2.S"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_note_engine_adapter.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_rec_bus_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_rec_overdub.c"
