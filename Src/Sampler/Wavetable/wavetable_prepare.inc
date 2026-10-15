@@ -967,9 +967,12 @@ static wavetable_result_t wavetable_pool_commit_candidate(
     const uint16_t global_slot = (forced_global_slot < WAVETABLE_POOL_MAX_SLOTS)
         ? forced_global_slot : wavetable_slot;
     wavetable_slot_t persistent;
-    if (wavetable_flash_store_append(candidate, source_crc32, base_crc32,
-                                     payload_crc32, &persistent) == 0U)
-        return WAVETABLE_RESULT_POOL_FULL;
+    const wavetable_flash_store_result_t store_result =
+        wavetable_flash_store_append(candidate, source_crc32, base_crc32,
+                                     payload_crc32, &persistent);
+    if (store_result != WAVETABLE_FLASH_STORE_OK)
+        return (store_result == WAVETABLE_FLASH_STORE_FULL)
+            ? WAVETABLE_RESULT_POOL_FULL : WAVETABLE_RESULT_WRITE_FAIL;
     const wavetable_preview_t preview = candidate->preview;
     *candidate = persistent;
     candidate->preview = preview;

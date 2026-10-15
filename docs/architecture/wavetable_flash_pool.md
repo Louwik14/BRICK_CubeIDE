@@ -60,12 +60,12 @@ pas compter le grand trou d'adressage précédant le ring Recorder.
 | Mémoire | Avant | Après | Delta hors pool Sampler |
 |---|---:|---:|---:|
 | DTCM | 125 696 | 125 728 | +32 |
-| D1 | 431 456 | 431 488 | +32 |
+| D1 | 431 456 | 431 520 | +64 |
 | D2 | 250 528 | 250 528 | 0 |
 | D3 | 54 720 | 54 176 | -544 |
 | SDRAM cacheable hors pool | 5 991 424 | 6 018 784 | +27 360 |
 | SDRAM non-cacheable | 0 | 0 | 0 |
-| **Total hors pool Sampler** | **6 853 824** | **6 880 704** | **+26 880** |
+| **Total hors pool Sampler** | **6 853 824** | **6 880 736** | **+26 912** |
 
 Le delta SDRAM combine +98 304 octets de scratch de préparation, -59 488
 octets de catalogue Wavetable et -11 456 octets de registre AUDIO. Le scratch
@@ -77,9 +77,9 @@ comme gains, puisqu'ils restent alloués et partagés.
 
 ## Flash firmware et coût AUDIO
 
-La somme des sections chargeables du firmware passe de 1 552 876 à 1 554 552
-octets, soit +1 676 octets. Le span du binaire Release est 1 567 564 octets sur
-la région firmware de 1 572 864 octets, laissant 5 300 octets. Le pool
+La somme des sections chargeables du firmware passe de 1 552 876 à 1 554 800
+octets, soit +1 924 octets. Le span du binaire Release est 1 567 572 octets sur
+la région firmware de 1 572 864 octets, laissant 5 292 octets. Le pool
 Wavetable de 262 144 octets est une région séparée et vide dans l'image usine ;
 son occupation utile vaut 66 112 octets par table standard, 198 336 octets pour
 trois tables.

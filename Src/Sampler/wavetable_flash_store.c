@@ -279,27 +279,30 @@ uint8_t wavetable_flash_store_scan_slot(uint16_t index,
         ? 1U : 0U;
 }
 
-uint8_t wavetable_flash_store_append(const wavetable_slot_t *prepared,
-                                     uint32_t source_crc32,
-                                     uint32_t base_crc32,
-                                     uint32_t payload_crc32,
-                                     wavetable_slot_t *out_persistent)
+wavetable_flash_store_result_t wavetable_flash_store_append(
+    const wavetable_slot_t *prepared,
+    uint32_t source_crc32,
+    uint32_t base_crc32,
+    uint32_t payload_crc32,
+    wavetable_slot_t *out_persistent)
 {
     if ((prepared == NULL) || (out_persistent == NULL)
         || (prepared->frame_count == 0U)
         || (prepared->frame_count > WAVETABLE_FLASH_MAX_FRAMES)
         || (prepared->mipmap.band_count == 0U)
         || (prepared->mipmap.band_count > WAVETABLE_MIPMAP_MAX_BANDS)
-        || (prepared->mipmap.data == NULL)) return 0U;
+        || (prepared->mipmap.data == NULL)) return WAVETABLE_FLASH_STORE_INVALID;
     const size_t path_length = strnlen(prepared->path, B6WF_PATH_BYTES);
-    if ((path_length == 0U) || (path_length >= B6WF_PATH_BYTES)) return 0U;
+    if ((path_length == 0U) || (path_length >= B6WF_PATH_BYTES))
+        return WAVETABLE_FLASH_STORE_INVALID;
     const uint32_t commit_offset = align32(B6WF_PAYLOAD_OFFSET
                                            + prepared->mipmap.data_bytes);
     const uint32_t record_bytes = commit_offset + 64U;
     if ((g_record_count >= WAVETABLE_POOL_MAX_SLOTS)
         || (g_append_offset > WAVETABLE_FLASH_SIZE - record_bytes)
         || (wavetable_flash_backend_is_erased(g_append_offset,
-                                               record_bytes) == 0U)) return 0U;
+                                               record_bytes) == 0U))
+        return WAVETABLE_FLASH_STORE_FULL;
 
     uint8_t header[B6WF_HEADER_BYTES];
     memset(header, 0xFF, sizeof(header));
@@ -345,7 +348,8 @@ uint8_t wavetable_flash_store_append(const wavetable_slot_t *prepared,
             ? 16U : band->cycle_sample_count);
         payload_offset += band->sample_count * sizeof(float);
     }
-    if (payload_offset != prepared->mipmap.data_bytes) return 0U;
+    if (payload_offset != prepared->mipmap.data_bytes)
+        return WAVETABLE_FLASH_STORE_INVALID;
 
     audio_stop();
     uint8_t ok = program_range(g_append_offset, header, sizeof(header));
@@ -367,14 +371,15 @@ uint8_t wavetable_flash_store_append(const wavetable_slot_t *prepared,
                                              commit);
     }
     const uint8_t restarted = audio_start();
-    if ((ok == 0U) || (restarted == 0U)) return 0U;
+    if ((ok == 0U) || (restarted == 0U))
+        return WAVETABLE_FLASH_STORE_WRITE_FAILED;
     wavetable_flash_backend_publish_barrier();
     const uint32_t stored_offset = g_append_offset;
     g_records[g_record_count++] = (wavetable_flash_record_t){
         .offset = stored_offset, .record_bytes = record_bytes };
     g_append_offset += record_bytes;
     return (decode_record(stored_offset, out_persistent, NULL) == 1U)
-        ? 1U : 0U;
+        ? WAVETABLE_FLASH_STORE_OK : WAVETABLE_FLASH_STORE_WRITE_FAILED;
 }
 
 uint8_t wavetable_flash_store_delete(uint32_t flash_offset)

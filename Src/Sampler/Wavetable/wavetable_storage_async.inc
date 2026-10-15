@@ -413,11 +413,16 @@ static void wavetable_pool_load_async_step(void)
             if (candidate->generation == 0U)
             {
                 wavetable_slot_t persistent;
-                if (wavetable_flash_store_append(
+                const wavetable_flash_store_result_t store_result =
+                    wavetable_flash_store_append(
                         candidate, job->source_crc, job->base_crc,
-                        job->payload_crc, &persistent) == 0U)
+                        job->payload_crc, &persistent);
+                if (store_result != WAVETABLE_FLASH_STORE_OK)
                 {
-                    wavetable_load_fail(WAVETABLE_RESULT_POOL_FULL);
+                    wavetable_load_fail(
+                        (store_result == WAVETABLE_FLASH_STORE_FULL)
+                            ? WAVETABLE_RESULT_POOL_FULL
+                            : WAVETABLE_RESULT_WRITE_FAIL);
                     return;
                 }
                 const wavetable_preview_t preview = candidate->preview;
