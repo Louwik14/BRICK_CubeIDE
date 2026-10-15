@@ -112,6 +112,20 @@ scenarios du 8 octobre. Les 376 descriptors logiques restent la premiere
 limite: sans leur futur redimensionnement, 752 demi-blocs physiques ne peuvent
 pas rendre plus de 376 pages mono simultanement adressables.
 
+Pour le catalogue produit affiche par le Sample Browser, la capacite est de
+340 samples charges. Les 36 carriers runtime sont soustraits avant admission;
+il reste donc 340 descriptors generaux et 340 carriers generaux. Chaque sample
+Classic ou sample constitutif d'un Multi protege exactement sa page de presocle
+et consomme un descriptor: 8 KiB en mono, 16 KiB en stereo. Le packing mono
+peut laisser du payload libre, mais ne cree aucun descriptor general
+supplementaire. Les slices sont des bornes de lecture dans un sample et ne
+consomment ni descriptor, ni page, ni carrier. La limite effective est donc
+`min(340 descriptors generaux, 680 demi-carriers)` en mono et
+`min(340 descriptors generaux, 340 carriers)` en stereo, soit 340 samples dans
+les deux cas. Le compteur UI compte les samples (`Classic = 1`, `Multi = nombre
+de samples de l'instrument`) et affiche `X/340`; il ne compte jamais les pages
+ou les carriers.
+
 Les pages partielles et les formats non canoniques restent sur le chemin de
 lecture asynchrone complet existant. Les writes Recorder/Looper/Overdub ne sont
 pas fragmentes en 512 octets: ils conservent ring, coalescing et gros DMA. Le

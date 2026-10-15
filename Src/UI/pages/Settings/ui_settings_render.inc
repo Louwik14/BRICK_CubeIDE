@@ -635,7 +635,7 @@ static void ui_page_settings_render_multi_browser(void)
 
     ui_page_settings_multi_prepare_poll();
 
-    ui_page_settings_draw_multi_sample_header();
+    ui_page_settings_draw_unified_sample_header(UI_SETTINGS_VIEW_MULTI_SAMPLE);
     drv_display_draw_line(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y, 127, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y);
 
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING)
@@ -768,7 +768,7 @@ static void ui_page_settings_render_sample_browser(void)
      * next OLED frame, but one frame must never dereference the old snapshot. */
     ui_page_settings_classic_coherence_service();
 
-    ui_page_settings_draw_global_sample_header("STREAM");
+    ui_page_settings_draw_unified_sample_header(UI_SETTINGS_VIEW_SAMPLER);
     drv_display_draw_line(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y, 127, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y);
     ui_page_settings_draw_stream_name_label();
     ui_page_settings_draw_sample_split_position(g_ui_settings.sample_child_count,

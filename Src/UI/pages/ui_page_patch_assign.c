@@ -194,7 +194,7 @@ static const char *ui_page_patch_assign_type_filter_label(patch_assign_type_filt
         case PATCH_ASSIGN_TYPE_STACK: return "STACK";
         case PATCH_ASSIGN_TYPE_ACID: return "ACID";
         case PATCH_ASSIGN_TYPE_RAM: return "RAM";
-        case PATCH_ASSIGN_TYPE_STREAM: return "STREAM";
+        case PATCH_ASSIGN_TYPE_STREAM: return "CLASSIC";
         case PATCH_ASSIGN_TYPE_MULTI: return "MULTI";
         case PATCH_ASSIGN_TYPE_DRUM_MD: return "DRUM MD";
         default: return "ALL";

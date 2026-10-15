@@ -231,7 +231,7 @@ static const char *ui_page_audio_rec_error_label(sample_capture_error_t error)
         case SAMPLE_CAPTURE_ERROR_LOAD_FAIL: return "LOAD FAIL";
         case SAMPLE_CAPTURE_ERROR_PREVIEW_FAIL: return "PREVIEW";
         case SAMPLE_CAPTURE_ERROR_OVERDUB: return "OVERDUB";
-        case SAMPLE_CAPTURE_ERROR_STREAM: return "STREAM";
+        case SAMPLE_CAPTURE_ERROR_STREAM: return "CLASSIC";
         default: return "ERROR";
     }
 }

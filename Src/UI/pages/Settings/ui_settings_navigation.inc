@@ -11,13 +11,13 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_WAVETABLE:
             return "SAMPLE > WAVE";
         case UI_SETTINGS_VIEW_SAMPLER:
-            return "SAMPLE > STREAM";
+            return "SAMPLE > CLASSIC";
         case UI_SETTINGS_VIEW_MULTI_SAMPLE:
             return "SAMPLE > MULTI";
         case UI_SETTINGS_VIEW_SAMPLER_SLOT:
-            return "STREAM > SLOT";
+            return "CLASSIC > SLOT";
         case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
-            return "STREAM > SD";
+            return "CLASSIC > SD";
         case UI_SETTINGS_VIEW_CALIBRATION:
             return "CALIBRATION";
         default:
@@ -34,7 +34,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_PROJECT:
             return (uint8_t)(g_ui_settings.project_slot_count + 1U);
         case UI_SETTINGS_VIEW_SAMPLE:
-            return 3U;
+            return 2U;
         case UI_SETTINGS_VIEW_WAVETABLE:
             return 0U;
         case UI_SETTINGS_VIEW_SAMPLER:
@@ -85,13 +85,9 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
         case UI_SETTINGS_VIEW_SAMPLE:
             if (index == 0U)
             {
-                return "MULTI";
+                return "SAMPLE BROWSER";
             }
-            if (index == 1U)
-            {
-                return "WAVE";
-            }
-            return "STREAM";
+            return "WAVE";
         case UI_SETTINGS_VIEW_PROJECT:
             if (index == 0U) return "[ + NEW PROJECT ]";
             --index;
@@ -453,21 +449,15 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_SAMPLE:
             if (level->selected_index == 0U)
             {
-                ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
-                ui_page_settings_multi_browser_enter_root();
-                ui_page_settings_push(UI_SETTINGS_VIEW_MULTI_SAMPLE);
+                ui_page_settings_refresh_sampler_slots();
+                ui_page_settings_sample_browser_enter_root();
+                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER);
             }
-            else if (level->selected_index == 1U)
+            else
             {
                 ui_page_settings_refresh_wavetable_slots();
                 ui_page_settings_wavetable_browser_enter_root();
                 ui_page_settings_push(UI_SETTINGS_VIEW_WAVETABLE);
-            }
-            else
-            {
-                ui_page_settings_refresh_sampler_slots();
-                ui_page_settings_sample_browser_enter_root();
-                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER);
             }
             break;
 

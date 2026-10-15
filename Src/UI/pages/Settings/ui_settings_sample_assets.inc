@@ -214,7 +214,7 @@ static void ui_page_settings_sample_request_replace(uint16_t slot, const char *p
     uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if (ui_page_settings_stream_backend_from_global(slot, &backend_slot) == 0U)
     {
-        ui_page_settings_status("SELECT STREAM");
+        ui_page_settings_status("SELECT CLASSIC");
         return;
     }
 

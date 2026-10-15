@@ -1,5 +1,20 @@
 # Z5 - Navigation et interaction UI
 
+## Sample Browser unifie
+
+Le menu SAMPLE ouvre un Browser unique. Son bandeau est
+`CLASSIC | MULTI | X/N`; le mode actif est inverse et E3 bascule entre les deux
+racines sans empiler une nouvelle page. P1 remonte d'un dossier puis quitte le
+Browser depuis la racine. P2 applique LOAD a l'element SD selectionne; les
+actions de preview, remplacement, unload, renommage et suppression restent
+specifiques au contexte et au mode. Le libelle produit est toujours CLASSIC;
+STREAM reste uniquement un nom interne de moteur/runtime.
+
+Les deux modes partagent la meme projection de capacite du Page Cache et le
+meme compteur de samples charges. Les listes sont reconstruites depuis leurs
+autorites apres publication terminale d'un LOAD ou apres DELETE; une selection
+UI ne conserve pas une reference runtime retiree.
+
 STEP 1..8 selectionnent les top-level. En GROUP, STEP 9..15 selectionnent les children 8..14; STEP 16 selectionne toujours la Master Track harmonique 15. La Master reutilise SEQ/PLAY et ses huit voix d'edition, sans page de saisie specifique, et son TONE contient exclusivement HARM 1-4 et HARM 5-8 pour les modes OFF/CHORD 1/CHORD 2/BASS/DIATONIC/PARALLEL des huit pistes top-level. Le mode du top-level 7 est herite par ses sept children GROUP. La Master n'expose aucun moteur ni sortie de notes. La disponibilite des ensembles vient du masque `track_runtime`: le master GROUP expose CFG, ENV, MOD, MIX et FX audio, mais ni SEQ, MIDI FX, TONE ni PLAY puisqu'il ne possede ni lane ni moteur de notes; son ENV edite le filtre post-somme (Cutoff, Resonance, Morph) et l'ENV3 commun. Un child expose la voix RAM mono, sa sequence/PLAY, ses MIDI FX, son ENV/TONE/MIX/FX et la vue filtree de la MOD partagee. MOD derive toujours son owner par `entity_topology`.
 
 Le bandeau derive d'abord l'identite via `entity_topology`: la Master affiche

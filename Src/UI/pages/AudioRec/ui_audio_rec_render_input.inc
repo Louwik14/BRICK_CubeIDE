@@ -88,7 +88,7 @@ static void ui_page_rec_edit_render(void)
             (void)snprintf(target_label, sizeof(target_label), "TRACK %u  %s",
                            (unsigned)(target + 1U),
                            (track_state_get_type(target) == TRACK_TYPE_STREAM)
-                               ? "STREAM" : "RAM");
+                               ? "CLASSIC" : "RAM");
         else
             (void)snprintf(target_label, sizeof(target_label), "NO TRACK");
         drv_display_clear_rect(4U, 19U, 120U, 39U);

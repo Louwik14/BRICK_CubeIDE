@@ -241,23 +241,43 @@ static uint16_t ui_page_settings_global_entry_count_used(void)
     return sample_global_pool_get_used_entries();
 }
 
+static void ui_page_settings_draw_unified_sample_header(ui_settings_view_t view)
+{
+    char capacity[12];
+    const uint16_t used = sample_global_pool_get_used_entries();
+    const uint16_t maximum = sample_global_pool_get_entry_capacity();
+    (void)snprintf(capacity, sizeof(capacity), "%u/%u",
+                   (unsigned)used, (unsigned)maximum);
+
+    drv_display_set_font(&FONT_4X6);
+    if (view == UI_SETTINGS_VIEW_SAMPLER)
+    {
+        drv_display_fill_rect(0, 0, 29, 6);
+        drv_display_draw_text_inverted(1U, 0U, "CLASSIC");
+    }
+    else
+    {
+        drv_display_draw_text(1U, 0U, "CLASSIC");
+    }
+    drv_display_draw_text(31U, 0U, "|");
+    if (view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+    {
+        drv_display_fill_rect(37, 0, 21, 6);
+        drv_display_draw_text_inverted(38U, 0U, "MULTI");
+    }
+    else
+    {
+        drv_display_draw_text(38U, 0U, "MULTI");
+    }
+    drv_display_draw_text(60U, 0U, "|");
+    drv_display_draw_text(67U, 0U, capacity);
+}
+
 static void ui_page_settings_draw_global_sample_header(const char *title)
 {
     ui_page_settings_draw_sample_header(title,
                                         ui_page_settings_global_entry_count_used(),
                                         sample_global_pool_get_entry_capacity(),
-                                        ui_page_settings_global_memory_used_bytes(),
-                                        SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
-}
-
-static void ui_page_settings_draw_multi_sample_header(void)
-{
-    const uint32_t slot_bytes = ui_page_settings_multi_slot_bytes();
-    const uint16_t total_slots = (uint16_t)(SAMPLE_GLOBAL_POOL_BUDGET_BYTES / slot_bytes);
-    const uint16_t used_slots = multi_sample_pool_get_slot_capacity_used();
-    ui_page_settings_draw_sample_header("MULTI",
-                                        used_slots,
-                                        total_slots,
                                         ui_page_settings_global_memory_used_bytes(),
                                         SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
 }
