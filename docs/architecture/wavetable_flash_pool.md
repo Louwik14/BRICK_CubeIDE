@@ -35,18 +35,28 @@ La base 1024 points est la première bande du payload et n'est pas dupliquée.
 
 ## Import, publication et compatibilité
 
-L'import SD décode et prépare les mipmaps dans un scratch SDRAM dédié. Il ne
-réserve aucune page du pool Sampler. Le flux audio est explicitement arrêté
+L'import SD décode et prépare les mipmaps dans le workspace SDRAM de
+persistance, sous le propriétaire exclusif `PERSISTENCE_WORKSPACE_WAVETABLE_IMPORT`.
+La réservation couvre tous les tours de superloop, de l'ouverture SD jusqu'au
+nettoyage terminal. Il ne réserve aucune page du pool Sampler. Le flux audio est explicitement arrêté
 pour la programmation ou la suppression Flash, puis redémarré après
 invalidation des caches. AUDIO reçoit ensuite des pointeurs directs vers la
 Flash : l'IRQ ne fait ni allocation, ni accès SD, ni décompression, ni écriture
 Flash.
 
-Les références Project, Pattern, Patch et Working restent des références
-canoniques `{kind, path}` compatibles avec les documents existants. À leur
-résolution, le catalogue cherche d'abord le record Flash portant ce chemin et
-ne réimporte depuis la SD que s'il est absent. L'identité interne et les
-références ne dépendent donc pas de l'offset physique du record.
+Les références Project, Resume, Pattern, Working, Patch, Preview et Boot restent
+des références canoniques `{kind, path}` compatibles avec les documents
+existants. Leur API de résolution consulte exclusivement le catalogue Flash.
+Une référence absente reste enregistrée dans la banque logique avec un runtime
+invalide, est exposée comme `UNAVAILABLE`, et ne déclenche ni accès SD, ni
+préparation, ni programmation Flash. Les autres références disponibles restent
+résolues normalement.
+
+La seule API d'écriture exposée est l'import asynchrone appelé par `P2 LOAD` dans
+le Browser Wavetable. Une réimportation manuelle ultérieure réutilise le chemin
+persistant, rattache le runtime Flash et republie les sélections de piste qui
+portaient cette référence. Les API synchrones historiques d'import ont été
+retirées afin qu'un chemin de restore ne puisse pas les réutiliser par erreur.
 
 Le Browser applique la même règle avant tout import : un chemin déjà présent
 dans le catalogue Flash global est rattaché à la banque logique courante sans
@@ -110,15 +120,31 @@ MAP Release :
 Le Browser n'ajoute donc aucun coût RAM permanent mesurable. Aucun buffer
 AUDIO, DMA ou pool Sampler n'est redimensionné.
 
-Le workspace de persistance de 268 544 octets n'est pas mutualisé avec le
-scratch Wavetable. Un Project Load conserve simultanément dans ce workspace le
-document candidat, ses assets, son Pattern préparé et les géométries Groove,
-puis peut devoir importer une Wavetable avant de publier le projet. Une
-réservation exclusive du même workspace bloquerait donc précisément ce chemin.
-Son sous-espace `scratch` ne fait que 82 560 octets et reste référencé par le
-Pattern préparé : il est trop petit et sa durée de vie chevauche l'import. Les
-98 304 octets statiques sont conservés plutôt que d'introduire une hypothèse
-d'exclusion fausse ou une dégradation de la préparation.
+### Delta Release de la passe import manuel
+
+| Mémoire | Avant | Après | Delta |
+|---|---:|---:|---:|
+| DTCM | 125 728 | 125 728 | 0 |
+| D1 | 431 488 | 431 520 | +32 |
+| D2 | 251 104 | 251 104 | 0 |
+| D3 | 54 176 | 54 176 | 0 |
+| SDRAM hors pool Sampler | 6 018 784 | 5 920 480 | -98 304 |
+| **Total** | **6 881 280** | **6 783 008** | **-98 272** |
+
+Le workspace complet mesure 268 544 octets ; l'union de préparation Wavetable
+en utilise 98 304 sans agrandir cette allocation permanente. Les anciens
+tableaux statiques base (32 768) et mipmap (65 536) sont supprimés. Les 32
+octets D1 supplémentaires viennent des pointeurs et de l'alignement ; le gain
+réel net est donc 98 272 octets.
+
+Project/Pattern/Patch détiennent déjà ce même workspace pendant leurs opérations
+coopératives et ne peuvent plus importer de Wavetable. Un import manuel échoue
+explicitement avec `WORKSPACE BUSY` si un propriétaire existe, puis conserve la
+réservation pendant toute sa durée asynchrone. Recorder et transport sont
+refusés avant acquisition ; Multi import est également exclu. Le streaming
+AUDIO peut continuer à être servi par son scheduler et n'accède pas à ce
+workspace. Les buffers sont cacheables, uniquement CPU, sans DMA ni maintenance
+de cache supplémentaire.
 
 ## Flash firmware et coût AUDIO
 
@@ -128,6 +154,9 @@ la région firmware de 1 572 864 octets, laissant 5 292 octets. Le pool
 Wavetable de 262 144 octets est une région séparée et vide dans l'image usine ;
 son occupation utile vaut 66 112 octets par table standard, 198 336 octets pour
 trois tables.
+
+La passe d'import manuel porte le span Release de 1 567 620 à 1 567 676
+octets, soit +56 octets. Les régions Flash Wavetable et Groove ne changent pas.
 
 Le calcul AUDIO, l'interpolation et le choix de mipmap sont inchangés. Les
 lectures passent des pages SDRAM à la Flash mappée et cacheable ; il n'y a aucun
