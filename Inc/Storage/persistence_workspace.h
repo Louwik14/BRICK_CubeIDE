@@ -40,10 +40,10 @@ typedef seq_groove_build_workspace_t persistence_groove_build_workspace_t;
 
 #define PERSISTENCE_PATTERN_ENCODED_MAX_BYTES \
     PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES
-#define PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY (152U)
-#define PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY (152U)
+#define PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY (2000U)
+#define PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY (2000U)
 
-_Static_assert(PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY == 152U,
+_Static_assert(PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY == 2000U,
                "Project Restore product asset capacity changed");
 _Static_assert(sizeof(persist_control_asset_ref_t) == 168U,
                "Persistent asset descriptor size changed");
@@ -90,13 +90,13 @@ typedef struct
     float mipmap[WAVETABLE_FLASH_MAX_FRAMES * 2048U];
 } persistence_wavetable_import_workspace_t;
 
-_Static_assert(sizeof(persistence_project_save_workspace_t) == 137308U,
+_Static_assert(sizeof(persistence_project_save_workspace_t) == 447772U,
                "Project Save workspace size changed");
 _Static_assert(sizeof(persistence_groove_build_workspace_t) == 82560U,
                "Groove Build workspace size changed");
 _Static_assert(sizeof(persistence_pattern_io_workspace_t) == 261312U,
                "Pattern IO workspace size changed");
-_Static_assert(sizeof(persistence_project_restore_workspace_t) == 268544U,
+_Static_assert(sizeof(persistence_project_restore_workspace_t) == 579008U,
                "Project Restore workspace size changed");
 _Static_assert(sizeof(persistence_wavetable_import_workspace_t) == 98304U,
                "Wavetable import workspace size changed");
