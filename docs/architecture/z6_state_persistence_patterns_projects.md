@@ -89,13 +89,22 @@ operations Storage incompatibles. Elle emprunte ensuite le socle du quiesce
 canonique: PANIC CONTROL/AUDIO, arret Preview et annulation des reservations de
 pages. Contrairement au remplacement de Project, elle ne retire pas les pools
 Wavetable/Multi: un echec de sauvegarde peut ainsi rouvrir un runtime coherent.
-Le snapshot ne commence qu'apres liberation des leases et travaux SD
-concurrents; aucun producteur Stream/Preview ne peut donc affamer la transaction
-Resume pendant que l'UI est figee. La machine Project Save existante reconcilie
+Le snapshot ne commence qu'apres acquittement AUDIO du PANIC, liberation des
+leases et travaux SD concurrents; aucun producteur Stream/Preview ne peut donc
+affamer la transaction Resume pendant que l'UI est figee. La machine Project
+Save existante reconcilie
 alors le Pattern actif dans Working, capture le core Project courant avec le
 codec `PROJECT.B6C`, puis publie Resume. AUDIO, ecran, USB et alimentation ne
 sont arretes qu'apres succes; une erreur termine le quiesce, rouvre l'ingress et
 refuse la coupure.
+
+Une base Blank encode le nom technique non vide `WORKING` dans le document
+Resume: le codec Project interdit un `name_length` nul, meme si ce nom n'est pas
+une identite de Project utilisateur. Un echec conserve `POWER_SHUTDOWN_FAILED`
+tant que le bouton reste appuye et affiche sa categorie sur l'OLED. Seul un
+relachement physique debounce rearme ensuite une nouvelle tentative. Le bloc
+RAM `g_power_shutdown_debug` conserve phase, cause, compteurs, statut SD,
+resultat Resume et etat PANIC/ACK apres le retour a IDLE.
 
 `BRICK/RESUME/S0` et `S1` sont deux generations alternantes. Chacune contient
 un `PROJECT.B6C` et un `RESUME.B6R` de 64 octets: magic/version, generation,
@@ -212,7 +221,8 @@ CONTROL, SEQ, AUDIO, assets et racine Pattern actifs restent intacts.
 `T_FORWARD` est defini une seule fois par l'appel de
 `project_load_quiesce_request()` et, concretement, par sa fermeture de l'ingress.
 Le panic global n'est publie qu'apres fermeture de l'horizon CONTROL en cours et
-disponibilite d'une entree FIFO. Le quiesce attend alors son effet AUDIO avant le
+disponibilite d'une entree FIFO. Le head FIFO capture apres publication fournit
+l'acquittement explicite: le quiesce attend sa consommation AUDIO avant le
 retire et la liberation des leases/cache; l'absence de panic publie pendant cette
 attente est un etat transitoire, pas un echec du quiesce.
 PANIC et retrait des gros payloads rendent alors l'ancien Project definitivement

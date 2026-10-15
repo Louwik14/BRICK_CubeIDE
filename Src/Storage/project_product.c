@@ -246,6 +246,7 @@ static uint8_t project_side_path_base(char*out,uint32_t size,const char*base,
 #define PROJECT_TX_PHASE_CANDIDATE 3U
 #define PROJECT_RESUME_MANIFEST_BYTES 64U
 #define PROJECT_RESUME_VERSION 1U
+#define PROJECT_RESUME_BLANK_NAME "WORKING"
 
 static uint8_t project_tx_bit(const uint32_t words[8],uint16_t index)
 {return(words[index>>5U]&(UINT32_C(1)<<(index&31U)))?1U:0U;}
@@ -879,14 +880,29 @@ uint8_t project_product_save_take_result(uint8_t *slot,uint8_t *success)
     return 1U;
 }
 
-uint8_t project_product_resume_save_begin(void)
+project_product_resume_begin_result_t project_product_resume_save_begin(void)
 {
     if(project_product_save_busy()!=0U||project_product_load_busy()!=0U
        ||project_product_rename_busy()!=0U||pattern_load_is_pending()!=0U
-       ||seq_runtime_is_running()!=0U||seq_runtime_is_start_pending()!=0U)return 0U;
-    if(project_load_allowed()==0U)return 0U;
+       ||seq_runtime_is_running()!=0U||seq_runtime_is_start_pending()!=0U)
+        return PROJECT_PRODUCT_RESUME_BEGIN_WAIT;
+    if(project_load_allowed()==0U)return PROJECT_PRODUCT_RESUME_BEGIN_WAIT;
+    g_save_error=PROJECT_PRODUCT_SAVE_ERROR_NONE;g_save_detail=0;
     uint8_t previous[PROJECT_RESUME_MANIFEST_BYTES]={0};
-    if(!acquire())return 0U;
+    if(!acquire())
+    {
+        const sd_storage_status_t storage=sd_access_storage_status();
+        if(storage==SD_STORAGE_STATUS_NO_MEDIA
+            ||storage==SD_STORAGE_STATUS_FAULT)
+        {
+            g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SD_BUSY;
+            persist_debug_begin(PERSIST_DBG_OP_PROJECT_SAVE,0U,0U);
+            persist_debug_error(PERSIST_DBG_STAGE_MOUNT,
+                                PERSIST_DBG_ERROR_MOUNT);
+            return PROJECT_PRODUCT_RESUME_BEGIN_FAILED;
+        }
+        return PROJECT_PRODUCT_RESUME_BEGIN_WAIT;
+    }
     const uint8_t previous_valid=project_resume_latest_mounted(previous);
     sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     memset(&g_project_save,0,sizeof(g_project_save));
@@ -899,11 +915,21 @@ uint8_t project_product_resume_save_begin(void)
     g_project_save.source_project_valid=pattern_control_bank_active_project(
         &g_project_save.source_project_slot);
     if(g_project_save.resume_base_kind==PATTERN_WORKING_BASE_PROJECT
-       &&g_project_save.source_project_valid==0U){memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+       &&g_project_save.source_project_valid==0U)
+    {
+        g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;
+        memset(&g_project_save,0,sizeof(g_project_save));
+        persist_debug_begin(PERSIST_DBG_OP_PROJECT_SAVE,0U,0U);
+        persist_debug_error(PERSIST_DBG_STAGE_VALIDATE,
+                            PERSIST_DBG_ERROR_VALIDATE);
+        return PROJECT_PRODUCT_RESUME_BEGIN_FAILED;
+    }
     (void)pattern_live_get_active(&g_project_save.resume_active_bank,
                                   &g_project_save.resume_active_pattern);
     if(g_active_valid!=0U)memcpy(g_project_save.requested_name,
         g_current_metadata.name,strlen(g_current_metadata.name)+1U);
+    else memcpy(g_project_save.requested_name,PROJECT_RESUME_BLANK_NAME,
+        sizeof(PROJECT_RESUME_BLANK_NAME));
     if(!project_storage_resume_root(g_project_save.project_directory,
             sizeof(g_project_save.project_directory))
        ||!project_storage_resume_slot_dir(g_project_save.transaction_directory,
@@ -914,12 +940,21 @@ uint8_t project_product_resume_save_begin(void)
             sizeof(g_project_save.temporary_path),g_project_save.final_path,"TMP")
        ||!project_side_path_base(g_project_save.backup_path,
             sizeof(g_project_save.backup_path),g_project_save.final_path,"BAK"))
-    {memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+    {
+        g_save_error=PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT;
+        memset(&g_project_save,0,sizeof(g_project_save));
+        persist_debug_begin(PERSIST_DBG_OP_PROJECT_SAVE,0U,0U);
+        persist_debug_error(PERSIST_DBG_STAGE_PATH,PERSIST_DBG_ERROR_PATH);
+        return PROJECT_PRODUCT_RESUME_BEGIN_FAILED;
+    }
+    persist_debug_begin(PERSIST_DBG_OP_PROJECT_SAVE,0U,
+                        g_project_save.resume_slot);
+    persist_debug_project(PERSIST_DBG_PROJECT_PHASE_SAVE_SNAPSHOT,0U,0U);
     g_project_save.media_epoch=sd_access_media_epoch();
     g_project_save.state=PROJECT_SAVE_RECONCILE_BEGIN;
     g_progress=(project_product_progress_t){.active=1U,.total=1U,
         .result=PROJECT_PRODUCT_RESULT_IN_PROGRESS};
-    return 1U;
+    return PROJECT_PRODUCT_RESUME_BEGIN_STARTED;
 }
 
 uint8_t project_product_resume_save_take_result(uint8_t *success)

@@ -8,6 +8,9 @@
 #define POWER_OFF_HOLD_MS 2000UL
 #define POWER_BUTTON_DEBOUNCE_MS 20UL
 #define BOOTLOADER_BOOT0_CHARGE_MS 10UL
+static uint8_t g_power_button_initialized;
+static uint8_t g_power_button_stable_state;
+
 void board_power_delay_ms(uint32_t ms)
 {
     HAL_Delay(ms);
@@ -15,9 +18,7 @@ void board_power_delay_ms(uint32_t ms)
 
 uint8_t board_power_shutdown_request_poll(uint32_t now_ms)
 {
-    static uint8_t initialized = 0U;
     static uint8_t raw_state = 0U;
-    static uint8_t stable_state = 0U;
     static uint8_t armed = 0U;
     static uint8_t hold_active = 0U;
     static uint8_t request_fired = 0U;
@@ -27,11 +28,11 @@ uint8_t board_power_shutdown_request_poll(uint32_t now_ms)
         (HAL_GPIO_ReadPin(POWER_BUTTON_SENSE_GPIO_Port,
                           POWER_BUTTON_SENSE_Pin) == GPIO_PIN_SET) ? 1U : 0U;
 
-    if (initialized == 0U)
+    if (g_power_button_initialized == 0U)
     {
-        initialized = 1U;
+        g_power_button_initialized = 1U;
         raw_state = sampled_state;
-        stable_state = sampled_state;
+        g_power_button_stable_state = sampled_state;
         raw_changed_ms = now_ms;
     }
     else if (sampled_state != raw_state)
@@ -40,19 +41,19 @@ uint8_t board_power_shutdown_request_poll(uint32_t now_ms)
         raw_changed_ms = now_ms;
     }
 
-    if ((stable_state != raw_state)
+    if ((g_power_button_stable_state != raw_state)
         && ((uint32_t)(now_ms - raw_changed_ms) >= POWER_BUTTON_DEBOUNCE_MS))
     {
-        stable_state = raw_state;
+        g_power_button_stable_state = raw_state;
     }
 
     if (armed == 0U)
     {
-        if (stable_state == 0U) armed = 1U;
+        if (g_power_button_stable_state == 0U) armed = 1U;
         return 0U;
     }
 
-    if (stable_state == 0U)
+    if (g_power_button_stable_state == 0U)
     {
         hold_active = 0U;
         request_fired = 0U;
@@ -74,6 +75,12 @@ uint8_t board_power_shutdown_request_poll(uint32_t now_ms)
         return 1U;
     }
     return 0U;
+}
+
+uint8_t board_power_shutdown_button_released(void)
+{
+    return (uint8_t)((g_power_button_initialized != 0U)
+        && (g_power_button_stable_state == 0U));
 }
 
 void board_power_usb_host_off(void)

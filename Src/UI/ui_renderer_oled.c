@@ -25,6 +25,7 @@
 #include <string.h>
 
 #include "Audio/Publications/audio_boot_diagnostic_reader.h"
+#include "App/power_shutdown.h"
 #include "main.h"
 #include "drv_display.h"
 #include "font.h"
@@ -72,6 +73,19 @@ static const char *ui_audio_boot_error_label(board_audio_boot_error_t error)
         case BOARD_AUDIO_BOOT_RX_DMA: return "RX DMA";
         case BOARD_AUDIO_BOOT_SAI_SYNC: return "SAI SYNC";
         default: return "AUDIO HARDWARE";
+    }
+}
+
+static const char *ui_power_shutdown_error_label(
+    power_shutdown_failure_t failure)
+{
+    switch (failure)
+    {
+        case POWER_SHUTDOWN_FAILURE_STORAGE_NO_MEDIA: return "SD ABSENT";
+        case POWER_SHUTDOWN_FAILURE_STORAGE_FAULT: return "SD ERROR";
+        case POWER_SHUTDOWN_FAILURE_RESUME_BEGIN: return "RESUME START";
+        case POWER_SHUTDOWN_FAILURE_RESUME_SAVE: return "RESUME SAVE";
+        default: return "UNKNOWN";
     }
 }
 
@@ -127,6 +141,25 @@ void ui_renderer_oled_draw(void)
                        (unsigned)error);
         drv_display_draw_text(8U, 37U, error_text);
         drv_display_draw_text(8U, 49U, "REBOOT TO RETRY");
+    }
+    else if (power_shutdown_phase() == POWER_SHUTDOWN_FAILED)
+    {
+        if (ui_renderer_oled_page_pending(g_ui_render_page) != 0U)
+        {
+            ui_renderer_oled_cancel_active();
+            drv_display_clear();
+        }
+        char detail[28];
+        drv_display_set_font(&FONT_5X7);
+        drv_display_draw_text(8U, 9U, "POWER OFF FAILED");
+        drv_display_set_font(&FONT_4X6);
+        drv_display_draw_text(8U, 24U,
+            ui_power_shutdown_error_label(power_shutdown_failure()));
+        (void)snprintf(detail, sizeof(detail), "ERR %lu DETAIL %ld",
+            (unsigned long)g_power_shutdown_debug.resume_error,
+            (long)g_power_shutdown_debug.resume_detail);
+        drv_display_draw_text(8U, 36U, detail);
+        drv_display_draw_text(8U, 50U, "RELEASE, HOLD TO RETRY");
     }
     else if (ui_boot_loading_is_active() != 0U)
     {

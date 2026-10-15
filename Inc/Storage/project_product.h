@@ -39,6 +39,11 @@ typedef enum {
     PROJECT_PRODUCT_SAVE_ERROR_TRANSPORT_ACTIVE,
     PROJECT_PRODUCT_SAVE_ERROR_INVALID_NAME
 } project_product_save_error_t;
+typedef enum {
+    PROJECT_PRODUCT_RESUME_BEGIN_WAIT = 0,
+    PROJECT_PRODUCT_RESUME_BEGIN_STARTED,
+    PROJECT_PRODUCT_RESUME_BEGIN_FAILED
+} project_product_resume_begin_result_t;
 typedef struct { char name[PROJECT_PRODUCT_NAME_BYTES + 1U]; } project_product_metadata_t;
 typedef enum
 {
@@ -82,6 +87,6 @@ uint8_t project_product_delete(uint8_t slot);
 uint8_t project_product_new_blank(void);
 project_product_boot_restore_result_t project_product_restore_boot(void);
 uint8_t project_product_get_progress(project_product_progress_t*out);
-uint8_t project_product_resume_save_begin(void);
+project_product_resume_begin_result_t project_product_resume_save_begin(void);
 uint8_t project_product_resume_save_take_result(uint8_t *success);
 #endif

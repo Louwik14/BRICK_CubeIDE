@@ -3,6 +3,14 @@
 
 #include <stdint.h>
 
+typedef struct
+{
+    uint8_t requested;
+    uint8_t panic_published;
+    uint8_t panic_acknowledged;
+    uint8_t reservations_cancelled;
+} resource_mutation_quiesce_debug_t;
+
 void project_load_quiesce_init(void);
 void project_load_quiesce_request(void);
 uint8_t project_load_quiesce_safe(void);
@@ -11,6 +19,8 @@ void project_load_quiesce_end(void);
 void resource_mutation_quiesce_request(void);
 uint8_t resource_mutation_quiesce_safe(void);
 void resource_mutation_quiesce_end(void);
+void resource_mutation_quiesce_debug_snapshot(
+    resource_mutation_quiesce_debug_t *out);
 uint8_t project_load_ingress_is_open(void);
 uint8_t project_replacement_is_active(void);
 uint8_t project_load_allowed(void);

@@ -1,6 +1,7 @@
 #include "Storage/project_load_quiesce.h"
 
 #include "ControlRT/live_event.h"
+#include "ControlRT/control_audio_fifo_control.h"
 #include "ControlRT/control_rt_publication.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_runtime.h"
@@ -20,10 +21,12 @@
 #include "Sampler/multi_sample_pool.h"
 #include "midi.h"
 #include "midi_host.h"
-static uint8_t g_project_load_panic_committed;
+static uint8_t g_resource_mutation_panic_committed;
 static uint8_t g_project_load_retire_started;
 static uint8_t g_project_load_requested;
 static uint8_t g_resource_mutation_quiesce_requested;
+static uint8_t g_resource_mutation_reservations_cancelled;
+static uint32_t g_resource_mutation_panic_head;
 static volatile uint8_t g_project_load_ingress_open;
 static uint8_t g_resource_mutation_ingress_holds;
 
@@ -55,28 +58,55 @@ uint8_t project_load_allowed(void)
 
 void project_load_quiesce_init(void)
 {
-    g_project_load_panic_committed = 0U;
+    g_resource_mutation_panic_committed = 0U;
     g_project_load_retire_started = 0U;
     g_project_load_requested = 0U;
     g_resource_mutation_quiesce_requested = 0U;
+    g_resource_mutation_reservations_cancelled = 0U;
+    g_resource_mutation_panic_head = 0U;
     g_project_load_ingress_open = 1U;
     g_resource_mutation_ingress_holds = 0U;
 }
 
-static void project_load_quiesce_begin_retire(void)
+static void resource_mutation_quiesce_begin_panic(void)
 {
-    if ((g_project_load_requested == 0U)
-        || (g_project_load_panic_committed != 0U)
+    if ((g_resource_mutation_quiesce_requested == 0U)
+        || (g_resource_mutation_panic_committed != 0U)
         || (control_rt_publication_horizon_active() != 0U)
         || (control_rt_publication_free() == 0U)) return;
 
-    g_project_load_panic_committed = control_music_output_panic_all(0U);
-    if (g_project_load_panic_committed == 0U) return;
+    g_resource_mutation_panic_committed =
+        control_music_output_panic_all(0U);
+    if (g_resource_mutation_panic_committed == 0U) return;
+    g_resource_mutation_panic_head =
+        control_audio_fifo_control_head_snapshot();
+}
+
+static void resource_mutation_quiesce_progress(void)
+{
+    resource_mutation_quiesce_begin_panic();
+    if ((g_resource_mutation_panic_committed == 0U)
+        || (g_resource_mutation_reservations_cancelled != 0U)
+        || (control_audio_fifo_control_head_consumed(
+                g_resource_mutation_panic_head) == 0U)) return;
 
     (void)sample_page_cache_cancel_reserved_domain(
         SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U);
     (void)sample_page_cache_cancel_reserved_domain(
         SAMPLE_AUDIO_DOMAIN_MULTI, 0U);
+    g_resource_mutation_reservations_cancelled = 1U;
+}
+
+static void project_load_quiesce_begin_retire(void)
+{
+    resource_mutation_quiesce_progress();
+    if ((g_project_load_requested == 0U)
+        || (g_resource_mutation_panic_committed == 0U)
+        || (g_resource_mutation_reservations_cancelled == 0U)
+        || (g_project_load_retire_started != 0U)
+        || (control_audio_fifo_control_head_consumed(
+                g_resource_mutation_panic_head) == 0U)) return;
+
     wavetable_pool_retire_all();
     multi_sample_pool_retire_all();
     g_project_load_retire_started = 1U;
@@ -101,15 +131,18 @@ void resource_mutation_quiesce_request(void)
     sd_preview_stop();
     seq_ingress_panic();
     g_resource_mutation_quiesce_requested = 1U;
-    project_load_quiesce_begin_retire();
+    resource_mutation_quiesce_begin_panic();
 }
 
 uint8_t resource_mutation_quiesce_safe(void)
 {
-    project_load_quiesce_begin_retire();
+    resource_mutation_quiesce_progress();
     if ((g_resource_mutation_quiesce_requested == 0U)
-        || (g_project_load_panic_committed == 0U)) return 0U;
-    return (uint8_t)((control_rt_publication_horizon_active() == 0U)
+        || (g_resource_mutation_panic_committed == 0U)
+        || (g_resource_mutation_reservations_cancelled == 0U)) return 0U;
+    return (uint8_t)((control_audio_fifo_control_head_consumed(
+            g_resource_mutation_panic_head) != 0U)
+        && (control_rt_publication_horizon_active() == 0U)
         && (sample_page_lease_control_all_released() != 0U)
         && (sample_cache_has_pending_sd_work() == 0U));
 }
@@ -118,7 +151,7 @@ uint8_t project_load_quiesce_safe(void)
 {
     project_load_quiesce_begin_retire();
     if ((g_project_load_requested == 0U)
-        || (g_project_load_panic_committed == 0U)
+        || (g_resource_mutation_panic_committed == 0U)
         || (g_project_load_retire_started == 0U)) return 0U;
     return (uint8_t)((resource_mutation_quiesce_safe() != 0U)
         && (g_project_load_retire_started != 0U)
@@ -142,12 +175,28 @@ void project_load_quiesce_end(void)
 
 void resource_mutation_quiesce_end(void)
 {
-    g_project_load_panic_committed = 0U;
+    g_resource_mutation_panic_committed = 0U;
     g_resource_mutation_quiesce_requested = 0U;
+    g_resource_mutation_reservations_cancelled = 0U;
+    g_resource_mutation_panic_head = 0U;
     __DMB();
     g_project_load_ingress_open =
         ((g_resource_mutation_ingress_holds == 0U)
          && (g_project_load_requested == 0U)) ? 1U : 0U;
+}
+
+void resource_mutation_quiesce_debug_snapshot(
+    resource_mutation_quiesce_debug_t *out)
+{
+    if (out == NULL) return;
+    out->requested = g_resource_mutation_quiesce_requested;
+    out->panic_published = g_resource_mutation_panic_committed;
+    out->panic_acknowledged = (uint8_t)(
+        (g_resource_mutation_panic_committed != 0U)
+        && (control_audio_fifo_control_head_consumed(
+                g_resource_mutation_panic_head) != 0U));
+    out->reservations_cancelled =
+        g_resource_mutation_reservations_cancelled;
 }
 
 void resource_mutation_ingress_close(void)
