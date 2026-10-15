@@ -6,7 +6,7 @@ CONFIRME — validation materielle : selection tactile/Hall.
 
 ## Description et acces
 
-Huit top-level stables 0..7. Les familles utilisateur sont OFF, SYNTH, DRUM, MIDI, SAMPLER et EXTERNAL. Types : PRISM, DRUM_MD, MIDI, STREAM, MULTI, STACK, WAVE, EXTERNAL, GROUP, FM, TB303, ACID. GROUP n'est disponible que pour l'entite 7 ; il active les children 8..14, chacun SAMPLER/RAM mono. L'entite 15 est la Master harmonique permanente.
+Huit top-level stables 0..7. Les familles utilisateur sont OFF, SYNTH, DRUM, MIDI, SAMPLER et EXTERNAL. Types : PRISM, DRUM_MD, MIDI, STREAM, MULTI, STACK, WAVE, EXTERNAL, GROUP, FM, ACID. GROUP n'est disponible que pour l'entite 7 ; il active les children 8..14, chacun SAMPLER/RAM mono. L'entite 15 est la Master harmonique permanente.
 
 TRACK maintenu + surface selectionne une entite. CFG MAIN edite famille/type/polyphonie/entree selon contexte ; CFG MIDI edite canal 1..16 et source INTERNAL/EXTERNAL/ALL. Une mutation structurelle valide l'etat final, commit CONTROL, reconstruit PROGRAM puis resynchronise UI. External reserve une entree physique exclusive.
 

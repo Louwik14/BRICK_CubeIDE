@@ -4,7 +4,7 @@
 
 CONFIRME — validation SD/coupure alimentation requise.
 
-Le codec courant `B6CP` version 19 (`PERSIST_CODEC_VERSION`) encode explicitement cles, sections, tailles et CRC. Pattern, Project et Patch n'utilisent pas de dump de structures. Les noms ont 32 caracteres visibles max. Le decodeur accepte aussi la version 18: son ancien octet `VOICES` est ignore et `SPREAD` est conserve.
+Le codec courant `B6CP` version 20 (`PERSIST_CODEC_VERSION`) encode explicitement cles, sections, tailles et CRC. Pattern, Project et Patch n'utilisent pas de dump de structures. Les noms ont 32 caracteres visibles max. Les formats anterieurs ne sont pas acceptes.
 
 Pattern : 256 slots par projet, un seul live. Resolution Recall = override Working, fichier Saved, default. Le Pattern quitte est capture avant commit cible puis reconcilie dans `BRICK/WORKING/PATTERNS`. Recall prepare CONTROL/SEQ/AUDIO avant boundary. Pattern Save ne reecrit que son document.
 

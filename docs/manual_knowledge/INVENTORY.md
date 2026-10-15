@@ -11,7 +11,7 @@ Regle de comptage : une fonctionnalite est un comportement utilisateur autonome 
 | SYN-STACK | Moteur Stack | CONFIRME | [synthese](features/synthesis/ENGINES.md) |
 | SYN-WAVE | Moteur Wavetable | CONFIRME | [synthese](features/synthesis/ENGINES.md) |
 | SYN-FM | Moteur FM/DX7 et import SysEx | PARTIEL | [synthese](features/synthesis/ENGINES.md) |
-| SYN-ACID | TB303 et Acid | CONFIRME | [synthese](features/synthesis/ENGINES.md) |
+| SYN-ACID | Moteur Acid | CONFIRME | [synthese](features/synthesis/ENGINES.md) |
 | DRUM-MD | Moteur Drum MD | CONFIRME | [synthese](features/synthesis/ENGINES.md) |
 | SMP-STREAM | Sampler STREAM/Classic et source REC | CONFIRME | [sampler](features/sampler/SAMPLER.md) |
 | SMP-MULTI | Instruments MULTI | CONFIRME | [sampler](features/sampler/SAMPLER.md) |

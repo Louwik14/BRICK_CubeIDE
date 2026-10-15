@@ -174,7 +174,6 @@ const char *ui_track_catalog_type_display_name(track_family_t family, track_type
         case TRACK_TYPE_WAVE: return "Wave";
         case TRACK_TYPE_STACK: return "Stack";
         case TRACK_TYPE_FM: return "FM";
-        case TRACK_TYPE_TB303: return "TB-303";
         case TRACK_TYPE_ACID: return "ACID";
         case TRACK_TYPE_DRUM_MD: return "MD";
         case TRACK_TYPE_MIDI: return "MIDI";
@@ -196,7 +195,6 @@ const char *ui_track_catalog_type_short_name(track_family_t family, track_type_t
         case TRACK_TYPE_WAVE: return "WAVE";
         case TRACK_TYPE_STACK: return "STCK";
         case TRACK_TYPE_FM: return "FM";
-        case TRACK_TYPE_TB303: return "303";
         case TRACK_TYPE_ACID: return "ACID";
         case TRACK_TYPE_DRUM_MD: return "MD";
         case TRACK_TYPE_MIDI: return "MID";

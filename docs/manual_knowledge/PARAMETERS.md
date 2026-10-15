@@ -31,9 +31,9 @@ Les IDs ci-dessous sont ceux reellement exposes par TONE. Le catalogue source do
 | STACK | OSC3 | model / timbre / color / tune |
 | STACK | MIX | levels osc1/2/3 / noise |
 | STACK | PHASE | reset / osc detune / vide / vide |
-| TB303/ACID | VCO | wave / tune / slide / accent |
-| TB303/ACID | VCF/VCA | cutoff / resonance / env mod / decay |
-| TB303/ACID | QUALITY | VCF rate / vide / vide / vide |
+| ACID | VCO | wave / tune / slide / accent |
+| ACID | VCF/VCA | cutoff / resonance / env mod / decay |
+| ACID | QUALITY | VCF rate / vide / vide / vide |
 | FM global | GLOBAL | algorithm / envelope attack / envelope decay / transpose |
 | FM global | OP QUICK | operateur local / freq / level / detune |
 | FM global | PITCH R/L | R1..R4 / L1..L4 |
@@ -58,7 +58,7 @@ Sources : familles de `Src/UI/pages/ui_page_template_tone.c`; descripteurs dans 
 ## Valeurs internes notables
 
 - Sampler Start/Length/Loop, gains et proportions : float normalise ; conversion terminale en frame ou gain.
-- Tune Sampler/Prism/Wave/TB303/Acid : demi-tons ; FM transpose : centiemes de demi-ton.
+- Tune Sampler/Prism/Wave/Acid : demi-tons ; FM transpose : centiemes de demi-ton.
 - Prism tune terminal Q7 (1/128 st), controles normalises Q15 lorsque le moteur le requiert.
 - Stack tune conserve les centiemes de demi-ton ; niveaux/timbre/couleur Q15.
 - temps avec `PARAM_DISPLAY_TIME_MS` : secondes canoniques, millisecondes affichees.

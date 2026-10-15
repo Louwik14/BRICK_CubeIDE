@@ -22,8 +22,7 @@ typedef struct {
     wave_osc_control_t osc[2];
     float volume, balance, tune, detune;
 } wave_program_control_t;
-typedef struct { float wave,tune,cut,res,env_mod,decay,accent,slide,vcf_rate; } tb303_program_control_t;
-typedef tb303_program_control_t acid_program_control_t;
+typedef struct { float wave,tune,cut,res,env_mod,decay,accent,slide,vcf_rate; } acid_program_control_t;
 
 typedef struct {
     float gain, start, length, mode, tune, loop_start, slice_count;
@@ -41,7 +40,6 @@ typedef struct {
         prism_program_control_t prism;
         stack_program_control_t stack;
         wave_program_control_t wave;
-        tb303_program_control_t tb303;
         acid_program_control_t acid;
         stream_program_control_t stream;
         multi_program_control_t multi;

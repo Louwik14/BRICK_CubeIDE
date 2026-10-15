@@ -13,7 +13,7 @@
   libre, puis le plus ancien en release, puis le plus ancien actif.
 - `SPREAD` est conserve. Il est calcule sur les voix effectivement possedees,
   sans quota configure par track.
-- STREAM/Classic, Drum, TB303 et ACID restent monophoniques. Patch Preview
+- STREAM/Classic, Drum et ACID restent monophoniques. Patch Preview
   conserve son chemin et ses ressources independants.
 
 Les identifiants de sortie rendent les NOTE_OFF tardifs idempotents. Lors d'un
@@ -35,10 +35,9 @@ la simplification presente.
 
 ## Persistence
 
-Le codec courant est B6CP v19. Il n'ecrit plus de nombre de voix par track. Le
-decodeur accepte encore v18, lit puis ignore son octet `VOICES`, et conserve
-`SPREAD`. La largeur PLAY v18 reste lue sur huit elements; seuls V1 a V4 sont
-appliques au modele vivant.
+Le codec courant est B6CP v20. Il n'ecrit plus de nombre de voix par track et
+n'accepte aucun format anterieur. `SPREAD` est conserve. La largeur PLAY reste
+encodee sur huit elements; seuls V1 a V4 sont appliques au modele vivant.
 
 ## Capacites sequenceur
 

@@ -320,17 +320,6 @@ enum {
     PARAM_GROUP_FX_A_LEVEL,
     PARAM_GROUP_FX_B_LEVEL,
 
-    /* TB-303 TONE controls. */
-    PARAM_TB303_WAVE,
-    PARAM_TB303_TUNE,
-    PARAM_TB303_CUT,
-    PARAM_TB303_RES,
-    PARAM_TB303_ENV_MOD,
-    PARAM_TB303_DECAY,
-    PARAM_TB303_ACCENT,
-    PARAM_TB303_SLIDE,
-    PARAM_TB303_VCF_RATE,
-
     PARAM_ACID_WAVE,
     PARAM_ACID_TUNE,
     PARAM_ACID_CUT,
@@ -398,7 +387,7 @@ PARAM_ID_STATIC_ASSERT(PARAM_AUDIO_FX_P3 == (PARAM_AUDIO_FX_P1 + 2),
         "Audio FX slot A parameter block must stay contiguous");
 PARAM_ID_STATIC_ASSERT(PARAM_AUDIO_FX_B_P3 == (PARAM_AUDIO_FX_B_P1 + 2),
         "Audio FX slot B parameter block must stay contiguous");
-PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 311, "Unexpected parameter catalog size");
+PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 302, "Unexpected parameter catalog size");
 #undef PARAM_ID_STATIC_ASSERT
 
 #ifdef __cplusplus

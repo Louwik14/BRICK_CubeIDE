@@ -140,7 +140,6 @@ track_runtime_type_t track_runtime_type_from_ui(track_type_t type)
         case TRACK_TYPE_EXTERNAL: return TRACK_RUNTIME_TYPE_EXTERNAL;
         case TRACK_TYPE_GROUP: return TRACK_RUNTIME_TYPE_GROUP;
         case TRACK_TYPE_FM: return TRACK_RUNTIME_TYPE_FM;
-        case TRACK_TYPE_TB303: return TRACK_RUNTIME_TYPE_TB303;
         case TRACK_TYPE_ACID: return TRACK_RUNTIME_TYPE_ACID;
         default: return TRACK_RUNTIME_TYPE_OTHER;
     }
@@ -156,7 +155,6 @@ track_runtime_engine_t track_runtime_choose_engine(track_runtime_family_t family
         case TRACK_RUNTIME_TYPE_STACK: return TRACK_RUNTIME_ENGINE_STACK;
         case TRACK_RUNTIME_TYPE_WAVE: return TRACK_RUNTIME_ENGINE_WAVE;
         case TRACK_RUNTIME_TYPE_FM: return TRACK_RUNTIME_ENGINE_FM;
-        case TRACK_RUNTIME_TYPE_TB303: return TRACK_RUNTIME_ENGINE_TB303;
         case TRACK_RUNTIME_TYPE_ACID: return TRACK_RUNTIME_ENGINE_ACID;
         default: return TRACK_RUNTIME_ENGINE_NONE;
     }

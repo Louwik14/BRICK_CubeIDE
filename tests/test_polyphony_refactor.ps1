@@ -55,10 +55,10 @@ Assert-True (-not $cfgUi.Contains('PARAM_CFG_POLY_VOICES')) `
 Assert-True (-not $command.Contains('CONTROL_AUDIO_CONFIG_POLY_VOICES') -and
     -not $command.Contains('PROGRAM_ENCODE_VOICES')) `
     'VOICE quota remains in the CONTROL/AUDIO ABI'
-Assert-True ($codecHeader.Contains('#define PERSIST_CODEC_VERSION 19U') -and
-    $codecHeader.Contains('#define PERSIST_CODEC_LEGACY_VERSION 18U') -and
-    $codec.Contains('legacy_voice_count')) `
-    'v19 write / v18 VOICES migration contract is missing'
+Assert-True ($codecHeader.Contains('#define PERSIST_CODEC_VERSION 20U') -and
+    -not $codecHeader.Contains('PERSIST_CODEC_LEGACY_VERSION') -and
+    -not $codec.Contains('legacy_voice_count')) `
+    'v20 current-only persistence contract is missing'
 
 $synthVoices = 0..15 | ForEach-Object {
     [pscustomobject]@{ index = $_; state = 'HELD'; age = ($_ + 1) }

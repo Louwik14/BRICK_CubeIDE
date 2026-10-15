@@ -27,7 +27,6 @@ automatiquement limites.
 | Stack | somme de 3 oscillateurs et du bruit, chacun pondere, puis 0,30; aucune normalisation globale | velocite lineaire; voix poly sommees | plusieurs sources a plein niveau peuvent depasser Prism avant le fader |
 | FM | bus MSFA Q24 converti par `1/2^24`; pas de trim moteur ni clamp | velocite appliquee par sensibilite de chaque operateur, pas comme VCA global; carriers et voix peuvent se sommer | niveau fortement dependant de l'algorithme/patch; marge fournie seulement par 0,125 |
 | Wavetable | somme de 2 oscillateurs, gains de balance, volume 0..1, velocite, puis `0,30 * 0,4216965 = 0,126509` | velocite lineaire; voix poly sommees | centre de balance peut sommer deux formes; reserve commune ensuite |
-| TB303 | sortie du filtre/VCA multipliee par 0,25118864 (-12 dB) | velocite ignoree; accent pilote le niveau | accent/resonance changent naturellement peak et RMS; pas de clamp moteur final |
 | Acid | modele non lineaire, sortie divisee par 32768 puis clamp +/-1 | velocite ignoree; accent pilote le niveau | saturation interne explicite, caractere preserve |
 | Drum MD | chaque modele applique enveloppes et velocite lineaire, puis hard-clip +/-1 | monophonique par instance | transitoires volontairement clippees dans le moteur |
 | Classic STREAM | amplitude WAV conservee, puis `SAMPLER_GAIN` (defaut 1), velocite `v/127`, VCA de piste et fader | une voix de piste; Clip force son gain de velocite a 1 | un fichier proche de 0 dBFS atteint 0,125 au bus a vel 127/gains unitaires |
@@ -82,7 +81,7 @@ Pour harmoniser davantage les moteurs, mesurer hors FX a velocite 127 puis 100,
 fader 1 et une voix: peak, RMS fenetre et facteur de crete sur un jeu fixe de
 patches representatifs. Ajuster ensuite seulement les trims de sortie moteur,
 avec compatibilite de presets explicite. Priorites de mesure: FM selon nombre
-de carriers, Stack avec 1 puis 3 oscillateurs, TB303/Acid avec accent et
+de carriers, Stack avec 1 puis 3 oscillateurs, Acid avec accent et
 resonance, puis Drum par modele. Aucune valeur artistique massive n'est
 modifiee par cet audit.
 

@@ -241,8 +241,6 @@ track_runtime_type_t track_runtime_type_from_ui(track_type_t type)
             return TRACK_RUNTIME_TYPE_STACK;
         case TRACK_TYPE_FM:
             return TRACK_RUNTIME_TYPE_FM;
-        case TRACK_TYPE_TB303:
-            return TRACK_RUNTIME_TYPE_TB303;
         case TRACK_TYPE_ACID:
             return TRACK_RUNTIME_TYPE_ACID;
         case TRACK_TYPE_EXTERNAL:
@@ -273,7 +271,6 @@ track_runtime_engine_t track_runtime_choose_engine(
         if (type == TRACK_RUNTIME_TYPE_STACK) return TRACK_RUNTIME_ENGINE_STACK;
         if (type == TRACK_RUNTIME_TYPE_WAVE) return TRACK_RUNTIME_ENGINE_WAVE;
         if (type == TRACK_RUNTIME_TYPE_FM) return TRACK_RUNTIME_ENGINE_FM;
-        if (type == TRACK_RUNTIME_TYPE_TB303) return TRACK_RUNTIME_ENGINE_TB303;
         if (type == TRACK_RUNTIME_TYPE_ACID) return TRACK_RUNTIME_ENGINE_ACID;
     }
     return TRACK_RUNTIME_ENGINE_NONE;
@@ -351,14 +348,12 @@ static uint8_t track_runtime_releases_scarce_resource(
         || (old_engine == TRACK_RUNTIME_ENGINE_STACK)
         || (old_engine == TRACK_RUNTIME_ENGINE_WAVE)
         || (old_engine == TRACK_RUNTIME_ENGINE_FM)
-        || (old_engine == TRACK_RUNTIME_ENGINE_TB303)
         || (old_engine == TRACK_RUNTIME_ENGINE_ACID));
     const uint8_t new_synth = (uint8_t)((new_engine == TRACK_RUNTIME_ENGINE_DRUM)
         || (new_engine == TRACK_RUNTIME_ENGINE_PRISM)
         || (new_engine == TRACK_RUNTIME_ENGINE_STACK)
         || (new_engine == TRACK_RUNTIME_ENGINE_WAVE)
         || (new_engine == TRACK_RUNTIME_ENGINE_FM)
-        || (new_engine == TRACK_RUNTIME_ENGINE_TB303)
         || (new_engine == TRACK_RUNTIME_ENGINE_ACID));
     return (uint8_t)(((old_synth != 0U) && (new_synth == 0U))
         );
@@ -1167,15 +1162,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_WAVE_BALANCE:
         case PARAM_WAVE_TUNE:
         case PARAM_WAVE_DETUNE:
-        case PARAM_TB303_WAVE:
-        case PARAM_TB303_TUNE:
-        case PARAM_TB303_CUT:
-        case PARAM_TB303_RES:
-        case PARAM_TB303_ENV_MOD:
-        case PARAM_TB303_DECAY:
-        case PARAM_TB303_ACCENT:
-        case PARAM_TB303_SLIDE:
-        case PARAM_TB303_VCF_RATE:
         case PARAM_ACID_WAVE:
         case PARAM_ACID_TUNE:
         case PARAM_ACID_CUT:

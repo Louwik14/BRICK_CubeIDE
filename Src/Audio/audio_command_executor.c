@@ -17,7 +17,6 @@
 #include "Audio/drum_synth.h"
 #include "Audio/audio_transport_runtime.h"
 #include "Audio/Engines/fm_engine.h"
-#include "Audio/Engines/tb303_engine.h"
 #include "Audio/Engines/acid_engine.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/wavetable_engine.h"
@@ -168,8 +167,6 @@ static void audio_command_close_entity(uint8_t entity)
         if (current.program_route.engine == TRACK_RUNTIME_ENGINE_DRUM)
             drum_synth_all_notes_off_for_instance(
                 current.program_route.instance_id);
-        if (current.program_route.engine == TRACK_RUNTIME_ENGINE_TB303)
-            brick6_tb303_runtime_all_notes_off(current.program_route.instance_id);
         if (current.program_route.engine == TRACK_RUNTIME_ENGINE_ACID)
             brick6_acid_runtime_all_notes_off(current.program_route.instance_id);
         if (current.program_route.mix_track_id < MIXER_MAX_TRACKS)
@@ -520,9 +517,6 @@ static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
         for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
         {
             audio_note_engine_program_t current;
-            if ((audio_note_engine_adapter_current(entity,&current)!=0U)
-                    && (current.program_route.engine==TRACK_RUNTIME_ENGINE_TB303))
-                brick6_tb303_runtime_all_notes_off(current.program_route.instance_id);
             if ((audio_note_engine_adapter_current(entity,&current)!=0U)
                     && (current.program_route.engine==TRACK_RUNTIME_ENGINE_ACID))
                 brick6_acid_runtime_all_notes_off(current.program_route.instance_id);

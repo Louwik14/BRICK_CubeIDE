@@ -41,9 +41,6 @@ static float *tone_field(tone_program_control_t *p, param_id_t id)
         switch(id){F(PARAM_WAVE_OSC1_POS,p->state.wave.osc[0].position);F(PARAM_WAVE_OSC1_START,p->state.wave.osc[0].start);F(PARAM_WAVE_OSC1_LEN,p->state.wave.osc[0].length);
         F(PARAM_WAVE_OSC2_POS,p->state.wave.osc[1].position);F(PARAM_WAVE_OSC2_START,p->state.wave.osc[1].start);F(PARAM_WAVE_OSC2_LEN,p->state.wave.osc[1].length);
         F(PARAM_WAVE_VOLUME,p->state.wave.volume);F(PARAM_WAVE_BALANCE,p->state.wave.balance);F(PARAM_WAVE_TUNE,p->state.wave.tune);F(PARAM_WAVE_DETUNE,p->state.wave.detune);default:return NULL;}
-    case TRACK_RUNTIME_TYPE_TB303:
-        switch(id){F(PARAM_TB303_WAVE,p->state.tb303.wave);F(PARAM_TB303_TUNE,p->state.tb303.tune);F(PARAM_TB303_CUT,p->state.tb303.cut);F(PARAM_TB303_RES,p->state.tb303.res);
-        F(PARAM_TB303_ENV_MOD,p->state.tb303.env_mod);F(PARAM_TB303_DECAY,p->state.tb303.decay);F(PARAM_TB303_ACCENT,p->state.tb303.accent);F(PARAM_TB303_SLIDE,p->state.tb303.slide);F(PARAM_TB303_VCF_RATE,p->state.tb303.vcf_rate);default:return NULL;}
     case TRACK_RUNTIME_TYPE_ACID:
         switch(id){F(PARAM_ACID_WAVE,p->state.acid.wave);F(PARAM_ACID_TUNE,p->state.acid.tune);F(PARAM_ACID_CUT,p->state.acid.cut);F(PARAM_ACID_RES,p->state.acid.res);F(PARAM_ACID_ENV_MOD,p->state.acid.env_mod);F(PARAM_ACID_DECAY,p->state.acid.decay);F(PARAM_ACID_ACCENT,p->state.acid.accent);F(PARAM_ACID_SLIDE,p->state.acid.slide);F(PARAM_ACID_VCF_RATE,p->state.acid.vcf_rate);default:return NULL;}
     case TRACK_RUNTIME_TYPE_STREAM:

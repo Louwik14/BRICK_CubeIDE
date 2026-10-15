@@ -48,7 +48,7 @@ static uint8_t patch_preview_validate(const persist_control_patch_t *patch)
         return 0U;
     const uint8_t synth = (uint8_t)((type == TRACK_TYPE_FM)
         || (type == TRACK_TYPE_PRISM) || (type == TRACK_TYPE_STACK)
-        || (type == TRACK_TYPE_TB303) || (type == TRACK_TYPE_ACID)
+        || (type == TRACK_TYPE_ACID)
         || (type == TRACK_TYPE_WAVE));
     const uint8_t sampler = (uint8_t)((type == TRACK_TYPE_STREAM)
         || (type == TRACK_TYPE_MULTI));
@@ -88,7 +88,6 @@ static patch_preview_engine_t patch_preview_engine_from_type(track_type_t type)
         case TRACK_TYPE_FM: return PATCH_PREVIEW_ENGINE_FM;
         case TRACK_TYPE_PRISM: return PATCH_PREVIEW_ENGINE_PRISM;
         case TRACK_TYPE_STACK: return PATCH_PREVIEW_ENGINE_STACK;
-        case TRACK_TYPE_TB303: return PATCH_PREVIEW_ENGINE_TB303;
         case TRACK_TYPE_ACID: return PATCH_PREVIEW_ENGINE_ACID;
         case TRACK_TYPE_WAVE: return PATCH_PREVIEW_ENGINE_WAVE;
         case TRACK_TYPE_STREAM: return PATCH_PREVIEW_ENGINE_STREAM;

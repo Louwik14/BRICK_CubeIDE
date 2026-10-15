@@ -77,10 +77,6 @@ void ui_page_template_tone_register_families(void)
             {
                 family_template = &g_ui_template_tone_family_fm;
             }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == TRACK_TYPE_TB303))
-            {
-                family_template = &g_ui_template_tone_family_tb303;
-            }
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == TRACK_TYPE_ACID))
             {
                 family_template = &g_ui_template_tone_family_acid;

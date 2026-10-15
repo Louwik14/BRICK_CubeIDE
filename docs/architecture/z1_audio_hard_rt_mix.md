@@ -60,10 +60,10 @@ La configuration moteur reste canonique sur l'instance primaire de la track.
 L'adapter AUDIO porte le geste commun de projection vers tous les slots physiques:
 une application PARAM live, une croissance de polyphonie et l'initialisation
 d'une voix passent par cette meme projection propre a Prism, Stack, Wave, FM ou
-TB303 ou ACID. Phase, gate, enveloppes, position et historique DSP restent possedes par
-chaque voix; Drum, TB303 et ACID conservent leur polyphonie effective de un.
+ACID. Phase, gate, enveloppes, position et historique DSP restent possedes par
+chaque voix; Drum et ACID conservent leur polyphonie effective de un.
 
-ACID est un moteur distinct de TB303. Il porte les formes d'onde mesurees,
+ACID porte les formes d'onde mesurees,
 la saturation, le filtre, les deux enveloppes, l'accent VCF/VCA et le slide
 de Digix0x (`connortreacy/digix0x`, commit `bec716c7`). Le rendu principal
 reste a 48 kHz. Un accumulateur entier par instance execute 25 pas filtre

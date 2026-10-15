@@ -125,7 +125,7 @@ _Static_assert(PERSIST_CONTROL_ENTITY_COUNT == SEQ_LANE_CAPACITY,
 _Static_assert(PERSIST_CONTROL_STEP_COUNT == SEQ_MAX_STEPS,
                "persistence and SEQ step capacities diverged");
 _Static_assert(PERSIST_CONTROL_PLAY_ITEM_COUNT == 8U,
-               "v18 persistence PLAY width changed");
+               "persistence PLAY width changed");
 _Static_assert(SEQ_PLAY_MAX_CAPACITY == 4U,
                "runtime PLAY migration width changed");
 _Static_assert(PERSIST_CONTROL_STEP_LOCK_COUNT == SEQ_STEP_MAX_LOCKS,

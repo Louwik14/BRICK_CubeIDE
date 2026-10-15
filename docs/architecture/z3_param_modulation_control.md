@@ -78,9 +78,9 @@ moteur; les selecteurs d'asset locaux ne sont pas des Param.
 | Stack | Tune OSC1/2/3 | float, demi-tons | 1 st | 0,01 st | centiemes de demi-ton (`int16_t`) | continu OK |
 | Stack | Timbre/Color OSC3, niveaux OSC1/2/3/Noise, OSC Detune | float normalise | 1 % | 0,01 % | Q15 | continu OK |
 | Stack | Model OSC1/2/3, Phase Reset | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
-| TB303/Acid | Tune | float, demi-tons | 1 st | 0,01 st | FLOAT32 jusqu'a la frequence | continu OK |
-| TB303/Acid | Cut, Res, Env Mod, Decay, Accent | float normalise | 1 % | 0,01 % | FLOAT32 | continu OK |
-| TB303/Acid | Wave, Slide, VCF Rate | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
+| Acid | Tune | float, demi-tons | 1 st | 0,01 st | FLOAT32 jusqu'a la frequence | continu OK |
+| Acid | Cut, Res, Env Mod, Decay, Accent | float normalise | 1 % | 0,01 % | FLOAT32 | continu OK |
+| Acid | Wave, Slide, VCF Rate | enum/bool | 1 valeur | 1 valeur | valeur entiere | discret volontaire |
 | FM | Transpose | centiemes de demi-ton (`uint16_t` biaise) | 1 st | 0,01 st | 0,01 st; log-pitch Q24 au rendu | bug corrige |
 | FM | Freq operateur | float ratio/frequence | 1,00 | 0,01 | centieme dans le DTO, log-pitch Q24 | continu OK |
 | FM | macros Attack/Decay globales | float bipolaire | 1 % | 0,01 % | FLOAT32 | continu OK |

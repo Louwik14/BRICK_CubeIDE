@@ -6,7 +6,6 @@
 #include "Audio/Engines/fm_engine.h"
 #include "Audio/Engines/prism_engine.h"
 #include "Audio/Engines/stack_engine.h"
-#include "Audio/Engines/tb303_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/audio_fx_runtime.h"
@@ -45,8 +44,6 @@ static void patch_preview_engine_reset(patch_preview_engine_t engine)
             brick6_braids_runtime_reset_instance(BRICK6_BRAIDS_PREVIEW_INSTANCE_ID); break;
         case PATCH_PREVIEW_ENGINE_STACK:
             brick6_stack_runtime_reset_instance(BRICK6_STACK_PREVIEW_INSTANCE_ID); break;
-        case PATCH_PREVIEW_ENGINE_TB303:
-            brick6_tb303_runtime_reset_instance(BRICK6_TB303_PREVIEW_INSTANCE_ID); break;
         case PATCH_PREVIEW_ENGINE_ACID:
             brick6_acid_runtime_reset_instance(BRICK6_ACID_PREVIEW_INSTANCE_ID); break;
         case PATCH_PREVIEW_ENGINE_WAVE:
@@ -153,28 +150,27 @@ static uint8_t patch_preview_stack_apply(param_id_t id, float value)
     return 1U;
 }
 
-static uint8_t patch_preview_303_apply(patch_preview_engine_t engine,
-                                       param_id_t id, float value)
+static uint8_t patch_preview_acid_apply(param_id_t id, float value)
 {
-    const uint8_t acid = (engine == PATCH_PREVIEW_ENGINE_ACID) ? 1U : 0U;
-    const param_id_t first = acid ? PARAM_ACID_WAVE : PARAM_TB303_WAVE;
-    if ((id < first) || (id > (param_id_t)(first + 8U))) return 0U;
-    const uint8_t relative = (uint8_t)(id - first);
-#define APPLY_303(name_, arg_) do { if (acid) brick6_acid_runtime_set_##name_(BRICK6_ACID_PREVIEW_INSTANCE_ID, (arg_)); else brick6_tb303_runtime_set_##name_(BRICK6_TB303_PREVIEW_INSTANCE_ID, (arg_)); } while (0)
+    if ((id < PARAM_ACID_WAVE)
+            || (id > (param_id_t)(PARAM_ACID_WAVE + 8U))) return 0U;
+    const uint8_t relative = (uint8_t)(id - PARAM_ACID_WAVE);
+#define APPLY_ACID(name_, arg_) \
+    brick6_acid_runtime_set_##name_(BRICK6_ACID_PREVIEW_INSTANCE_ID, (arg_))
     switch (relative)
     {
-        case 0U: APPLY_303(wave, value >= 0.5f); break;
-        case 1U: APPLY_303(tune, value); break;
-        case 2U: APPLY_303(cut, value); break;
-        case 3U: APPLY_303(res, value); break;
-        case 4U: APPLY_303(env_mod, value); break;
-        case 5U: APPLY_303(decay, value); break;
-        case 6U: APPLY_303(accent, value); break;
-        case 7U: APPLY_303(slide, value >= 0.5f); break;
-        case 8U: APPLY_303(vcf_rate, value >= 0.5f); break;
+        case 0U: APPLY_ACID(wave, value >= 0.5f); break;
+        case 1U: APPLY_ACID(tune, value); break;
+        case 2U: APPLY_ACID(cut, value); break;
+        case 3U: APPLY_ACID(res, value); break;
+        case 4U: APPLY_ACID(env_mod, value); break;
+        case 5U: APPLY_ACID(decay, value); break;
+        case 6U: APPLY_ACID(accent, value); break;
+        case 7U: APPLY_ACID(slide, value >= 0.5f); break;
+        case 8U: APPLY_ACID(vcf_rate, value >= 0.5f); break;
         default: return 0U;
     }
-#undef APPLY_303
+#undef APPLY_ACID
     return 1U;
 }
 
@@ -186,8 +182,8 @@ static uint8_t patch_preview_engine_apply(patch_preview_engine_t engine,
         case PATCH_PREVIEW_ENGINE_FM: return brick6_fm_preview_apply_param(id, value);
         case PATCH_PREVIEW_ENGINE_PRISM: return patch_preview_prism_apply(id, value);
         case PATCH_PREVIEW_ENGINE_STACK: return patch_preview_stack_apply(id, value);
-        case PATCH_PREVIEW_ENGINE_TB303: case PATCH_PREVIEW_ENGINE_ACID:
-            return patch_preview_303_apply(engine, id, value);
+        case PATCH_PREVIEW_ENGINE_ACID:
+            return patch_preview_acid_apply(id, value);
         case PATCH_PREVIEW_ENGINE_WAVE:
             return patch_preview_wave_apply(id, value);
         case PATCH_PREVIEW_ENGINE_STREAM:
@@ -293,8 +289,6 @@ uint8_t patch_preview_audio_note_on(uint8_t note, uint8_t velocity)
             (float)velocity * (1.0f / 127.0f)); break;
         case PATCH_PREVIEW_ENGINE_STACK: brick6_stack_runtime_note_on(
             BRICK6_STACK_PREVIEW_INSTANCE_ID, note, velocity); break;
-        case PATCH_PREVIEW_ENGINE_TB303: brick6_tb303_runtime_note_on(
-            BRICK6_TB303_PREVIEW_INSTANCE_ID, note, velocity); break;
         case PATCH_PREVIEW_ENGINE_ACID: brick6_acid_runtime_note_on(
             BRICK6_ACID_PREVIEW_INSTANCE_ID, note, velocity); break;
         case PATCH_PREVIEW_ENGINE_WAVE: brick6_wave_runtime_note_on(
@@ -323,8 +317,6 @@ uint8_t patch_preview_audio_note_off(uint8_t note)
             BRICK6_BRAIDS_PREVIEW_INSTANCE_ID, note); break;
         case PATCH_PREVIEW_ENGINE_STACK: brick6_stack_runtime_note_off(
             BRICK6_STACK_PREVIEW_INSTANCE_ID, note); break;
-        case PATCH_PREVIEW_ENGINE_TB303: brick6_tb303_runtime_note_off(
-            BRICK6_TB303_PREVIEW_INSTANCE_ID, note); break;
         case PATCH_PREVIEW_ENGINE_ACID: brick6_acid_runtime_note_off(
             BRICK6_ACID_PREVIEW_INSTANCE_ID, note); break;
         case PATCH_PREVIEW_ENGINE_WAVE: brick6_wave_runtime_note_off(
@@ -362,8 +354,6 @@ static uint8_t patch_preview_engine_render(float *mono, uint32_t frames)
             BRICK6_BRAIDS_PREVIEW_INSTANCE_ID, mono, frames);
         case PATCH_PREVIEW_ENGINE_STACK: return brick6_stack_runtime_render_instance(
             BRICK6_STACK_PREVIEW_INSTANCE_ID, mono, frames, 1U);
-        case PATCH_PREVIEW_ENGINE_TB303: return brick6_tb303_runtime_render_instance(
-            BRICK6_TB303_PREVIEW_INSTANCE_ID, mono, frames);
         case PATCH_PREVIEW_ENGINE_ACID: return brick6_acid_runtime_render_instance(
             BRICK6_ACID_PREVIEW_INSTANCE_ID, mono, frames);
         case PATCH_PREVIEW_ENGINE_WAVE: return brick6_wave_runtime_render_instance(

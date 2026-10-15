@@ -1,9 +1,5 @@
 # Divergences, incoherences et code inactif
 
-## D-01 — Version persistence documentee
-
-`docs/architecture/ARCHITECTURE_GLOBAL.md` annonce encore codec version 7 et `docs/architecture/z6_state_persistence_patterns_projects.md` version 15, tandis que `Inc/Storage/persistent_control_codec.h` fixe le code courant a B6CP version 19 avec lecture legacy v18. Verdict : **INCOHERENT documentaire** ; la fiche retient v19.
-
 ## D-02 — MIDI DIN/Host
 
 `Inc/MIDI/midi.h` decrit USB Host et DIN UART comme stubs futurs ; le depot contient `midi_host.c` et des piles USB. Verdict : **PARTIEL**, ne pas annoncer le support materiel avant essai et inspection carte complete.

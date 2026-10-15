@@ -12,7 +12,6 @@
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
-#include "Audio/Engines/tb303_engine.h"
 #include "Audio/Engines/acid_engine.h"
 #include "Platform/brick_build_config.h"
 #include "ControlRT/control_audio_command.h"
@@ -281,9 +280,6 @@ static void audio_note_engine_adapter_project_voice_configuration(
         case TRACK_RUNTIME_ENGINE_FM:
             brick6_fm_runtime_sync_voice(source, instance);
             break;
-        case TRACK_RUNTIME_ENGINE_TB303:
-            brick6_tb303_runtime_sync_voice(source, instance);
-            break;
         case TRACK_RUNTIME_ENGINE_ACID:
             brick6_acid_runtime_sync_voice(source, instance);
             break;
@@ -304,7 +300,6 @@ uint8_t audio_note_engine_adapter_project_track_configuration(
             && (engine != TRACK_RUNTIME_ENGINE_STACK)
             && (engine != TRACK_RUNTIME_ENGINE_WAVE)
             && (engine != TRACK_RUNTIME_ENGINE_FM)
-            && (engine != TRACK_RUNTIME_ENGINE_TB303)
             && (engine != TRACK_RUNTIME_ENGINE_ACID))
         return 1U;
     const uint8_t voice_count = synth_polyphony_get_voice_count(entity_id);
@@ -371,13 +366,6 @@ static uint8_t audio_note_engine_adapter_initialize_held_renderer(
             program, instance);
         brick6_fm_runtime_initialize_held_note(instance, note, velocity);
     }
-    else if (engine == TRACK_RUNTIME_ENGINE_TB303)
-    {
-        audio_note_engine_adapter_project_voice_configuration(
-            program, instance);
-        brick6_tb303_runtime_restart_voice(instance);
-        brick6_tb303_runtime_initialize_held_note(instance, note, velocity);
-    }
     else if (engine == TRACK_RUNTIME_ENGINE_ACID)
     {
         audio_note_engine_adapter_project_voice_configuration(
@@ -421,7 +409,6 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         || (engine == TRACK_RUNTIME_ENGINE_STACK)
         || (engine == TRACK_RUNTIME_ENGINE_WAVE)
         || (engine == TRACK_RUNTIME_ENGINE_FM)
-        || (engine == TRACK_RUNTIME_ENGINE_TB303)
         || (engine == TRACK_RUNTIME_ENGINE_ACID));
     const uint8_t is_multi_sampler = (uint8_t)((engine
             == TRACK_RUNTIME_ENGINE_SAMPLER)
@@ -619,19 +606,6 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         }
         else
             brick6_fm_runtime_note_off(instance, note);
-    }
-    else if (engine == TRACK_RUNTIME_ENGINE_TB303)
-    {
-        if (is_note_on != 0U)
-        {
-            audio_note_engine_adapter_project_voice_configuration(
-                program, instance);
-            brick6_tb303_runtime_note_on(instance, note, velocity);
-        }
-        else
-        {
-            brick6_tb303_runtime_note_off(instance, note);
-        }
     }
     else if (engine == TRACK_RUNTIME_ENGINE_ACID)
     {
@@ -845,7 +819,6 @@ uint8_t audio_note_engine_adapter_install_prepared(
                 || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
                 || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
                 || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
-                || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB303)
                 || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_ACID)))
     {
         const uint8_t renderer_ready = (preserve_synth_slots != 0U)
@@ -963,7 +936,6 @@ uint8_t audio_note_engine_adapter_initialize_held_outputs(
         || (engine == TRACK_RUNTIME_ENGINE_STACK)
         || (engine == TRACK_RUNTIME_ENGINE_WAVE)
         || (engine == TRACK_RUNTIME_ENGINE_FM)
-        || (engine == TRACK_RUNTIME_ENGINE_TB303)
         || (engine == TRACK_RUNTIME_ENGINE_ACID));
     const uint8_t uses_voice_vca =
         audio_note_engine_adapter_engine_uses_voice_vca(engine);

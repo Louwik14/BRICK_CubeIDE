@@ -87,5 +87,5 @@ Looper/Overdub conservent leur ring et leurs gros writes asynchrones. Preview
 utilise le meme runtime sampler STREAM; Multi conserve ses voix polyphoniques
 sur le meme Page Cache et le meme transport physique.
 
-Le codec courant est la version 17. Il ne reconnait aucun format anterieur et
+Le codec courant est la version 20. Il ne reconnait aucun format anterieur et
 ne contient ni type moteur alternatif, ni migration, ni alias sampler.

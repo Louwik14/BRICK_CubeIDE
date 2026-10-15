@@ -9,8 +9,7 @@
 extern "C" {
 #endif
 
-#define PERSIST_CODEC_VERSION 19U
-#define PERSIST_CODEC_LEGACY_VERSION 18U
+#define PERSIST_CODEC_VERSION 20U
 #define PERSIST_CODEC_HEADER_BYTES 24U
 #define PERSIST_CODEC_SECTION_HEADER_BYTES 8U
 #define PERSIST_CODEC_MAX_DOCUMENT_BYTES 0x3FFFFFFFUL
@@ -28,12 +27,8 @@ extern "C" {
 #define PERSIST_CODEC_PATTERN_CURRENT_DOCUMENT_MAX_BYTES \
     (PERSIST_CODEC_HEADER_BYTES + PERSIST_CODEC_SECTION_HEADER_BYTES \
         + PERSIST_CODEC_PATTERN_BODY_MAX_BYTES)
-/* Decode keeps accepting v18, whose 16 entity records each contain the
- * removed VOICES byte.  Keep the public envelope large enough for that
- * legacy document while current v19 writes remain 16 bytes smaller. */
 #define PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES \
-    (PERSIST_CODEC_PATTERN_CURRENT_DOCUMENT_MAX_BYTES \
-        + PERSIST_CONTROL_ENTITY_COUNT)
+    PERSIST_CODEC_PATTERN_CURRENT_DOCUMENT_MAX_BYTES
 
 /* Project envelope: CORE metadata, maximum asset catalog and 14 native
  * Macros. Patterns are separate canonical documents in the Project folder. */
@@ -50,7 +45,7 @@ _Static_assert(PERSIST_CODEC_PATTERN_BODY_MAX_BYTES == 115268U,
                "Pattern codec body envelope changed");
 _Static_assert(PERSIST_CODEC_PATTERN_CURRENT_DOCUMENT_MAX_BYTES == 115300U,
                "Current Pattern codec worst-case envelope changed");
-_Static_assert(PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES == 115316U,
+_Static_assert(PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES == 115300U,
                "Pattern codec worst-case envelope changed");
 _Static_assert(PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES == 174116U,
                "Project codec worst-case envelope changed");
