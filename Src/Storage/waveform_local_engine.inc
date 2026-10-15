@@ -19,6 +19,11 @@ typedef struct
     int16_t min, max, first, last;
 } waveform_local_point_t;
 
+typedef struct
+{
+    int8_t min, max, first, last;
+} waveform_local_packed_point_t;
+
 typedef enum
 {
     WAVEFORM_LOCAL_EMPTY = 0,
@@ -35,6 +40,7 @@ typedef struct
     uint32_t loaded_frames;
     uint32_t generation;
     waveform_local_state_t state;
+    waveform_local_point_t building[3];
 } waveform_local_tile_t;
 
 typedef struct
@@ -61,11 +67,11 @@ typedef struct
 
 EDITOR_AUDIO_CACHE_SDRAM static int8_t
     g_waveform_local_pcm[WAVEFORM_LOCAL_TILE_COUNT][WAVEFORM_LOCAL_TILE_FRAMES];
-EDITOR_AUDIO_CACHE_SDRAM static waveform_local_point_t
+EDITOR_AUDIO_CACHE_SDRAM static waveform_local_packed_point_t
     g_waveform_local_level0[WAVEFORM_LOCAL_TILE_COUNT][WAVEFORM_LOCAL_LEVEL0_POINTS];
-EDITOR_AUDIO_CACHE_SDRAM static waveform_local_point_t
+EDITOR_AUDIO_CACHE_SDRAM static waveform_local_packed_point_t
     g_waveform_local_level1[WAVEFORM_LOCAL_TILE_COUNT][WAVEFORM_LOCAL_LEVEL1_POINTS];
-EDITOR_AUDIO_CACHE_SDRAM static waveform_local_point_t
+EDITOR_AUDIO_CACHE_SDRAM static waveform_local_packed_point_t
     g_waveform_local_level2[WAVEFORM_LOCAL_TILE_COUNT][WAVEFORM_LOCAL_LEVEL2_POINTS];
 STORAGE_STATE_SDRAM static waveform_local_cache_t g_waveform_local;
 
@@ -255,37 +261,66 @@ static void waveform_local_request(const waveform_source_t *source,
             &queued);
 }
 
-static void waveform_local_accumulate_point(waveform_local_point_t *level,
-    uint32_t block_frames, uint32_t frame, int16_t sample)
+static int8_t waveform_local_pcm8_encode(int16_t sample);
+static int16_t waveform_local_pcm8_decode(int8_t encoded);
+
+static void waveform_local_pack_point(waveform_local_packed_point_t *packed,
+    const waveform_local_point_t *point)
 {
-    waveform_local_point_t *const point = &level[frame / block_frames];
+    packed->min = waveform_local_pcm8_encode(point->min);
+    packed->max = waveform_local_pcm8_encode(point->max);
+    packed->first = waveform_local_pcm8_encode(point->first);
+    packed->last = waveform_local_pcm8_encode(point->last);
+}
+
+static waveform_local_point_t waveform_local_unpack_point(
+    const waveform_local_packed_point_t *packed)
+{
+    const waveform_local_point_t point = {
+        waveform_local_pcm8_decode(packed->min),
+        waveform_local_pcm8_decode(packed->max),
+        waveform_local_pcm8_decode(packed->first),
+        waveform_local_pcm8_decode(packed->last)
+    };
+    return point;
+}
+
+static void waveform_local_accumulate_point(
+    waveform_local_packed_point_t *level, waveform_local_point_t *building,
+    uint32_t block_frames, uint32_t frame, int16_t sample, uint8_t last)
+{
     if(frame % block_frames == 0U)
     {
-        point->min = sample;
-        point->max = sample;
-        point->first = sample;
-        point->last = sample;
-        return;
+        building->min = sample;
+        building->max = sample;
+        building->first = sample;
+        building->last = sample;
     }
-    if(sample < point->min) { point->min = sample; }
-    if(sample > point->max) { point->max = sample; }
-    point->last = sample;
+    else
+    {
+        if(sample < building->min) { building->min = sample; }
+        if(sample > building->max) { building->max = sample; }
+        building->last = sample;
+    }
+    if((((frame + 1U) % block_frames) == 0U) || last != 0U)
+        waveform_local_pack_point(&level[frame / block_frames], building);
 }
 
 static void waveform_local_accumulate_levels(uint8_t slot, uint32_t frame,
-    int16_t sample)
+    int16_t sample, uint8_t last)
 {
+    waveform_local_tile_t *const tile = &g_waveform_local.tiles[slot];
     waveform_local_accumulate_point(g_waveform_local_level0[slot],
-        WAVEFORM_LOCAL_LEVEL0_FRAMES, frame, sample);
+        &tile->building[0], WAVEFORM_LOCAL_LEVEL0_FRAMES, frame, sample, last);
     waveform_local_accumulate_point(g_waveform_local_level1[slot],
-        WAVEFORM_LOCAL_LEVEL1_FRAMES, frame, sample);
+        &tile->building[1], WAVEFORM_LOCAL_LEVEL1_FRAMES, frame, sample, last);
     waveform_local_accumulate_point(g_waveform_local_level2[slot],
-        WAVEFORM_LOCAL_LEVEL2_FRAMES, frame, sample);
+        &tile->building[2], WAVEFORM_LOCAL_LEVEL2_FRAMES, frame, sample, last);
 }
 
 /* G.711 mu-law keeps substantially finer steps around silence than linear
- * PCM8.  The detailed envelope levels remain int16 and are accumulated from
- * the original sample; companding only affects the one-sample zoom store. */
+ * PCM8.  Extrema are accumulated from original samples in int16 and only
+ * completed detailed points are compacted for storage. */
 static int8_t waveform_local_pcm8_encode(int16_t sample)
 {
     int32_t magnitude = sample;
@@ -428,7 +463,8 @@ static void waveform_local_storage_service(void)
             const uint32_t rel = tile->loaded_frames + f;
             g_waveform_local_pcm[(uint8_t)index][rel] =
                 waveform_local_pcm8_encode(mono);
-            waveform_local_accumulate_levels((uint8_t)index, rel, mono);
+            waveform_local_accumulate_levels((uint8_t)index, rel, mono,
+                (uint8_t)(rel + 1U == tile->frame_count));
         }
         tile->loaded_frames += frames;
         if(tile->loaded_frames >= tile->frame_count)
@@ -488,7 +524,7 @@ static uint8_t waveform_local_accumulate_range(uint32_t start_frame, uint32_t en
         const uint32_t rel_start = cursor - tile->start_frame;
         const uint32_t rel_end = span_end - tile->start_frame;
         uint32_t block = 0U;
-        const waveform_local_point_t *level = 0;
+        const waveform_local_packed_point_t *level = 0;
         if(samples_per_point >= WAVEFORM_LOCAL_LEVEL2_FRAMES)
         { block = WAVEFORM_LOCAL_LEVEL2_FRAMES;
           level = g_waveform_local_level2[(uint8_t)index]; }
@@ -505,7 +541,11 @@ static uint8_t waveform_local_accumulate_range(uint32_t start_frame, uint32_t en
             {
                 if((point + 1U) * block <= tile->loaded_frames
                         || tile->loaded_frames == tile->frame_count)
-                    waveform_local_merge(out, &level[point], &seen);
+                {
+                    const waveform_local_point_t value =
+                        waveform_local_unpack_point(&level[point]);
+                    waveform_local_merge(out, &value, &seen);
+                }
                 else
                 {
                     const uint32_t raw_start = (point * block > rel_start)
