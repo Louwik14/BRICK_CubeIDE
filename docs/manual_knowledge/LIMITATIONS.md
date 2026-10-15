@@ -1,7 +1,7 @@
 # Limites et comportements particuliers
 
 - 8 pistes top-level ; 16 identites totales avec 7 children GROUP et Master 15. GROUP seulement sur top-level 7 ; children forces SAMPLER/RAM mono.
-- Maximum 4 pistes STREAM (`BRICK6_MAX_CLIP_TRACKS`). External arbitre un nombre borne d'entrees physiques et interdit le partage conflictuel.
+- Maximum 8 pistes STREAM/GROUP avec Shifter (`BRICK6_MAX_CLIP_TRACKS`), dans la limite commune des 8 VoiceReaders musicaux partages avec Multi. External arbitre un nombre borne d'entrees physiques et interdit le partage conflictuel.
 - Sequence : 64 steps, 4 pages de 16 ; 32 locks par step ; pool global par lane de 512 locks ; PLAY jusqu'a 8 voix.
 - Roll : Off puis 1/20, 1/24, 1/32, 1/40, 1/48, 1/64 sur grille interne 60 points.
 - Projects : 16 slots. Patterns : 256 slots par projet. Noms : 32 caracteres, espace/alphanumerique/`_`/`-`, trim des espaces externes.

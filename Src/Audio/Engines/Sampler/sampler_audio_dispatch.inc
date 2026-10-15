@@ -15,6 +15,9 @@ void brick6_sampler_runtime_init(void)
     for (uint8_t i = 0U; i < BRICK6_MAX_CLIP_TRACKS; ++i)
     {
         g_sampler_clip_slots[i].owner_track_id = BRICK6_SAMPLER_CLIP_SLOT_NONE;
+        brick6_clip_shifter_init(&g_sampler_clip_slots[i].shifter,
+                                 g_sampler_clip_shifter_history[i][0],
+                                 g_sampler_clip_shifter_history[i][1]);
     }
     for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
     {

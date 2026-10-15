@@ -193,6 +193,12 @@ static uint8_t patch_preview_engine_apply(patch_preview_engine_t engine,
     }
 }
 
+static uint8_t patch_preview_engine_is_sample(patch_preview_engine_t engine)
+{
+    return (uint8_t)((engine == PATCH_PREVIEW_ENGINE_STREAM)
+        || (engine == PATCH_PREVIEW_ENGINE_MULTI));
+}
+
 static uint8_t patch_preview_mod_apply(void *context, param_id_t id, float value)
 {
     (void)context;
@@ -299,9 +305,12 @@ uint8_t patch_preview_audio_note_on(uint8_t note, uint8_t velocity)
             break;
         default: return 0U;
     }
-    preview_voice_dsp_note_on(note, velocity);
-    if (g_patch_preview_audio.modulation_present != 0U)
-        mod_instrument_runtime_note_on(&g_patch_preview_audio.modulation);
+    if (patch_preview_engine_is_sample(g_patch_preview_audio.engine) == 0U)
+    {
+        preview_voice_dsp_note_on(note, velocity);
+        if (g_patch_preview_audio.modulation_present != 0U)
+            mod_instrument_runtime_note_on(&g_patch_preview_audio.modulation);
+    }
     g_patch_preview_audio.note = note;
     g_patch_preview_audio.state = PATCH_PREVIEW_AUDIO_ACTIVE;
     return 1U;
@@ -326,9 +335,12 @@ uint8_t patch_preview_audio_note_off(uint8_t note)
             brick6_sampler_preview_note_off(note); break;
         default: break;
     }
-    preview_voice_dsp_note_off(note);
-    if (g_patch_preview_audio.modulation_present != 0U)
-        mod_instrument_runtime_note_off(&g_patch_preview_audio.modulation);
+    if (patch_preview_engine_is_sample(g_patch_preview_audio.engine) == 0U)
+    {
+        preview_voice_dsp_note_off(note);
+        if (g_patch_preview_audio.modulation_present != 0U)
+            mod_instrument_runtime_note_off(&g_patch_preview_audio.modulation);
+    }
     return 1U;
 }
 
@@ -368,7 +380,10 @@ uint8_t patch_preview_audio_render_main(float *out_main_l, float *out_main_r,
     if ((g_patch_preview_audio.state != PATCH_PREVIEW_AUDIO_ACTIVE)
             || (out_main_l == NULL) || (out_main_r == NULL)
             || (frames == 0U) || (frames > BRICK6_FM_RENDER_BLOCK)) return 0U;
-    if (g_patch_preview_audio.modulation_present != 0U)
+    const uint8_t sample_preview =
+        patch_preview_engine_is_sample(g_patch_preview_audio.engine);
+    if ((sample_preview == 0U)
+            && (g_patch_preview_audio.modulation_present != 0U))
     {
         float filter_envelope;
         float vca_envelope;
@@ -381,19 +396,23 @@ uint8_t patch_preview_audio_render_main(float *out_main_l, float *out_main_r,
     memset(g_patch_preview_render, 0, frames * sizeof(*g_patch_preview_render));
     memset(g_patch_preview_render_right, 0,
            frames * sizeof(*g_patch_preview_render_right));
-    if (g_patch_preview_audio.engine >= PATCH_PREVIEW_ENGINE_STREAM)
-        (void)brick6_sampler_preview_render(g_patch_preview_render,
+    uint8_t running;
+    if (sample_preview != 0U)
+        running = brick6_sampler_preview_render(g_patch_preview_render,
             g_patch_preview_render_right, frames);
     else
     {
-        (void)patch_preview_engine_render(g_patch_preview_render, frames);
+        running = patch_preview_engine_render(g_patch_preview_render, frames);
         memcpy(g_patch_preview_render_right, g_patch_preview_render,
                frames * sizeof(*g_patch_preview_render));
     }
-    const uint8_t running = preview_voice_dsp_process_stereo(
-        g_patch_preview_render, g_patch_preview_render_right, frames);
-    audio_fx_runtime_preview_process(g_patch_preview_render,
-                                     g_patch_preview_render_right, frames);
+    if (sample_preview == 0U)
+    {
+        running = preview_voice_dsp_process_stereo(
+            g_patch_preview_render, g_patch_preview_render_right, frames);
+        audio_fx_runtime_preview_process(g_patch_preview_render,
+                                         g_patch_preview_render_right, frames);
+    }
     for (uint32_t frame = 0U; frame < frames; ++frame)
     {
         out_main_l[frame] += g_patch_preview_render[frame]

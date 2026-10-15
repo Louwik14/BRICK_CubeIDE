@@ -16,7 +16,7 @@ Un Multi est prepare depuis un dossier/index de zones. TONE expose asset, gain e
 
 ## Persistance et interactions
 
-La selection est une reference stable `{kind,path}`, jamais un slot runtime. Project/Pattern/Patch peuvent la transporter. P-lock et Matrix s'appliquent aux Params sonores, pas au selecteur asset. Maximum quatre pistes clip STREAM.
+La selection est une reference stable `{kind,path}`, jamais un slot runtime. Project/Pattern/Patch peuvent la transporter. P-lock et Matrix s'appliquent aux Params sonores, pas au selecteur asset. Maximum huit pistes STREAM/GROUP avec Shifter, dans la limite commune des huit VoiceReaders musicaux partages avec Multi.
 
 ## Sources
 

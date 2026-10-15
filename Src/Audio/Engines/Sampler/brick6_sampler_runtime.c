@@ -272,13 +272,16 @@ brick6_sampler_stream_live_diag_t g_sampler_stream_live_diag
     __attribute__((used, externally_visible));
 static brick6_sampler_multi_track_state_t g_sampler_multi_track_state[SEQ_TRACK_COUNT];
 static brick6_sampler_clip_slot_t g_sampler_clip_slots[BRICK6_MAX_CLIP_TRACKS];
-static float g_sampler_clip_shifter_delay_d1[2U][BRICK6_CLIP_SHIFTER_DELAY_FRAMES];
 static AUDIO_HISTORY_SDRAM float
-    g_sampler_clip_shifter_delay_general[2U][BRICK6_CLIP_SHIFTER_DELAY_FRAMES];
-static SDRAM_RECORDER float
-    g_sampler_clip_shifter_delay_recorder[3U][BRICK6_CLIP_SHIFTER_DELAY_FRAMES];
-static SEC_ATTR(".sdram_recorder_ring") ALIGN32 float
-    g_sampler_clip_shifter_delay_recorder_ring[BRICK6_CLIP_SHIFTER_DELAY_FRAMES];
+    g_sampler_clip_shifter_history[BRICK6_MAX_CLIP_TRACKS]
+                                  [2U]
+                                  [BRICK6_CLIP_SHIFTER_DELAY_FRAMES];
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+_Static_assert(sizeof(brick6_clip_shifter_t) == 96U,
+               "Shifter hot state size changed; remeasure SRAM");
+_Static_assert(sizeof(g_sampler_clip_shifter_history) == (512U * 1024U),
+               "Eight stereo Shifter histories must occupy exactly 512 KiB");
+#endif
 static AUDIO_HOT brick6_sampler_declick_tail_t
     g_sampler_declick_tail[STEAL_DECLICK_TAIL_SLOTS];
 static AUDIO_HOT uint32_t g_sampler_render_track_mask;

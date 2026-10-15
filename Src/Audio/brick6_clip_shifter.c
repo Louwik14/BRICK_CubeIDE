@@ -1,6 +1,6 @@
 #include "Audio/brick6_clip_shifter.h"
 
-#include <string.h>
+#include <stddef.h>
 
 #define BRICK6_CLIP_SHIFTER_RATIO_MIN 0.25f
 #define BRICK6_CLIP_SHIFTER_RATIO_MAX 4.0f
@@ -36,7 +36,10 @@ static float brick6_clip_shifter_clampf(float value, float min_value, float max_
     return value;
 }
 
-static float brick6_clip_shifter_read_interp(const float *buffer, uint16_t write_index, float offset)
+static float brick6_clip_shifter_read_interp(const brick6_clip_shifter_t *shifter,
+                                             const float *buffer,
+                                             uint16_t write_index,
+                                             float offset)
 {
     uint32_t offset_integral;
     float offset_fractional;
@@ -58,8 +61,16 @@ static float brick6_clip_shifter_read_interp(const float *buffer, uint16_t write
     offset_fractional = offset - (float)offset_integral;
     index_a = ((uint32_t)write_index + offset_integral) & BRICK6_CLIP_SHIFTER_DELAY_MASK;
     index_b = (index_a + 1U) & BRICK6_CLIP_SHIFTER_DELAY_MASK;
-    a = buffer[index_a];
-    b = buffer[index_b];
+    if (shifter->valid_frames < BRICK6_CLIP_SHIFTER_DELAY_FRAMES)
+    {
+        a = (offset_integral < shifter->valid_frames) ? buffer[index_a] : 0.0f;
+        b = ((offset_integral + 1U) < shifter->valid_frames) ? buffer[index_b] : 0.0f;
+    }
+    else
+    {
+        a = buffer[index_a];
+        b = buffer[index_b];
+    }
     return a + ((b - a) * offset_fractional);
 }
 
@@ -87,14 +98,15 @@ static void brick6_clip_shifter_advance_phase(brick6_clip_shifter_t *shifter,
     }
 }
 
-static float brick6_clip_shifter_render_channel(const float *buffer,
+static float brick6_clip_shifter_render_channel(const brick6_clip_shifter_t *shifter,
+                                                const float *buffer,
                                                 uint16_t write_index,
                                                 float phase,
                                                 float half,
                                                 float tri)
 {
-    return (brick6_clip_shifter_read_interp(buffer, write_index, phase) * tri)
-           + (brick6_clip_shifter_read_interp(buffer, write_index, half) * (1.0f - tri));
+    return (brick6_clip_shifter_read_interp(shifter, buffer, write_index, phase) * tri)
+           + (brick6_clip_shifter_read_interp(shifter, buffer, write_index, half) * (1.0f - tri));
 }
 
 static float brick6_clip_shifter_wrap_phase(float phase)
@@ -170,12 +182,9 @@ void brick6_clip_shifter_reset(brick6_clip_shifter_t *shifter)
         return;
     }
 
-    memset(shifter->buffer_l, 0,
-           BRICK6_CLIP_SHIFTER_DELAY_FRAMES * sizeof(shifter->buffer_l[0]));
-    memset(shifter->buffer_r, 0,
-           BRICK6_CLIP_SHIFTER_DELAY_FRAMES * sizeof(shifter->buffer_r[0]));
     shifter->phase = 0.0f;
     shifter->write_index = 0U;
+    shifter->valid_frames = 0U;
     shifter->random_state = 0x6D2B79F5U;
     shifter->heads = 0U;
     shifter->window = UINT8_MAX;
@@ -257,6 +266,8 @@ static void brick6_clip_shifter_process_experimental(brick6_clip_shifter_t *shif
         shifter->write_index = (uint16_t)((shifter->write_index - 1U) & BRICK6_CLIP_SHIFTER_DELAY_MASK);
         shifter->buffer_l[shifter->write_index] = left[i];
         if (stereo != 0U) shifter->buffer_r[shifter->write_index] = right[i];
+        if (shifter->valid_frames < BRICK6_CLIP_SHIFTER_DELAY_FRAMES)
+            ++shifter->valid_frames;
         shifter->phase = brick6_clip_shifter_wrap_phase(shifter->phase + phase_step);
 
         float mixed_l = 0.0f;
@@ -291,10 +302,10 @@ static void brick6_clip_shifter_process_experimental(brick6_clip_shifter_t *shif
             float offset = (local_phase * shifter->window_frames)
                            + shifter->head_dispersion_frames[head];
             if (offset >= shifter->window_frames) offset -= shifter->window_frames;
-            mixed_l += brick6_clip_shifter_read_interp(shifter->buffer_l,
+            mixed_l += brick6_clip_shifter_read_interp(shifter, shifter->buffer_l,
                                                        shifter->write_index, offset) * weight;
             if (stereo != 0U)
-                mixed_r += brick6_clip_shifter_read_interp(shifter->buffer_r,
+                mixed_r += brick6_clip_shifter_read_interp(shifter, shifter->buffer_r,
                                                            shifter->write_index, offset) * weight;
         }
         if ((shifter->window == (uint8_t)BRICK6_CLIP_SHIFTER_WINDOW_TRI) && (tri_sum > 0.0f))
@@ -329,12 +340,15 @@ void brick6_clip_shifter_process_mono(brick6_clip_shifter_t *shifter,
     {
         shifter->write_index = (uint16_t)((shifter->write_index - 1U) & BRICK6_CLIP_SHIFTER_DELAY_MASK);
         shifter->buffer_l[shifter->write_index] = mono[i];
+        if (shifter->valid_frames < BRICK6_CLIP_SHIFTER_DELAY_FRAMES)
+            ++shifter->valid_frames;
 
         float tri;
         float phase;
         float half;
         brick6_clip_shifter_advance_phase(shifter, &tri, &phase, &half);
-        mono[i] = brick6_clip_shifter_render_channel(shifter->buffer_l,
+        mono[i] = brick6_clip_shifter_render_channel(shifter,
+                                                     shifter->buffer_l,
                                                      shifter->write_index,
                                                      phase,
                                                      half,
@@ -365,6 +379,8 @@ void brick6_clip_shifter_process_stereo(brick6_clip_shifter_t *shifter,
         shifter->write_index = (uint16_t)((shifter->write_index - 1U) & BRICK6_CLIP_SHIFTER_DELAY_MASK);
         shifter->buffer_l[shifter->write_index] = left[i];
         shifter->buffer_r[shifter->write_index] = right[i];
+        if (shifter->valid_frames < BRICK6_CLIP_SHIFTER_DELAY_FRAMES)
+            ++shifter->valid_frames;
 
         shifter->phase += (1.0f - shifter->ratio) / shifter->window_frames;
         if (shifter->phase >= 1.0f)
@@ -384,9 +400,9 @@ void brick6_clip_shifter_process_stereo(brick6_clip_shifter_t *shifter,
             half -= shifter->window_frames;
         }
 
-        left[i] = (brick6_clip_shifter_read_interp(shifter->buffer_l, shifter->write_index, phase) * tri)
-                  + (brick6_clip_shifter_read_interp(shifter->buffer_l, shifter->write_index, half) * (1.0f - tri));
-        right[i] = (brick6_clip_shifter_read_interp(shifter->buffer_r, shifter->write_index, phase) * tri)
-                   + (brick6_clip_shifter_read_interp(shifter->buffer_r, shifter->write_index, half) * (1.0f - tri));
+        left[i] = (brick6_clip_shifter_read_interp(shifter, shifter->buffer_l, shifter->write_index, phase) * tri)
+                  + (brick6_clip_shifter_read_interp(shifter, shifter->buffer_l, shifter->write_index, half) * (1.0f - tri));
+        right[i] = (brick6_clip_shifter_read_interp(shifter, shifter->buffer_r, shifter->write_index, phase) * tri)
+                   + (brick6_clip_shifter_read_interp(shifter, shifter->buffer_r, shifter->write_index, half) * (1.0f - tri));
     }
 }

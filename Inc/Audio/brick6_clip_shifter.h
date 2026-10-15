@@ -30,6 +30,7 @@ typedef struct
     float head_dispersion_frames[BRICK6_CLIP_SHIFTER_MAX_HEADS];
     uint32_t random_state;
     uint16_t write_index;
+    uint16_t valid_frames;
     uint8_t heads;
     uint8_t window;
     uint8_t dispersion_percent;
