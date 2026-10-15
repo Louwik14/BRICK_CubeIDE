@@ -195,16 +195,6 @@ void project_control_init(void)
     project_control_reset_macros();
     project_control_reset_asset_banks();
     memset(&g_wavetable_load, 0, sizeof(g_wavetable_load));
-    for (uint16_t slot = 0U; slot < WAVETABLE_POOL_MAX_SLOTS; ++slot)
-    {
-        const wavetable_slot_t *const table = wavetable_pool_get_slot(slot);
-        if ((table != NULL) && (table->state == WAVETABLE_SLOT_READY))
-        {
-            uint16_t logical = PROJECT_CONTROL_INVALID_RUNTIME;
-            (void)project_control_register_wavetable_runtime(
-                table->path, slot, &logical);
-        }
-    }
 }
 uint8_t project_control_get_macro_lock(uint8_t macro,uint8_t lock,project_control_macro_lock_t*out){if(out==NULL||macro>=PERSIST_CONTROL_MACRO_COUNT||lock>=PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;const persist_control_macro_t*m=&g_macros.macros[macro];if(lock>=m->lock_count){*out=(project_control_macro_lock_t){0xFFU,PARAM_COUNT,0.0f};return 1U;}if(persist_key_param_from_disk(m->locks[lock].parameter,&out->param)==0U)return 0U;out->track=m->locks[lock].entity;out->target_value=m->locks[lock].target_value;return 1U;}
 uint8_t project_control_set_macro_lock(uint8_t macro,uint8_t lock,const project_control_macro_lock_t*in)
