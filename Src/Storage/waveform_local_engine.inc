@@ -5,8 +5,9 @@
 #define WAVEFORM_LOCAL_TILE_FRAMES 24000U
 #define WAVEFORM_LOCAL_CHUNK_BYTES WAVEFORM_LOCAL_READ_BYTES
 #define WAVEFORM_LOCAL_REQUEST_MAX 4U
-#define WAVEFORM_LOCAL_KEEP_RADIUS 1U
-#define WAVEFORM_LOCAL_MAX_VIEW_TILES 2U
+#define WAVEFORM_LOCAL_MAX_VIEW_TILES WAVEFORM_LOCAL_TILE_COUNT
+#define WAVEFORM_LOCAL_MAX_DETAIL_FRAMES \
+    ((WAVEFORM_LOCAL_TILE_COUNT - 1U) * WAVEFORM_LOCAL_TILE_FRAMES)
 #define WAVEFORM_LOCAL_LEVEL0_FRAMES 16U
 #define WAVEFORM_LOCAL_LEVEL1_FRAMES 64U
 #define WAVEFORM_LOCAL_LEVEL2_FRAMES 256U
@@ -16,9 +17,8 @@
 
 _Static_assert(WAVEFORM_LOCAL_REQUEST_MAX <= WAVEFORM_LOCAL_TILE_COUNT,
     "waveform local request exceeds tile capacity");
-_Static_assert(WAVEFORM_LOCAL_MAX_VIEW_TILES + 2U
-        <= WAVEFORM_LOCAL_TILE_COUNT,
-    "waveform local view leaves no bidirectional prefetch capacity");
+_Static_assert(WAVEFORM_LOCAL_MAX_VIEW_TILES <= WAVEFORM_LOCAL_TILE_COUNT,
+    "waveform local view exceeds tile capacity");
 
 typedef struct
 {
@@ -234,20 +234,12 @@ static void waveform_local_request(const waveform_source_t *source,
     const uint32_t focus_tile = waveform_local_align(focus);
     const uint32_t first_tile = waveform_local_align(start_frame);
     const uint32_t last_tile = waveform_local_align(start_frame + frame_count - 1U);
-    const uint32_t keep_first = (first_tile >=
-        WAVEFORM_LOCAL_KEEP_RADIUS * WAVEFORM_LOCAL_TILE_FRAMES)
-        ? first_tile - WAVEFORM_LOCAL_KEEP_RADIUS * WAVEFORM_LOCAL_TILE_FRAMES
-        : 0U;
-    const uint32_t keep_last = (last_tile <= UINT32_MAX
-        - WAVEFORM_LOCAL_KEEP_RADIUS * WAVEFORM_LOCAL_TILE_FRAMES)
-        ? last_tile + WAVEFORM_LOCAL_KEEP_RADIUS * WAVEFORM_LOCAL_TILE_FRAMES
-        : UINT32_MAX;
     for(uint8_t i = 0U; i < WAVEFORM_LOCAL_TILE_COUNT; ++i)
     {
         waveform_local_tile_t *const tile = &g_waveform_local.tiles[i];
         if(tile->state == WAVEFORM_LOCAL_LOADING
-                && (tile->start_frame < keep_first
-                    || tile->start_frame > keep_last))
+                && (tile->start_frame < first_tile
+                    || tile->start_frame > last_tile))
             tile->state = WAVEFORM_LOCAL_STALE;
     }
     uint8_t queued = 0U;
@@ -259,12 +251,6 @@ static void waveform_local_request(const waveform_source_t *source,
         if(tile > UINT32_MAX - WAVEFORM_LOCAL_TILE_FRAMES) { break; }
         tile += WAVEFORM_LOCAL_TILE_FRAMES;
     }
-    if(first_tile >= WAVEFORM_LOCAL_TILE_FRAMES)
-        (void)waveform_local_queue(first_tile - WAVEFORM_LOCAL_TILE_FRAMES,
-            &queued);
-    if(last_tile <= UINT32_MAX - WAVEFORM_LOCAL_TILE_FRAMES)
-        (void)waveform_local_queue(last_tile + WAVEFORM_LOCAL_TILE_FRAMES,
-            &queued);
 }
 
 static int8_t waveform_local_pcm8_encode(int16_t sample);
@@ -503,6 +489,25 @@ static int8_t waveform_local_find_frame(uint32_t frame)
     if(frame < tile->start_frame + tile->loaded_frames)
         return index;
     return -1;
+}
+
+static uint8_t waveform_local_span_ready(uint32_t start_frame,
+    uint32_t frame_count)
+{
+    const uint32_t end_frame = start_frame + frame_count;
+    uint32_t cursor = start_frame;
+    while(cursor < end_frame)
+    {
+        const int8_t index = waveform_local_find(waveform_local_align(cursor));
+        if(index < 0) { return 0U; }
+        const waveform_local_tile_t *const tile =
+            &g_waveform_local.tiles[(uint8_t)index];
+        uint32_t needed_end = tile->start_frame + tile->frame_count;
+        if(needed_end > end_frame) { needed_end = end_frame; }
+        if(tile->start_frame + tile->loaded_frames < needed_end) { return 0U; }
+        cursor = needed_end;
+    }
+    return 1U;
 }
 
 static void waveform_local_merge(waveform_local_point_t *out,

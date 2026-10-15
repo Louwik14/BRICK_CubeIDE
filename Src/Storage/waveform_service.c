@@ -1049,8 +1049,9 @@ waveform_result_t waveform_request(const waveform_source_t *source,
     return WAVEFORM_RESULT_PENDING;
 }
 
-/* The local engine can compose a visible window across several PCM tiles.
- * Windows larger than its bounded cache stay on the global min/max path. */
+/* The local engine composes the whole viewport at one resolution.  The
+ * duration gate uses the worst possible tile alignment so scrolling cannot
+ * change renderer at constant zoom. */
 waveform_result_t waveform_request_detailed(const waveform_source_t *source,
                                    uint32_t start_frame,
                                    uint32_t frame_count,
@@ -1066,17 +1067,28 @@ waveform_result_t waveform_request_detailed(const waveform_source_t *source,
         line[col].ready = 0U;
     const uint32_t frames_per_pixel = (uint32_t)(((uint64_t)frame_count
         + pixel_width - 1U) / pixel_width);
+    const rec_source_waveform_summary_t *const summary =
+        waveform_rec_summary(source);
+    if(frame_count > WAVEFORM_LOCAL_MAX_DETAIL_FRAMES)
+    {
+        g_waveform_local_line_hot.valid = 0U;
+        if(summary == 0) { return WAVEFORM_RESULT_PENDING; }
+        waveform_render_rec_overview(summary, start_frame, frame_count,
+            pixel_width, columns);
+        return WAVEFORM_RESULT_READY;
+    }
     const uint32_t first_tile = start_frame / WAVEFORM_LOCAL_TILE_FRAMES;
     const uint32_t last_tile = (start_frame + frame_count - 1U)
         / WAVEFORM_LOCAL_TILE_FRAMES;
     if(last_tile - first_tile + 1U > WAVEFORM_LOCAL_MAX_VIEW_TILES)
     {
-        return waveform_request(source, start_frame, frame_count,
+        g_waveform_local_line_hot.valid = 0U;
+        if(summary == 0) { return WAVEFORM_RESULT_PENDING; }
+        waveform_render_rec_overview(summary, start_frame, frame_count,
             pixel_width, columns);
+        return WAVEFORM_RESULT_READY;
     }
     waveform_local_request(source, start_frame, frame_count);
-    const rec_source_waveform_summary_t *const summary =
-        waveform_rec_summary(source);
     int32_t reused_shift = INT32_MAX;
     if(g_waveform_local_line_hot.valid != 0U
             && waveform_source_equal(&g_waveform_local_line_hot.source,
@@ -1092,6 +1104,21 @@ waveform_result_t waveform_request_detailed(const waveform_source_t *source,
                 pixel_width * sizeof(line[0]));
             return WAVEFORM_RESULT_READY;
         }
+    }
+    if(waveform_local_span_ready(start_frame, frame_count) == 0U)
+    {
+        g_waveform_local_line_hot.valid = 0U;
+        if(summary == 0) { return WAVEFORM_RESULT_PENDING; }
+        waveform_render_rec_overview(summary, start_frame, frame_count,
+            pixel_width, columns);
+        return WAVEFORM_RESULT_READY;
+    }
+    if(g_waveform_local_line_hot.valid != 0U
+            && waveform_source_equal(&g_waveform_local_line_hot.source,
+                source) != 0U
+            && g_waveform_local_line_hot.frame_count == frame_count
+            && g_waveform_local_line_hot.width == pixel_width)
+    {
         if(frame_count % pixel_width == 0U)
         {
             const int64_t delta = (int64_t)start_frame
@@ -1137,58 +1164,22 @@ waveform_result_t waveform_request_detailed(const waveform_source_t *source,
             line[col].ready = 1U;
             continue;
         }
-        if(summary == 0)
-        {
-            columns[col].min = 0;
-            columns[col].max = 0;
-            continue;
-        }
-        uint32_t bin0, bin1;
-        if(summary->frames_per_bin != 0U)
-        {
-            bin0 = frame0 / summary->frames_per_bin;
-            bin1 = (uint32_t)(((uint64_t)frame1
-                + summary->frames_per_bin - 1ULL)
-                / summary->frames_per_bin);
-        }
-        else
-        {
-            const uint32_t domain = (summary->bin_domain_frames != 0U)
-                ? summary->bin_domain_frames : summary->frame_count;
-            bin0 = (uint32_t)(((uint64_t)frame0 * summary->bin_count)
-                / domain);
-            bin1 = (uint32_t)((((uint64_t)frame1 * summary->bin_count)
-                + domain - 1ULL) / domain);
-        }
-        if(bin0 >= summary->bin_count) { bin0 = summary->bin_count - 1U; }
-        if(bin1 <= bin0) { bin1 = bin0 + 1U; }
-        if(bin1 > summary->bin_count) { bin1 = summary->bin_count; }
-        columns[col].min = summary->min[bin0];
-        columns[col].max = summary->max[bin0];
-        for(uint32_t bin = bin0 + 1U; bin < bin1; ++bin)
-        {
-            if(summary->min[bin] < columns[col].min)
-                columns[col].min = summary->min[bin];
-            if(summary->max[bin] > columns[col].max)
-                columns[col].max = summary->max[bin];
-        }
+        g_waveform_local_line_hot.valid = 0U;
+        if(summary == 0) { return WAVEFORM_RESULT_PENDING; }
+        for(uint8_t reset = 0U; reset < pixel_width; ++reset)
+            line[reset].ready = 0U;
+        waveform_render_rec_overview(summary, start_frame, frame_count,
+            pixel_width, columns);
+        return WAVEFORM_RESULT_READY;
     }
-    uint8_t all_local_ready = 1U;
-    for(uint8_t col = 0U; col < pixel_width; ++col)
-    {
-        if(line[col].ready == 0U) { all_local_ready = 0U; break; }
-    }
-    g_waveform_local_line_hot.valid = all_local_ready;
-    if(all_local_ready != 0U)
-    {
-        g_waveform_local_line_hot.source = *source;
-        g_waveform_local_line_hot.start_frame = start_frame;
-        g_waveform_local_line_hot.frame_count = frame_count;
-        g_waveform_local_line_hot.width = pixel_width;
-        memcpy(g_waveform_local_line_hot.columns, columns,
-            pixel_width * sizeof(columns[0]));
-        memcpy(g_waveform_local_line_hot.line, line,
-            pixel_width * sizeof(line[0]));
-    }
+    g_waveform_local_line_hot.valid = 1U;
+    g_waveform_local_line_hot.source = *source;
+    g_waveform_local_line_hot.start_frame = start_frame;
+    g_waveform_local_line_hot.frame_count = frame_count;
+    g_waveform_local_line_hot.width = pixel_width;
+    memcpy(g_waveform_local_line_hot.columns, columns,
+        pixel_width * sizeof(columns[0]));
+    memcpy(g_waveform_local_line_hot.line, line,
+        pixel_width * sizeof(line[0]));
     return WAVEFORM_RESULT_READY;
 }
