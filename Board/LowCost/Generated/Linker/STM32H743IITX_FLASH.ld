@@ -44,8 +44,10 @@ _Min_Heap_Stack_Guard = 0x1000;
 /* Specify the memory areas */
 MEMORY
 {
-  /* Application firmware area (bank1 + bank2 sectors 0..5). */
-  FLASH (rx)          : ORIGIN = 0x08000000, LENGTH = 1792K
+  /* Application firmware area (bank1 + bank2 sectors 0..3). */
+  FLASH (rx)          : ORIGIN = 0x08000000, LENGTH = 1536K
+  /* Persistent global wavetable pool: bank2 sectors 4 and 5. */
+  WAVETABLE_FLASH (rx): ORIGIN = 0x08180000, LENGTH = 256K
   /* Reserved future Groove bank: bank2 sectors 6 and 7. */
   GROOVE_FLASH (rx)   : ORIGIN = 0x081C0000, LENGTH = 256K
   DTCMRAM (xrw)  : ORIGIN = 0x20000000, LENGTH = 128K
@@ -62,6 +64,9 @@ MEMORY
   ITCMRAM (xrw)  : ORIGIN = 0x00000000, LENGTH = 64K
 }
 
+__wavetable_flash_start__ = ORIGIN(WAVETABLE_FLASH);
+__wavetable_flash_end__ = ORIGIN(WAVETABLE_FLASH) + LENGTH(WAVETABLE_FLASH);
+ASSERT(LENGTH(WAVETABLE_FLASH) == 256K, "Wavetable Flash pool must span two sectors");
 __groove_flash_start__ = ORIGIN(GROOVE_FLASH);
 __groove_flash_end__ = ORIGIN(GROOVE_FLASH) + LENGTH(GROOVE_FLASH);
 ASSERT(LENGTH(GROOVE_FLASH) == 256K, "Groove Flash bank must span two sectors");

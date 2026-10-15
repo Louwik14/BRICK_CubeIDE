@@ -12,10 +12,7 @@
 extern "C" {
 #endif
 
-#define WAVETABLE_POOL_PATH_MAX        SAMPLE_GLOBAL_POOL_PATH_MAX
-
-_Static_assert(WAVETABLE_POOL_MAX_SLOTS <= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
-               "Wavetable slots must fit the active global audio asset pool");
+#define WAVETABLE_POOL_PATH_MAX        (160U)
 
 typedef enum
 {
@@ -100,6 +97,9 @@ typedef struct
     uint32_t cost_bytes_aligned;
     wavetable_result_t error;
     uint32_t flags;
+    uint64_t stable_id;
+    uint32_t flash_offset;
+    uint8_t persistent;
     wavetable_preview_t preview;
     wavetable_mipmap_view_t mipmap;
 } wavetable_slot_t;
@@ -164,6 +164,11 @@ const float *wavetable_pool_get_data(uint16_t wavetable_slot);
 const wavetable_mipmap_view_t *wavetable_pool_get_mipmap_view(uint16_t wavetable_slot);
 const wavetable_preview_t *wavetable_pool_get_preview(uint16_t wavetable_slot);
 const wavetable_preview_t *wavetable_pool_get_preview_for_global(uint16_t global_slot);
+uint8_t wavetable_pool_resolve_global(uint16_t global_slot,
+                                      uint16_t *out_wavetable_slot);
+uint8_t wavetable_pool_find_by_path(const char *path,
+                                    uint16_t *out_wavetable_slot);
+uint64_t wavetable_pool_get_stable_id(uint16_t wavetable_slot);
 uint32_t wavetable_pool_get_used_bytes(void);
 uint32_t wavetable_pool_get_free_bytes(void);
 wavetable_result_t wavetable_pool_get_last_result(void);

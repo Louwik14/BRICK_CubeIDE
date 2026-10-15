@@ -79,6 +79,8 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_global_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_audio_backing.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/wavetable_pool.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/wavetable_flash_backend.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/wavetable_flash_store.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/control_audio_transport.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_clipboard.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_clipboard_storage.c"
