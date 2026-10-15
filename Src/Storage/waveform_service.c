@@ -731,7 +731,9 @@ static uint8_t waveform_pcm_request(const waveform_source_t *source,
 uint8_t waveform_rec_current_source(waveform_source_t *out_source)
 {
     rec_source_snapshot_t current;
-    if((out_source == 0) || (rec_source_current_snapshot(&current) == 0U)
+    const char *path = 0;
+    if((out_source == 0)
+            || (rec_source_current_path(&path, &current) == 0U)
             || (current.key.domain != SAMPLE_AUDIO_DOMAIN_REC)
             || (current.key.generation == 0U)
             || (current.registration_epoch == 0U)
@@ -739,10 +741,11 @@ uint8_t waveform_rec_current_source(waveform_source_t *out_source)
     {
         return 0U;
     }
+    (void)path;
     out_source->key = current.key;
     out_source->registration_epoch = current.registration_epoch;
     out_source->frame_count = current.frame_count;
-    return (waveform_rec_summary(out_source) != 0) ? 1U : 0U;
+    return 1U;
 }
 
 uint16_t waveform_rec_peak(const waveform_source_t *source)

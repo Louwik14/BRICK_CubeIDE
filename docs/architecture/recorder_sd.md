@@ -198,6 +198,12 @@ REC EDIT consomment ensuite le même résumé final, sans relecture du WAV. Apr�
 RETURN/SAVE, REC MODE reprend explicitement la cible live REC BUS même si la
 dernière génération REC reste disponible pour l'undo ou le Streamer.
 
+L'identité éditable de `REC_SOURCE CURRENT` et son résumé résident ne dépendent
+pas de la projection de playback du Streamer. Un échec de chargement des pages
+de démarrage peut empêcher l'audition, mais ne masque ni la waveform REC EDIT
+ni SAVE. Pendant RECORDING, l'échelle verticale est absolue en PCM16 pleine
+échelle; elle n'est pas renormalisée sur le pic courant.
+
 ## Navigation waveform REC EDIT
 
 Le zoom horizontal va désormais de l'overview à 126 frames visibles sur les

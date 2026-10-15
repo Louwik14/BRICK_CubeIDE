@@ -420,23 +420,12 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
             if (waveform_request_recording_overview(inner_w, columns,
                     &captured_frames, &domain_frames) == WAVEFORM_RESULT_READY)
             {
-                uint16_t peak = 4096U;
-                for (uint8_t col = 0U; col < inner_w; ++col)
-                {
-                    const int16_t min = columns[col].min;
-                    const int16_t max = columns[col].max;
-                    const uint16_t amin = (min == INT16_MIN) ? 32768U
-                        : (uint16_t)((min < 0) ? -min : min);
-                    const uint16_t amax = (max == INT16_MIN) ? 32768U
-                        : (uint16_t)((max < 0) ? -max : max);
-                    if (amin > peak) peak = amin;
-                    if (amax > peak) peak = amax;
-                }
                 const int cy = y + (h / 2);
                 for (uint8_t col = 0U; col < inner_w; ++col)
                     ui_page_audio_rec_draw_minmax_column(x + 1 + col,
                         y + 1, h - 2, cy, columns[col].min,
-                        columns[col].max, peak, 256U);
+                        columns[col].max,
+                        SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE, 256U);
             }
             (void)captured_frames;
             (void)domain_frames;
