@@ -1,6 +1,8 @@
 #ifndef PERSISTENCE_WORKSPACE_H
 #define PERSISTENCE_WORKSPACE_H
 
+#include "Import/dx7_sysex.h"
+#include "Storage/patch_product.h"
 #include "Storage/persistent_control_codec.h"
 #include "Storage/persistent_pattern_control.h"
 
@@ -10,8 +12,27 @@ typedef enum
     PERSISTENCE_WORKSPACE_PROJECT_SAVE,
     PERSISTENCE_WORKSPACE_PROJECT_RESTORE,
     PERSISTENCE_WORKSPACE_PATTERN_IO,
-    PERSISTENCE_WORKSPACE_GROOVE_BUILD
+    PERSISTENCE_WORKSPACE_GROOVE_BUILD,
+    PERSISTENCE_WORKSPACE_PATCH_DX7_BOOT
 } persistence_workspace_owner_t;
+
+#define PERSISTENCE_PATCH_DX7_FILE_BUFFER_BYTES (32U * 1024U)
+#define PERSISTENCE_PATCH_DX7_FILE_COUNT_MAX PATCH_PRODUCT_SLOT_COUNT
+#define PERSISTENCE_PATCH_DX7_FILENAME_BYTES 256U
+
+typedef struct
+{
+    char filenames[PERSISTENCE_PATCH_DX7_FILE_COUNT_MAX]
+                  [PERSISTENCE_PATCH_DX7_FILENAME_BYTES];
+    uint8_t file_bytes[PERSISTENCE_PATCH_DX7_FILE_BUFFER_BYTES];
+    dx7_voice_t voices[PATCH_PRODUCT_SLOT_COUNT];
+    uint16_t slots[PATCH_PRODUCT_SLOT_COUNT];
+    persist_control_patch_t patch;
+    persist_codec_patch_staging_t decoded;
+} persistence_patch_dx7_boot_workspace_t;
+
+_Static_assert(sizeof(persistence_patch_dx7_boot_workspace_t) == 114480U,
+               "Patch DX7 boot workspace size changed");
 
 typedef struct
 {
@@ -77,6 +98,7 @@ persistence_project_save_workspace_t *persistence_workspace_acquire_project_save
 persistence_project_restore_workspace_t *persistence_workspace_acquire_project_restore(void);
 persistence_pattern_io_workspace_t *persistence_workspace_acquire_pattern_io(void);
 persistence_groove_build_workspace_t *persistence_workspace_acquire_groove_build(void);
+persistence_patch_dx7_boot_workspace_t *persistence_workspace_acquire_patch_dx7_boot(void);
 void persistence_workspace_release(persistence_workspace_owner_t owner);
 persistence_workspace_owner_t persistence_workspace_owner(void);
 

@@ -59,7 +59,6 @@ void control_domain_init(void)
     project_load_quiesce_init();
 
     sd_access_gate_init();
-    groove_bank_init();
     wav_convert_init();
     multi_sample_import_init();
     waveform_cache_init();
@@ -90,9 +89,10 @@ void control_domain_start(float postgain, float output_compensation)
     (void)param_registry_commit_global(PARAM_POST_GAIN, postgain);
     (void)param_registry_commit_global(PARAM_OUTPUT_COMP, output_compensation);
     brick6_boot_apply_param_defaults();
+    patch_product_init();
+    groove_bank_init();
     project_control_init();
     pattern_live_init();
-    patch_product_init();
     project_product_init();
     ui_boot_loading_begin();
     undo_v2_init();

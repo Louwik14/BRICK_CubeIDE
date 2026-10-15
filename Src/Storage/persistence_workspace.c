@@ -9,6 +9,7 @@ typedef union
     persistence_project_restore_workspace_t project_restore;
     persistence_pattern_io_workspace_t pattern_io;
     persistence_groove_build_workspace_t groove_build;
+    persistence_patch_dx7_boot_workspace_t patch_dx7_boot;
 } persistence_workspace_storage_t;
 
 #define PERSISTENCE_WORKSPACE_ALIGN_BYTES (32U)
@@ -63,6 +64,14 @@ persistence_groove_build_workspace_t *persistence_workspace_acquire_groove_build
     g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_GROOVE_BUILD;
     persist_debug_workspace_owner(g_persistence_workspace_owner);
     return &g_persistence_workspace.groove_build;
+}
+
+persistence_patch_dx7_boot_workspace_t *persistence_workspace_acquire_patch_dx7_boot(void)
+{
+    if (g_persistence_workspace_owner != PERSISTENCE_WORKSPACE_FREE) return 0;
+    g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_PATCH_DX7_BOOT;
+    persist_debug_workspace_owner(g_persistence_workspace_owner);
+    return &g_persistence_workspace.patch_dx7_boot;
 }
 
 void persistence_workspace_release(persistence_workspace_owner_t owner)

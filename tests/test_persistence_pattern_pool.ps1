@@ -63,6 +63,10 @@ $codecHeader = Get-Content -Raw (Join-Path $root 'Inc/Storage/persistent_control
 $codec = Get-Content -Raw (Join-Path $root 'Src/Storage/persistent_control_codec.c')
 $control = Get-Content -Raw (Join-Path $root 'Src/Storage/persistent_pattern_control.c')
 $workspace = Get-Content -Raw (Join-Path $root 'Inc/Storage/persistence_workspace.h')
+$workspaceSource = Get-Content -Raw (Join-Path $root 'Src/Storage/persistence_workspace.c')
+$patchProduct = Get-Content -Raw (Join-Path $root 'Src/Storage/patch_product.c')
+$timing = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_timing.c')
+$controlDomain = Get-Content -Raw (Join-Path $root 'Src/App/control_domain.c')
 
 Assert-True ($model.Contains('#define PERSIST_CONTROL_PLAY_ITEM_COUNT            4U')) `
     'persistent PLAY capacity is not four'
@@ -81,9 +85,25 @@ Assert-True ($control.Contains('step->lock_first=sequence->lock_count') -and
     $control.Contains('&x->sequence.locks[st->lock_first+i]')) `
     'CONTROL capture/apply does not use the lane pool'
 Assert-True ($workspace.Contains('PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY (152U)') -and
+    $workspace.Contains('sizeof(persistence_patch_dx7_boot_workspace_t) == 114480U') -and
     $workspace.Contains('sizeof(persistence_pattern_io_workspace_t) == 261312U') -and
     $workspace.Contains('sizeof(persistence_project_restore_workspace_t) == 268544U')) `
     'workspace capacity proofs are missing'
+Assert-True ($workspace.Contains('PERSISTENCE_WORKSPACE_PATCH_DX7_BOOT') -and
+    $workspaceSource.Contains('persistence_patch_dx7_boot_workspace_t patch_dx7_boot;') -and
+    $patchProduct.Contains('persistence_workspace_acquire_patch_dx7_boot()') -and
+    $patchProduct.Contains('BRICK_FATAL("PATCH_DX7_BOOT_WORKSPACE_BUSY")') -and
+    (-not $patchProduct.Contains('g_patch_dx7_boot'))) `
+    'DX7 boot scratch is not exclusively owned by the persistence workspace'
+Assert-True ($timing.Contains('memset(g_pending,0,sizeof(g_pending))') -and
+    $timing.Contains('memset(g_pending_key,0,sizeof(g_pending_key))')) `
+    'Groove workspace aliases survive release'
+$patchInit = $controlDomain.IndexOf('patch_product_init();')
+Assert-True ($patchInit -ge 0 -and
+    $patchInit -lt $controlDomain.IndexOf('groove_bank_init();') -and
+    $patchInit -lt $controlDomain.IndexOf('project_control_init();') -and
+    $patchInit -lt $controlDomain.IndexOf('pattern_live_init();')) `
+    'DX7 import no longer precedes Project, Pattern and Groove initialization'
 
 $irregular = @()
 for ($pair = 0; $pair -lt 15; ++$pair) {

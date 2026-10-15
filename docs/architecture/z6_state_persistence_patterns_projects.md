@@ -463,7 +463,8 @@ ne dedupliquent et ne rejouent plus de transaction de commandes live.
 Les tailles de reference ARM finales sont `Pattern = 146 092`,
 `PreparedPattern = 8 876`, `PreparedAudio = 8 728` et slot
 `PreparedAudio = 8 736` octets. `PROJECT_SAVE` occupe 137 308 octets,
-`GROOVE_BUILD` 82 560, `PATTERN_IO` 261 312 et `PROJECT_RESTORE` 268 544.
+`GROOVE_BUILD` 82 560, `PATCH_DX7_BOOT` 114 480, `PATTERN_IO` 261 312
+et `PROJECT_RESTORE` 268 544.
 Le workspace Persistence, borne par ce dernier membre, occupe donc 268 544
 octets. Project Save porte au plus les 152 descriptors du catalogue produit et
 ne reserve plus de DTO Pattern ni de record de banque. La
@@ -502,7 +503,14 @@ persistante ne subsiste apres publication.
 Le workspace Persistence est une union a ownership exclusif. Pattern IO le garde
 jusqu'au commit/annulation du candidat. Project Save porte son scratch d'encodage
 dans son propre membre jusqu'au commit/cleanup; Project Restore porte de meme
-son scratch codec et ses DTO finaux dans son membre Restore. L'ancienne zone
-record partagee et sa lease multi-owner n'existent plus. Aucun pointeur scratch
-ne survit au changement d'owner de l'union; cette fusion reduit aussi le pic
-SDRAM de 25 216 octets.
+son scratch codec et ses DTO finaux dans son membre Restore. L'import DX7 prend
+l'owner `PATCH_DX7_BOOT` uniquement pendant le scan synchrone de boot, avant les
+initialisations Project, Pattern et Groove, puis libere le workspace avant de
+quitter `patch_product_init()`. Une acquisition impossible a cette phase est une
+violation d'invariant de boot, jamais une attente ni un import silencieusement
+ignore. Les alias temporaires de compilation Groove sont effaces lors du commit
+ou de l'abandon avant que l'owner change. L'ancienne zone record partagee et sa
+lease multi-owner n'existent plus. Aucun pointeur scratch ne survit au changement
+d'owner de l'union. La mutualisation DX7 supprime un symbole SDRAM de 114 480
+octets et les 16 octets de padding necessaires a l'objet 32-byte suivant, soit
+114 496 octets SDRAM nets; le workspace reste strictement a 268 544 octets.
