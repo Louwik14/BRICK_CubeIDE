@@ -1,7 +1,5 @@
 static void wavetable_load_job_boot_init(void)
 {
-    g_wavetable_prepare_base = NULL;
-    g_wavetable_prepare_mipmap = NULL;
     memset(&g_wavetable_load_job, 0, sizeof(g_wavetable_load_job));
     g_wavetable_load_job.state = WAVETABLE_LOAD_IDLE;
     wavetable_pool_candidate_init(&g_wavetable_candidate);
@@ -26,8 +24,6 @@ void wavetable_pool_load_async_cancel(void)
         (void)f_unlink(job->temp_path);
     }
     wavetable_pool_candidate_release(&g_wavetable_candidate);
-    if (g_wavetable_prepare_base != NULL)
-        wavetable_prepare_workspace_release();
     memset(job, 0, sizeof(*job));
     job->state = WAVETABLE_LOAD_IDLE;
 }
@@ -105,16 +101,10 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
     }
     if (g_wavetable_pool.slots[wavetable_slot].state
         == WAVETABLE_SLOT_RETIRING) return 0U;
-    if (wavetable_prepare_workspace_acquire() == 0U)
-    {
-        wavetable_pool_set_last(WAVETABLE_RESULT_SD_BUSY);
-        return 0U;
-    }
     memset(job, 0, sizeof(*job));
     wavetable_pool_candidate_init(&g_wavetable_candidate);
     if (wavetable_pool_copy_path(job->path, sizeof(job->path), path) == 0U)
     {
-        wavetable_prepare_workspace_release();
         return 0U;
     }
     job->wavetable_slot = wavetable_slot;
@@ -801,11 +791,7 @@ static void wavetable_pool_load_async_step(void)
             else if ((job->cleanup_phase <= 2U) && (job->temp_path[0] != '\0'))
             { (void)f_unlink(job->temp_path); job->cleanup_phase = 3U; }
             else
-            {
-                wavetable_pool_candidate_release(candidate);
-                wavetable_prepare_workspace_release();
-                job->state = WAVETABLE_LOAD_DONE;
-            }
+            { wavetable_pool_candidate_release(candidate); job->state = WAVETABLE_LOAD_DONE; }
             break;
         default:
             break;
@@ -825,9 +811,6 @@ void wavetable_pool_load_async_service(void)
         const uint32_t old_cycle = job->cycle;
         const uint16_t old_band = job->band;
         wavetable_pool_load_async_step();
-        if ((job->state == WAVETABLE_LOAD_DONE)
-            && (g_wavetable_prepare_base != NULL))
-            wavetable_prepare_workspace_release();
         if ((job->state == WAVETABLE_LOAD_IDLE)
             || (job->state == WAVETABLE_LOAD_DONE))
             break;
@@ -895,15 +878,9 @@ static wavetable_result_t wavetable_pool_load_wav_transactional(
         wavetable_pool_set_last(WAVETABLE_RESULT_INVALID_ARG);
         return WAVETABLE_RESULT_INVALID_ARG;
     }
-    if (wavetable_prepare_workspace_acquire() == 0U)
-    {
-        wavetable_pool_set_last(WAVETABLE_RESULT_SD_BUSY);
-        return WAVETABLE_RESULT_SD_BUSY;
-    }
     char *const cache_path = g_wavetable_transaction_paths[0];
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
     {
-        wavetable_prepare_workspace_release();
         wavetable_pool_set_last(WAVETABLE_RESULT_SD_BUSY);
         return WAVETABLE_RESULT_SD_BUSY;
     }
@@ -1026,7 +1003,6 @@ done:
         wavetable_pool_candidate_release(candidate);
     }
     wavetable_pool_set_last(result);
-    wavetable_prepare_workspace_release();
     return result;
 }
 

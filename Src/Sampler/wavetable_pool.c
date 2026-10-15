@@ -22,7 +22,6 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/wavetable_flash_store.h"
-#include "Storage/persistence_workspace.h"
 
 #define WAVETABLE_POOL_IO_BYTES (SD_SCHEDULER_HEAVY_MAX_DATA_BYTES)
 #define WAVETABLE_LOAD_SERVICE_BUDGET_MS (2U)
@@ -66,25 +65,11 @@ STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_work_real[WAVETABLE_FRAME_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_work_imag[WAVETABLE_FRAME_SAMPLE_COUNT];
-static float *g_wavetable_prepare_base;
-static float *g_wavetable_prepare_mipmap;
-
-static uint8_t wavetable_prepare_workspace_acquire(void)
-{
-    persistence_wavetable_prepare_workspace_t *const workspace =
-        persistence_workspace_acquire_wavetable_prepare();
-    if (workspace == NULL) return 0U;
-    g_wavetable_prepare_base = workspace->base;
-    g_wavetable_prepare_mipmap = workspace->mipmap;
-    return 1U;
-}
-
-static void wavetable_prepare_workspace_release(void)
-{
-    g_wavetable_prepare_base = NULL;
-    g_wavetable_prepare_mipmap = NULL;
-    persistence_workspace_release(PERSISTENCE_WORKSPACE_WAVETABLE_PREPARE);
-}
+STORAGE_SCRATCH_SDRAM static float
+    g_wavetable_prepare_base[WAVETABLE_FLASH_MAX_FRAMES
+                             * WAVETABLE_FRAME_SAMPLE_COUNT];
+STORAGE_SCRATCH_SDRAM static float
+    g_wavetable_prepare_mipmap[WAVETABLE_FLASH_MAX_FRAMES * 2048U];
 static const uint8_t g_wavetable_mipmap_upstream_commit_sha1[20] = {
     0x0dU, 0x9cU, 0xbfU, 0x04U, 0x40U, 0xf0U, 0x55U, 0x5eU, 0x25U, 0x44U,
     0xccU, 0x1eU, 0xb0U, 0x19U, 0xb3U, 0x16U, 0x75U, 0x63U, 0x70U, 0x08U
