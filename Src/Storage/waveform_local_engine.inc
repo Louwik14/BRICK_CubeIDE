@@ -1,10 +1,10 @@
 /* REC editor local engine, adapted from 363640867's editor tile cache.
  * Its PCM and 16/64/256 summaries stay hot independently of audio voices.
  * Only STORAGE fills tiles; the UI sees columns through waveform_service. */
-#define WAVEFORM_LOCAL_TILE_COUNT 16U
+#define WAVEFORM_LOCAL_TILE_COUNT 4U
 #define WAVEFORM_LOCAL_TILE_FRAMES 24000U
 #define WAVEFORM_LOCAL_CHUNK_BYTES WAVEFORM_LOCAL_READ_BYTES
-#define WAVEFORM_LOCAL_REQUEST_MAX 16U
+#define WAVEFORM_LOCAL_REQUEST_MAX 4U
 #define WAVEFORM_LOCAL_MAX_VIEW_TILES WAVEFORM_LOCAL_TILE_COUNT
 #define WAVEFORM_LOCAL_MAX_DETAIL_FRAMES \
     ((WAVEFORM_LOCAL_TILE_COUNT - 1U) * WAVEFORM_LOCAL_TILE_FRAMES)
