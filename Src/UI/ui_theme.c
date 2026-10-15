@@ -15,6 +15,7 @@
 #define UI_THEME_PREF_MAGIC 0x46504955UL
 #define UI_THEME_PREF_VERSION 2U
 #define UI_THEME_PREF_LEGACY_VERSION 1U
+#define UI_THEME_DEFAULT_SHOW_CPU_LOAD 0U
 
 typedef struct
 {
@@ -44,7 +45,7 @@ static const ui_theme_t g_ui_themes[UI_THEME_COUNT] = {
 };
 
 static ui_theme_id_t g_ui_theme_id = UI_THEME_CLASSIC;
-static uint8_t g_ui_show_cpu_load = 1U;
+static uint8_t g_ui_show_cpu_load = UI_THEME_DEFAULT_SHOW_CPU_LOAD;
 
 static uint32_t ui_theme_crc(const uint8_t *data, uint32_t size)
 {
@@ -109,7 +110,7 @@ static uint8_t ui_theme_preferences_save(void)
 void ui_theme_init(void)
 {
     g_ui_theme_id = UI_THEME_CLASSIC;
-    g_ui_show_cpu_load = 1U;
+    g_ui_show_cpu_load = UI_THEME_DEFAULT_SHOW_CPU_LOAD;
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_BACKGROUND) == 0U) return;
     ui_theme_preferences_t prefs;
     uint8_t loaded = 0U;
