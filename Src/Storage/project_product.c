@@ -34,10 +34,9 @@
 #include <stdio.h>
 #include <string.h>
 
-_Static_assert((2U * SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
-                    + MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
-                   <= PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY,
-               "Project Save asset snapshot capacity is too small");
+_Static_assert(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
+                   == PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY,
+               "Project Save asset capacity must match the product catalogue");
 _Static_assert(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
                    == PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY,
                "Project Restore asset capacity must match the product pool");

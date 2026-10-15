@@ -14,6 +14,7 @@
 #include "NoteFx/note_fx_contract.h"
 #include "Seq/seq_timing.h"
 #include "Seq/seq_traversal.h"
+#include "Seq/seq_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,7 +36,7 @@ extern "C" {
 #define PERSIST_CONTROL_MASTER_COUNT               1U
 #define PERSIST_CONTROL_MASTER_ID                 15U
 #define PERSIST_CONTROL_STEP_COUNT                64U
-#define PERSIST_CONTROL_PLAY_ITEM_COUNT            8U
+#define PERSIST_CONTROL_PLAY_ITEM_COUNT            4U
 #define PERSIST_CONTROL_CHILD_PLAY_ITEM_COUNT      1U
 #define PERSIST_CONTROL_STEP_LOCK_COUNT            32U
 #define PERSIST_CONTROL_NOTE_FX_BYTES               NOTE_FX_CHAIN_CANONICAL_PARAM_COUNT
@@ -45,7 +46,7 @@ extern "C" {
 #define PERSIST_CONTROL_PATTERN_PER_BANK           16U
 #define PERSIST_CONTROL_MACRO_COUNT                 14U
 #define PERSIST_CONTROL_MACRO_LOCK_COUNT           32U
-#define PERSIST_CONTROL_ASSET_COUNT              1024U
+#define PERSIST_CONTROL_ASSET_COUNT               152U
 #define PERSIST_CONTROL_ASSET_PATH_BYTES          160U
 #define PERSIST_CONTROL_PATCH_NAME_BYTES           32U
 #define PERSIST_CONTROL_TRACK_ASSET_COUNT           3U
@@ -211,12 +212,12 @@ typedef struct
 
 typedef struct
 {
+    uint16_t lock_first;
     uint8_t trigger;
     uint8_t roll;
     uint8_t play_count;
     uint8_t lock_count;
     persist_control_play_item_t play[PERSIST_CONTROL_PLAY_ITEM_COUNT];
-    persist_control_step_lock_t locks[PERSIST_CONTROL_STEP_LOCK_COUNT];
 } persist_control_step_t;
 
 typedef struct
@@ -228,6 +229,8 @@ typedef struct
     uint8_t page_mask;
     seq_track_timing_config_t timing;
     persist_control_step_t steps[PERSIST_CONTROL_STEP_COUNT];
+    persist_control_step_lock_t locks[SEQ_PLOCK_POOL_CAP_PER_TRACK];
+    uint16_t lock_count;
 } persist_control_sequence_t;
 
 typedef struct
@@ -380,10 +383,22 @@ _Static_assert(PERSIST_CONTROL_FIRST_GROUP_CHILD_ID == 8U,
                "GROUP child persistent identity changed");
 _Static_assert(PERSIST_CONTROL_MASTER_ID == 15U,
                "harmonic Master persistent identity changed");
-_Static_assert(PERSIST_CONTROL_PLAY_ITEM_COUNT == 8U,
+_Static_assert(PERSIST_CONTROL_PLAY_ITEM_COUNT == 4U,
                "top-level and GROUP-master PLAY capacity changed");
 _Static_assert(PERSIST_CONTROL_CHILD_PLAY_ITEM_COUNT == 1U,
                "GROUP-child PLAY capacity changed");
+_Static_assert(PERSIST_CONTROL_STEP_LOCK_COUNT == 32U,
+               "per-step P-lock capacity changed");
+_Static_assert(SEQ_PLOCK_POOL_CAP_PER_TRACK == 512U,
+               "per-lane P-lock capacity changed");
+_Static_assert(sizeof(persist_control_step_lock_t) == 12U,
+               "persistent P-lock alignment or size changed");
+_Static_assert(sizeof(persist_control_step_t) == 26U,
+               "persistent step size changed");
+_Static_assert(sizeof(persist_control_sequence_t) == 7892U,
+               "persistent lane sequence size changed");
+_Static_assert(sizeof(persist_control_pattern_t) == 146092U,
+               "persistent Pattern size changed");
 
 #ifdef __cplusplus
 }

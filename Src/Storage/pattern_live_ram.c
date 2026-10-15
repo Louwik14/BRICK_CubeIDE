@@ -68,7 +68,7 @@ static uint8_t g_pattern_save_bank;
 static uint8_t g_pattern_save_pattern;
 static uint8_t g_pattern_active_reconcile_state;
 
-_Static_assert(sizeof(persist_control_pattern_t) == 459372U,
+_Static_assert(sizeof(persist_control_pattern_t) == 146092U,
                "Working Pattern departure snapshot size changed");
 
 static void pattern_debug_state(void)

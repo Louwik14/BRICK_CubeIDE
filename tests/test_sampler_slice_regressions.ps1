@@ -169,7 +169,7 @@ Assert-True ($paramSpecSource.Contains(
     'LENGTH parameter is still exposed as END'
 Assert-True (-not $paramSpecSource.Contains('PARAM_SAMPLER_END')) `
     'legacy END parameter still exists'
-Assert-True ($persistenceHeader.Contains('#define PERSIST_CODEC_VERSION 20U')) `
+Assert-True ($persistenceHeader.Contains('#define PERSIST_CODEC_VERSION 21U')) `
     'persistence format was not bumped for LENGTH semantics'
 
 $holdSource = Get-Content -Raw (Join-Path $PSScriptRoot `

@@ -124,12 +124,14 @@ _Static_assert(PERSIST_CONTROL_ENTITY_COUNT == SEQ_LANE_CAPACITY,
                "persistence and SEQ lane capacities diverged");
 _Static_assert(PERSIST_CONTROL_STEP_COUNT == SEQ_MAX_STEPS,
                "persistence and SEQ step capacities diverged");
-_Static_assert(PERSIST_CONTROL_PLAY_ITEM_COUNT == 8U,
+_Static_assert(PERSIST_CONTROL_PLAY_ITEM_COUNT == 4U,
                "persistence PLAY width changed");
 _Static_assert(SEQ_PLAY_MAX_CAPACITY == 4U,
-               "runtime PLAY migration width changed");
+               "runtime PLAY width changed");
 _Static_assert(PERSIST_CONTROL_STEP_LOCK_COUNT == SEQ_STEP_MAX_LOCKS,
                "persistence and SEQ p-lock capacities diverged");
+_Static_assert(SEQ_PLOCK_POOL_CAP_PER_TRACK == SEQ_ENGINE_LOCK_POOL_CAPACITY,
+               "persistence and prepared SEQ lane pools diverged");
 _Static_assert(PERSIST_CONTROL_NOTE_FX_BYTES == sizeof(note_fx_chain_state_t),
                "persistence and fixed Note FX chain diverged");
 _Static_assert(PERSIST_CONTROL_MOD_LFO_COUNT == MOD_LFO_COUNT_PER_TRACK,
@@ -430,7 +432,57 @@ static uint8_t capture_plock_value(param_id_t id, seq_value16_t raw,
     }
     return 1U;
 }
-static uint8_t capture_sequence(uint8_t entity,persist_control_entity_t*out){out->sequence.length=seq_model_get_track_length(entity);if(seq_runtime_get_track_div(entity,&out->sequence.division)==0U||seq_runtime_get_track_traversal(entity,&out->sequence.direction,&out->sequence.rotate)==0U||seq_runtime_get_track_timing(entity,&out->sequence.timing)==0U)return 0U;for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){persist_control_step_t*step=&out->sequence.steps[s];step->trigger=seq_model_get_trig(entity,s);step->roll=seq_model_get_step_roll(entity,s);if(capture_play(entity,s,step)==0U)return 0U;step->lock_count=seq_model_step_param_plock_count(entity,s);for(uint8_t i=0U;i<step->lock_count;++i){seq_plock_entry_t raw;if(seq_model_step_param_plock_get_at(entity,s,i,&raw)==0U)return 0U;if(raw.set_id==SEQ_PLOCK_SET_TONE){if((raw.param_slot>=SEQ_PARAM_TONE_SLOT_COUNT)||persist_key_tone_slot_to_disk(raw.param_slot,&step->locks[i].parameter)==0U)return 0U;step->locks[i].kind=PERSIST_VALUE_FLOAT32;step->locks[i].value.f32=(float)raw.value16/65535.0f;}else{param_id_t id;if(seq_param_iface_slot_to_param(entity,raw.set_id,raw.param_slot,&id)==0U||persist_key_param_to_disk(id,&step->locks[i].parameter)==0U||capture_plock_value(id,raw.value16,&step->locks[i])==0U)return 0U;}step->locks[i].flags=raw.flags;}}return 1U;}
+static uint8_t capture_sequence(uint8_t entity,persist_control_entity_t*out)
+{
+    persist_control_sequence_t *const sequence=&out->sequence;
+    sequence->length=seq_model_get_track_length(entity);
+    sequence->lock_count=0U;
+    if(seq_runtime_get_track_div(entity,&sequence->division)==0U
+            ||seq_runtime_get_track_traversal(entity,&sequence->direction,
+                                              &sequence->rotate)==0U
+            ||seq_runtime_get_track_timing(entity,&sequence->timing)==0U)
+        return 0U;
+    for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s)
+    {
+        persist_control_step_t*step=&sequence->steps[s];
+        step->trigger=seq_model_get_trig(entity,s);
+        step->roll=seq_model_get_step_roll(entity,s);
+        if(capture_play(entity,s,step)==0U)return 0U;
+        step->lock_first=sequence->lock_count;
+        step->lock_count=seq_model_step_param_plock_count(entity,s);
+        if((step->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT)
+                ||(((uint32_t)step->lock_first+step->lock_count)
+                    >SEQ_PLOCK_POOL_CAP_PER_TRACK))return 0U;
+        for(uint8_t i=0U;i<step->lock_count;++i)
+        {
+            persist_control_step_lock_t *const lock=
+                &sequence->locks[step->lock_first+i];
+            seq_plock_entry_t raw;
+            if(seq_model_step_param_plock_get_at(entity,s,i,&raw)==0U)return 0U;
+            if(raw.set_id==SEQ_PLOCK_SET_TONE)
+            {
+                if((raw.param_slot>=SEQ_PARAM_TONE_SLOT_COUNT)
+                        ||persist_key_tone_slot_to_disk(raw.param_slot,
+                                                       &lock->parameter)==0U)
+                    return 0U;
+                lock->kind=PERSIST_VALUE_FLOAT32;
+                lock->value.f32=(float)raw.value16/65535.0f;
+            }
+            else
+            {
+                param_id_t id;
+                if(seq_param_iface_slot_to_param(entity,raw.set_id,
+                                                 raw.param_slot,&id)==0U
+                        ||persist_key_param_to_disk(id,&lock->parameter)==0U
+                        ||capture_plock_value(id,raw.value16,lock)==0U)
+                    return 0U;
+            }
+            lock->flags=raw.flags;
+        }
+        sequence->lock_count=(uint16_t)(sequence->lock_count+step->lock_count);
+    }
+    return 1U;
+}
 static uint8_t capture_note_fx(uint8_t entity,const persist_entity_caps_t*caps,persist_control_entity_t*out){if(caps==NULL)return 0U;if(caps->note_fx_owner==0U){memset(&out->note_fx,0,sizeof(out->note_fx));return 1U;}return note_fx_chain_state_capture_track(entity,&out->note_fx);}
 static uint8_t capture_product_state(uint8_t entity,persist_control_entity_t*out)
 {
@@ -841,7 +893,85 @@ static uint8_t apply_plock_value(param_id_t id,
 }
 
 static uint8_t apply_sequence(uint8_t e,const persist_control_entity_t*x,
-    const persistent_pattern_prepared_t *prepared){uint16_t resolved_index=0U;seq_model_set_track_length(e,x->sequence.length);seq_runtime_set_track_div(e,x->sequence.division);seq_runtime_set_track_traversal(e,x->sequence.direction,x->sequence.rotate);seq_runtime_set_track_timing(e,&x->sequence.timing);for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t*st=&x->sequence.steps[s];seq_model_set_trig(e,s,st->trigger);seq_model_set_step_roll(e,s,st->roll);seq_model_play_clear_step(e,s);seq_model_step_param_plock_clear(e,s);const uint8_t migrated_play_count=(st->play_count>SEQ_PLAY_MAX_CAPACITY)?SEQ_PLAY_MAX_CAPACITY:st->play_count;for(uint8_t v=0U;v<migrated_play_count;++v){const persist_control_play_item_t*p=&st->play[v];if(((p->present_mask&SEQ_STEP_PLAY_PRESENT_NOTE)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_NOTE,p->note)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_VELOCITY)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_VELOCITY,p->velocity)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_LENGTH)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_LENGTH,p->length)==0U)||((p->present_mask&SEQ_STEP_PLAY_PRESENT_MICROTIMING)!=0U&&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_MICROTIMING,p->microtiming)==0U))return 0U;}for(uint8_t i=0U;i<st->lock_count;++i){param_id_t id;uint8_t set;seq_param_slot_t slot;uint8_t found=0U;seq_value16_t value;if(prepared!=NULL){if(resolved_index>=prepared->lock_count[e]||!seq_param_iface_key_to_address(prepared->locks[e][resolved_index++],&set,&slot))return 0U;if(set==SEQ_PLOCK_SET_TONE)value=(seq_value16_t)(st->locks[i].value.f32*65535.0f+0.5f);else if(!seq_param_iface_slot_to_param_for_type(track_runtime_type_from_ui((track_type_t)prepared->type[e]),set,slot,&id)||!apply_plock_value(id,&st->locks[i],&value))return 0U;found=1U;}else if(persist_key_tone_slot_from_disk(st->locks[i].parameter,&slot)!=0U){set=SEQ_PLOCK_SET_TONE;value=(seq_value16_t)(st->locks[i].value.f32*65535.0f+0.5f);found=1U;}else{if(persist_key_param_from_disk(st->locks[i].parameter,&id)==0U||apply_plock_value(id,&st->locks[i],&value)==0U)return 0U;for(set=0U;set<SEQ_PLOCK_SET_COUNT;++set)if(seq_param_iface_param_to_slot(e,set,id,&slot)!=0U){found=1U;break;}}if(found==0U)return 0U;seq_plock_op_status_t status=seq_model_step_plock_upsert(e,s,set,slot,value,st->locks[i].flags);if(status!=SEQ_PLOCK_OP_CREATED&&status!=SEQ_PLOCK_OP_UPDATED)return 0U;}}return (prepared==NULL||resolved_index==prepared->lock_count[e])?1U:0U;}
+    const persistent_pattern_prepared_t *prepared)
+{
+    uint16_t resolved_index=0U;
+    seq_model_set_track_length(e,x->sequence.length);
+    seq_runtime_set_track_div(e,x->sequence.division);
+    seq_runtime_set_track_traversal(e,x->sequence.direction,x->sequence.rotate);
+    seq_runtime_set_track_timing(e,&x->sequence.timing);
+    /* Release the complete old lane pool before rebuilding it.  Clearing and
+     * inserting step-by-step can spuriously exhaust a full 512-entry pool
+     * when the new Pattern moves P-locks toward earlier steps. */
+    for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s)
+    {
+        seq_model_play_clear_step(e,s);
+        seq_model_step_param_plock_clear(e,s);
+    }
+    for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s)
+    {
+        const persist_control_step_t*st=&x->sequence.steps[s];
+        seq_model_set_trig(e,s,st->trigger);
+        seq_model_set_step_roll(e,s,st->roll);
+        for(uint8_t v=0U;v<st->play_count;++v)
+        {
+            const persist_control_play_item_t*p=&st->play[v];
+            if(((p->present_mask&SEQ_STEP_PLAY_PRESENT_NOTE)!=0U
+                    &&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_NOTE,p->note)==0U)
+                    ||((p->present_mask&SEQ_STEP_PLAY_PRESENT_VELOCITY)!=0U
+                    &&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_VELOCITY,p->velocity)==0U)
+                    ||((p->present_mask&SEQ_STEP_PLAY_PRESENT_LENGTH)!=0U
+                    &&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_LENGTH,p->length)==0U)
+                    ||((p->present_mask&SEQ_STEP_PLAY_PRESENT_MICROTIMING)!=0U
+                    &&seq_model_play_set(e,s,v,SEQ_STEP_PLAY_FIELD_MICROTIMING,p->microtiming)==0U))
+                return 0U;
+        }
+        for(uint8_t i=0U;i<st->lock_count;++i)
+        {
+            const persist_control_step_lock_t *const lock=
+                &x->sequence.locks[st->lock_first+i];
+            param_id_t id;
+            uint8_t set;
+            seq_param_slot_t slot;
+            uint8_t found=0U;
+            seq_value16_t value;
+            if(prepared!=NULL)
+            {
+                if(resolved_index>=prepared->lock_count[e]
+                        ||!seq_param_iface_key_to_address(
+                            prepared->locks[e][resolved_index++],&set,&slot))
+                    return 0U;
+                if(set==SEQ_PLOCK_SET_TONE)
+                    value=(seq_value16_t)(lock->value.f32*65535.0f+0.5f);
+                else if(!seq_param_iface_slot_to_param_for_type(
+                            track_runtime_type_from_ui((track_type_t)prepared->type[e]),
+                            set,slot,&id)||!apply_plock_value(id,lock,&value))
+                    return 0U;
+                found=1U;
+            }
+            else if(persist_key_tone_slot_from_disk(lock->parameter,&slot)!=0U)
+            {
+                set=SEQ_PLOCK_SET_TONE;
+                value=(seq_value16_t)(lock->value.f32*65535.0f+0.5f);
+                found=1U;
+            }
+            else
+            {
+                if(persist_key_param_from_disk(lock->parameter,&id)==0U
+                        ||apply_plock_value(id,lock,&value)==0U)return 0U;
+                for(set=0U;set<SEQ_PLOCK_SET_COUNT;++set)
+                    if(seq_param_iface_param_to_slot(e,set,id,&slot)!=0U)
+                    {found=1U;break;}
+            }
+            if(found==0U)return 0U;
+            const seq_plock_op_status_t status=seq_model_step_plock_upsert(
+                e,s,set,slot,value,lock->flags);
+            if(status!=SEQ_PLOCK_OP_CREATED&&status!=SEQ_PLOCK_OP_UPDATED)
+                return 0U;
+        }
+    }
+    return (prepared==NULL||resolved_index==prepared->lock_count[e])?1U:0U;
+}
 static uint8_t apply_note_fx(uint8_t e,uint8_t active,const persist_control_entity_t*x){persist_entity_caps_t caps;if(persist_entity_caps_resolve(active,e,&caps)==0U)return 0U;if(caps.note_fx_owner==0U){const uint8_t*value=(const uint8_t*)&x->note_fx;for(uint8_t i=0U;i<sizeof(x->note_fx);++i)if(value[i]!=0U)return 0U;return 1U;}return note_fx_chain_state_install_track(e,&x->note_fx);}
 static uint8_t restore_polyphony_audio_fx(uint8_t entity,
     const polyphony_control_state_t*polyphony,const audio_fx_control_state_t*audio_fx)
@@ -1375,12 +1505,14 @@ static uint8_t persistent_pattern_prepare_seq(
                     source->play[voice].microtiming,source->play[voice].present_mask};
             for(uint8_t i=0U;i<source->lock_count;++i)
             {
+                const persist_control_step_lock_t *const lock=
+                    &saved->sequence.locks[source->lock_first+i];
                 param_id_t id=PARAM_COUNT;uint8_t set=0U;seq_param_slot_t slot=0U;
                 seq_value16_t value=0U,base=0U;
-                if(persist_key_tone_slot_from_disk(source->locks[i].parameter,&slot))
-                {set=(uint8_t)SEQ_PLOCK_SET_TONE;if(!tone_param_codec_slot_to_param(runtime_type,slot,&id))goto fail;value=(seq_value16_t)(source->locks[i].value.f32*65535.0f+0.5f);}
+                if(persist_key_tone_slot_from_disk(lock->parameter,&slot))
+                {set=(uint8_t)SEQ_PLOCK_SET_TONE;if(!tone_param_codec_slot_to_param(runtime_type,slot,&id))goto fail;value=(seq_value16_t)(lock->value.f32*65535.0f+0.5f);}
                 else
-                {if(!persist_key_param_from_disk(source->locks[i].parameter,&id)||!apply_plock_value(id,&source->locks[i],&value))goto fail;uint8_t found=0U;for(set=0U;set<SEQ_PLOCK_SET_COUNT;++set)if(seq_param_iface_param_to_slot_for_type((uint8_t)runtime_type,topology.role==ENTITY_ROLE_GROUP_MASTER,set,id,&slot)){found=1U;break;}if(!found)goto fail;}
+                {if(!persist_key_param_from_disk(lock->parameter,&id)||!apply_plock_value(id,lock,&value))goto fail;uint8_t found=0U;for(set=0U;set<SEQ_PLOCK_SET_COUNT;++set)if(seq_param_iface_param_to_slot_for_type((uint8_t)runtime_type,topology.role==ENTITY_ROLE_GROUP_MASTER,set,id,&slot)){found=1U;break;}if(!found)goto fail;}
                 if(prepared->lock_count[entity]>=SEQ_ENGINE_LOCK_POOL_CAPACITY)goto fail;
                 seq_plock_key_t resolved;
                 if(!seq_param_iface_address_to_key(set,slot,&resolved))goto fail;

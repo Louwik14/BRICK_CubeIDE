@@ -188,6 +188,7 @@ static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity,uint
         return;
     }
     persist_control_sequence_t *s=&entity->sequence;
+    uint16_t lock_cursor = 0U;
     codec_u8(io,&s->length);codec_u8(io,&s->division);
     uint8_t packed_direction = (io->mode == CODEC_READ) ? 0U
         : (uint8_t)((s->direction & 0x0FU) | (s->page_mask << 4U));
@@ -203,7 +204,7 @@ static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity,uint
     codec_u8(io,&s->timing.random);codec_i8(io,&s->timing.velocity);
     codec_u8(io,&s->timing.global);
     if(io->mode==CODEC_READ){s->timing.groove=SEQ_GROOVE_NONE;
-        s->timing.groove_flags=0U;}
+        s->timing.groove_flags=0U;s->lock_count=0U;}
     for(uint8_t step=0U;step<PERSIST_CONTROL_STEP_COUNT;++step)
     {
         persist_control_step_t *st=&s->steps[step];
@@ -213,6 +214,23 @@ static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity,uint
         if((st->play_count>play_limit)
                 ||(st->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT))
         {io->result=(st->play_count>play_limit)?PERSIST_CODEC_INVALID_PLAY:PERSIST_CODEC_INVALID_PLOCK;return;}
+        if (io->mode == CODEC_READ)
+        {
+            st->lock_first = lock_cursor;
+            if (((uint32_t)lock_cursor + st->lock_count)
+                    > SEQ_PLOCK_POOL_CAP_PER_TRACK)
+            {
+                io->result = PERSIST_CODEC_INVALID_PLOCK;
+                return;
+            }
+        }
+        else if ((st->lock_first != lock_cursor)
+                || (((uint32_t)st->lock_first + st->lock_count)
+                    > SEQ_PLOCK_POOL_CAP_PER_TRACK))
+        {
+            io->result = PERSIST_CODEC_INVALID_PLOCK;
+            return;
+        }
         for(uint8_t i=0U;i<st->play_count;++i)
         {
             persist_control_play_item_t *p=&st->play[i];
@@ -221,12 +239,15 @@ static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity,uint
         }
         for(uint8_t i=0U;i<st->lock_count;++i)
         {
-            persist_control_step_lock_t *l=&st->locks[i];uint8_t kind=(uint8_t)l->kind;
+            persist_control_step_lock_t *l=&s->locks[st->lock_first+i];uint8_t kind=(uint8_t)l->kind;
             codec_u32(io,&l->parameter);codec_u8(io,&l->flags);codec_u8(io,&kind);
             if(io->mode==CODEC_READ)l->kind=(persist_control_value_kind_t)kind;
             codec_value(io,l->kind,&l->value);
         }
+        lock_cursor = (uint16_t)(lock_cursor + st->lock_count);
     }
+    if (io->mode == CODEC_READ) s->lock_count = lock_cursor;
+    else if (s->lock_count != lock_cursor) io->result=PERSIST_CODEC_INVALID_PLOCK;
 }
 
 static void codec_modulation(codec_io_t *io, persist_control_modulation_t *m);
@@ -505,6 +526,65 @@ static uint8_t codec_note_fx_state_valid(const note_fx_chain_state_t *state,
     return 1U;
 }
 
+static persist_codec_result_t codec_validate_sequence_steps(
+    const persist_control_sequence_t *sequence,
+    const persist_entity_caps_t *caps)
+{
+    if ((sequence == NULL) || (caps == NULL)
+            || (sequence->lock_count > SEQ_PLOCK_POOL_CAP_PER_TRACK))
+        return PERSIST_CODEC_INVALID_PLOCK;
+
+    uint16_t lock_cursor = 0U;
+    for (uint8_t step = 0U; step < PERSIST_CONTROL_STEP_COUNT; ++step)
+    {
+        const persist_control_step_t *const st = &sequence->steps[step];
+        if ((st->trigger > 1U) || (st->roll >= SEQ_STEP_ROLL_COUNT)
+                || ((st->trigger == 0U) && (st->roll != SEQ_STEP_ROLL_OFF))
+                || ((caps->sequence_owner == 0U) && (st->trigger != 0U))
+                || (st->play_count > caps->play_limit))
+            return PERSIST_CODEC_INVALID_PLAY;
+        for (uint8_t voice = 0U; voice < st->play_count; ++voice)
+            if (codec_play_value_valid(&st->play[voice]) == 0U)
+                return PERSIST_CODEC_INVALID_PLAY;
+
+        if ((st->lock_count > PERSIST_CONTROL_STEP_LOCK_COUNT)
+                || ((caps->sequence_owner == 0U) && (st->lock_count != 0U))
+                || (st->lock_first != lock_cursor)
+                || (((uint32_t)st->lock_first + st->lock_count)
+                    > sequence->lock_count))
+            return PERSIST_CODEC_INVALID_PLOCK;
+
+        const persist_control_step_lock_t *const locks =
+            &sequence->locks[st->lock_first];
+        for (uint8_t i = 0U; i < st->lock_count; ++i)
+        {
+            uint8_t tone_slot = 0U;
+            param_id_t id = 0U;
+            persist_param_descriptor_t descriptor;
+            if (persist_key_tone_slot_from_disk(locks[i].parameter,
+                                                &tone_slot) != 0U)
+            {
+                if ((locks[i].kind != PERSIST_VALUE_FLOAT32)
+                        || !isfinite(locks[i].value.f32)
+                        || (locks[i].value.f32 < 0.0f)
+                        || (locks[i].value.f32 > 1.0f))
+                    return PERSIST_CODEC_INVALID_PLOCK;
+            }
+            else if ((persist_key_param_from_disk(locks[i].parameter, &id) == 0U)
+                    || (persist_key_param_descriptor(id, &descriptor) == 0U)
+                    || (descriptor.plockable == 0U)
+                    || (codec_plock_value_valid(id, &locks[i]) == 0U))
+                return PERSIST_CODEC_INVALID_PLOCK;
+            for (uint8_t previous = 0U; previous < i; ++previous)
+                if (locks[previous].parameter == locks[i].parameter)
+                    return PERSIST_CODEC_DUPLICATE;
+        }
+        lock_cursor = (uint16_t)(lock_cursor + st->lock_count);
+    }
+    return (lock_cursor == sequence->lock_count)
+        ? PERSIST_CODEC_OK : PERSIST_CODEC_INVALID_PLOCK;
+}
+
 persist_codec_result_t persist_codec_validate_pattern(const persist_control_pattern_t *p)
 {
     if(p==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;
@@ -524,7 +604,9 @@ persist_codec_result_t persist_codec_validate_pattern(const persist_control_patt
               return PERSIST_CODEC_INVALID_ENTITY;
       }
       if(x->modulation_present>1U||x->modulation_present!=caps.modulation_owner)return PERSIST_CODEC_INVALID_MODULATION;
-      uint16_t locks=0U;for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t *st=&x->sequence.steps[s];if(st->trigger>1U||st->roll>=SEQ_STEP_ROLL_COUNT||(st->trigger==0U&&st->roll!=SEQ_STEP_ROLL_OFF)||(caps.sequence_owner==0U&&st->trigger!=0U)||st->play_count>caps.play_limit)return PERSIST_CODEC_INVALID_PLAY;for(uint8_t v=0U;v<st->play_count;++v)if(codec_play_value_valid(&st->play[v])==0U)return PERSIST_CODEC_INVALID_PLAY;if(st->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT||(caps.sequence_owner==0U&&st->lock_count!=0U))return PERSIST_CODEC_INVALID_PLOCK;locks=(uint16_t)(locks+st->lock_count);for(uint8_t i=0U;i<st->lock_count;++i){uint8_t tone_slot=0U;param_id_t id=0U;persist_param_descriptor_t d;if(persist_key_tone_slot_from_disk(st->locks[i].parameter,&tone_slot)!=0U){if((st->locks[i].kind!=PERSIST_VALUE_FLOAT32)||!isfinite(st->locks[i].value.f32)||(st->locks[i].value.f32<0.0f)||(st->locks[i].value.f32>1.0f))return PERSIST_CODEC_INVALID_PLOCK;}else if((persist_key_param_from_disk(st->locks[i].parameter,&id)==0U)||(persist_key_param_descriptor(id,&d)==0U)||(d.plockable==0U)||(codec_plock_value_valid(id,&st->locks[i])==0U))return PERSIST_CODEC_INVALID_PLOCK;for(uint8_t j=0U;j<i;++j)if(st->locks[j].parameter==st->locks[i].parameter)return PERSIST_CODEC_DUPLICATE;}}if(locks>SEQ_PLOCK_POOL_CAP_PER_TRACK)return PERSIST_CODEC_INVALID_PLOCK; }
+      const persist_codec_result_t sequence_result=
+          codec_validate_sequence_steps(&x->sequence,&caps);
+      if(sequence_result!=PERSIST_CODEC_OK)return sequence_result; }
     uint8_t record_mode=0U;if((codec_clock_valid(p->globals.clock_source_key)==0U)||(persist_key_record_start_from_disk(p->globals.record_start_key,&record_mode)==0U)||(persist_key_record_length_from_disk(p->globals.record_length_key,&record_mode)==0U))return PERSIST_CODEC_CAPACITY_EXCEEDED;
     for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e){if(p->entities[e].modulation_present==0U)continue;const persist_control_modulation_t*m=&p->entities[e].modulation;
     for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_LFO_COUNT;++i){mod_lfo_shape_t shape;mod_lfo_trig_mode_t trigger;if((persist_key_lfo_shape_from_disk(m->lfos[i].shape_key,&shape)==0U)||(persist_key_lfo_trigger_from_disk(m->lfos[i].trigger_key,&trigger)==0U)||!isfinite(m->lfos[i].rate)||!isfinite(m->lfos[i].phase_offset))return PERSIST_CODEC_INVALID_MODULATION;}

@@ -20,7 +20,7 @@ typedef struct
 
 #define PERSISTENCE_PATTERN_ENCODED_MAX_BYTES \
     PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES
-#define PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY (512U)
+#define PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY (152U)
 #define PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY (152U)
 
 _Static_assert(PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY == 152U,
@@ -64,8 +64,14 @@ typedef struct
     } scratch;
 } persistence_pattern_io_workspace_t;
 
-_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 583552U,
+_Static_assert(sizeof(persistence_project_save_workspace_t) == 137308U,
+               "Project Save workspace size changed");
+_Static_assert(sizeof(persistence_groove_build_workspace_t) == 82560U,
+               "Groove Build workspace size changed");
+_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 261312U,
                "Pattern IO workspace size changed");
+_Static_assert(sizeof(persistence_project_restore_workspace_t) == 268544U,
+               "Project Restore workspace size changed");
 
 persistence_project_save_workspace_t *persistence_workspace_acquire_project_save(void);
 persistence_project_restore_workspace_t *persistence_workspace_acquire_project_restore(void);

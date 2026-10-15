@@ -2,11 +2,21 @@
 
 ## Modele et format
 
-Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 20. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts, et aucun format anterieur n'est accepte. FM Transpose reste encode en centiemes de demi-ton sur `uint16_t`. La section Macro Project version 2 contient 14 macros natives, chacune avec ses valeurs cibles `(track, parametre, valeur)`. Aucun dump de structure n'est lu. AUDIO_GLOBAL contient exactement 51 floats, FILTER douze floats, et aucun type Drum Analog historique n'est accepte. Les enveloppes courantes sont 115 300 octets pour un Pattern et 174 116 octets pour un Project.
+Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 21. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts, et aucun format anterieur n'est accepte. FM Transpose reste encode en centiemes de demi-ton sur `uint16_t`. La section Macro Project version 2 contient 14 macros natives, chacune avec ses valeurs cibles `(track, parametre, valeur)`. Aucun dump de structure n'est lu. AUDIO_GLOBAL contient exactement 51 floats, FILTER douze floats, et aucun type Drum Analog historique n'est accepte. Les enveloppes courantes sont 106 340 octets pour un Pattern et 29 364 octets pour un Project.
 
 Les cles persistantes de famille, type, parametre, MIDI, clock, modulation et asset sont explicites et independantes des ordinaux C. Les FLOAT32 conservent leurs bits. Les indices runtime, contextes AUDIO installes, pointeurs, caches, voix, phases, playheads et UI sont exclus. Note FX persiste directement son unique bloc brut de seize octets `GENERATOR/VOICER/SCALER/TRIG`; il n'existe plus de cle de modele, count, slot ou ORDER, ni de migration depuis les anciennes chaines.
 
 Pattern contient les seize identites. La configuration des children inactifs est conservee, mais pas leurs parametres, assets, routes, modulation, Note FX ou sequence dynamique. En GROUP, chaque child actif est obligatoirement `SAMPLER/RAM`; le master seul persiste MOD, LFO, ENV3 et operateurs, tandis que les children gardent leur lane a un PLAY et leurs niveaux A/B.
+
+Chaque lane Pattern conserve 64 steps, quatre notes PLAY par step, 32 P-locks
+maximum par step et 512 P-locks maximum sur la lane. Les P-locks sont des
+records naturellement alignes de 12 octets dans un pool de lane; chaque step
+porte uniquement `{lock_first, lock_count}`. Les plages sont canoniques,
+contigues, ordonnees par step, sans trou ni chevauchement, et leur somme est
+exactement `sequence.lock_count`. Capture et decode reconstruisent cette forme;
+validation, preparation et application la refusent avant tout acces si une
+borne ou la continuite est invalide. Le codec disque reste ordonne par step et
+ne serialise aucun padding ni pointeur.
 
 Patch contient une entite, ses parametres logiques, zero a deux references
 d'assets typees et, pour FM, le DTO de l'owner. `PROJECT.B6C` contient metadata,
@@ -32,7 +42,7 @@ override Working
 ```
 
 Il n'existe pas de banque RAM multi-Patterns. CONTROL possede un unique DTO
-sortant de 459 436 octets en SDRAM. Lorsque le candidat cible est PREPARED et
+sortant de 146 092 octets en SDRAM. Lorsque le candidat cible est PREPARED et
 que la frontiere de Recall est due, CONTROL capture le Pattern vivant dans ce
 DTO avant toute mutation, puis applique le candidat avec le pipeline existant.
 Apres le commit CONTROL/SEQ/AUDIO, hors frontiere musicale, le service
@@ -450,9 +460,12 @@ AUDIO. Le `changed_program_mask` est calcule tardivement dans l'IRQ; les
 transitions conservent release-before-acquire, le rebind des held outputs pour
 Pattern et le PANIC/full rebuild pour Project. Pattern/Project ne construisent,
 ne dedupliquent et ne rejouent plus de transaction de commandes live.
-Les tailles de reference ARM finales sont `PreparedPattern = 8 876` octets,
-`PreparedAudio = 8 728` octets et slot `PreparedAudio = 8 736` octets. Le
-workspace Persistence reste une union bornee par son budget SDRAM; Project Save
+Les tailles de reference ARM finales sont `Pattern = 146 092`,
+`PreparedPattern = 8 876`, `PreparedAudio = 8 728` et slot
+`PreparedAudio = 8 736` octets. `PROJECT_SAVE` occupe 137 308 octets,
+`GROOVE_BUILD` 82 560, `PATTERN_IO` 261 312 et `PROJECT_RESTORE` 268 544.
+Le workspace Persistence, borne par ce dernier membre, occupe donc 268 544
+octets. Project Save porte au plus les 152 descriptors du catalogue produit et
 ne reserve plus de DTO Pattern ni de record de banque. La
 transaction AUDIO legacy de `36 872` octets appartient uniquement a Patch.
 Cette boundary est globale au Pattern sortant et ne depend jamais de la lane
