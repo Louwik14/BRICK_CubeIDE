@@ -59,7 +59,7 @@ typedef struct
     waveform_local_tile_t tiles[WAVEFORM_LOCAL_TILE_COUNT];
 } waveform_local_cache_t;
 
-EDITOR_AUDIO_CACHE_SDRAM static int16_t
+EDITOR_AUDIO_CACHE_SDRAM static int8_t
     g_waveform_local_pcm[WAVEFORM_LOCAL_TILE_COUNT][WAVEFORM_LOCAL_TILE_FRAMES];
 EDITOR_AUDIO_CACHE_SDRAM static waveform_local_point_t
     g_waveform_local_level0[WAVEFORM_LOCAL_TILE_COUNT][WAVEFORM_LOCAL_LEVEL0_POINTS];
@@ -283,6 +283,38 @@ static void waveform_local_accumulate_levels(uint8_t slot, uint32_t frame,
         WAVEFORM_LOCAL_LEVEL2_FRAMES, frame, sample);
 }
 
+/* G.711 mu-law keeps substantially finer steps around silence than linear
+ * PCM8.  The detailed envelope levels remain int16 and are accumulated from
+ * the original sample; companding only affects the one-sample zoom store. */
+static int8_t waveform_local_pcm8_encode(int16_t sample)
+{
+    int32_t magnitude = sample;
+    uint8_t sign = 0U;
+    if(magnitude < 0)
+    {
+        magnitude = -magnitude;
+        sign = 0x80U;
+    }
+    if(magnitude > 32635) { magnitude = 32635; }
+    magnitude += 0x84;
+    uint8_t exponent = 7U;
+    for(int32_t mask = 0x4000; exponent != 0U
+            && (magnitude & mask) == 0; mask >>= 1)
+        exponent--;
+    const uint8_t mantissa = (uint8_t)(
+        (magnitude >> (exponent + 3U)) & 0x0FU);
+    return (int8_t)(uint8_t)~(sign | (uint8_t)(exponent << 4U) | mantissa);
+}
+
+static int16_t waveform_local_pcm8_decode(int8_t encoded)
+{
+    const uint8_t value = (uint8_t)~(uint8_t)encoded;
+    int32_t magnitude = ((int32_t)(value & 0x0FU) << 3U) + 0x84;
+    magnitude <<= (value & 0x70U) >> 4U;
+    return (int16_t)((value & 0x80U) != 0U
+        ? (0x84 - magnitude) : (magnitude - 0x84));
+}
+
 static int8_t waveform_local_next_loading(void)
 {
     int8_t best = -1;
@@ -394,7 +426,8 @@ static void waveform_local_storage_service(void)
                 : left;
             const int16_t mono = (int16_t)(((int32_t)left + right) / 2);
             const uint32_t rel = tile->loaded_frames + f;
-            g_waveform_local_pcm[(uint8_t)index][rel] = mono;
+            g_waveform_local_pcm[(uint8_t)index][rel] =
+                waveform_local_pcm8_encode(mono);
             waveform_local_accumulate_levels((uint8_t)index, rel, mono);
         }
         tile->loaded_frames += frames;
@@ -481,8 +514,8 @@ static uint8_t waveform_local_accumulate_range(uint32_t start_frame, uint32_t en
                         ? (point + 1U) * block : rel_end;
                     for(uint32_t f = raw_start; f < raw_end; ++f)
                     {
-                        const int16_t sample =
-                            g_waveform_local_pcm[(uint8_t)index][f];
+                        const int16_t sample = waveform_local_pcm8_decode(
+                            g_waveform_local_pcm[(uint8_t)index][f]);
                         const waveform_local_point_t value =
                             { sample, sample, sample, sample };
                         waveform_local_merge(out, &value, &seen);
@@ -494,8 +527,8 @@ static uint8_t waveform_local_accumulate_range(uint32_t start_frame, uint32_t en
         {
             for(uint32_t f = rel_start; f < rel_end; ++f)
             {
-                const int16_t sample =
-                    g_waveform_local_pcm[(uint8_t)index][f];
+                const int16_t sample = waveform_local_pcm8_decode(
+                    g_waveform_local_pcm[(uint8_t)index][f]);
                 const waveform_local_point_t value =
                     { sample, sample, sample, sample };
                 waveform_local_merge(out, &value, &seen);
