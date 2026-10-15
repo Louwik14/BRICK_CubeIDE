@@ -493,7 +493,7 @@ static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_pl
         {
             return BRICK6_SAMPLE_COMMON_PLAN_RESOLVE_FAIL;
         }
-        out_source->key = sample_audio_key_multi(projected->multi_sample_id);
+        out_source->key = projected->key;
         out_source->total_frames = projected->total_frames;
         out_source->format = projected->format;
         out_source->stride_floats = projected->stride_floats;
@@ -599,7 +599,7 @@ static void brick6_sampler_runtime_multi_release_dsp_slot(brick6_sampler_voice_t
 
 static sample_audio_key_t brick6_sampler_runtime_multi_key(uint16_t multi_sample_id)
 {
-    return sample_audio_key_multi(multi_sample_id);
+    return multi_sample_audio_projection_key(multi_sample_id);
 }
 
 static void brick6_sampler_runtime_multi_release_voice_vca(

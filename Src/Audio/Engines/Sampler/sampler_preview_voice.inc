@@ -138,7 +138,7 @@ uint8_t brick6_sampler_preview_note_on(uint8_t note, uint8_t velocity)
             note, velocity, &projected)) return 0U;
     sample_resolved_source_t source;
     sample_resolved_source_init(&source);
-    source.key = sample_audio_key_multi(projected.multi_sample_id);
+    source.key = projected.key;
     source.total_frames = projected.total_frames;
     source.format = projected.format;
     source.stride_floats = projected.stride_floats;

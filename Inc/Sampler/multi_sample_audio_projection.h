@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "Sampler/sample_audio_format.h"
+#include "Sampler/sample_audio_key.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,6 +13,7 @@ extern "C" {
  * READY.  Paths and mutable loader/catalogue state deliberately stay out. */
 typedef struct
 {
+    sample_audio_key_t key;
     uint16_t multi_sample_id;
     uint16_t zone_id;
     uint16_t instrument_id;
@@ -31,7 +33,7 @@ typedef struct
     uint8_t has_loop;
 } multi_sample_audio_source_t;
 
-_Static_assert(sizeof(multi_sample_audio_source_t) == 40U,
+_Static_assert(sizeof(multi_sample_audio_source_t) == 48U,
                "Multi AUDIO source ABI changed");
 
 #ifdef __cplusplus

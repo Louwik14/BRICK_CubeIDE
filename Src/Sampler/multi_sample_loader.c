@@ -254,17 +254,17 @@ static wav_info_t multi_loader_wav_info_from_pool_sample(
     {
         info.audio_format = 3U;
         info.encoding = WAV_SAMPLE_ENCODING_IEEE_FLOAT;
-        info.sample_rate = sample->sample_rate;
-        info.channels = sample->channels;
-        info.bits_per_sample = sample->bits_per_sample;
-        info.valid_bits_per_sample = sample->bits_per_sample;
+        info.sample_rate = 48000U;
+        info.channels = sample->stride_floats;
+        info.bits_per_sample = 32U;
+        info.valid_bits_per_sample = 32U;
         info.fmt_chunk_size = 16U;
         info.has_fact = 1U;
         info.fact_sample_length = sample->total_frames;
-        info.block_align = (uint16_t)((sample->channels * sample->bits_per_sample) / 8U);
-        info.byte_rate = sample->sample_rate * info.block_align;
-        info.data_offset = sample->data_offset;
-        info.data_size = sample->data_size;
+        info.block_align = (uint16_t)(sample->stride_floats * sizeof(float));
+        info.byte_rate = 48000U * info.block_align;
+        info.data_offset = 512U;
+        info.data_size = sample->total_frames * info.block_align;
     }
     return info;
 }
@@ -634,7 +634,7 @@ static uint8_t multi_loader_register_next_sample(void)
     {
         return 0U;
     }
-    const sample_audio_key_t key = sample_audio_key_multi(sample_id);
+    const sample_audio_key_t key = multi_sample_pool_sample_key(sample_id);
     const wav_info_t info = multi_loader_wav_info_from_pool_sample(sample);
     sample_page_stream_info_t stream;
     uint16_t prefill_pages = 0U;
@@ -642,7 +642,7 @@ static uint8_t multi_loader_register_next_sample(void)
     if (multi_loader_runtime_stopped() != 0U)
     {
         if (sample_page_cache_port_prepare_stream(
-                key, full_path, &info, sample->total_frames, sample->data_offset,
+                key, full_path, &info, sample->total_frames, 512U,
                 NULL, &stream, &prefill_pages) == 0U)
             return 0U;
     }
@@ -671,7 +671,7 @@ static uint8_t multi_loader_register_next_sample(void)
             return 0U;
         if (sample_page_cache_port_prepare_stream_mapped(
                 key, g_multi_register_path, &info, sample->total_frames,
-                sample->data_offset, &map, file_size, &stream,
+                512U, &map, file_size, &stream,
                 &prefill_pages) == 0U)
         {
             sample_stream_physical_map_release(&map);
@@ -812,7 +812,7 @@ void multi_sample_service_load(uint32_t byte_budget)
         multi_sample_prefill_plan_t *const plan =
             &g_multi_prefill_plans[g_multi_prefill.current_plan];
         const sample_page_state_t state = sample_page_cache_get_page_state_key(
-            sample_audio_key_multi(plan->sample_id), plan->next_page);
+            multi_sample_pool_sample_key(plan->sample_id), plan->next_page);
         if ((state == SAMPLE_PAGE_RESERVED) || (state == SAMPLE_PAGE_LOADING))
             return;
         if (state != SAMPLE_PAGE_READY)

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "Sampler/sample_cache.h"
+#include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_page_lease_control.h"
 #include "ControlRT/control_audio_fifo_control.h"
 #include "ControlRT/control_rt_publication.h"
@@ -389,6 +390,7 @@ uint8_t sample_global_pool_register_classic_at(uint16_t global_index,
                                                uint32_t cost_bytes)
 {
     if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        || (multi_sample_pool_music_id_in_use(global_index) != 0U)
         || ((g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_EMPTY)
             && (g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_CLASSIC))
         || (sample_global_pool_validate_entries(SAMPLE_GLOBAL_KIND_CLASSIC,
@@ -448,6 +450,11 @@ uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path)
     if (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
     {
         g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_INVALID_ID;
+        return 0U;
+    }
+    if (multi_sample_pool_music_id_in_use(global_index) != 0U)
+    {
+        g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_NO_FREE_SLOT;
         return 0U;
     }
     if ((g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_EMPTY)
@@ -533,6 +540,7 @@ uint8_t sample_global_pool_load_classic_prepared(uint16_t global_index,
         return 0U;
     }
     if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        || (multi_sample_pool_music_id_in_use(global_index) != 0U)
         || (path == NULL) || (path[0] == '\0')
         || (strlen(path) >= SAMPLE_GLOBAL_POOL_PATH_MAX)
         || ((g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_EMPTY)

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Sampler/sample_global_pool.h"
+#include "Sampler/sample_cache.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_page_lease_control.h"
@@ -28,6 +29,9 @@ SDRAM_MULTI_POOL static uint8_t g_multi_sample_used[MULTI_SAMPLE_POOL_MAX_SAMPLE
 SDRAM_MULTI_POOL static uint8_t g_multi_zone_used[MULTI_SAMPLE_POOL_MAX_ZONES];
 SDRAM_MULTI_POOL static uint16_t g_multi_sample_next[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 SDRAM_MULTI_POOL static uint16_t g_multi_zone_next[MULTI_SAMPLE_POOL_MAX_ZONES];
+SDRAM_MULTI_POOL static uint8_t
+    g_multi_music_id_used[SAMPLE_PAGE_CACHE_CLASSIC_ID_CAPACITY];
+static CTRL_STATE uint32_t g_multi_music_generation;
 static CTRL_STATE uint16_t g_multi_sample_count;
 static CTRL_STATE uint16_t g_multi_zone_count;
 static CTRL_STATE uint8_t
@@ -99,6 +103,22 @@ static uint16_t multi_sample_find_free_sample(void)
 {
     for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_SAMPLES; ++id)
         if (g_multi_sample_used[id] == 0U) return id;
+    return MULTI_SAMPLE_POOL_INVALID_ID;
+}
+
+static uint16_t multi_sample_acquire_music_id(void)
+{
+    for (uint16_t id = 0U; id < SAMPLE_PAGE_CACHE_CLASSIC_ID_CAPACITY; ++id)
+    {
+        const sample_global_slot_t *const slot = sample_global_pool_get_slot(id);
+        if (g_multi_music_id_used[id] == 0U
+            && (slot == NULL || slot->kind != SAMPLE_GLOBAL_KIND_CLASSIC)
+            && sample_cache_get_state(id) == SAMPLE_CACHE_EMPTY)
+        {
+            g_multi_music_id_used[id] = 1U;
+            return id;
+        }
+    }
     return MULTI_SAMPLE_POOL_INVALID_ID;
 }
 
@@ -200,6 +220,7 @@ void multi_sample_pool_reset(void)
     memset(g_multi_zones, 0, sizeof(g_multi_zones));
     memset(g_multi_sample_used, 0, sizeof(g_multi_sample_used));
     memset(g_multi_zone_used, 0, sizeof(g_multi_zone_used));
+    memset(g_multi_music_id_used, 0, sizeof(g_multi_music_id_used));
     memset(g_multi_sample_next, 0xFF, sizeof(g_multi_sample_next));
     memset(g_multi_zone_next, 0xFF, sizeof(g_multi_zone_next));
     g_multi_sample_count = 0U;
@@ -281,6 +302,24 @@ const multi_sample_desc_t *multi_sample_pool_get_sample(uint16_t multi_sample_id
     }
 
     return &g_multi_samples[multi_sample_id];
+}
+
+sample_audio_key_t multi_sample_pool_sample_key(uint16_t multi_sample_id)
+{
+    const multi_sample_desc_t *const sample =
+        multi_sample_pool_get_sample(multi_sample_id);
+    if (sample == NULL)
+        return (sample_audio_key_t){ SAMPLE_AUDIO_DOMAIN_MULTI, 0U,
+                                     UINT16_MAX, 0U };
+    return (sample_audio_key_t){ SAMPLE_AUDIO_DOMAIN_MULTI, 0U,
+                                 sample->object_id,
+                                 sample->object_generation };
+}
+
+uint8_t multi_sample_pool_music_id_in_use(uint16_t object_id)
+{
+    return (object_id < SAMPLE_PAGE_CACHE_CLASSIC_ID_CAPACITY)
+        ? g_multi_music_id_used[object_id] : 0U;
 }
 
 multi_sample_instrument_state_t multi_sample_pool_get_state(uint16_t instrument_id)
@@ -422,9 +461,10 @@ static uint8_t multi_sample_pool_finalize_clear_instrument(uint16_t instrument_i
          ++visited)
     {
         const uint16_t next = g_multi_sample_next[sample_id];
-        const sample_audio_key_t key = sample_audio_key_multi(sample_id);
+        const sample_audio_key_t key = multi_sample_pool_sample_key(sample_id);
         sample_stream_manager_release_key(key);
         sample_page_cache_clear_key(key);
+        g_multi_music_id_used[g_multi_samples[sample_id].object_id] = 0U;
         memset(&g_multi_samples[sample_id], 0, sizeof(g_multi_samples[sample_id]));
         g_multi_sample_used[sample_id] = 0U;
         g_multi_sample_next[sample_id] = MULTI_SAMPLE_POOL_INVALID_ID;
@@ -512,7 +552,7 @@ void multi_sample_pool_service_retire(void)
                 && sample < MULTI_SAMPLE_POOL_MAX_SAMPLES;
              ++visited, sample = g_multi_sample_next[sample])
             if (sample_page_lease_control_references_key(
-                    sample_audio_key_multi(sample)) != 0U)
+                    multi_sample_pool_sample_key(sample)) != 0U)
             { leased = 1U; break; }
         if (leased != 0U) continue;
         g_multi_retire_stop_committed[i] = 0U;
@@ -703,10 +743,14 @@ uint8_t multi_sample_pool_debug_add_sample(uint16_t instrument_id,
     multi_sample_instrument_t *const instrument = &g_multi_instruments[instrument_id].desc;
     const uint16_t sample_id = multi_sample_find_free_sample();
     if (sample_id == MULTI_SAMPLE_POOL_INVALID_ID) return 0U;
+    const uint16_t object_id = multi_sample_acquire_music_id();
+    if (object_id == MULTI_SAMPLE_POOL_INVALID_ID) return 0U;
     multi_sample_desc_t *const sample = &g_multi_samples[sample_id];
     memset(sample, 0, sizeof(*sample));
-    sample->multi_sample_id = sample_id;
     sample->instrument_id = instrument_id;
+    sample->object_id = object_id;
+    if (++g_multi_music_generation == 0U) ++g_multi_music_generation;
+    sample->object_generation = g_multi_music_generation;
     sample->total_frames = total_frames;
     sample->root_note = root_note;
     sample->vel_low = vel_low;
@@ -714,6 +758,7 @@ uint8_t multi_sample_pool_debug_add_sample(uint16_t instrument_id,
     sample->flags = flags;
     if (multi_sample_copy_text(sample->path, sizeof(sample->path), path) == 0U)
     {
+        g_multi_music_id_used[object_id] = 0U;
         memset(sample, 0, sizeof(*sample));
         return 0U;
     }
@@ -769,20 +814,16 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
     {
         return 0U;
     }
-    sample->data_offset = data_offset;
-    sample->data_size = data_size;
-    sample->sample_rate = sample_rate;
-    sample->channels = channels;
-    sample->bits_per_sample = bits_per_sample;
     sample->format = format;
     sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(format);
     sample->frames_per_page = sample_audio_format_frames_per_page(format);
-    sample->block_align = (uint16_t)((channels * bits_per_sample) / 8U);
     if (sample_audio_format_is_valid(instrument->format) == 0U)
     {
         (void)multi_sample_pool_set_instrument_format(sample->instrument_id, format);
     }
-    return (sample->block_align != 0U) ? 1U : 0U;
+    return (uint8_t)(data_offset == 512U && sample_rate == 48000U
+        && bits_per_sample == 32U
+        && data_size == sample->total_frames * channels * sizeof(float));
 }
 
 uint8_t multi_sample_pool_set_sample_loop(uint16_t multi_sample_id,
@@ -864,8 +905,7 @@ uint8_t multi_sample_pool_resolve_source_from_result(
         return 0U;
     }
 
-    out_source->key.domain = SAMPLE_AUDIO_DOMAIN_MULTI;
-    out_source->key.object_id = resolved->multi_sample_id;
+    out_source->key = multi_sample_pool_sample_key(resolved->multi_sample_id);
     out_source->path = sample->path;
     out_source->total_frames = sample->total_frames;
     out_source->format = sample->format;

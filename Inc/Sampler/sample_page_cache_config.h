@@ -52,11 +52,10 @@
  */
 #define SAMPLE_PAGE_CACHE_CLASSIC_ID_BASE     (0U)
 #define SAMPLE_PAGE_CACHE_CLASSIC_ID_CAPACITY (SAMPLE_CLASSIC_CAPACITY)
-#define SAMPLE_PAGE_CACHE_MULTI_ID_BASE       (SAMPLE_PAGE_CACHE_CLASSIC_ID_BASE \
-                                               + SAMPLE_PAGE_CACHE_CLASSIC_ID_CAPACITY)
+#define SAMPLE_PAGE_CACHE_MULTI_ID_BASE       SAMPLE_PAGE_CACHE_CLASSIC_ID_BASE
 #define SAMPLE_PAGE_CACHE_MULTI_ID_CAPACITY   (MULTI_SAMPLE_MAX_SAMPLES)
-#define SAMPLE_PAGE_CACHE_REC_ID_BASE         (SAMPLE_PAGE_CACHE_MULTI_ID_BASE \
-                                               + SAMPLE_PAGE_CACHE_MULTI_ID_CAPACITY)
+#define SAMPLE_PAGE_CACHE_REC_ID_BASE         (SAMPLE_PAGE_CACHE_CLASSIC_ID_BASE \
+                                               + SAMPLE_PAGE_CACHE_CLASSIC_ID_CAPACITY)
 /* Recorder keeps CURRENT, UNDO, RETIRED and BUILDING source slots. */
 #define SAMPLE_PAGE_CACHE_REC_ID_CAPACITY     (4U)
 #define SAMPLE_PAGE_CACHE_ID_CAPACITY         (SAMPLE_PAGE_CACHE_REC_ID_BASE \
@@ -194,6 +193,6 @@ static inline uint8_t sample_page_slot_is_voice_window_pool(uint32_t slot)
 #endif
 
 #if ((SAMPLE_PAGE_CACHE_MULTI_ID_BASE + SAMPLE_PAGE_CACHE_MULTI_ID_CAPACITY) \
-     > SAMPLE_PAGE_CACHE_ID_CAPACITY)
+     > SAMPLE_PAGE_CACHE_REC_ID_BASE)
 #error "multi sample ids must fit in page-cache id capacity"
 #endif

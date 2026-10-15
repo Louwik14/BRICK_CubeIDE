@@ -41,16 +41,11 @@ typedef struct
 
 typedef struct
 {
-    uint16_t multi_sample_id;
     uint16_t instrument_id;
+    uint16_t object_id;
+    uint32_t object_generation;
     char path[MULTI_SAMPLE_POOL_PATH_MAX];
     uint32_t total_frames;
-    uint32_t data_offset;
-    uint32_t data_size;
-    uint32_t sample_rate;
-    uint16_t channels;
-    uint16_t bits_per_sample;
-    uint16_t block_align;
     sample_audio_format_t format;
     uint16_t stride_floats;
     uint32_t frames_per_page;
@@ -98,6 +93,8 @@ uint16_t multi_sample_pool_get_slot_capacity_used(void);
 uint16_t multi_sample_pool_get_zone_capacity_used(void);
 const multi_sample_instrument_t *multi_sample_pool_get_instrument(uint16_t instrument_id);
 const multi_sample_desc_t *multi_sample_pool_get_sample(uint16_t multi_sample_id);
+sample_audio_key_t multi_sample_pool_sample_key(uint16_t multi_sample_id);
+uint8_t multi_sample_pool_music_id_in_use(uint16_t object_id);
 multi_sample_instrument_state_t multi_sample_pool_get_state(uint16_t instrument_id);
 uint8_t multi_sample_pool_set_state(uint16_t instrument_id,
                                     multi_sample_instrument_state_t state);

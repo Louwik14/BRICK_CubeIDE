@@ -3,6 +3,7 @@
 #include "Sampler/multi_sample_audio_projection.h"
 
 uint8_t multi_sample_audio_projection_is_ready(uint16_t instrument_id);
+sample_audio_key_t multi_sample_audio_projection_key(uint16_t multi_sample_id);
 uint8_t multi_sample_audio_projection_resolve(
     uint16_t instrument_id,
     uint8_t note,

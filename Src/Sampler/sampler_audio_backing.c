@@ -31,7 +31,7 @@ _Static_assert(sizeof(multi_audio_instrument_t) == 8U,
                "Multi instrument layout changed");
 _Static_assert(sizeof(multi_audio_zone_t) == 10U,
                "Multi zone ABI changed");
-_Static_assert(sizeof(multi_sample_audio_source_t) == 40U,
+_Static_assert(sizeof(multi_sample_audio_source_t) == 48U,
                "Multi source ABI changed");
 _Static_assert(sizeof(audio_wavetable_registry_slot_t) == 188U,
                "Wavetable registry slot layout changed");

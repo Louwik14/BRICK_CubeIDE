@@ -40,6 +40,7 @@ uint8_t multi_sample_audio_projection_publish(uint16_t instrument_id)
         const multi_sample_desc_t *const s = multi_sample_pool_get_sample(sample_id);
         if ((s == NULL) || (s->instrument_id != instrument_id)) return 0U;
         g_multi_audio_samples[sample_id] = (multi_sample_audio_source_t){
+            .key = multi_sample_pool_sample_key(sample_id),
             .multi_sample_id = sample_id, .instrument_id = instrument_id,
             .root_note = s->root_note, .vel_low = s->vel_low, .vel_high = s->vel_high,
             .total_frames = s->total_frames,
