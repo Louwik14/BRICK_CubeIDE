@@ -39,7 +39,7 @@ _estack = ORIGIN(RAM_D1) + LENGTH(RAM_D1);    /* end of RAM */
 /* Generate a link error if heap and stack don't fit into RAM */
 _Min_Heap_Size = 0x1000;      /* bounded newlib heap */
 _Msp_Target_Stack_Size = 0x6000; /* 24 KiB target after static closure */
-_Min_Stack_Size = 0xA000;     /* provisional 40 KiB MSP safety envelope */
+_Min_Stack_Size = 0x6000;     /* 24 KiB MSP */
 _Min_Heap_Stack_Guard = 0x1000;
 
 /* Specify the memory areas */

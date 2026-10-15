@@ -96,7 +96,7 @@ extern uint32_t _estack;
 #define SDRAM_MPU_BASE                     (0xC0000000UL)
 #define SDRAM_RECORDER_MPU_BASE            (0xC1FC0000UL)
 #define MSP_GUARD_BYTES                    (4UL * 1024UL)
-#define MSP_PROVISIONAL_STACK_BYTES        (40UL * 1024UL)
+#define MSP_PROVISIONAL_STACK_BYTES        (24UL * 1024UL)
 #define MSP_STACK_FILL_WORD                (0xA55AA55AUL)
 #define MSP_MONITOR_WORDS_PER_SERVICE      (64UL)
 #define UI_TASKLET_ENGINE_DIVIDER         (4UL)
