@@ -367,7 +367,7 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
 }
 
 static void seq_engine_control_poll_with_workspace(
-    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
+    seq_groove_build_workspace_t *workspace)
 {
     if (g_prepared_active != 0U) return;
     const uint8_t running = seq_runtime_is_running();
@@ -479,7 +479,7 @@ void seq_engine_control_poll(void)
 }
 
 uint8_t seq_engine_control_flush_with_workspace(
-    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
+    seq_groove_build_workspace_t *workspace)
 {
     const uint32_t target_generation = g_edit_generation;
     const uint16_t pass_limit = (uint16_t)(
@@ -499,7 +499,7 @@ uint8_t seq_engine_control_flush(void)
 }
 
 uint8_t seq_engine_control_replace_with_workspace(
-    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
+    seq_groove_build_workspace_t *workspace)
 {
     /* Replacement owns every SEQ-derived parameter projection as well as the
      * terminal engine.  Reset it before compiling the replacement so base
@@ -511,7 +511,7 @@ uint8_t seq_engine_control_replace_with_workspace(
 
 uint8_t seq_engine_control_prepare_begin(
     const seq_track_timing_config_t timing[SEQ_TIMING_TRACK_COUNT],
-    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
+    seq_groove_build_workspace_t *workspace)
 {
     if (timing == NULL || workspace == NULL || g_prepared_active != 0U)
         return 0U;

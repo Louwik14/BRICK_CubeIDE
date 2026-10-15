@@ -246,7 +246,7 @@ static void pattern_candidate_decoded(void)
     const persist_codec_result_t prepared=persistent_pattern_control_prepare(
         &g_pattern_io_workspace->pattern,
         &g_pattern_io_workspace->prepared_pattern,
-        g_pattern_io_workspace->scratch.groove_build.track);
+        &g_pattern_io_workspace->scratch.groove_build);
     if(prepared==PERSIST_CODEC_IO_ERROR)
     {g_persist_dbg.decision_reason=PERSIST_DBG_DECISION_PREFLIGHT_BLOCKED;pattern_debug_state();return;}
     if(prepared!=PERSIST_CODEC_OK)

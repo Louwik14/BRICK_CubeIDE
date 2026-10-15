@@ -38,7 +38,8 @@ ENTRY(Reset_Handler)
 _estack = ORIGIN(RAM_D1) + LENGTH(RAM_D1);    /* end of RAM */
 /* Generate a link error if heap and stack don't fit into RAM */
 _Min_Heap_Size = 0x1000;      /* bounded newlib heap */
-_Min_Stack_Size = 0x1000;     /* reserved MSP stack */
+_Msp_Target_Stack_Size = 0x6000; /* 24 KiB target after static closure */
+_Min_Stack_Size = 0xA000;     /* provisional 40 KiB MSP safety envelope */
 _Min_Heap_Stack_Guard = 0x1000;
 
 /* Specify the memory areas */
@@ -632,7 +633,52 @@ SECTIONS
     . = ALIGN(8);
   } >RAM_D1
 
-  PROVIDE ( __stack_limit__ = _estack - _Min_Stack_Size );
+  __stack_limit__ = _estack - _Min_Stack_Size;
+  __stack_guard_start__ = __stack_limit__ - _Min_Heap_Stack_Guard;
+  __msp_stack_size__ = _Min_Stack_Size;
+  __msp_target_stack_size__ = _Msp_Target_Stack_Size;
+
+  /* Explicit D1 allocation arena reclaimed from the former implicit
+     heap-to-MSP gap.  Future users opt in through .ram_d1_reclaimed. */
+  .ram_d1_reclaimed (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __d1_reclaimed_start__ = .;
+    *(.ram_d1_reclaimed)
+    *(.ram_d1_reclaimed.*)
+    . = ALIGN(32);
+    __d1_reclaimed_used_end__ = .;
+  } >RAM_D1
+  __d1_reclaimed_end__ = __stack_guard_start__;
+  __d1_reclaimed_capacity__ = __d1_reclaimed_end__ - __d1_reclaimed_start__;
+  __d1_reclaimed_used__ = __d1_reclaimed_used_end__ - __d1_reclaimed_start__;
+
+  .msp_guard __stack_guard_start__ (NOLOAD) :
+  {
+    __msp_guard_start__ = .;
+    . = . + _Min_Heap_Stack_Guard;
+    __msp_guard_end__ = .;
+  } >RAM_D1
+
+  .msp_stack __stack_limit__ (NOLOAD) :
+  {
+    __msp_stack_start__ = .;
+    . = . + _Min_Stack_Size;
+    __msp_stack_end__ = .;
+  } >RAM_D1
+
+  ASSERT(__heap_limit__ <= __d1_reclaimed_start__,
+         "RAM_D1 heap overlaps reclaimed arena")
+  ASSERT(__d1_reclaimed_used_end__ <= __stack_guard_start__,
+         "RAM_D1 reclaimed arena overflow")
+  ASSERT(SIZEOF(.msp_guard) == _Min_Heap_Stack_Guard,
+         "MSP guard size mismatch")
+  ASSERT(SIZEOF(.msp_stack) == _Min_Stack_Size,
+         "MSP stack size mismatch")
+  ASSERT((__stack_guard_start__ & (_Min_Heap_Stack_Guard - 1)) == 0,
+         "MSP guard is not MPU aligned")
+  ASSERT(__msp_stack_end__ == _estack,
+         "MSP stack does not end at _estack")
   ASSERT(__heap_limit__ + _Min_Heap_Stack_Guard <= __stack_limit__,
          "RAM_D1 heap/guard/stack contract overflow")
 

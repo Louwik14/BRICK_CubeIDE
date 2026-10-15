@@ -375,8 +375,21 @@ static uint8_t ensure_directory(void)
     return project_mkdir_path(project_storage_projects_root);
 }
 
-static uint8_t project_remove_tree(const char *directory)
+#define PROJECT_REMOVE_TREE_MAX_DEPTH 2U
+
+static uint8_t project_tree_child_path(char child[128],const char *directory,
+                                       const char *name)
 {
+    const int length=snprintf(child,128U,"%s/%s",directory,name);
+    return(length>0&&(uint32_t)length<128U)?1U:0U;
+}
+
+/* Validate the complete tree before deleting its first entry.  The second
+ * pass retains the same depth check so a media change cannot create an
+ * unbounded recursive path between validation and removal. */
+static uint8_t project_tree_depth_allowed(const char *directory,uint8_t depth)
+{
+    if(directory==NULL||depth==0U||depth>PROJECT_REMOVE_TREE_MAX_DEPTH)return 0U;
     DIR dir;FILINFO info;char child[128];
     FRESULT result=f_opendir(&dir,directory);
     if(result==FR_NO_PATH||result==FR_NO_FILE)return 1U;
@@ -387,18 +400,48 @@ static uint8_t project_remove_tree(const char *directory)
         if(result!=FR_OK){(void)f_closedir(&dir);return 0U;}
         if(info.fname[0]=='\0')break;
         if(strcmp(info.fname,".")==0||strcmp(info.fname,"..")==0)continue;
-        const int length=snprintf(child,sizeof(child),"%s/%s",directory,info.fname);
-        if(length<=0||(uint32_t)length>=sizeof(child))
+        if((info.fattrib&AM_DIR)==0U)continue;
+        if(depth>=PROJECT_REMOVE_TREE_MAX_DEPTH
+            ||project_tree_child_path(child,directory,info.fname)==0U
+            ||project_tree_depth_allowed(child,(uint8_t)(depth+1U))==0U)
+        {(void)f_closedir(&dir);return 0U;}
+    }
+    return(f_closedir(&dir)==FR_OK)?1U:0U;
+}
+
+static uint8_t project_remove_tree_bounded(const char *directory,uint8_t depth)
+{
+    if(directory==NULL||depth==0U||depth>PROJECT_REMOVE_TREE_MAX_DEPTH)return 0U;
+    DIR dir;FILINFO info;char child[128];
+    FRESULT result=f_opendir(&dir,directory);
+    if(result==FR_NO_PATH||result==FR_NO_FILE)return 1U;
+    if(result!=FR_OK)return 0U;
+    for(;;)
+    {
+        result=f_readdir(&dir,&info);
+        if(result!=FR_OK){(void)f_closedir(&dir);return 0U;}
+        if(info.fname[0]=='\0')break;
+        if(strcmp(info.fname,".")==0||strcmp(info.fname,"..")==0)continue;
+        if(project_tree_child_path(child,directory,info.fname)==0U)
         {(void)f_closedir(&dir);return 0U;}
         if((info.fattrib&AM_DIR)!=0U)
         {
-            if(project_remove_tree(child)==0U){(void)f_closedir(&dir);return 0U;}
+            if(depth>=PROJECT_REMOVE_TREE_MAX_DEPTH
+                ||project_remove_tree_bounded(child,(uint8_t)(depth+1U))==0U)
+            {(void)f_closedir(&dir);return 0U;}
         }
         else if(f_unlink(child)!=FR_OK)
         {(void)f_closedir(&dir);return 0U;}
     }
-    (void)f_closedir(&dir);result=f_unlink(directory);
+    if(f_closedir(&dir)!=FR_OK)return 0U;
+    result=f_unlink(directory);
     return(result==FR_OK||result==FR_NO_PATH||result==FR_NO_FILE)?1U:0U;
+}
+
+static uint8_t project_remove_tree(const char *directory)
+{
+    if(project_tree_depth_allowed(directory,1U)==0U)return 0U;
+    return project_remove_tree_bounded(directory,1U);
 }
 
 static void project_delete_recover_all(void)
@@ -1243,9 +1286,11 @@ void project_product_save_service(void)
             if(!made)project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_DIRECTORY,(int32_t)FR_DISK_ERR);
             else
             {
-                if(g_project_save.resume_mode==0U)
-                    (void)project_remove_tree(g_project_save.transaction_directory);
-                g_project_save.state=PROJECT_SAVE_MKDIR_PROJECT;
+                if(g_project_save.resume_mode==0U
+                    &&project_remove_tree(g_project_save.transaction_directory)==0U)
+                    project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_DIRECTORY,
+                                      (int32_t)FR_DENIED);
+                else g_project_save.state=PROJECT_SAVE_MKDIR_PROJECT;
             }
             break;
         }
@@ -2265,7 +2310,7 @@ void project_product_load_service(void)
         persistent_pattern_control_abort_prepared(&restore->prepared_pattern);
         const persist_codec_result_t pattern_prepare=
             persistent_pattern_control_prepare(&restore->working_pattern,
-                &restore->prepared_pattern,restore->scratch.groove_build.track);
+                &restore->prepared_pattern,&restore->scratch.groove_build);
         if(pattern_prepare!=PERSIST_CODEC_OK)
             PROJECT_PRODUCT_FATAL("PROJECT_PATTERN_REPREPARE_FAILED",
                                   PROJECT_FATAL_PATTERN_APPLY);
@@ -2547,7 +2592,7 @@ static uint8_t project_product_load_internal(uint8_t slot,
     }
     const persist_codec_result_t pattern_prepare=
         persistent_pattern_control_prepare(&restore->working_pattern,
-            &restore->prepared_pattern,restore->scratch.groove_build.track);
+            &restore->prepared_pattern,&restore->scratch.groove_build);
     if(pattern_prepare!=PERSIST_CODEC_OK)
     {
         persist_debug_error(PERSIST_DBG_STAGE_VALIDATE,(int32_t)pattern_prepare);
@@ -2591,8 +2636,10 @@ uint8_t project_product_delete(uint8_t slot)
     {
         (void)project_mkdir_path(project_storage_internal_root);
         (void)project_mkdir_path(project_storage_transactions_root);
-        (void)project_remove_tree(transaction);
-        result=f_rename(source,transaction);
+        if(project_remove_tree(transaction)==0U
+            ||project_tree_depth_allowed(source,1U)==0U)
+            result=FR_DENIED;
+        else result=f_rename(source,transaction);
         if(result==FR_OK)(void)project_remove_tree(transaction);
     }
     sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
@@ -2653,7 +2700,7 @@ uint8_t project_product_new_blank(void)
                               PROJECT_FATAL_BLANK_BUILD);
     const persist_codec_result_t pattern_prepare=
         persistent_pattern_control_prepare(&restore->working_pattern,
-            &restore->prepared_pattern,restore->scratch.groove_build.track);
+            &restore->prepared_pattern,&restore->scratch.groove_build);
     if(pattern_prepare!=PERSIST_CODEC_OK)
     {
         if(pattern_prepare!=PERSIST_CODEC_IO_ERROR)

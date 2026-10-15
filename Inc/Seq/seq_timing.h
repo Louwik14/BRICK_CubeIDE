@@ -40,6 +40,12 @@ typedef struct
     uint8_t reserved;
 } seq_groove_compiled_t;
 
+typedef union
+{
+    seq_groove_compiled_t track[SEQ_TIMING_TRACK_COUNT];
+    int64_t compile_scratch[SEQ_GROOVE_MAX_PREPARED_NODES];
+} seq_groove_build_workspace_t;
+
 typedef struct
 {
     uint8_t base;
@@ -83,13 +89,15 @@ _Static_assert(sizeof(seq_track_timing_config_t) == 72U,
                "track timing configuration budget");
 _Static_assert(sizeof(seq_groove_compiled_t) == 5160U,
                "compiled Groove block budget");
+_Static_assert(sizeof(seq_groove_build_workspace_t) == 82560U,
+               "Groove build workspace budget");
 _Static_assert(sizeof(seq_track_timing_plan_t) == 64U,
                "compiled track timing plan budget");
 
 void seq_timing_geometry_init(void);
 uint8_t seq_timing_geometry_build_begin_with_workspace(
     const seq_track_timing_config_t config[SEQ_TIMING_TRACK_COUNT],
-    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
+    seq_groove_build_workspace_t *workspace);
 uint8_t seq_timing_geometry_build_begin(
     const seq_track_timing_config_t config[SEQ_TIMING_TRACK_COUNT]);
 void seq_timing_geometry_build_abort(void);

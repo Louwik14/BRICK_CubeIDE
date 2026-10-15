@@ -54,7 +54,7 @@ persist_codec_result_t persistent_pattern_control_validate_decoded(
 persist_codec_result_t persistent_pattern_control_prepare(
     const persist_control_pattern_t *pattern,
     persistent_pattern_prepared_t *prepared,
-    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
+    seq_groove_build_workspace_t *workspace);
 void persistent_pattern_control_abort_prepared(
     persistent_pattern_prepared_t *prepared);
 /* CONTROL and SEQ are already proven/compiled.  Any refusal here is a

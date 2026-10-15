@@ -294,12 +294,12 @@ void seq_engine_control_disarm_track(uint8_t track);
 void seq_engine_control_poll(void);
 uint8_t seq_engine_control_flush(void);
 uint8_t seq_engine_control_flush_with_workspace(
-    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
+    seq_groove_build_workspace_t *workspace);
 uint8_t seq_engine_control_replace_with_workspace(
-    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
+    seq_groove_build_workspace_t *workspace);
 uint8_t seq_engine_control_prepare_begin(
     const seq_track_timing_config_t timing[SEQ_TIMING_TRACK_COUNT],
-    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
+    seq_groove_build_workspace_t *workspace);
 uint8_t seq_engine_control_prepare_track(
     uint8_t track, const seq_pattern_prepare_track_t *prepared,
     uint32_t samples_per_step_q16, uint32_t groove_seed);

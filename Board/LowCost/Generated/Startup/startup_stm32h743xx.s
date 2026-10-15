@@ -60,6 +60,16 @@ defined in linker script */
 Reset_Handler:
   ldr   sp, =_estack      /* set stack pointer */
 
+/* Paint the complete linker-reserved MSP range before the first call.  The
+   cooperative monitor samples this pattern outside IRQ context. */
+  ldr r0, =__stack_limit__
+  ldr r1, =_estack
+  ldr r2, =0xA55AA55A
+FillMspWatermark:
+  str r2, [r0], #4
+  cmp r0, r1
+  bcc FillMspWatermark
+
 /* Call the ExitRun0Mode function to configure the power supply */
   bl  ExitRun0Mode
 /* Call the clock system initialization function.*/

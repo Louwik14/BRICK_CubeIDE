@@ -81,6 +81,9 @@ extern uint32_t __ram_d2_dma_audio_start__;
 extern uint32_t __ram_d2_dma_audio_end__;
 extern uint32_t __ram_d2_dma_cacheable_start__;
 extern uint32_t __ram_d2_dma_cacheable_end__;
+extern uint32_t __stack_guard_start__;
+extern uint32_t __stack_limit__;
+extern uint32_t _estack;
 
 #define RAM_D2_DMA_MPU_BASE               (0x30000000UL)
 #define RAM_D2_DMA_MPU_COVERED_BYTES      (12UL * 1024UL)
@@ -92,10 +95,51 @@ extern uint32_t __ram_d2_dma_cacheable_end__;
 #define RAM_D2_IRQ_SHARED_MPU_BASE                 (0x30040000UL)
 #define SDRAM_MPU_BASE                     (0xC0000000UL)
 #define SDRAM_RECORDER_MPU_BASE            (0xC1FC0000UL)
+#define MSP_GUARD_BYTES                    (4UL * 1024UL)
+#define MSP_PROVISIONAL_STACK_BYTES        (40UL * 1024UL)
+#define MSP_STACK_FILL_WORD                (0xA55AA55AUL)
+#define MSP_MONITOR_WORDS_PER_SERVICE      (64UL)
 #define UI_TASKLET_ENGINE_DIVIDER         (4UL)
 #define UI_TASKLET_CATCHUP_BUDGET         (8UL)
 #define LOWCOST_BOOTLOADER_SHIFT_STEP16_ENABLE     1U
 #define LOWCOST_BOOTLOADER_HOLD_MS                 2000UL
+
+__attribute__((section(".ram_d3_ctrl")))
+volatile uint32_t g_msp_stack_high_water_bytes;
+__attribute__((section(".ram_d3_ctrl")))
+volatile uint32_t g_msp_stack_capacity_bytes;
+__attribute__((section(".ram_d3_ctrl")))
+static uintptr_t g_msp_stack_scan_address;
+__attribute__((section(".ram_d3_ctrl")))
+static uintptr_t g_msp_stack_lowest_touched;
+
+static void msp_stack_monitor_init(void)
+{
+  const uintptr_t stack_limit = (uintptr_t)&__stack_limit__;
+  const uintptr_t stack_end = (uintptr_t)&_estack;
+  g_msp_stack_capacity_bytes = (uint32_t)(stack_end - stack_limit);
+  g_msp_stack_high_water_bytes = 0U;
+  g_msp_stack_scan_address = stack_limit;
+  g_msp_stack_lowest_touched = stack_end;
+}
+
+static void msp_stack_monitor_service(void)
+{
+  const uintptr_t stack_limit = (uintptr_t)&__stack_limit__;
+  const uintptr_t stack_end = (uintptr_t)&_estack;
+  uintptr_t scan = g_msp_stack_scan_address;
+  uintptr_t lowest = g_msp_stack_lowest_touched;
+  for (uint32_t word = 0U; word < MSP_MONITOR_WORDS_PER_SERVICE; ++word)
+  {
+    if (*(const volatile uint32_t *)scan != MSP_STACK_FILL_WORD && scan < lowest)
+      lowest = scan;
+    scan += sizeof(uint32_t);
+    if (scan >= stack_end) scan = stack_limit;
+  }
+  g_msp_stack_scan_address = scan;
+  g_msp_stack_lowest_touched = lowest;
+  g_msp_stack_high_water_bytes = (uint32_t)(stack_end - lowest);
+}
 
 static void MPU_Config(void)
 {
@@ -156,6 +200,21 @@ static void MPU_Config(void)
   MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
 
+  /* Region 7 overrides the privileged default map for the page immediately
+     below MSP.  Any downward stack access faults before reaching reclaimed
+     D1, the bounded heap, or static storage. */
+  MPU_InitStruct.Number = MPU_REGION_NUMBER7;
+  MPU_InitStruct.BaseAddress = (uint32_t)&__stack_guard_start__;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_4KB;
+  MPU_InitStruct.SubRegionDisable = 0x00U;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+  MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
   MPU_InitStruct.Number = MPU_REGION_NUMBER5;
   MPU_InitStruct.BaseAddress = RAM_D3_IRQ_SHARED_MPU_BASE;
   MPU_InitStruct.Size = MPU_REGION_SIZE_32KB;
@@ -181,6 +240,7 @@ static void MPU_Config(void)
   MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
 
+  SCB->SHCSR |= SCB_SHCSR_MEMFAULTENA_Msk;
   HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
   __DSB();
   __ISB();
@@ -255,7 +315,18 @@ int main(void)
     Error_Handler();
   }
 
+  const uintptr_t stack_guard_start = (uintptr_t)&__stack_guard_start__;
+  const uintptr_t stack_limit = (uintptr_t)&__stack_limit__;
+  const uintptr_t stack_end = (uintptr_t)&_estack;
+  if (((stack_guard_start & (MSP_GUARD_BYTES - 1U)) != 0U)
+      || (stack_limit - stack_guard_start != MSP_GUARD_BYTES)
+      || (stack_end - stack_limit != MSP_PROVISIONAL_STACK_BYTES))
+  {
+    Error_Handler();
+  }
+
   MPU_Config();
+  msp_stack_monitor_init();
   /* USER CODE END 1 */
 
   /* Enable the CPU Cache */
@@ -333,6 +404,7 @@ int main(void)
 	     brick6_app_process();
 	     board_usb_process();
 	     lowcost_bootloader_shift_step16_service();
+	     msp_stack_monitor_service();
 
 	     uint32_t ui_ticks_processed = 0U;
 	     while ((engine_tick_count != last_tick) && (ui_ticks_processed < UI_TASKLET_CATCHUP_BUDGET))

@@ -1450,7 +1450,7 @@ static uint8_t persistent_pattern_finalize_audio_from_control(
 static uint8_t persistent_pattern_prepare_seq(
     const persist_control_pattern_t *pattern,
     persistent_pattern_prepared_t *prepared,
-    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
+    seq_groove_build_workspace_t *workspace)
 {
     seq_track_timing_config_t timing[SEQ_TIMING_TRACK_COUNT];
     for(uint8_t entity=0U;entity<SEQ_TIMING_TRACK_COUNT;++entity)
@@ -1657,7 +1657,7 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
 persist_codec_result_t persistent_pattern_control_prepare(
     const persist_control_pattern_t *pattern,
     persistent_pattern_prepared_t *prepared,
-    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
+    seq_groove_build_workspace_t *workspace)
 {
     if(pattern==NULL||prepared==NULL||workspace==NULL)
         return PERSIST_CODEC_INVALID_ARGUMENT;

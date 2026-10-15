@@ -30,6 +30,9 @@
 /* WARM: block DSP state not directly DMA-owned */
 #define AUDIO_WARM SEC_ATTR(".ram_d1_audio")
 
+/* Explicit arena below the protected MSP guard for future D1 allocations. */
+#define D1_RECLAIMED SEC_ATTR(".ram_d1_reclaimed") ALIGN32
+
 /* DMA/shared buffers: hardware-proven non-cacheable D2 contract. */
 #define DMA_BUFFER SEC_ATTR(".ram_d2_dma") ALIGN32
 

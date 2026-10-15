@@ -36,10 +36,7 @@ typedef struct
 _Static_assert(sizeof(persistence_patch_dx7_boot_workspace_t) == 114480U,
                "Patch DX7 boot workspace size changed");
 
-typedef struct
-{
-    seq_groove_compiled_t track[SEQ_TIMING_TRACK_COUNT];
-} persistence_groove_build_workspace_t;
+typedef seq_groove_build_workspace_t persistence_groove_build_workspace_t;
 
 #define PERSISTENCE_PATTERN_ENCODED_MAX_BYTES \
     PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES
