@@ -328,12 +328,8 @@ static uint8_t ui_page_settings_wavetable_backend_from_global(uint16_t global_sl
 
     uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if(project_control_resolve_wavetable_runtime(global_slot,&runtime_global)==0U)return 0U;
-    const sample_global_slot_t *const slot = sample_global_pool_get_slot(runtime_global);
-    if ((slot == 0)
-        || (slot->kind != SAMPLE_GLOBAL_KIND_WAVETABLE)
-        || (sample_global_pool_resolve_backend(runtime_global,
-                                               SAMPLE_GLOBAL_KIND_WAVETABLE,
-                                               &backend_slot) == 0U)
+    if ((wavetable_pool_resolve_global(runtime_global,
+                                       &backend_slot) == 0U)
         || (backend_slot >= WAVETABLE_POOL_MAX_SLOTS))
     {
         return 0U;

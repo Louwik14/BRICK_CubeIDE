@@ -831,9 +831,7 @@ static void ui_renderer_template_draw_wave_wavetable_preview(const ui_param_seq_
     }
 
     uint16_t wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
-    if (sample_global_pool_resolve_backend(global_slot,
-                                           SAMPLE_GLOBAL_KIND_WAVETABLE,
-                                           &wavetable_slot) == 0U)
+    if (wavetable_pool_resolve_global(global_slot, &wavetable_slot) == 0U)
     {
         return;
     }

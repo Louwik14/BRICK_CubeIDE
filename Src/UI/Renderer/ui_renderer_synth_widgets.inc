@@ -75,7 +75,7 @@ static uint8_t ui_renderer_template_wave_table_for_param(
     uint16_t global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     uint16_t slot = WAVETABLE_POOL_INVALID_SLOT;
     if ((project_control_resolve_wavetable_runtime(logical, &global) == 0U)
-            || (sample_global_pool_resolve_backend(global, SAMPLE_GLOBAL_KIND_WAVETABLE, &slot) == 0U)) return 0U;
+            || (wavetable_pool_resolve_global(global, &slot) == 0U)) return 0U;
     *out_table = wavetable_pool_get_slot(slot);
     *out_preview = wavetable_pool_get_preview_for_global(global);
     return (uint8_t)((*out_table != NULL) && ((*out_table)->state == WAVETABLE_SLOT_READY)

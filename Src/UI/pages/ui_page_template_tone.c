@@ -14,6 +14,7 @@
 #include "Param/param_stack_labels.h"
 #include "Harmony/harmony_engine.h"
 #include "Sampler/sample_global_pool.h"
+#include "Sampler/wavetable_pool.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_reader_contract.h"
 #include "ui_core.h"

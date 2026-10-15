@@ -125,8 +125,7 @@ static uint8_t patch_preview_resolve_assets(
                         path, &logical)
                     || !project_control_resolve_wavetable_runtime(logical,
                         &global)
-                    || !sample_global_pool_resolve_backend(global,
-                        SAMPLE_GLOBAL_KIND_WAVETABLE, &backend)) return 0U;
+                    || !wavetable_pool_resolve_global(global, &backend)) return 0U;
             const wavetable_slot_t *const slot = wavetable_pool_get_slot(backend);
             if ((slot == NULL) || (slot->state != WAVETABLE_SLOT_READY)
                     || (slot->data == NULL) || (slot->frame_count == 0U)) return 0U;

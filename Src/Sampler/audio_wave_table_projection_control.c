@@ -6,12 +6,11 @@
 #include "ControlRT/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Param/param_registry.h"
-#include "Sampler/sample_global_pool.h"
-#include "Sampler/sample_page_cache_backing.h"
 #include "Sampler/wavetable_pool.h"
 #include "Storage/project_control.h"
 #include "Track/track_runtime.h"
 #include "stm32h7xx.h"
+#include "Platform/wavetable_flash_layout.h"
 
 #define AUDIO_WAVE_TABLE_SELECTION_COUNT \
     (BRICK_ENTITY_CAPACITY * AUDIO_WAVETABLE_OSC_COUNT)
@@ -44,14 +43,9 @@ uint8_t audio_wave_table_projection_build_descriptor(
     const uint64_t expected_base_bytes = (uint64_t)slot->frame_count
         * WAVETABLE_FRAME_SAMPLE_COUNT * sizeof(float);
     if ((slot->generation == 0U) || (slot->data == NULL)
-        || (slot->first_page_slot >= SAMPLE_PAGE_MAX_COUNT)
-        || (slot->page_count == 0U)
-        || (slot->page_count > (SAMPLE_PAGE_MAX_COUNT - slot->first_page_slot))
-        || ((uint64_t)slot->data_bytes
-            > ((uint64_t)slot->page_count * SAMPLE_PAGE_BYTES))
-        || ((const uint8_t *)slot->data
-            != &((const uint8_t *)g_sample_page_data)[
-                (uint32_t)slot->first_page_slot * SAMPLE_PAGE_BYTES])
+        || (slot->persistent == 0U)
+        || ((uintptr_t)slot->data < WAVETABLE_FLASH_BASE)
+        || ((uintptr_t)slot->data + slot->data_bytes > WAVETABLE_FLASH_END)
         || (slot->frame_count == 0U)
         || (slot->frame_sample_count != WAVETABLE_FRAME_SAMPLE_COUNT)
         || (expected_base_bytes != slot->data_bytes)
@@ -60,16 +54,9 @@ uint8_t audio_wave_table_projection_build_descriptor(
     out->base_data = slot->data;
     if ((out->band_count != 0U)
         && ((slot->mipmap.data == NULL)
-            || (slot->mipmap.first_page_slot >= SAMPLE_PAGE_MAX_COUNT)
-            || (slot->mipmap.page_count == 0U)
-            || (slot->mipmap.page_count
-                > (SAMPLE_PAGE_MAX_COUNT - slot->mipmap.first_page_slot))
-            || ((uint64_t)slot->mipmap.data_bytes
-                > ((uint64_t)slot->mipmap.page_count * SAMPLE_PAGE_BYTES))
-            || ((const uint8_t *)slot->mipmap.data
-                != &((const uint8_t *)g_sample_page_data)[
-                    (uint32_t)slot->mipmap.first_page_slot
-                        * SAMPLE_PAGE_BYTES])))
+            || ((uintptr_t)slot->mipmap.data < WAVETABLE_FLASH_BASE)
+            || ((uintptr_t)slot->mipmap.data + slot->mipmap.data_bytes
+                > WAVETABLE_FLASH_END)))
         return 0U;
     uint32_t mip_offset = 0U;
     for (uint16_t i = 0U; i < out->band_count; ++i)
@@ -133,12 +120,11 @@ void audio_wave_table_projection_install_prepared(
 static uint8_t resolve_selection(uint16_t logical,
                                  audio_wave_table_selection_t *out)
 {
-    uint16_t global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    uint16_t global = WAVETABLE_POOL_INVALID_SLOT;
     uint16_t slot = WAVETABLE_POOL_INVALID_SLOT;
     if ((out == NULL)
         || !project_control_resolve_wavetable_runtime(logical, &global)
-        || !sample_global_pool_resolve_backend(global,
-            SAMPLE_GLOBAL_KIND_WAVETABLE, &slot)) return 0U;
+        || !wavetable_pool_resolve_global(global, &slot)) return 0U;
     const wavetable_slot_t *const table = wavetable_pool_get_slot(slot);
     if ((table == NULL) || (table->state != WAVETABLE_SLOT_READY)
         || (table->data == NULL) || (table->frame_count == 0U)

@@ -15,6 +15,7 @@
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/wavetable_pool.h"
+#include "Sampler/audio_wave_table_projection_control.h"
 #include "Seq/seq_runtime.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/groove_bank.h"
@@ -70,6 +71,7 @@ void control_domain_init(void)
     sd_preview_init();
     sample_page_cache_init();
     sample_global_pool_init();
+    audio_wave_table_projection_init();
     wavetable_pool_init();
     multi_sample_pool_init();
     multi_sample_loader_init();

@@ -23,8 +23,6 @@ void wavetable_pool_load_async_cancel(void)
     {
         (void)f_unlink(job->temp_path);
     }
-    if (job->global_reserved != 0U)
-        sample_global_pool_clear_slot(job->global_slot);
     wavetable_pool_candidate_release(&g_wavetable_candidate);
     memset(job, 0, sizeof(*job));
     job->state = WAVETABLE_LOAD_IDLE;
@@ -33,11 +31,7 @@ void wavetable_pool_load_async_cancel(void)
 static void wavetable_load_fail(wavetable_result_t result)
 {
     wavetable_restore_retained_old();
-    if (g_wavetable_load_job.global_reserved != 0U)
-    {
-        sample_global_pool_clear_slot(g_wavetable_load_job.global_slot);
-        g_wavetable_load_job.global_reserved = 0U;
-    }
+    g_wavetable_load_job.global_reserved = 0U;
     g_wavetable_load_job.result = result;
     g_wavetable_load_job.state = WAVETABLE_LOAD_CLEANUP;
     wavetable_pool_set_last(result);
@@ -114,7 +108,7 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
         return 0U;
     }
     job->wavetable_slot = wavetable_slot;
-    job->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    job->global_slot = WAVETABLE_POOL_INVALID_SLOT;
     job->media_epoch = sd_access_media_epoch();
     job->source_geometry = source_geometry;
     if (prepared_info != NULL)
@@ -384,35 +378,6 @@ static void wavetable_pool_load_async_step(void)
             wavetable_slot_t *const destination =
                 &g_wavetable_pool.slots[job->wavetable_slot];
             const wavetable_slot_state_t state = destination->state;
-            if (candidate->generation == 0U)
-            {
-                uint16_t global_slot = destination->global_slot;
-                if (global_slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
-                {
-                    if (sample_global_pool_reserve_wavetable(
-                            job->wavetable_slot, candidate->path,
-                            candidate->cost_bytes_aligned, &global_slot) == 0U)
-                    {
-                        wavetable_load_fail(WAVETABLE_RESULT_REGISTER_FAIL);
-                        return;
-                    }
-                    job->global_reserved = 1U;
-                }
-                job->global_slot = global_slot;
-                candidate->global_slot = global_slot;
-                candidate->generation = wavetable_pool_next_generation();
-                candidate->state = WAVETABLE_SLOT_READY;
-                candidate->error = WAVETABLE_RESULT_OK;
-                candidate->preview.generation = candidate->generation;
-                wavetable_pool_mark_payload_cpu_clean(candidate);
-                if (audio_wave_table_projection_build_descriptor(
-                        job->wavetable_slot, candidate,
-                        &job->prepared_descriptor) == 0U)
-                {
-                    wavetable_load_fail(WAVETABLE_RESULT_REGISTER_FAIL);
-                    return;
-                }
-            }
             if ((state == WAVETABLE_SLOT_READY)
                 && (job->quiesce_committed == 0U))
             {
@@ -445,22 +410,50 @@ static void wavetable_pool_load_async_step(void)
                 wavetable_load_fail(WAVETABLE_RESULT_REGISTER_FAIL);
                 return;
             }
-            if (sample_global_pool_register_wavetable_at(
-                    job->global_slot, job->wavetable_slot, candidate->path,
-                    candidate->cost_bytes_aligned) == 0U)
-                BRICK_FATAL_CONTEXT("WAVETABLE_COMMIT_REGISTRATION_FAILED",
-                                  BRICK_FATAL_WAVETABLE_COMMIT,
-                                  job->wavetable_slot, job->global_slot,
-                                  candidate->cost_bytes_aligned,
-                                  SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
+            if (candidate->generation == 0U)
+            {
+                wavetable_slot_t persistent;
+                if (wavetable_flash_store_append(
+                        candidate, job->source_crc, job->base_crc,
+                        job->payload_crc, &persistent) == 0U)
+                {
+                    wavetable_load_fail(WAVETABLE_RESULT_POOL_FULL);
+                    return;
+                }
+                const wavetable_preview_t preview = candidate->preview;
+                *candidate = persistent;
+                candidate->preview = preview;
+                job->global_slot = job->wavetable_slot;
+                candidate->global_slot = job->global_slot;
+                candidate->generation = wavetable_pool_next_generation();
+                candidate->state = WAVETABLE_SLOT_READY;
+                candidate->error = WAVETABLE_RESULT_OK;
+                candidate->preview.generation = candidate->generation;
+                if (audio_wave_table_projection_build_descriptor(
+                        job->wavetable_slot, candidate,
+                        &job->prepared_descriptor) == 0U)
+                {
+                    (void)wavetable_flash_store_delete(candidate->flash_offset);
+                    wavetable_load_fail(WAVETABLE_RESULT_REGISTER_FAIL);
+                    return;
+                }
+            }
+            if ((job->old_snapshot.state == WAVETABLE_SLOT_READY)
+                && (job->old_snapshot.persistent != 0U)
+                && (wavetable_flash_store_delete(
+                        job->old_snapshot.flash_offset) == 0U))
+            {
+                if (candidate->persistent != 0U)
+                    (void)wavetable_flash_store_delete(candidate->flash_offset);
+                wavetable_load_fail(WAVETABLE_RESULT_WRITE_FAIL);
+                return;
+            }
             job->global_reserved = 0U;
             const uint32_t primask = __get_PRIMASK();
             __disable_irq();
             *destination = *candidate;
             __DMB();
             if (primask == 0U) __enable_irq();
-            candidate->page_count = 0U;
-            candidate->mipmap.page_count = 0U;
             audio_wave_table_projection_install_prepared(
                 &job->prepared_descriptor);
             wavetable_pool_release_slot_allocations(&job->old_snapshot);
@@ -868,11 +861,11 @@ static wavetable_result_t wavetable_pool_load_wav_transactional(
     wavetable_pool_candidate_init(candidate);
     if (out_global_slot != 0)
     {
-        *out_global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        *out_global_slot = WAVETABLE_POOL_INVALID_SLOT;
     }
     if ((wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
-        || ((forced_global_slot != SAMPLE_GLOBAL_POOL_INVALID_INDEX)
-            && (forced_global_slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS))
+        || ((forced_global_slot != WAVETABLE_POOL_INVALID_SLOT)
+            && (forced_global_slot >= WAVETABLE_POOL_MAX_SLOTS))
         || (path == 0) || (path[0] == '\0')
         || ((source_geometry != WAVETABLE_SOURCE_GEOMETRY_1024)
             && (source_geometry != WAVETABLE_SOURCE_GEOMETRY_2048)))
@@ -880,14 +873,6 @@ static wavetable_result_t wavetable_pool_load_wav_transactional(
         wavetable_pool_set_last(WAVETABLE_RESULT_INVALID_ARG);
         return WAVETABLE_RESULT_INVALID_ARG;
     }
-    if (sample_global_pool_validate_entries(SAMPLE_GLOBAL_KIND_WAVETABLE,
-                                            wavetable_slot,
-                                            1U) == 0U)
-    {
-        wavetable_pool_set_last(WAVETABLE_RESULT_GLOBAL_SLOT_FULL);
-        return WAVETABLE_RESULT_GLOBAL_SLOT_FULL;
-    }
-
     char *const cache_path = g_wavetable_transaction_paths[0];
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
     {
@@ -999,7 +984,14 @@ done:
         result = wavetable_pool_commit_candidate(wavetable_slot,
                                                  forced_global_slot,
                                                  candidate,
-                                                 out_global_slot);
+                                                 out_global_slot,
+                                                 source_crc32,
+                                                 wavetable_pool_crc32_memory(
+                                                     candidate->data,
+                                                     candidate->data_bytes),
+                                                 wavetable_pool_crc32_memory(
+                                                     candidate->mipmap.data,
+                                                     candidate->mipmap.data_bytes));
     }
     if (result != WAVETABLE_RESULT_OK)
     {
@@ -1028,7 +1020,7 @@ wavetable_result_t wavetable_pool_load_wav_with_geometry(
 {
     return wavetable_pool_load_wav_transactional(
         wavetable_slot,
-        SAMPLE_GLOBAL_POOL_INVALID_INDEX,
+        WAVETABLE_POOL_INVALID_SLOT,
         path,
         source_geometry,
         out_global_slot);
@@ -1038,14 +1030,14 @@ wavetable_result_t wavetable_pool_load_file_at(uint16_t wavetable_slot,
                                                uint16_t global_slot,
                                                const char *path)
 {
-    if (global_slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+    if (global_slot >= WAVETABLE_POOL_MAX_SLOTS)
     {
         wavetable_pool_set_last(WAVETABLE_RESULT_INVALID_ARG);
         return WAVETABLE_RESULT_INVALID_ARG;
     }
     if (wavetable_pool_path_ext_is_wav(path) != 0U)
     {
-        uint16_t loaded_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        uint16_t loaded_global = WAVETABLE_POOL_INVALID_SLOT;
         const wavetable_result_t result =
             wavetable_pool_load_wav_transactional(wavetable_slot,
                                                   global_slot,

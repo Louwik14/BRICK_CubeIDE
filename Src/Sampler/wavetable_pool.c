@@ -5,9 +5,6 @@
 #include <string.h>
 
 #include "ff.h"
-#include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_page_cache_port.h"
-#include "Platform/cache_maintenance.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Sampler/audio_wave_table_projection_control.h"
 #include "ControlRT/control_audio_timing.h"
@@ -24,6 +21,7 @@
 #include "Storage/project_load_quiesce.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_stream_manager.h"
+#include "Sampler/wavetable_flash_store.h"
 
 #define WAVETABLE_POOL_IO_BYTES (SD_SCHEDULER_HEAVY_MAX_DATA_BYTES)
 #define WAVETABLE_LOAD_SERVICE_BUDGET_MS (2U)
@@ -67,6 +65,11 @@ STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_work_real[WAVETABLE_FRAME_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_work_imag[WAVETABLE_FRAME_SAMPLE_COUNT];
+STORAGE_SCRATCH_SDRAM static float
+    g_wavetable_prepare_base[WAVETABLE_FLASH_MAX_FRAMES
+                             * WAVETABLE_FRAME_SAMPLE_COUNT];
+STORAGE_SCRATCH_SDRAM static float
+    g_wavetable_prepare_mipmap[WAVETABLE_FLASH_MAX_FRAMES * 2048U];
 static const uint8_t g_wavetable_mipmap_upstream_commit_sha1[20] = {
     0x0dU, 0x9cU, 0xbfU, 0x04U, 0x40U, 0xf0U, 0x55U, 0x5eU, 0x25U, 0x44U,
     0xccU, 0x1eU, 0xb0U, 0x19U, 0xb3U, 0x16U, 0x75U, 0x63U, 0x70U, 0x08U
@@ -191,36 +194,15 @@ static CTRL_STATE uint64_t
     g_wavetable_retire_not_before_sample[WAVETABLE_POOL_MAX_SLOTS];
 static CTRL_STATE uint8_t
     g_wavetable_retire_stop_committed[WAVETABLE_POOL_MAX_SLOTS];
+static CTRL_STATE uint8_t
+    g_wavetable_retire_delete[WAVETABLE_POOL_MAX_SLOTS];
 static CTRL_STATE uint8_t g_wavetable_retire_invariant_failed;
-
-static void wavetable_pool_mark_payload_cpu_clean(
-    const wavetable_slot_t *slot)
-{
-    /* These CPU-produced payloads remain local to M7.  Cleaning here is the
-     * page-cache ownership handoff that makes payload_cpu_clean truthful; it
-     * is not part of the CONTROL-to-AUDIO publication protocol. */
-    dcache_clean_by_addr_aligned(slot->data, slot->data_bytes);
-    dcache_clean_by_addr_aligned(slot->mipmap.data,
-                                 slot->mipmap.data_bytes);
-    sample_page_cache_port_mark_local_cpu_clean(slot->first_page_slot,
-                                                 slot->page_count);
-    sample_page_cache_port_mark_local_cpu_clean(slot->mipmap.first_page_slot,
-                                                 slot->mipmap.page_count);
-}
 
 static void wavetable_restore_retained_old(void)
 {
     wavetable_load_job_t *const job = &g_wavetable_load_job;
     if (job->retain_old_for_commit == 0U) return;
     const wavetable_slot_t *const old = &job->old_snapshot;
-    if (sample_global_pool_register_wavetable_at(
-            old->global_slot, job->wavetable_slot, old->path,
-            old->cost_bytes_aligned) == 0U)
-        BRICK_FATAL_CONTEXT("WAVETABLE_ROLLBACK_REGISTRATION_FAILED",
-                          BRICK_FATAL_WAVETABLE_COMMIT,
-                          job->wavetable_slot, old->global_slot,
-                          old->cost_bytes_aligned,
-                          SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
     g_wavetable_pool.slots[job->wavetable_slot] = *old;
     audio_wavetable_descriptor_t descriptor;
     if (audio_wave_table_projection_build_descriptor(
@@ -319,15 +301,18 @@ uint8_t wavetable_pool_inspect_source(const wav_info_t *info,
     if (wavetable_pool_frame_geometry(frame_count, &base_bytes, &mipmap_bytes,
                                       &base_pages, &mipmap_pages) == 0U)
         return 0U;
-    const uint64_t total_bytes = (uint64_t)base_pages * SAMPLE_PAGE_BYTES
-                               + (uint64_t)mipmap_pages * SAMPLE_PAGE_BYTES;
+    const uint64_t flash_bytes = 256U
+        + (uint64_t)WAVETABLE_MIPMAP_MAX_BANDS
+            * WAVETABLE_PREPARED_BAND_ENTRY_SIZE
+        + mipmap_bytes + 64U;
     if ((base_pages == 0U) || (mipmap_pages == 0U)
-        || (total_bytes > sample_page_cache_port_local_total_bytes()))
+        || (flash_bytes > UINT32_MAX)
+        || (flash_bytes > wavetable_flash_store_free_bytes()))
     {
         return 0U;
     }
     if (out_frame_count != 0) *out_frame_count = frame_count;
-    if (out_page_count != 0) *out_page_count = base_pages + mipmap_pages;
-    if (out_cost_bytes != 0) *out_cost_bytes = (uint32_t)total_bytes;
+    if (out_page_count != 0) *out_page_count = 0U;
+    if (out_cost_bytes != 0) *out_cost_bytes = (uint32_t)flash_bytes;
     return 1U;
 }

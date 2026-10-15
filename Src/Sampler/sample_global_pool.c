@@ -49,8 +49,7 @@ STORAGE_STATE_SDRAM static sample_classic_operation_t g_sample_classic_operation
 static uint8_t sample_global_kind_valid(sample_global_kind_t kind)
 {
     return ((kind == SAMPLE_GLOBAL_KIND_CLASSIC)
-            || (kind == SAMPLE_GLOBAL_KIND_MULTI)
-            || (kind == SAMPLE_GLOBAL_KIND_WAVETABLE)) ? 1U : 0U;
+            || (kind == SAMPLE_GLOBAL_KIND_MULTI)) ? 1U : 0U;
 }
 
 static uint8_t sample_global_copy_path(char *dst, uint32_t dst_size, const char *src)
@@ -743,74 +742,6 @@ uint8_t sample_global_pool_register_multi_loading_at(uint16_t global_index,
                                            path,
                                            0U,
                                            entry_count);
-}
-
-uint8_t sample_global_pool_reserve_wavetable(uint16_t wavetable_slot,
-                                             const char *path,
-                                             uint32_t cost_bytes,
-                                             uint16_t *out_global_index)
-{
-    return sample_global_pool_register(SAMPLE_GLOBAL_KIND_WAVETABLE,
-                                       SAMPLE_GLOBAL_STATE_RESERVED,
-                                       wavetable_slot,
-                                       path,
-                                       cost_bytes,
-                                       1U,
-                                       out_global_index);
-}
-
-uint8_t sample_global_pool_register_wavetable(uint16_t wavetable_slot,
-                                              const char *path,
-                                              uint32_t cost_bytes,
-                                              uint16_t *out_global_index)
-{
-    return sample_global_pool_register(SAMPLE_GLOBAL_KIND_WAVETABLE,
-                                       SAMPLE_GLOBAL_STATE_READY,
-                                       wavetable_slot,
-                                       path,
-                                       cost_bytes,
-                                       1U,
-                                       out_global_index);
-}
-
-uint8_t sample_global_pool_register_wavetable_at(uint16_t global_index,
-                                                 uint16_t wavetable_slot,
-                                                 const char *path,
-                                                 uint32_t cost_bytes)
-{
-    return sample_global_pool_register_at(SAMPLE_GLOBAL_KIND_WAVETABLE,
-                                          SAMPLE_GLOBAL_STATE_READY,
-                                          global_index,
-                                           wavetable_slot,
-                                           path,
-                                           cost_bytes,
-                                           1U);
-}
-
-uint8_t sample_global_pool_register_wavetable_error(uint16_t wavetable_slot,
-                                                    const char *path,
-                                                    uint16_t *out_global_index)
-{
-    return sample_global_pool_register(SAMPLE_GLOBAL_KIND_WAVETABLE,
-                                       SAMPLE_GLOBAL_STATE_ERROR,
-                                       wavetable_slot,
-                                       path,
-                                       0U,
-                                       1U,
-                                       out_global_index);
-}
-
-uint8_t sample_global_pool_register_wavetable_error_at(uint16_t global_index,
-                                                       uint16_t wavetable_slot,
-                                                       const char *path)
-{
-    return sample_global_pool_register_at(SAMPLE_GLOBAL_KIND_WAVETABLE,
-                                          SAMPLE_GLOBAL_STATE_ERROR,
-                                          global_index,
-                                           wavetable_slot,
-                                           path,
-                                           0U,
-                                           1U);
 }
 
 void sample_global_pool_clear_slot(uint16_t global_index)

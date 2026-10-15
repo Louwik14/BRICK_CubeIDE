@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include "Platform/brick_build_config.h"
 
-#include "Sampler/sample_global_pool.h"
 #include "Sampler/wavetable_config.h"
 #include "Sampler/wavetable_prepared_format.h"
 #include "Storage/wav_parser.h"

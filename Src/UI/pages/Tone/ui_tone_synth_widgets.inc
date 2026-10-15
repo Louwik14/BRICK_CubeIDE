@@ -977,14 +977,13 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                         ? PROJECT_CONTROL_ASSET_NONE
                         : (uint16_t)((value < 0.0f) ? 0.0f : value + 0.5f);
                     uint16_t runtime_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-                    const sample_global_slot_t *asset = NULL;
+                    const wavetable_slot_t *asset = NULL;
                     if (project_control_resolve_wavetable_runtime(
                             logical_slot, &runtime_slot) != 0U)
                     {
-                        asset = sample_global_pool_get_slot(runtime_slot);
+                        asset = wavetable_pool_get_slot(runtime_slot);
                     }
-                    if ((asset != NULL) && (asset->kind == SAMPLE_GLOBAL_KIND_WAVETABLE)
-                            && (asset->state == SAMPLE_GLOBAL_STATE_READY))
+                    if ((asset != NULL) && (asset->state == WAVETABLE_SLOT_READY))
                     {
                         (void)snprintf(out_value, out_value_len, "WT%03u", (unsigned int)logical_slot);
                     }
