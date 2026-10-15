@@ -48,6 +48,21 @@ résolution, le catalogue cherche d'abord le record Flash portant ce chemin et
 ne réimporte depuis la SD que s'il est absent. L'identité interne et les
 références ne dépendent donc pas de l'offset physique du record.
 
+Le Browser applique la même règle avant tout import : un chemin déjà présent
+dans le catalogue Flash global est rattaché à la banque logique courante sans
+réécriture, même si les trois slots Flash sont occupés. La colonne gauche reste
+le catalogue SD et marque `*` les fichiers déjà importés ; la colonne droite ne
+montre que les références de la banque courante. `UNLOAD` retire uniquement
+cette référence logique. La suppression SD ne touche que la source. La
+suppression Flash depuis l'UI est refusée (`FLASH PROTECTED`) tant qu'un index
+global des références de tous les projets n'existe pas : vérifier seulement le
+projet actif ne suffirait pas à protéger les projets hors ligne.
+
+L'identifiant 64 bits du record reste interne au catalogue Flash. Le format
+des documents n'évolue pas : `{kind, path}` fournit déjà une migration propre
+des projets historiques et une déduplication inter-projets, tandis qu'un ID
+seul ne permettrait pas de reconstruire un record absent depuis la SD.
+
 ## Bilan mémoire Release
 
 Le pool Sampler de 5 570 560 octets reste alloué et n'est pas compté comme un
@@ -77,6 +92,33 @@ mipmaps 65 536 octets sont simultanés pendant l'import, soit un pic réel de
 98 304 octets. Les réductions de catalogue et de registre sont permanentes.
 Les buffers FFT existants et les buffers SD mutualisés ne sont pas attribués
 comme gains, puisqu'ils restent alloués et partagés.
+
+### Delta Release de la passe Browser
+
+Mesure isolée avec les mêmes changements utilisateur présents dans les deux
+MAP Release :
+
+| Mémoire | Avant | Après | Delta |
+|---|---:|---:|---:|
+| DTCM | 125 728 | 125 728 | 0 |
+| D1 | 431 488 | 431 488 | 0 |
+| D2 | 251 104 | 251 104 | 0 |
+| D3 | 54 176 | 54 176 | 0 |
+| SDRAM hors pool Sampler | 6 018 784 | 6 018 784 | 0 |
+| **Total** | **6 881 280** | **6 881 280** | **0** |
+
+Le Browser n'ajoute donc aucun coût RAM permanent mesurable. Aucun buffer
+AUDIO, DMA ou pool Sampler n'est redimensionné.
+
+Le workspace de persistance de 268 544 octets n'est pas mutualisé avec le
+scratch Wavetable. Un Project Load conserve simultanément dans ce workspace le
+document candidat, ses assets, son Pattern préparé et les géométries Groove,
+puis peut devoir importer une Wavetable avant de publier le projet. Une
+réservation exclusive du même workspace bloquerait donc précisément ce chemin.
+Son sous-espace `scratch` ne fait que 82 560 octets et reste référencé par le
+Pattern préparé : il est trop petit et sa durée de vie chevauche l'import. Les
+98 304 octets statiques sont conservés plutôt que d'introduire une hypothèse
+d'exclusion fausse ou une dégradation de la préparation.
 
 ## Flash firmware et coût AUDIO
 
