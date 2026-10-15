@@ -41,6 +41,7 @@ $page = Get-Content -Raw (Join-Path $root 'Src/UI/pages/AudioRec/ui_audio_rec_pa
 $render = Get-Content -Raw (Join-Path $root 'Src/UI/pages/AudioRec/ui_audio_rec_take_editor.inc')
 $source = Get-Content -Raw (Join-Path $root 'Src/Storage/rec_source.c')
 $service = Get-Content -Raw (Join-Path $root 'Src/Storage/waveform_service.c')
+$contract = Get-Content -Raw (Join-Path $root 'Inc/Storage/rec_source_waveform.h')
 
 Assert-True ($capture.Contains('g_rec_source_waveform.levels[0].frames_per_bin = 1U;')) `
     'REC waveform no longer starts at one PCM frame per bin'
@@ -56,6 +57,23 @@ Assert-True ($storage.Contains('AUDIO_RECORDER_STORAGE_TAKE_READY')) `
     'final waveform drain does not cover TAKE_READY'
 Assert-True ($source.Contains('rec_source_waveform_captured_frames() != frame_count')) `
     'REC_SOURCE CURRENT can publish an incoherent partial waveform'
+Assert-True ($capture.Contains('rec_source_waveform_build_level_t')) `
+    'REC waveform build levels are no longer separated from final summaries'
+Assert-True ($capture.Contains('final_level->min') -and
+    $capture.Contains('final_level->max')) `
+    'REC waveform finalization no longer copies the compact min/max summary'
+Assert-True (-not $contract.Contains('int16_t first[REC_SOURCE_WAVEFORM_BINS]')) `
+    'final REC waveform summaries still retain first[]'
+Assert-True (-not $contract.Contains('int16_t last[REC_SOURCE_WAVEFORM_BINS]')) `
+    'final REC waveform summaries still retain last[]'
+Assert-True ($source.Contains('memset(&candidate->waveform, 0, sizeof(candidate->waveform));')) `
+    'recycled REC_SOURCE slots can retain a stale waveform summary'
+Assert-True (-not $source.Contains('building->waveform.ready == 0U')) `
+    'REC_SOURCE finalization can still reuse a stale ready summary'
+Assert-True ($source.Contains('rec_source_waveform_commit();')) `
+    'REC waveform construction can end before the generation commit succeeds'
+Assert-True ($source.Contains('current->waveform.generation == current->key.generation')) `
+    'REC_SOURCE exposes waveform data without generation validation'
 Assert-True ($page.Contains('state.phase == SAMPLE_CAPTURE_PHASE_SAVED')) `
     'saved REC mode does not restore the live scope owner'
 Assert-True (-not $page.Contains('(state.take_valid == 0U)')) `

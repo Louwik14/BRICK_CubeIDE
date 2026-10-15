@@ -6,7 +6,19 @@
 
 typedef struct
 {
-    rec_source_waveform_summary_t levels[2];
+    uint32_t frames_per_bin;
+    int16_t min[REC_SOURCE_WAVEFORM_BINS];
+    int16_t max[REC_SOURCE_WAVEFORM_BINS];
+    int16_t first[REC_SOURCE_WAVEFORM_BINS];
+    int16_t last[REC_SOURCE_WAVEFORM_BINS];
+} rec_source_waveform_build_level_t;
+
+_Static_assert(sizeof(rec_source_waveform_build_level_t) == 32772U,
+    "REC_SOURCE waveform build-level SDRAM budget");
+
+typedef struct
+{
+    rec_source_waveform_build_level_t levels[2];
     uint32_t captured_frames;
     uint32_t compact_cursor;
     uint32_t compact_start_frame;
@@ -20,7 +32,7 @@ typedef struct
 
 STORAGE_STATE_SDRAM static rec_source_waveform_capture_t g_rec_source_waveform;
 
-static void clear_level(rec_source_waveform_summary_t *level)
+static void clear_level(rec_source_waveform_build_level_t *level)
 {
     memset(level, 0, sizeof(*level));
     for (uint32_t i = 0U; i < REC_SOURCE_WAVEFORM_BINS; ++i)
@@ -30,7 +42,7 @@ static void clear_level(rec_source_waveform_summary_t *level)
     }
 }
 
-static void accumulate(rec_source_waveform_summary_t *level, uint32_t bin,
+static void accumulate(rec_source_waveform_build_level_t *level, uint32_t bin,
                        int16_t min, int16_t max, int16_t first, int16_t last)
 {
     if (bin >= REC_SOURCE_WAVEFORM_BINS) return;
@@ -44,9 +56,9 @@ static void accumulate(rec_source_waveform_summary_t *level, uint32_t bin,
 
 static void compact_one(void)
 {
-    rec_source_waveform_summary_t *const src =
+    rec_source_waveform_build_level_t *const src =
         &g_rec_source_waveform.levels[g_rec_source_waveform.active_level];
-    rec_source_waveform_summary_t *const dst =
+    rec_source_waveform_build_level_t *const dst =
         &g_rec_source_waveform.levels[g_rec_source_waveform.active_level ^ 1U];
     const uint32_t i = g_rec_source_waveform.compact_cursor;
     if (i >= (REC_SOURCE_WAVEFORM_BINS / 2U)) return;
@@ -94,7 +106,7 @@ static void capture_frame(const float *lr, uint32_t frame)
         if (sample_max > live->max) live->max = sample_max;
         live->last = mono;
     }
-    rec_source_waveform_summary_t *active =
+    rec_source_waveform_build_level_t *active =
         &g_rec_source_waveform.levels[g_rec_source_waveform.active_level];
     const uint32_t frames_per_bin = active->frames_per_bin;
     if ((g_rec_source_waveform.compacting == 0U)
@@ -107,7 +119,7 @@ static void capture_frame(const float *lr, uint32_t frame)
     if (g_rec_source_waveform.compacting != 0U)
     {
         compact_one();
-        rec_source_waveform_summary_t *const dst =
+        rec_source_waveform_build_level_t *const dst =
             &g_rec_source_waveform.levels[g_rec_source_waveform.active_level ^ 1U];
         const uint32_t next_fpb = frames_per_bin * 2U;
         const uint32_t bin = (REC_SOURCE_WAVEFORM_BINS / 2U)
@@ -127,7 +139,7 @@ static void capture_frame(const float *lr, uint32_t frame)
     {
         accumulate(active, frame / frames_per_bin, sample_min, sample_max,
             mono, mono);
-        rec_source_waveform_summary_t *const spare =
+        rec_source_waveform_build_level_t *const spare =
             &g_rec_source_waveform.levels[g_rec_source_waveform.active_level ^ 1U];
         for (uint8_t n = 0U; (n < 2U)
                 && (g_rec_source_waveform.clear_cursor
@@ -245,7 +257,8 @@ uint8_t rec_source_waveform_active_overview(uint8_t pixel_width,
     return 1U;
 }
 
-uint8_t rec_source_waveform_finish(rec_source_waveform_summary_t *out_summary)
+uint8_t rec_source_waveform_finish(
+    rec_source_waveform_final_summary_t *out_summary)
 {
     if ((out_summary == NULL) || (g_rec_source_waveform.active == 0U)) return 0U;
     while (g_rec_source_waveform.compacting != 0U)
@@ -263,13 +276,18 @@ uint8_t rec_source_waveform_finish(rec_source_waveform_summary_t *out_summary)
         }
     }
     const uint8_t level = g_rec_source_waveform.active_level;
-    *out_summary = g_rec_source_waveform.levels[level];
+    const rec_source_waveform_build_level_t *const final_level =
+        &g_rec_source_waveform.levels[level];
+    memset(out_summary, 0, sizeof(*out_summary));
     out_summary->frame_count = g_rec_source_waveform.captured_frames;
+    out_summary->frames_per_bin = final_level->frames_per_bin;
     out_summary->bin_domain_frames = out_summary->frame_count;
     uint32_t bins = (out_summary->frame_count + out_summary->frames_per_bin - 1U)
         / out_summary->frames_per_bin;
     if (bins > REC_SOURCE_WAVEFORM_BINS) bins = REC_SOURCE_WAVEFORM_BINS;
     out_summary->bin_count = (uint16_t)bins;
+    memcpy(out_summary->min, final_level->min, sizeof(out_summary->min));
+    memcpy(out_summary->max, final_level->max, sizeof(out_summary->max));
     for (uint16_t i = 0U; i < out_summary->bin_count; ++i)
         if ((out_summary->min[i] == 32767) && (out_summary->max[i] == -32768))
         {
@@ -277,6 +295,10 @@ uint8_t rec_source_waveform_finish(rec_source_waveform_summary_t *out_summary)
             out_summary->max[i] = 0;
         }
     out_summary->ready = (out_summary->bin_count != 0U) ? 1U : 0U;
-    g_rec_source_waveform.active = 0U;
     return out_summary->ready;
+}
+
+void rec_source_waveform_commit(void)
+{
+    g_rec_source_waveform.active = 0U;
 }

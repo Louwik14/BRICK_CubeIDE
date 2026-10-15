@@ -175,16 +175,22 @@ status produit; elle n'est pas reclassée en ring overflow. Les erreurs média,
 ## Waveform de prise
 
 AUDIO publie dans le ring le FLOAT32 final qui est l'unique point source du
-résumé. STORAGE n'alimente les 4096 cellules `min/max/first/last` int16 qu'après le commit
-SD correspondant; une frame affichée comme enregistrée est donc déjà validée
-par le writer. Avant de rendre les frames du ring recyclables, STORAGE alimente ces
-cellules. Les longueurs FREE et fixes commencent toutes à une
+résumé. STORAGE n'alimente les deux niveaux temporaires de 4096 cellules
+`min/max/first/last` int16 qu'après le commit SD correspondant; une frame
+affichée comme enregistrée est donc déjà validée par le writer. Avant de rendre
+les frames du ring recyclables, STORAGE alimente ces cellules. Les longueurs
+FREE et fixes commencent toutes à une
 frame PCM par bin puis compactent par deux seulement lorsque les 4096 bins sont
 pleins. La durée planifiée ne dégrade donc jamais une prise courte. Lors de
 DRAINING/FINALIZING, le reliquat borné par le ring est consommé immédiatement
 afin que la publication `REC_SOURCE CURRENT` ne reste pas bloquée sur un résumé
-incomplet. Le résumé READY
-(environ 32 KiB) est copié dans le descripteur `BUILDING` et publié avec lui.
+incomplet. À la finalisation, seules les métadonnées et les cellules `min/max`
+sont copiées dans le résumé READY du descripteur `BUILDING` (environ 16 KiB).
+Les extrémités `first/last` restent propres au workspace de capture et à sa
+compaction; elles ne sont pas conservées dans une génération finalisée.
+Chaque `begin_build` invalide le résumé du slot recyclé et chaque finalisation
+le reconstruit intégralement avant de publier la génération, ce qui interdit
+qu'un ancien résumé redevienne visible.
 L'éditeur l'utilise directement pour une prise fraîche; le scan SD reste le
 fallback des fichiers externes, anciens, récupérés ou sans résumé valide.
 
@@ -198,8 +204,9 @@ commitée, pas la limite programmée. Un ring visuel distinct de 4096 cellules
 leurs extrêmes et leurs extrémités temporelles. L'OLED relie les contours
 min/max et ajoute la trace mono `last` tant que la fenêtre est assez courte
 pour ne pas sous-échantillonner visiblement le PCM ; la durée d'une prise longue ne dégrade donc
-plus progressivement le détail de l'affichage REC. STOPPING conserve ce résumé; TAKE_READY et
-REC EDIT consomment ensuite le même résumé final, sans relecture du WAV. Après
+plus progressivement le détail de l'affichage REC. STOPPING conserve ce
+workspace; TAKE_READY et REC EDIT consomment ensuite son résumé final min/max,
+sans relecture du WAV pour l'overview. Après
 RETURN/SAVE, REC MODE reprend explicitement la cible live REC BUS même si la
 dernière génération REC reste disponible pour l'undo ou le Streamer.
 
@@ -220,7 +227,7 @@ quotient/reste; seules les divisions initiales dépendent de la largeur.
 
 Le chemin de données est gradué :
 
-- le résumé REC 4096 bins `min/max/first/last` en SDRAM fournit l'overview immédiat pour
+- le résumé REC finalisé de 4096 bins `min/max` en SDRAM fournit l'overview immédiat pour
   une génération READY cohérente, avec le pas réel des bins libres conservé ;
   un scan séquentiel de 8 KiB par passage
   STORAGE reste le fallback sans résumé ;

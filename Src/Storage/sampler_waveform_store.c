@@ -681,7 +681,7 @@ static void sampler_waveform_seed_from_current_rec(
 {
     const char *rec_path = 0;
     rec_source_snapshot_t snapshot;
-    const rec_source_waveform_summary_t *const summary =
+    const rec_source_waveform_final_summary_t *const summary =
         rec_source_current_waveform();
     if(path == 0 || identity == 0 || summary == 0
             || summary->ready == 0U || summary->frames_per_bin == 0U

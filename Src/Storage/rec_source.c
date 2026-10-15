@@ -54,7 +54,7 @@ typedef struct
     rec_source_state_t state;
     rec_source_ownership_t ownership;
     uint8_t release_requested;
-    rec_source_waveform_summary_t waveform;
+    rec_source_waveform_final_summary_t waveform;
     char temporary_path[REC_SOURCE_PATH_MAX];
     char path[REC_SOURCE_PATH_MAX];
 } rec_source_generation_t;
@@ -484,6 +484,7 @@ uint8_t rec_source_begin_build(const char **temporary_path, const char **final_p
         candidate->registration_epoch = 0U;
         candidate->release_requested = 0U;
         candidate->ownership = REC_SOURCE_OWNERSHIP_TEMPORARY;
+        memset(&candidate->waveform, 0, sizeof(candidate->waveform));
         candidate->state = REC_SOURCE_STATE_BUILDING;
         g_rec_source_building_slot = slot;
         *temporary_path = candidate->temporary_path;
@@ -552,11 +553,11 @@ uint8_t rec_source_publish_building(uint32_t frame_count, uint32_t registration_
     const uint32_t after = building->key.generation;
     if ((undo_v2_audio_transition_can_commit(before, after) == 0U)
             || (rec_source_waveform_captured_frames() != frame_count)
-            || ((building->waveform.ready == 0U)
-                && (rec_source_waveform_finish(&building->waveform) == 0U)))
+            || (rec_source_waveform_finish(&building->waveform) == 0U))
         return 0U;
     building->waveform.generation = after;
     if (undo_v2_commit_audio_transition(before, after) != UNDO_V2_STATUS_OK) return 0U;
+    rec_source_waveform_commit();
     const uint8_t building_slot = g_rec_source_building_slot;
     if ((g_rec_source_current_slot < REC_SOURCE_SLOT_COUNT)
             && (g_rec_source_current_slot != building_slot))
@@ -724,10 +725,13 @@ uint8_t rec_source_current_is_temporary(void)
             == REC_SOURCE_OWNERSHIP_TEMPORARY));
 }
 
-const rec_source_waveform_summary_t *rec_source_current_waveform(void)
+const rec_source_waveform_final_summary_t *rec_source_current_waveform(void)
 {
     if (g_rec_source_current_slot >= REC_SOURCE_SLOT_COUNT) return NULL;
     const rec_source_generation_t *const current =
         &g_rec_source_generations[g_rec_source_current_slot];
-    return (current->waveform.ready != 0U) ? &current->waveform : NULL;
+    return ((current->waveform.ready != 0U)
+        && (current->waveform.generation == current->key.generation)
+        && (current->waveform.frame_count == current->frame_count))
+        ? &current->waveform : NULL;
 }

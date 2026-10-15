@@ -18,9 +18,10 @@ typedef struct
     uint8_t reserved;
     int16_t min[REC_SOURCE_WAVEFORM_BINS];
     int16_t max[REC_SOURCE_WAVEFORM_BINS];
-    int16_t first[REC_SOURCE_WAVEFORM_BINS];
-    int16_t last[REC_SOURCE_WAVEFORM_BINS];
-} rec_source_waveform_summary_t;
+} rec_source_waveform_final_summary_t;
+
+_Static_assert(sizeof(rec_source_waveform_final_summary_t) == 16404U,
+    "REC_SOURCE finalized waveform SDRAM budget");
 
 typedef struct
 {
@@ -40,4 +41,6 @@ uint8_t rec_source_waveform_active_overview(uint8_t pixel_width,
                                             rec_source_waveform_column_t *columns,
                                             uint32_t *out_captured_frames,
                                             uint32_t *out_domain_frames);
-uint8_t rec_source_waveform_finish(rec_source_waveform_summary_t *out_summary);
+uint8_t rec_source_waveform_finish(
+    rec_source_waveform_final_summary_t *out_summary);
+void rec_source_waveform_commit(void);

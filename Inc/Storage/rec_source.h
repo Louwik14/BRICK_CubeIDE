@@ -63,4 +63,4 @@ rec_source_playback_state_t rec_source_current_playback_state(void);
 uint8_t rec_source_current_path(const char **out_path,
                                 rec_source_snapshot_t *out_snapshot);
 uint8_t rec_source_current_is_temporary(void);
-const rec_source_waveform_summary_t *rec_source_current_waveform(void);
+const rec_source_waveform_final_summary_t *rec_source_current_waveform(void);

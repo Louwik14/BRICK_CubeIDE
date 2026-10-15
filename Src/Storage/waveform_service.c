@@ -555,7 +555,7 @@ void waveform_service_storage_service(void)
     if(ok == 0U) { job->active = 0U; }
 }
 
-static const rec_source_waveform_summary_t *waveform_rec_summary(
+static const rec_source_waveform_final_summary_t *waveform_rec_summary(
     const waveform_source_t *source)
 {
     rec_source_snapshot_t current;
@@ -568,7 +568,7 @@ static const rec_source_waveform_summary_t *waveform_rec_summary(
         return 0;
     }
     (void)path;
-    const rec_source_waveform_summary_t *const summary =
+    const rec_source_waveform_final_summary_t *const summary =
         rec_source_current_waveform();
     if((summary == 0) || (summary->ready == 0U)
             || (summary->generation != source->key.generation)
@@ -771,7 +771,7 @@ uint8_t waveform_rec_current_source(waveform_source_t *out_source)
 
 uint16_t waveform_rec_peak(const waveform_source_t *source)
 {
-    const rec_source_waveform_summary_t *const summary = waveform_rec_summary(source);
+    const rec_source_waveform_final_summary_t *const summary = waveform_rec_summary(source);
     if(summary == 0) { return 0U; }
     if(g_waveform_peak_valid != 0U
             && waveform_source_equal(&g_waveform_peak_source, source) != 0U)
@@ -797,7 +797,7 @@ uint16_t waveform_rec_peak(const waveform_source_t *source)
 }
 
 static void waveform_render_rec_overview(
-    const rec_source_waveform_summary_t *summary, uint32_t start_frame,
+    const rec_source_waveform_final_summary_t *summary, uint32_t start_frame,
     uint32_t frame_count, uint8_t pixel_width, waveform_column_t *columns)
 {
     const uint32_t frame_step = frame_count / pixel_width;
@@ -858,7 +858,7 @@ waveform_result_t waveform_request_overview(const waveform_source_t *source,
             || frame_count == 0U || start_frame >= source->frame_count
             || frame_count > source->frame_count - start_frame)
         return WAVEFORM_RESULT_INVALID;
-    const rec_source_waveform_summary_t *const summary =
+    const rec_source_waveform_final_summary_t *const summary =
         waveform_rec_summary(source);
     if(summary == 0) { return WAVEFORM_RESULT_PENDING; }
     for(uint8_t col = 0U; col < pixel_width; ++col)
@@ -935,7 +935,7 @@ waveform_result_t waveform_request(const waveform_source_t *source,
         g_waveform_diag.pending_returns++;
         return WAVEFORM_RESULT_PENDING;
     }
-    const rec_source_waveform_summary_t *const summary = waveform_rec_summary(source);
+    const rec_source_waveform_final_summary_t *const summary = waveform_rec_summary(source);
     /* A visible window no larger than one PCM page can straddle two pages;
        the shared loader owns misses and the existing audio contracts. */
     const uint8_t pcm_scale = (uint8_t)(frame_count <= SAMPLE_PAGE_FRAMES);
@@ -1067,7 +1067,7 @@ waveform_result_t waveform_request_detailed(const waveform_source_t *source,
         line[col].ready = 0U;
     const uint32_t frames_per_pixel = (uint32_t)(((uint64_t)frame_count
         + pixel_width - 1U) / pixel_width);
-    const rec_source_waveform_summary_t *const summary =
+    const rec_source_waveform_final_summary_t *const summary =
         waveform_rec_summary(source);
     if(frame_count > WAVEFORM_LOCAL_MAX_DETAIL_FRAMES)
     {
