@@ -155,8 +155,8 @@ Wavetable de 262 144 octets est une région séparée et vide dans l'image usine
 son occupation utile vaut 66 112 octets par table standard, 198 336 octets pour
 trois tables.
 
-La passe d'import manuel porte le span Release de 1 567 620 à 1 567 676
-octets, soit +56 octets. Les régions Flash Wavetable et Groove ne changent pas.
+La passe d'import manuel porte le span Release de 1 567 620 à 1 567 668
+octets, soit +48 octets. Les régions Flash Wavetable et Groove ne changent pas.
 
 Le calcul AUDIO, l'interpolation et le choix de mipmap sont inchangés. Les
 lectures passent des pages SDRAM à la Flash mappée et cacheable ; il n'y a aucun

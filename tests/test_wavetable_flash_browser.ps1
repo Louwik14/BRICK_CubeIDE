@@ -14,6 +14,9 @@ $render = Get-Content -Raw (Join-Path $root `
 $control = Get-Content -Raw (Join-Path $root 'Src/Storage/project_control.c')
 $product = Get-Content -Raw (Join-Path $root 'Src/Storage/project_product.c')
 $patchPreview = Get-Content -Raw (Join-Path $root 'Src/Storage/patch_preview.c')
+$patchControl = Get-Content -Raw (Join-Path $root `
+    'Src/Storage/persistent_patch_control.c')
+$patchProduct = Get-Content -Raw (Join-Path $root 'Src/Storage/patch_product.c')
 $pool = Get-Content -Raw (Join-Path $root 'Src/Sampler/wavetable_pool.c')
 $async = Get-Content -Raw (Join-Path $root `
     'Src/Sampler/Wavetable/wavetable_storage_async.inc')
@@ -43,6 +46,13 @@ Assert-True ((-not $product.Contains('PROJECT_LOAD_INSTALL_WAIT_WAVETABLE')) -an
              (-not $product.Contains('project_control_complete_wavetable_runtime')) -and
              (-not $product.Contains('wavetable_slots <= WAVETABLE_POOL_MAX_SLOTS'))) `
     'Project restore still owns an implicit Wavetable import path or physical-slot quota'
+Assert-True ($patchProduct.Contains(
+                'selected->kind == PERSIST_ASSET_WAVETABLE') -and
+             $patchControl.Contains(
+                'project_control_track_asset_restore_status') -and
+             $patchControl.Contains(
+                'project_control_asset_reference_status')) `
+    'Patch Load does not preserve unavailable Wavetable references'
 $restoreResolver = $control.Substring(
     $control.IndexOf('static project_control_asset_result_t apply_bank_asset'),
     $control.IndexOf('project_control_asset_result_t project_control_prepare_asset') -

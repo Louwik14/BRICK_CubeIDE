@@ -845,6 +845,9 @@ static project_control_asset_result_t patch_product_prepare_assets(void)
         asset_path[selected->path_length] = '\0';
         const project_control_asset_result_t result =
             project_control_prepare_asset(selected->kind, asset_path, &logical);
+        if (result == PROJECT_CONTROL_ASSET_FAILED
+            && selected->kind == PERSIST_ASSET_WAVETABLE)
+            continue;
         if (result != PROJECT_CONTROL_ASSET_READY) return result;
     }
     return PROJECT_CONTROL_ASSET_READY;
