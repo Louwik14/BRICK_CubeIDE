@@ -6,6 +6,7 @@
  * Integration: service utilisé par seq_edit; ne gère pas l'UI ni l'exécution temps réel.
  */
 #include "Seq/seq_clipboard.h"
+#include "Seq/seq_clipboard_storage.h"
 #include "Track/entity_topology.h"
 #include "Seq/seq_step_snapshot.h"
 
@@ -15,10 +16,33 @@
 
 typedef struct
 {
+    seq_step_id_t step;
+    seq_clipboard_step_t snapshot;
+} seq_clipboard_step_entry_t;
+
+_Static_assert(sizeof(seq_clipboard_step_entry_t) == 30U,
+               "sequence clipboard step entry size changed");
+
+typedef struct
+{
+    uint8_t count;
+    uint8_t reserved[3];
+    seq_clipboard_step_entry_t entries[SEQ_MAX_STEPS];
+    seq_clipboard_plock_t locks[SEQ_PLOCK_POOL_CAP_PER_TRACK];
+} seq_clipboard_step_list_t;
+
+_Static_assert(sizeof(seq_clipboard_step_list_t) == 3972U,
+               "sequence clipboard compact storage size changed");
+
+typedef struct
+{
     uint8_t valid;
     seq_step_id_t source_anchor;
-    seq_step_snapshot_list_t steps;
+    seq_clipboard_step_list_t steps;
 } seq_clipboard_state_t;
+
+_Static_assert(sizeof(seq_clipboard_state_t) == 3974U,
+               "sequence clipboard state size changed");
 
 UI_SDRAM static seq_clipboard_state_t g_seq_clipboard;
 
@@ -27,6 +51,28 @@ static uint8_t seq_clipboard_track_is_valid(seq_track_id_t track)
     entity_topology_descriptor_t entity;
     return (uint8_t)((entity_topology_get((brick_entity_id_t)track, &entity) != 0U)
             && (entity_topology_can_sequence(&entity) != 0U));
+}
+
+static uint8_t seq_clipboard_storage_is_valid(void)
+{
+    if ((g_seq_clipboard.steps.count == 0U)
+            || (g_seq_clipboard.steps.count > SEQ_MAX_STEPS))
+        return 0U;
+
+    uint16_t expected_offset = 0U;
+    for (uint8_t i = 0U; i < g_seq_clipboard.steps.count; ++i)
+    {
+        const seq_clipboard_step_t *const step =
+            &g_seq_clipboard.steps.entries[i].snapshot;
+        if ((step->lock_offset != expected_offset)
+                || (step->valid == 0U)
+                || (step->lock_count > SEQ_STEP_MAX_LOCKS)
+                || ((uint32_t)expected_offset + step->lock_count
+                    > SEQ_PLOCK_POOL_CAP_PER_TRACK))
+            return 0U;
+        expected_offset = (uint16_t)(expected_offset + step->lock_count);
+    }
+    return 1U;
 }
 
 static uint8_t seq_clipboard_find_min_step(const seq_step_id_t *steps, uint8_t step_count, seq_step_id_t *out_min)
@@ -50,7 +96,7 @@ static uint8_t seq_clipboard_find_min_step(const seq_step_id_t *steps, uint8_t s
 }
 
 static uint8_t seq_clipboard_resolve_target_step(
-    const seq_step_snapshot_entry_t *source,
+    const seq_clipboard_step_entry_t *source,
     seq_step_id_t dest_anchor,
     seq_step_id_t *out_step)
 {
@@ -98,23 +144,28 @@ uint8_t seq_clipboard_copy(seq_track_id_t track,
     }
 
     memset(&g_seq_clipboard, 0, sizeof(g_seq_clipboard));
-    g_seq_clipboard.valid = 1U;
     g_seq_clipboard.source_anchor = source_anchor;
 
-    if (seq_step_snapshot_capture_list(track,
-                                       steps,
-                                       step_count,
-                                       &g_seq_clipboard.steps) == 0U)
+    uint16_t lock_count = 0U;
+    for (uint8_t i = 0U; i < step_count; ++i)
     {
-        g_seq_clipboard.valid = 0U;
-        return 0U;
+        if (seq_model_is_step_editable_index(steps[i]) == 0U)
+            return 0U;
+        for (uint8_t j = 0U; j < i; ++j)
+            if (steps[j] == steps[i]) return 0U;
+
+        seq_step_snapshot_t snapshot;
+        if ((seq_step_snapshot_capture(track, steps[i], &snapshot) == 0U)
+                || (seq_clipboard_storage_pack_step(&snapshot,
+                        &g_seq_clipboard.steps.entries[i].snapshot,
+                        g_seq_clipboard.steps.locks, &lock_count) == 0U))
+            return 0U;
+        g_seq_clipboard.steps.entries[i].step =
+            (seq_step_id_t)(steps[i] - source_anchor);
     }
 
-    for (uint8_t i = 0U; i < g_seq_clipboard.steps.count; ++i)
-    {
-        g_seq_clipboard.steps.entries[i].step =
-            (seq_step_id_t)(g_seq_clipboard.steps.entries[i].step - source_anchor);
-    }
+    g_seq_clipboard.steps.count = step_count;
+    g_seq_clipboard.valid = 1U;
 
     return 1U;
 }
@@ -135,6 +186,7 @@ uint8_t seq_clipboard_collect_paste_targets(seq_track_id_t target_track,
         || (out_steps == 0)
         || (max_steps == 0U)
         || (g_seq_clipboard.valid == 0U)
+        || (seq_clipboard_storage_is_valid() == 0U)
         || (seq_clipboard_track_is_valid(target_track) == 0U)
         || (dest_steps == 0)
         || (dest_count == 0U))
@@ -178,6 +230,7 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
 
     if ((out_result == 0)
         || (g_seq_clipboard.valid == 0U)
+        || (seq_clipboard_storage_is_valid() == 0U)
         || (seq_clipboard_track_is_valid(target_track) == 0U)
         || (dest_steps == 0)
         || (dest_count == 0U))
@@ -202,7 +255,7 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
     seq_step_snapshot_t projected;
     for (uint8_t i = 0U; i < g_seq_clipboard.steps.count; ++i)
     {
-        const seq_step_snapshot_entry_t *const src = &g_seq_clipboard.steps.entries[i];
+        const seq_clipboard_step_entry_t *const src = &g_seq_clipboard.steps.entries[i];
 
         seq_step_id_t target_step = 0U;
         if (seq_clipboard_resolve_target_step(src, dest_anchor, &target_step) == 0U)
@@ -211,7 +264,13 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
             continue;
         }
 
-        projected = src->snapshot;
+        if (seq_clipboard_storage_unpack_step(&src->snapshot,
+                g_seq_clipboard.steps.locks, &projected) == 0U)
+        {
+            result.partial = 1U;
+            *out_result = result;
+            return 0U;
+        }
         if (seq_step_snapshot_project_play_for_track(
                 target_track,
                 &projected) == 0U
@@ -251,15 +310,16 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
 
     for (uint8_t i = 0U; i < g_seq_clipboard.steps.count; ++i)
     {
-        const seq_step_snapshot_entry_t *const src = &g_seq_clipboard.steps.entries[i];
+        const seq_clipboard_step_entry_t *const src = &g_seq_clipboard.steps.entries[i];
         seq_step_id_t target_step = 0U;
         if (seq_clipboard_resolve_target_step(src, dest_anchor, &target_step) == 0U)
         {
             continue;
         }
 
-        projected = src->snapshot;
-        if ((seq_step_snapshot_project_play_for_track(target_track, &projected) == 0U)
+        if ((seq_clipboard_storage_unpack_step(&src->snapshot,
+                    g_seq_clipboard.steps.locks, &projected) == 0U)
+                || (seq_step_snapshot_project_play_for_track(target_track, &projected) == 0U)
                 || (seq_step_snapshot_apply(target_track, target_step, &projected) == 0U))
         {
             result.partial = 1U;

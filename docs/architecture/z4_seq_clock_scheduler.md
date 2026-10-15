@@ -246,6 +246,13 @@ La page SEQ expose trois sous-pages sans dupliquer l'etat:
 canonique en une operation, de sorte qu'aucune combinaison intermediaire ne
 peut etre publiee.
 
+La representation compacte du clipboard ne traverse jamais le runtime SEQ:
+CONTROL decode un step a la fois vers `seq_step_snapshot_t`, pre-valide le budget
+final de 512 P-locks, libere les plages remplacees puis laisse le modele
+redistribuer ses noeuds. Les offsets du clipboard ne deviennent donc jamais des
+indices du pool vivant. Les collages partiels conservent leur ancre minimale,
+leurs offsets relatifs et la troncature aux bornes de la sequence.
+
 Le transport conserve une phase physique par piste. Le resolver O(1) applique
 `FWD`, `REV`, `PINGPONG` ou `RANDOM`, puis `ROTATE`, et produit l'unique index
 de step stocke lu a la boundary. Trig, PLAY, microtiming, roll, p-locks et

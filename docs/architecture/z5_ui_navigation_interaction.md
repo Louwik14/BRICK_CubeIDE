@@ -118,6 +118,14 @@ Les clipboards transportent uniquement des etats logiques. Le bloc MIDI FX
 copie les seize octets de la chaine fixe sans tri MODEL ni conversion de mode;
 un collage External conserve l'entree demandee et echoue sur conflit.
 
+Les clipboards Step, Sequence et Track stockent les P-locks dans un pool compact
+immuable de 512 entrees de quatre octets par lane. Chaque step reference une
+plage contigue par `offset/count`; la limite reste 32 P-locks par step. Le
+clipboard GROUP possede huit pools independants, un pour le master et un par
+child. Les snapshots denses de step ne servent que de representation transitoire
+pendant la capture, la validation et l'application; Page et Ensemble ne portent
+aucun P-lock.
+
 Project Save est modal et reutilise le Name Editor generique. L'entree SAVE AS
 ou SAVE TO est refusee tant que le transport est RUNNING ou START_PENDING; elle
 ne demande jamais de STOP. Apres confirmation du nom, les inputs Settings restent

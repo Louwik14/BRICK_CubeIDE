@@ -81,6 +81,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/wavetable_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/control_audio_transport.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_clipboard.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_clipboard_storage.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_clock_bridge.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_division_catalog.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_edit.c"

@@ -43,6 +43,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_clipboard.h"
+#include "Seq/seq_clipboard_storage.h"
 #include "Seq/seq_step_snapshot.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 
@@ -89,7 +90,8 @@ typedef struct
     int8_t rotate;
     seq_track_timing_config_t timing;
     seq_play_snapshot_t play_base;
-    seq_step_snapshot_t step[SEQ_MAX_STEPS];
+    seq_clipboard_step_t step[SEQ_MAX_STEPS];
+    seq_clipboard_plock_t locks[SEQ_PLOCK_POOL_CAP_PER_TRACK];
 } ui_track_clipboard_sequence_t;
 
 typedef struct
@@ -139,6 +141,9 @@ typedef struct
     ui_ensemble_clipboard_t ensemble;
     ui_page_clipboard_t page;
 } ui_clipboard_state_t;
+
+_Static_assert(sizeof(ui_clipboard_state_t) == 40548U,
+               "UI clipboard compact storage size changed");
 
 UI_SDRAM static ui_clipboard_state_t g_ui_clipboard;
 
@@ -555,9 +560,15 @@ static uint8_t ui_track_clipboard_capture_sequence(
             || (seq_runtime_get_track_timing(track, &out->timing) == 0U)
             || (seq_model_play_base_capture(track, &out->play_base) == 0U))
         return 0U;
+    uint16_t lock_count = 0U;
     for (seq_step_id_t step = 0U; step < SEQ_MAX_STEPS; ++step)
-        if (seq_step_snapshot_capture(track, step, &out->step[step]) == 0U)
+    {
+        seq_step_snapshot_t snapshot;
+        if ((seq_step_snapshot_capture(track, step, &snapshot) == 0U)
+                || (seq_clipboard_storage_pack_step(&snapshot,
+                        &out->step[step], out->locks, &lock_count) == 0U))
             return 0U;
+    }
     return 1U;
 }
 
@@ -708,12 +719,19 @@ static uint8_t ui_track_clipboard_validate_sequence(
             || (seq_edit_track_sequence_is_locked(target) != 0U))
         return 0U;
     uint16_t lock_count = 0U;
+    uint16_t expected_offset = 0U;
     for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
     {
-        if (seq_step_snapshot_validate_for_target(
-                1U, 1U, (uint8_t)type, &seq->step[step]) == 0U)
+        seq_step_snapshot_t snapshot;
+        if ((seq->step[step].lock_offset != expected_offset)
+                || (seq_clipboard_storage_unpack_step(&seq->step[step],
+                        seq->locks, &snapshot) == 0U))
             return 0U;
-        lock_count = (uint16_t)(lock_count + seq->step[step].lock_count);
+        if (seq_step_snapshot_validate_for_target(
+                1U, 1U, (uint8_t)type, &snapshot) == 0U)
+            return 0U;
+        expected_offset = (uint16_t)(expected_offset + snapshot.lock_count);
+        lock_count = (uint16_t)(lock_count + snapshot.lock_count);
     }
     return (lock_count <= seq_model_get_track_plock_capacity(target)) ? 1U : 0U;
 }
@@ -977,7 +995,12 @@ static uint8_t ui_track_clipboard_restore_sequence(
     }
     uint8_t ok = 1U;
     for (uint8_t step = 0U; (step < SEQ_MAX_STEPS) && (ok != 0U); ++step)
-        ok = seq_step_snapshot_apply(target, step, &seq->step[step]);
+    {
+        seq_step_snapshot_t snapshot;
+        ok = (uint8_t)((seq_clipboard_storage_unpack_step(&seq->step[step],
+                           seq->locks, &snapshot) != 0U)
+                && (seq_step_snapshot_apply(target, step, &snapshot) != 0U));
+    }
     if (ok != 0U)
     {
         seq_model_set_track_length(target, seq->length);
