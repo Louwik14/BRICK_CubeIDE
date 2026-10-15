@@ -208,14 +208,29 @@ static uint8_t decode_record(uint32_t offset, wavetable_slot_t *out,
             + (uint32_t)i * WAVETABLE_PREPARED_BAND_ENTRY_SIZE];
         wavetable_mipmap_band_t *const band = &out->mipmap.bands[i];
         band->max_phase_increment = read_u32(entry);
+        band->from_cycle = read_u32(entry + 4U);
+        band->to_cycle = read_u32(entry + 8U);
         band->cycle_sample_count = read_u32(entry + 12U);
         band->cycle_magnitude = read_u16(entry + 16U);
         band->flags = read_u16(entry + 18U);
         const uint32_t encoded_offset = read_u32(entry + 20U);
         band->sample_count = read_u32(entry + 24U);
-        const uint32_t band_bytes = band->sample_count * sizeof(float);
+        const uint32_t encoded_stride = read_u32(entry + 28U);
+        const uint32_t expected_cycle_samples =
+            WAVETABLE_FRAME_SAMPLE_COUNT >> i;
+        const uint32_t expected_stride = (expected_cycle_samples == 8U)
+            ? 16U : expected_cycle_samples;
+        const uint64_t band_bytes64 = (uint64_t)band->sample_count
+            * sizeof(float);
         if ((encoded_offset != payload_offset)
-            || (band_bytes > data_bytes - payload_offset)) return 0U;
+            || (band->from_cycle != 0U)
+            || (band->to_cycle != frame_count)
+            || (band->cycle_sample_count != expected_cycle_samples)
+            || (band->flags != WAVETABLE_MIPMAP_FLAG_MULTIBAND)
+            || (encoded_stride != expected_stride)
+            || (band->sample_count != frame_count * expected_stride)
+            || (band_bytes64 > data_bytes - payload_offset)) return 0U;
+        const uint32_t band_bytes = (uint32_t)band_bytes64;
         band->data = (float *)&record[data_offset + payload_offset];
         payload_offset += band_bytes;
     }
@@ -319,6 +334,8 @@ uint8_t wavetable_flash_store_append(const wavetable_slot_t *prepared,
         uint8_t *const entry = &directory[
             (uint32_t)i * WAVETABLE_PREPARED_BAND_ENTRY_SIZE];
         write_u32(entry, band->max_phase_increment);
+        write_u32(entry + 4U, band->from_cycle);
+        write_u32(entry + 8U, band->to_cycle);
         write_u32(entry + 12U, band->cycle_sample_count);
         write_u16(entry + 16U, band->cycle_magnitude);
         write_u16(entry + 18U, band->flags);

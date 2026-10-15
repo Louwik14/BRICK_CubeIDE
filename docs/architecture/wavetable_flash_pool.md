@@ -77,8 +77,8 @@ comme gains, puisqu'ils restent alloués et partagés.
 
 ## Flash firmware et coût AUDIO
 
-La somme des sections chargeables du firmware passe de 1 552 876 à 1 554 384
-octets, soit +1 508 octets. Le span du binaire Release est 1 567 564 octets sur
+La somme des sections chargeables du firmware passe de 1 552 876 à 1 554 552
+octets, soit +1 676 octets. Le span du binaire Release est 1 567 564 octets sur
 la région firmware de 1 572 864 octets, laissant 5 300 octets. Le pool
 Wavetable de 262 144 octets est une région séparée et vide dans l'image usine ;
 son occupation utile vaut 66 112 octets par table standard, 198 336 octets pour
