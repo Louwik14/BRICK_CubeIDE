@@ -745,7 +745,13 @@ static uint8_t ui_page_settings_asset_action_enabled(ui_settings_view_t view,
     }
     if (action == UI_BROWSER_ACTION_UNLOAD) return 1U;
     if (action == UI_BROWSER_ACTION_RENAME || action == UI_BROWSER_ACTION_DELETE)
+    {
+        if (action == UI_BROWSER_ACTION_DELETE
+            && view == UI_SETTINGS_VIEW_WAVETABLE
+            && g_ui_settings.sample_focus == UI_SETTINGS_SAMPLE_FOCUS_SLOTS)
+            return 1U;
         return project_control_find_asset(kind, path, &logical) == 0U;
+    }
     return 1U;
 }
 
@@ -809,7 +815,11 @@ static void ui_page_settings_asset_action(ui_settings_view_t view,
             ui_page_settings_asset_rename_begin();
             break;
         case UI_BROWSER_ACTION_DELETE:
-            ui_page_settings_asset_delete_request();
+            if (view == UI_SETTINGS_VIEW_WAVETABLE
+                && g_ui_settings.sample_focus == UI_SETTINGS_SAMPLE_FOCUS_SLOTS)
+                ui_page_settings_status("FLASH PROTECTED");
+            else
+                ui_page_settings_asset_delete_request();
             break;
         case UI_BROWSER_ACTION_RETURN:
             if (view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
@@ -978,6 +988,7 @@ static void ui_page_settings_tick(void)
             ui_page_settings_flash_sample_header_memory();
         }
         ui_page_settings_refresh_wavetable_slots();
+        (void)ui_page_settings_wavetable_browser_refresh();
         ui_page_settings_status(wavetable_pool_result_label(wavetable_result));
     }
 
@@ -996,6 +1007,7 @@ static void ui_page_settings_tick(void)
     {
         ui_page_settings_status("CAT FAIL");
     }
+    ui_page_settings_wavetable_bank_coherence_service();
     ui_page_settings_wavetable_browser_service();
 
     if (g_ui_settings.convert_slot_valid != 0U)

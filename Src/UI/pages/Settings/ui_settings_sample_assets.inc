@@ -184,7 +184,7 @@ static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *p
     }
     if (project_control_wavetable_load_begin(slot, path) != 0U)
     {
-        ui_page_settings_status("LOADING");
+        ui_page_settings_status("IMPORTING");
     }
     else
     {
@@ -524,17 +524,17 @@ static void ui_page_settings_wavetable_copy_left(uint8_t shift_down)
         return;
     }
 
-    if (sample_global_pool_get_used_entries() >= sample_global_pool_get_entry_capacity())
+    uint16_t existing_backend = WAVETABLE_POOL_INVALID_SLOT;
+    if (wavetable_pool_find_by_path(entry->path, &existing_backend) != 0U)
     {
-        ui_page_settings_flash_sample_header_slots();
-        ui_page_settings_status("POOL FULL");
+        ui_page_settings_wavetable_load_to_slot(existing_backend, entry->path);
         return;
     }
 
     const int16_t free_slot = ui_page_settings_wavetable_find_free_backend_slot();
     if (free_slot < 0)
     {
-        ui_page_settings_status("WAVE FULL");
+        ui_page_settings_status("FLASH FULL");
         return;
     }
 
@@ -555,13 +555,6 @@ static void ui_page_settings_wavetable_copy_right(uint8_t shift_down)
         return;
     }
 
-    uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if (ui_page_settings_wavetable_backend_from_global(g_ui_settings.sample_slot_selected,
-                                                       &backend_slot) == 0U)
-    {
-        ui_page_settings_status("SELECT WAVE");
-        return;
-    }
     const uint16_t deleted_logical = g_ui_settings.sample_slot_selected;
     ui_page_settings_select_neighbor_before_delete();
     if (project_control_remove_wavetable(deleted_logical) == 0U)
@@ -569,8 +562,8 @@ static void ui_page_settings_wavetable_copy_right(uint8_t shift_down)
         ui_page_settings_status("CLEAR BUSY");
         return;
     }
-    wavetable_pool_clear(backend_slot);
     ui_page_settings_refresh_wavetable_slots();
-    ui_page_settings_status("CLEAR OK");
+    (void)ui_page_settings_wavetable_browser_refresh();
+    ui_page_settings_status("BANK REMOVE OK");
 }
 

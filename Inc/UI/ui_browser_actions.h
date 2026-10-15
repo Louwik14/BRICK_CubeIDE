@@ -34,7 +34,9 @@ static inline ui_browser_action_t ui_browser_action_resolve_context(
     if (context == UI_BROWSER_ASSET_SD || context == UI_BROWSER_ASSET_POOL) {
         if (shift != 0U) {
             if (button == BTN_PAGE_2) return UI_BROWSER_ACTION_REFRESH;
-            if (button == BTN_PAGE_3 && context == UI_BROWSER_ASSET_SD)
+            if (button == BTN_PAGE_3
+                && (context == UI_BROWSER_ASSET_SD
+                    || context == UI_BROWSER_ASSET_POOL))
                 return UI_BROWSER_ACTION_DELETE;
             return UI_BROWSER_ACTION_NONE;
         }

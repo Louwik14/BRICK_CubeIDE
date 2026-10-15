@@ -922,6 +922,20 @@ static void ui_page_settings_wavetable_browser_service(void)
         ui_page_settings_status("LIST FULL");
 }
 
+static void ui_page_settings_wavetable_bank_coherence_service(void)
+{
+    const ui_settings_menu_level_t *const level = ui_page_settings_current_level();
+    if ((level == 0) || (level->view != UI_SETTINGS_VIEW_WAVETABLE)) return;
+    uint16_t current[SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS];
+    const uint16_t count = project_control_list_wavetables(
+        current, SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
+    if ((count != g_ui_settings.sampler_slot_count)
+        || ((count != 0U)
+            && (memcmp(current, g_ui_settings.sampler_slots,
+                       count * sizeof(current[0])) != 0)))
+        ui_page_settings_refresh_wavetable_slots();
+}
+
 static void ui_page_settings_multi_load_metadata(ui_settings_multi_entry_t *entry)
 {
     if ((entry == 0) || (entry->type != UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM))

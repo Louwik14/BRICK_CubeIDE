@@ -258,6 +258,24 @@ uint8_t project_control_find_asset(uint32_t kind,const char*path,uint16_t*out_lo
 uint8_t project_control_wavetable_load_begin(uint16_t backend_slot,const char*path)
 {
     if(g_wavetable_load.pending!=0U||g_wavetable_load.valid!=0U)return 0U;
+    uint16_t existing_backend=WAVETABLE_POOL_INVALID_SLOT;
+    if(wavetable_pool_find_by_path(path,&existing_backend)!=0U)
+    {
+        const wavetable_slot_t*const existing=
+            wavetable_pool_get_slot(existing_backend);
+        uint16_t logical=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        if(existing==NULL||existing->state!=WAVETABLE_SLOT_READY
+            ||project_control_register_wavetable_runtime(
+                path,existing->global_slot,&logical)==0U)return 0U;
+        g_wavetable_load.result=(project_control_wavetable_load_result_t){
+            .backend_slot=existing_backend,
+            .global_slot=existing->global_slot,
+            .logical_slot=logical,
+            .result=(uint16_t)WAVETABLE_RESULT_OK,
+            .success=1U};
+        g_wavetable_load.valid=1U;
+        return 1U;
+    }
     const wavetable_slot_t*const old=wavetable_pool_get_slot(backend_slot);
     const uint16_t replaced=(old!=NULL&&old->state==WAVETABLE_SLOT_READY)
         ?bank_find_runtime(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,

@@ -825,6 +825,9 @@ void wavetable_pool_load_async_service(void)
         const uint32_t old_cycle = job->cycle;
         const uint16_t old_band = job->band;
         wavetable_pool_load_async_step();
+        if ((job->state == WAVETABLE_LOAD_DONE)
+            && (g_wavetable_prepare_base != NULL))
+            wavetable_prepare_workspace_release();
         if ((job->state == WAVETABLE_LOAD_IDLE)
             || (job->state == WAVETABLE_LOAD_DONE))
             break;

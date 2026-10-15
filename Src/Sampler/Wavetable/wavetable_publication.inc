@@ -214,7 +214,7 @@ const char *wavetable_pool_result_label(wavetable_result_t result)
             return "LOAD OK";
         case WAVETABLE_RESULT_POOL_FULL:
         case WAVETABLE_RESULT_GLOBAL_SLOT_FULL:
-            return "SLOT FULL";
+            return "FLASH FULL";
         case WAVETABLE_RESULT_GLOBAL_BUDGET_FULL:
         case WAVETABLE_RESULT_RAM_POOL_FULL:
             return "MEM FULL";
@@ -235,7 +235,7 @@ const char *wavetable_pool_result_label(wavetable_result_t result)
         case WAVETABLE_RESULT_READ_FAIL:
             return "SD READ FAIL";
         case WAVETABLE_RESULT_WRITE_FAIL:
-            return "SD WRITE FAIL";
+            return "WRITE FAIL";
         case WAVETABLE_RESULT_REGISTER_FAIL:
             return "REGISTER FAIL";
         case WAVETABLE_RESULT_TRANSPORT_ACTIVE:

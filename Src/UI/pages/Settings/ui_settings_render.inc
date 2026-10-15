@@ -888,9 +888,19 @@ static void ui_page_settings_render_wavetable_browser(void)
         {
             char left[32];
             const ui_settings_sample_entry_t *const entry = &g_ui_settings.sample_entries[left_index];
+            char marked[28];
+            const char *label = entry->label;
+            uint16_t imported_slot = WAVETABLE_POOL_INVALID_SLOT;
+            if ((entry->type == UI_SETTINGS_SAMPLE_ENTRY_FILE)
+                && (wavetable_pool_find_by_path(entry->path,
+                                                &imported_slot) != 0U))
+            {
+                (void)snprintf(marked, sizeof(marked), "%s *", entry->label);
+                label = marked;
+            }
             ui_page_settings_fit_label(left,
                                        sizeof(left),
-                                       entry->label,
+                                       label,
                                        (uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_W);
             if ((left_index == g_ui_settings.sample_selected)
                 && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY))
