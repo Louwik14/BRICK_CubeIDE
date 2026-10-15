@@ -81,7 +81,7 @@ AUDIO_HOT static audio_fx_runtime_plan_t g_audio_fx_plan[AUDIO_FX_OWNER_COUNT];
 _Static_assert(sizeof(g_audio_fx_plan) == 544U,
                "Audio FX structural-plan bank size changed");
 
-AUDIO_WARM static fx_audio_vibe_history_t
+AUDIO_HISTORY_SDRAM static fx_audio_vibe_history_t
     g_audio_fx_vibe_history[AUDIO_FX_OWNER_COUNT];
 AUDIO_HISTORY_SDRAM static fx_audio_drift_history_t
     g_audio_fx_drift_history[AUDIO_FX_OWNER_COUNT][2];
@@ -95,7 +95,7 @@ AUDIO_HISTORY_SDRAM static fx_audio_drift_history_t
     g_audio_fx_preview_drift_history[2];
 static uint8_t g_audio_fx_preview_contextual_bypass;
 _Static_assert(sizeof(g_audio_fx_vibe_history) == 65536U,
-               "VIBE D1 pool size changed");
+               "VIBE SDRAM pool size changed");
 _Static_assert(sizeof(g_audio_fx_drift_history) == 65536U,
                "DRIFT SDRAM pool size changed");
 
