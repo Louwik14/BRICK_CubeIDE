@@ -10,6 +10,7 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_preview.h"
 #include "Storage/wav_convert.h"
+#include "Storage/waveform_service.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/pattern_control_bank.h"
 #include "Sampler/sample_page_lease_control.h"
@@ -129,6 +130,7 @@ void resource_mutation_quiesce_request(void)
     midi_rx_discard_pending();
     midi_host_rx_discard_pending();
     sd_preview_stop();
+    (void)waveform_service_local_quiesce();
     seq_ingress_panic();
     g_resource_mutation_quiesce_requested = 1U;
     resource_mutation_quiesce_begin_panic();
@@ -144,7 +146,8 @@ uint8_t resource_mutation_quiesce_safe(void)
             g_resource_mutation_panic_head) != 0U)
         && (control_rt_publication_horizon_active() == 0U)
         && (sample_page_lease_control_all_released() != 0U)
-        && (sample_cache_has_pending_sd_work() == 0U));
+        && (sample_cache_has_pending_sd_work() == 0U)
+        && (waveform_service_local_quiesce() != 0U));
 }
 
 uint8_t project_load_quiesce_safe(void)
@@ -179,6 +182,7 @@ void resource_mutation_quiesce_end(void)
     g_resource_mutation_quiesce_requested = 0U;
     g_resource_mutation_reservations_cancelled = 0U;
     g_resource_mutation_panic_head = 0U;
+    waveform_service_local_resume();
     __DMB();
     g_project_load_ingress_open =
         ((g_resource_mutation_ingress_holds == 0U)

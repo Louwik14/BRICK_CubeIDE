@@ -412,9 +412,9 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
     ui_page_audio_rec_draw_zero_line(x, y, w, h);
     if (state->view == SAMPLE_CAPTURE_VIEW_AUDIO_REC)
     {
-        if ((state->recording_started != 0U)
-                && ((state->phase == SAMPLE_CAPTURE_PHASE_RECORDING)
-                    || (state->phase == SAMPLE_CAPTURE_PHASE_STOPPING)))
+        if (((state->phase == SAMPLE_CAPTURE_PHASE_RECORDING)
+                    && (state->recording_audio_active != 0U))
+                || (state->phase == SAMPLE_CAPTURE_PHASE_STOPPING))
         {
             waveform_column_t columns[126];
             waveform_line_column_t line[126];

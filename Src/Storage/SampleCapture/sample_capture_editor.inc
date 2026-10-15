@@ -48,7 +48,9 @@ sample_capture_rec_led_state_t sample_capture_model_rec_led_state(void)
 void sample_capture_model_set_view(sample_capture_view_t view)
 {
     g_sample_capture.state.view = view;
-    if(view != SAMPLE_CAPTURE_VIEW_REC_EDIT)
+    if(view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
+        waveform_service_local_resume();
+    else
         waveform_service_local_suspend();
 }
 

@@ -3,7 +3,6 @@ static void sample_capture_reset_take_transients(uint8_t preserve_final_path)
     sample_capture_detail_reset();
     g_sample_capture.state.take_valid = 0U;
     g_sample_capture.state.planned_frames = 0U;
-    g_sample_capture.state.recording_started = 0U;
     g_sample_capture.state.recording_committed_frames = 0U;
     g_sample_capture.state.recorded_frames = 0U;
     g_sample_capture.state.edit_start_frame = 0U;
@@ -146,6 +145,10 @@ static void sample_capture_save_service(void)
 {
     sample_capture_save_job_t *const job = &g_sample_capture.save_job;
     if(job->phase == SAMPLE_CAPTURE_SAVE_IDLE) return;
+    /* A persistent local-waveform FIL would make the no-copy promotion fail
+     * with FR_LOCKED.  Quiescence is cooperative and owns no SD gate while
+     * waiting; the save starts on the following service turn after close. */
+    if(waveform_service_local_quiesce() == 0U) return;
     if((job->phase == SAMPLE_CAPTURE_SAVE_READ_DATA) && (job->chunk_bytes == 0U))
         job->chunk_bytes = (job->bytes_left > SAMPLE_CAPTURE_SAVE_CHUNK_BYTES)
             ? SAMPLE_CAPTURE_SAVE_CHUNK_BYTES : job->bytes_left;
@@ -326,6 +329,8 @@ static void sample_capture_save_service(void)
             (void)f_unlink(job->temporary_path);
             memset(job, 0, sizeof(*job));
             g_sample_capture.state.save_pending = 0U;
+            if(g_sample_capture.state.view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
+                waveform_service_local_resume();
             break;
         default:
             sample_capture_save_fail();

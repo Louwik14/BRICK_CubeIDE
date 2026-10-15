@@ -21,6 +21,7 @@
 #define WAVEFORM_TILE_BINS 512U
 #define WAVEFORM_TILE_COUNT 16U
 #define WAVEFORM_READ_BYTES 4092U
+#define WAVEFORM_LOCAL_READ_BYTES SD_SCHEDULER_HEAVY_MAX_DATA_BYTES
 
 typedef struct
 {
@@ -56,6 +57,8 @@ STORAGE_STATE_SDRAM static waveform_build_t g_waveform_build;
 STORAGE_STATE_SDRAM static sampler_waveform_bin_t
     g_sampler_waveform_request_bins[SAMPLER_WAVEFORM_BIN_COUNT];
 RECORDER_SCRATCH_SDRAM static uint8_t g_waveform_read[WAVEFORM_READ_BYTES];
+RECORDER_SCRATCH_SDRAM static uint8_t
+    g_waveform_local_read[WAVEFORM_LOCAL_READ_BYTES];
 static uint32_t g_waveform_lru;
 static waveform_source_t g_waveform_peak_source;
 static uint16_t g_waveform_peak;
@@ -375,6 +378,10 @@ void waveform_service_init(void)
 
 uint8_t waveform_service_local_pending(void)
 {
+    if(g_waveform_local.file_open != 0U
+            && (g_waveform_local.close_pending != 0U
+                || g_waveform_local.file_media_epoch != sd_access_media_epoch()))
+        return 1U;
     if(g_waveform_local.valid == 0U || g_waveform_local.desired == 0U)
         return 0U;
     for(uint8_t i = 0U; i < WAVEFORM_LOCAL_TILE_COUNT; ++i)
@@ -387,7 +394,19 @@ uint8_t waveform_service_local_pending(void)
 
 void waveform_service_local_suspend(void)
 {
-    g_waveform_local.desired = 0U;
+    waveform_local_suspend();
+}
+
+void waveform_service_local_resume(void)
+{
+    g_waveform_local.quiesced = 0U;
+}
+
+uint8_t waveform_service_local_quiesce(void)
+{
+    g_waveform_local.quiesced = 1U;
+    waveform_local_suspend();
+    return (uint8_t)(waveform_service_local_pending() == 0U);
 }
 
 void waveform_service_storage_service(void)

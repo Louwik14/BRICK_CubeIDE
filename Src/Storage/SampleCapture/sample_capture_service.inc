@@ -199,6 +199,8 @@ static void sample_capture_sync_current_generation(void)
 
 void sample_capture_model_service(void)
 {
+    g_sample_capture.state.recording_audio_active =
+        audio_recorder_is_recording();
     if (g_sample_capture.rec_bus_publish_pending != 0U)
         sample_capture_publish_rec_bus();
     sample_capture_save_service();
@@ -212,9 +214,6 @@ void sample_capture_model_service(void)
         return;
     }
     g_sample_capture.state.recording_committed_frames = status.frames_committed;
-    if ((status.frames_received != 0U)
-            || (audio_recorder_is_recording() != 0U))
-        g_sample_capture.state.recording_started = 1U;
 
     audio_rec_level_snapshot_t level;
     if(audio_rec_level_reader_read(&level) != 0U)

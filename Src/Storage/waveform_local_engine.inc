@@ -3,7 +3,7 @@
  * Only STORAGE fills tiles; the UI sees columns through waveform_service. */
 #define WAVEFORM_LOCAL_TILE_COUNT 16U
 #define WAVEFORM_LOCAL_TILE_FRAMES 24000U
-#define WAVEFORM_LOCAL_CHUNK_BYTES 4092U
+#define WAVEFORM_LOCAL_CHUNK_BYTES WAVEFORM_LOCAL_READ_BYTES
 #define WAVEFORM_LOCAL_REQUEST_MAX 4U
 #define WAVEFORM_LOCAL_KEEP_RADIUS 2U
 #define WAVEFORM_LOCAL_MAX_VIEW_TILES 12U
@@ -48,9 +48,14 @@ typedef struct
     uint16_t bits_per_sample;
     uint16_t channels;
     wav_sample_encoding_t encoding;
+    FIL file;
+    uint32_t file_media_epoch;
     uint8_t valid;
     uint8_t format_ready;
     uint8_t desired;
+    uint8_t file_open;
+    uint8_t close_pending;
+    uint8_t quiesced;
     waveform_local_tile_t tiles[WAVEFORM_LOCAL_TILE_COUNT];
 } waveform_local_cache_t;
 
@@ -75,6 +80,54 @@ typedef struct
     waveform_line_column_t line[126];
 } waveform_local_line_hot_t;
 STORAGE_STATE_SDRAM static waveform_local_line_hot_t g_waveform_local_line_hot;
+
+static void waveform_local_invalidate(void)
+{
+    g_waveform_local.valid = 0U;
+    g_waveform_local.format_ready = 0U;
+    g_waveform_local.desired = 0U;
+    g_waveform_local_line_hot.valid = 0U;
+    memset(g_waveform_local.tiles, 0, sizeof(g_waveform_local.tiles));
+}
+
+static void waveform_local_suspend(void)
+{
+    waveform_local_invalidate();
+    if(g_waveform_local.file_open != 0U)
+        g_waveform_local.close_pending = 1U;
+}
+
+static uint8_t waveform_local_close_service(void)
+{
+    if(g_waveform_local.file_open == 0U)
+    {
+        g_waveform_local.close_pending = 0U;
+        return 1U;
+    }
+    if(g_waveform_local.file_media_epoch != sd_access_media_epoch())
+    {
+        /* FatFs invalidates its lock table with the lost volume.  The old FIL
+         * must not be closed against a newly mounted media generation. */
+        g_waveform_local.file_open = 0U;
+        g_waveform_local.close_pending = 0U;
+        return 1U;
+    }
+    const sd_scheduler_background_request_t admission =
+        { 0U, g_waveform_local.file_media_epoch,
+            SD_SCHEDULER_BACKGROUND_METADATA };
+    if(sd_scheduler_runtime_background_try_begin(&admission)
+            != SD_SCHEDULER_BACKGROUND_GO)
+        return 0U;
+    const FRESULT result = f_close(&g_waveform_local.file);
+    sd_scheduler_runtime_background_end();
+    if(result == FR_OK)
+    {
+        g_waveform_local.file_open = 0U;
+        g_waveform_local.close_pending = 0U;
+        return 1U;
+    }
+    return 0U;
+}
 
 static uint32_t waveform_local_align(uint32_t frame)
 {
@@ -150,12 +203,14 @@ static uint8_t waveform_local_queue(uint32_t start_frame, uint8_t *queued)
 static void waveform_local_request(const waveform_source_t *source,
     uint32_t start_frame, uint32_t frame_count)
 {
+    if(g_waveform_local.quiesced != 0U) { return; }
     if(g_waveform_local.valid == 0U
             || waveform_source_equal(&g_waveform_local.source, source) == 0U
             || g_waveform_local.media_epoch != sd_access_media_epoch())
     {
-        memset(&g_waveform_local, 0, sizeof(g_waveform_local));
-        g_waveform_local_line_hot.valid = 0U;
+        const uint8_t open = g_waveform_local.file_open;
+        waveform_local_invalidate();
+        g_waveform_local.close_pending = open;
         g_waveform_local.source = *source;
         g_waveform_local.media_epoch = sd_access_media_epoch();
         g_waveform_local.valid = 1U;
@@ -247,6 +302,17 @@ static int8_t waveform_local_next_loading(void)
 
 static void waveform_local_storage_service(void)
 {
+    if(g_waveform_local.file_open != 0U
+            && g_waveform_local.file_media_epoch != sd_access_media_epoch())
+    {
+        waveform_local_invalidate();
+        g_waveform_local.close_pending = 1U;
+    }
+    if(g_waveform_local.close_pending != 0U)
+    {
+        (void)waveform_local_close_service();
+        return;
+    }
     if(g_waveform_local.valid == 0U) { return; }
     const int8_t index = waveform_local_next_loading();
     if(index < 0) { return; }
@@ -254,7 +320,7 @@ static void waveform_local_storage_service(void)
     if(g_waveform_local.media_epoch != sd_access_media_epoch()
             || waveform_source_current(&g_waveform_local.source, &path) == 0U)
     {
-        g_waveform_local.valid = 0U;
+        waveform_local_suspend();
         return;
     }
     waveform_local_tile_t *const tile = &g_waveform_local.tiles[(uint8_t)index];
@@ -271,22 +337,22 @@ static void waveform_local_storage_service(void)
     {
         return;
     }
-    FIL fp;
     uint8_t ok = 0U;
-    if(sd_access_fs_mount_if_needed() == 0U
-            || f_open(&fp, path, FA_READ) != FR_OK)
+    if(sd_access_fs_mount_if_needed() == 0U) { goto end; }
+    if(g_waveform_local.file_open == 0U)
     {
-        goto end;
+        if(f_open(&g_waveform_local.file, path, FA_READ) != FR_OK) { goto end; }
+        g_waveform_local.file_open = 1U;
+        g_waveform_local.file_media_epoch = g_waveform_local.media_epoch;
     }
     if(g_waveform_local.format_ready == 0U)
     {
         wav_info_t info;
-        if(wav_parser_parse_info(&fp, &info) == 0
+        if(wav_parser_parse_info(&g_waveform_local.file, &info) == 0
                 || wav_parser_format_supported(&info) == 0U
                 || info.block_align > 8U)
         {
             tile->state = WAVEFORM_LOCAL_EMPTY;
-            (void)f_close(&fp);
             goto end;
         }
         g_waveform_local.data_offset = info.data_offset;
@@ -300,17 +366,21 @@ static void waveform_local_storage_service(void)
     if(frames > WAVEFORM_LOCAL_CHUNK_BYTES / g_waveform_local.block_align)
         frames = WAVEFORM_LOCAL_CHUNK_BYTES / g_waveform_local.block_align;
     const uint32_t bytes = frames * g_waveform_local.block_align;
+    const FSIZE_t offset = (FSIZE_t)g_waveform_local.data_offset
+        + (FSIZE_t)(tile->start_frame + tile->loaded_frames)
+            * g_waveform_local.block_align;
     UINT read = 0U;
-    if(f_lseek(&fp, g_waveform_local.data_offset
-            + (tile->start_frame + tile->loaded_frames)
-                * g_waveform_local.block_align) == FR_OK
-            && f_read(&fp, g_waveform_read, bytes, &read) == FR_OK
+    const FRESULT seek_result = (f_tell(&g_waveform_local.file) == offset)
+        ? FR_OK : f_lseek(&g_waveform_local.file, offset);
+    if(seek_result == FR_OK
+            && f_read(&g_waveform_local.file, g_waveform_local_read,
+                bytes, &read) == FR_OK
             && read == bytes)
     {
         for(uint32_t f = 0U; f < frames; ++f)
         {
             const uint8_t *const pcm =
-                &g_waveform_read[f * g_waveform_local.block_align];
+                &g_waveform_local_read[f * g_waveform_local.block_align];
             const uint16_t sample_bytes = g_waveform_local.bits_per_sample / 8U;
             const int16_t left =
                 (g_waveform_local.encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
@@ -332,8 +402,18 @@ static void waveform_local_storage_service(void)
             tile->state = WAVEFORM_LOCAL_READY;
         ok = 1U;
     }
-    (void)f_close(&fp);
 end:
+    if(ok == 0U && g_waveform_local.file_open != 0U)
+    {
+        if(f_close(&g_waveform_local.file) == FR_OK)
+        {
+            g_waveform_local.file_open = 0U;
+            g_waveform_local.close_pending = 0U;
+        }
+        else
+            g_waveform_local.close_pending = 1U;
+        g_waveform_local.format_ready = 0U;
+    }
     sd_scheduler_runtime_background_end();
     if(ok == 0U && tile->state == WAVEFORM_LOCAL_LOADING)
         tile->state = WAVEFORM_LOCAL_EMPTY;

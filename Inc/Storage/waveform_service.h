@@ -76,6 +76,8 @@ uint16_t waveform_rec_peak(const waveform_source_t *source);
 void waveform_service_storage_service(void);
 uint8_t waveform_service_local_pending(void);
 void waveform_service_local_suspend(void);
+void waveform_service_local_resume(void);
+uint8_t waveform_service_local_quiesce(void);
 waveform_result_t waveform_request(const waveform_source_t *source,
                                    uint32_t start_frame,
                                    uint32_t frame_count,

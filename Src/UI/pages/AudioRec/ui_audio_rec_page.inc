@@ -147,10 +147,11 @@ static void ui_page_audio_rec_tick(void)
     sample_capture_model_get_state(&state);
     if (state.view == SAMPLE_CAPTURE_VIEW_AUDIO_REC)
     {
-        const uint8_t live = (uint8_t)((state.recording_started == 0U)
+        const uint8_t live = (uint8_t)((state.recording_audio_active == 0U)
             && ((state.phase == SAMPLE_CAPTURE_PHASE_IDLE)
                 || (state.phase == SAMPLE_CAPTURE_PHASE_ARMED)
                 || (state.phase == SAMPLE_CAPTURE_PHASE_WAIT_QUANT)
+                || (state.phase == SAMPLE_CAPTURE_PHASE_RECORDING)
                 || (state.phase == SAMPLE_CAPTURE_PHASE_SAVED)));
         if (live != g_ui_audio_rec_scope_requested)
         {
