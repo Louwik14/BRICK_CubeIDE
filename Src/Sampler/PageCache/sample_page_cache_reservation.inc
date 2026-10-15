@@ -19,23 +19,20 @@ uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,
         return 0U;
     }
 
-    sample_stream_physical_map_t *const map = &sample->stream_safe.physical_map;
-    if ((sample->physical_only != 0U)
-        && (sample_stream_physical_map_is_current(map) == 0U))
-        return 0U;
-
     memset(out_info, 0, sizeof(*out_info));
     out_info->key = key;
-    memcpy(out_info->path, sample->path, sizeof(out_info->path));
-    out_info->info = sample->info;
-    out_info->total_frames = sample->total_frames;
-    out_info->data_offset = sample->data_offset;
-    out_info->format = sample->format;
-    out_info->stride_floats = sample->stride_floats;
-    out_info->frames_per_page = sample->frames_per_page;
+    out_info->total_frames = sample->stream_safe.total_frames;
+    out_info->data_offset = sample->stream_safe.data_offset_bytes;
+    out_info->format = (sample_audio_format_t)sample->format;
+    out_info->stride_floats = (uint16_t)sample_audio_format_stride_floats(
+        out_info->format);
+    out_info->frames_per_page = sample_audio_format_frames_per_page(
+        out_info->format);
     out_info->registration_epoch = sample->registration_epoch;
     out_info->stream_safe = sample->stream_safe;
-    out_info->physical_only = sample->physical_only;
+    out_info->encoding = (wav_sample_encoding_t)sample->encoding;
+    out_info->canonical_float = (uint8_t)(
+        (sample->flags & SAMPLE_PAGE_SAMPLE_CANONICAL_FLOAT) != 0U);
     return 1U;
 }
 
@@ -48,26 +45,25 @@ uint8_t sample_page_cache_register_prepared_stream(
         || (registration->total_frames == 0U)
         || (registration->frames_per_page == 0U)
         || (sample_audio_format_is_valid(registration->format) == 0U)
-        || ((registration->physical_only != 0U)
-            && (sample_stream_physical_map_is_current(
-                    &registration->stream_safe.physical_map) == 0U))) return 0U;
+        || (sample_audio_key_equal(
+                &registration->stream_safe.key, &registration->key) == 0U)
+        || (registration->stream_safe.total_frames
+                != registration->total_frames)
+        || (registration->stream_safe.data_offset_bytes
+                != registration->data_offset)
+        || (sample_stream_physical_map_is_current(
+                &registration->stream_safe.physical_map) == 0U)) return 0U;
     sample_page_cache_clear_key(registration->key);
     sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-    if (sample_page_cache_trim_path_copy(sample->path, sizeof(sample->path),
-                                         registration->path) == 0U) return 0U;
-    sample->key = registration->key;
-    sample->info = registration->info;
-    sample->total_frames = registration->total_frames;
+    sample->stream_safe = registration->stream_safe;
     sample->readable_frames = registration->total_frames;
-    sample->data_offset = registration->data_offset;
-    sample->format = registration->format;
-    sample->stride_floats = registration->stride_floats;
-    sample->frames_per_page = registration->frames_per_page;
     sample->registration_epoch =
         ++g_sample_page_cache_state.registration_epoch_counter;
-    sample->stream_safe = registration->stream_safe;
-    sample->valid = 1U;
-    sample->physical_only = registration->physical_only;
+    sample->format = (uint8_t)registration->format;
+    sample->encoding = (uint8_t)registration->encoding;
+    sample->flags = SAMPLE_PAGE_SAMPLE_VALID;
+    if (registration->canonical_float != 0U)
+        sample->flags |= SAMPLE_PAGE_SAMPLE_CANONICAL_FLOAT;
     return 1U;
 }
 
@@ -293,20 +289,19 @@ uint8_t sample_page_cache_get_stream_load_info_key(
         &g_sample_page_sample_desc[key_slot];
     if (sample_page_cache_sample_is_stream_loadable_key(key) == 0U)
         return 0U;
-    if ((sample->physical_only != 0U)
-        && (sample_stream_physical_map_is_current(
-                &sample->stream_safe.physical_map) == 0U)) return 0U;
-
     *out_info = (sample_page_stream_load_info_t){
         .key = key,
         .stream_safe = sample->stream_safe,
         .registration_epoch = sample->registration_epoch,
-        .format = sample->format,
-        .stride_floats = sample->stride_floats,
-        .frames_per_page = sample->frames_per_page,
-        .encoding = sample->info.encoding,
-        .canonical_float = wav_parser_is_canonical_brick_float(&sample->info),
-        .physical_only = sample->physical_only,
+        .format = (sample_audio_format_t)sample->format,
+        .stride_floats = (uint16_t)sample_audio_format_stride_floats(
+            (sample_audio_format_t)sample->format),
+        .frames_per_page = sample_audio_format_frames_per_page(
+            (sample_audio_format_t)sample->format),
+        .encoding = (wav_sample_encoding_t)sample->encoding,
+        .canonical_float = (uint8_t)(
+            (sample->flags & SAMPLE_PAGE_SAMPLE_CANONICAL_FLOAT) != 0U),
+        .reserved = 0U,
     };
     return 1U;
 }

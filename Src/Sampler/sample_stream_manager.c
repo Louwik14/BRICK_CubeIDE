@@ -179,8 +179,8 @@ static uint8_t sample_stream_manager_submit_fastpath(
         || (stream.format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
         || (stream.stride_floats != SAMPLE_PAGE_FRAME_STRIDE_FLOATS)
         || (stream.stream_safe.block_align != SAMPLE_PAGE_BYTES_PER_FRAME)
-        || (sample_stream_safe_metadata_backend(&stream.stream_safe)
-            != SAMPLE_STREAM_BACKEND_PHYSICAL))
+        || (sample_stream_physical_map_is_current(
+            &stream.stream_safe.physical_map) == 0U))
         return 0U;
 
     const uint8_t reverse = (lease->sequential_direction

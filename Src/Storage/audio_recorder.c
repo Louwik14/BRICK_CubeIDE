@@ -107,7 +107,7 @@ static void register_build_stream(void)
             || (map.reserved_file_bytes > UINT32_MAX)) return;
     const sample_audio_key_t key = rec_source_building_key();
     if(sample_page_cache_register_live_float32_stereo_sample_key(
-            key, g_audio_recorder.temporary_path, total_frames,
+            key, total_frames,
             readable_frames, AUDIO_RECORDER_WAV_HEADER_BYTES,
             (uint32_t)map.reserved_file_bytes, map.extents,
             map.extent_count, map.media_epoch) == 0U) return;
@@ -371,8 +371,6 @@ void audio_recorder_service(void)
                 / SAMPLE_PAGE_FRAMES;
             if(startup_pages > SAMPLE_PAGE_MIN_READY_PAGES)
                 startup_pages = SAMPLE_PAGE_MIN_READY_PAGES;
-            (void)sample_page_cache_update_stream_path_key(
-                key, g_audio_recorder.final_path);
             (void)sample_page_cache_reserve_start_pages_key(
                 key, 0U, startup_pages);
             if((sample_page_cache_get_registration_epoch_key(key, &epoch) != 0U)

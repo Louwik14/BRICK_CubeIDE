@@ -20,7 +20,6 @@ uint8_t sample_page_cache_mark_static_page_key_alloc(sample_audio_key_t key,
 
 uint8_t sample_page_cache_register_live_float32_stereo_sample_key(
     sample_audio_key_t key,
-    const char *path,
     uint32_t total_frames,
     uint32_t readable_frames,
     uint32_t data_offset,
@@ -32,7 +31,7 @@ uint8_t sample_page_cache_register_live_float32_stereo_sample_key(
     const uint16_t key_slot = sample_page_cache_key_slot(key);
     const uint64_t data_bytes = (uint64_t)total_frames
                               * AUDIO_RECORDER_BYTES_PER_FRAME;
-    if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (path == 0)
+    if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
             || (total_frames == 0U) || (readable_frames > total_frames)
             || (data_bytes > UINT32_MAX)
             || (((uint64_t)data_offset + data_bytes) > file_size))
@@ -42,49 +41,46 @@ uint8_t sample_page_cache_register_live_float32_stereo_sample_key(
 
     sample_page_cache_clear_key(key);
     sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-    if (sample_page_cache_trim_path_copy(
-            sample->path, sizeof(sample->path), path) == 0U)
-    {
-        return 0U;
-    }
-    sample->key = key;
-    sample->info.audio_format = 3U;
-    sample->info.encoding = WAV_SAMPLE_ENCODING_IEEE_FLOAT;
-    sample->info.sample_rate = AUDIO_RECORDER_SAMPLE_RATE_HZ;
-    sample->info.channels = AUDIO_RECORDER_CHANNELS;
-    sample->info.bits_per_sample = AUDIO_RECORDER_BITS_PER_SAMPLE;
-    sample->info.valid_bits_per_sample = AUDIO_RECORDER_BITS_PER_SAMPLE;
-    sample->info.fmt_chunk_size = 16U;
-    sample->info.block_align = AUDIO_RECORDER_BYTES_PER_FRAME;
-    sample->info.byte_rate = AUDIO_RECORDER_SAMPLE_RATE_HZ
-                           * AUDIO_RECORDER_BYTES_PER_FRAME;
-    sample->info.data_size = (uint32_t)data_bytes;
-    sample->info.fact_sample_length = total_frames;
-    sample->info.has_fact = 1U;
-    sample->total_frames = total_frames;
+    const wav_info_t info = {
+        .audio_format = 3U,
+        .encoding = WAV_SAMPLE_ENCODING_IEEE_FLOAT,
+        .sample_rate = AUDIO_RECORDER_SAMPLE_RATE_HZ,
+        .byte_rate = AUDIO_RECORDER_SAMPLE_RATE_HZ
+                   * AUDIO_RECORDER_BYTES_PER_FRAME,
+        .channels = AUDIO_RECORDER_CHANNELS,
+        .block_align = AUDIO_RECORDER_BYTES_PER_FRAME,
+        .bits_per_sample = AUDIO_RECORDER_BITS_PER_SAMPLE,
+        .valid_bits_per_sample = AUDIO_RECORDER_BITS_PER_SAMPLE,
+        .fmt_chunk_size = 16U,
+        .data_offset = data_offset,
+        .data_size = (uint32_t)data_bytes,
+        .fact_sample_length = total_frames,
+        .has_fact = 1U,
+    };
     sample->readable_frames = readable_frames;
-    sample->data_offset = data_offset;
-    sample->format = SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED;
-    sample->stride_floats = (uint16_t)sample_audio_format_stride_floats(
-        sample->format);
-    sample->frames_per_page = sample_audio_format_frames_per_page(sample->format);
     sample->registration_epoch = ++g_sample_page_cache_state.registration_epoch_counter;
     sample_stream_safe_metadata_init_fatfs(key,
-                                           &sample->info,
+                                           &info,
                                            total_frames,
                                            data_offset,
                                            &sample->stream_safe);
     sample->stream_safe.file_size = file_size;
-    if (sample_stream_physical_map_import(
+    if ((sample_stream_physical_map_import(
             &sample->stream_safe.physical_map,
             extents, extent_count, media_epoch) == 0U)
+        || (sample_stream_physical_map_is_current(
+            &sample->stream_safe.physical_map) == 0U))
     {
+        sample_stream_physical_map_release(
+            &sample->stream_safe.physical_map);
         memset(sample, 0, sizeof(*sample));
         return 0U;
     }
-    sample->valid = 1U;
-    sample->live_committed = 1U;
-    sample->physical_only = 1U;
+    sample->format = (uint8_t)SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED;
+    sample->encoding = (uint8_t)WAV_SAMPLE_ENCODING_IEEE_FLOAT;
+    sample->flags = SAMPLE_PAGE_SAMPLE_VALID
+                  | SAMPLE_PAGE_SAMPLE_LIVE_COMMITTED
+                  | SAMPLE_PAGE_SAMPLE_CANONICAL_FLOAT;
     return 1U;
 }
 
@@ -97,9 +93,9 @@ uint8_t sample_page_cache_update_readable_frames_key(sample_audio_key_t key,
         return 0U;
     }
     sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-    if ((sample->valid == 0U)
-            || (sample_audio_key_equal(&sample->key, &key) == 0U)
-            || (readable_frames > sample->total_frames))
+    if (((sample->flags & SAMPLE_PAGE_SAMPLE_VALID) == 0U)
+            || (sample_audio_key_equal(&sample->stream_safe.key, &key) == 0U)
+            || (readable_frames > sample->stream_safe.total_frames))
     {
         return 0U;
     }
@@ -121,9 +117,10 @@ uint8_t sample_page_cache_finalize_live_frames_key(sample_audio_key_t key,
         return 0U;
     }
     sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-    if(sample->valid == 0U || sample->live_committed == 0U
-            || sample_audio_key_equal(&sample->key, &key) == 0U
-            || final_frames > sample->total_frames
+    if((sample->flags & SAMPLE_PAGE_SAMPLE_VALID) == 0U
+            || (sample->flags & SAMPLE_PAGE_SAMPLE_LIVE_COMMITTED) == 0U
+            || sample_audio_key_equal(&sample->stream_safe.key, &key) == 0U
+            || final_frames > sample->stream_safe.total_frames
             || (uint64_t)final_frames * AUDIO_RECORDER_BYTES_PER_FRAME
                 > UINT32_MAX)
     {
@@ -131,30 +128,11 @@ uint8_t sample_page_cache_finalize_live_frames_key(sample_audio_key_t key,
     }
     const uint32_t data_bytes = final_frames * AUDIO_RECORDER_BYTES_PER_FRAME;
     const uint32_t primask = sample_page_cache_lock();
-    sample->total_frames = final_frames;
     sample->readable_frames = final_frames;
-    sample->info.data_size = data_bytes;
-    sample->info.fact_sample_length = final_frames;
     sample->stream_safe.total_frames = final_frames;
     sample->stream_safe.data_size = data_bytes;
     sample_page_cache_unlock(primask);
     return 1U;
-}
-
-uint8_t sample_page_cache_update_stream_path_key(sample_audio_key_t key,
-                                                  const char *path)
-{
-    const uint16_t key_slot = sample_page_cache_key_slot(key);
-    if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (path == 0)
-            || (g_sample_page_sample_desc[key_slot].valid == 0U)
-            || (sample_audio_key_equal(
-                &g_sample_page_sample_desc[key_slot].key, &key) == 0U))
-    {
-        return 0U;
-    }
-    return (sample_page_cache_trim_path_copy(
-        g_sample_page_sample_desc[key_slot].path,
-        sizeof(g_sample_page_sample_desc[key_slot].path), path) != 0U) ? 1U : 0U;
 }
 
 uint8_t sample_page_cache_get_reserved_load_target_domain_range(
@@ -182,8 +160,9 @@ uint8_t sample_page_cache_get_reserved_load_target_domain_range(
             continue;
 
         sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-        if ((sample->valid == 0U)
-            || (sample_audio_key_equal(&sample->key, &page->key) == 0U))
+        if (((sample->flags & SAMPLE_PAGE_SAMPLE_VALID) == 0U)
+            || (sample_audio_key_equal(
+                &sample->stream_safe.key, &page->key) == 0U))
             continue;
         return sample_page_cache_get_load_target_key(
             page->key, page->page_index, out_target);

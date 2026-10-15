@@ -12,7 +12,6 @@
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "stm32h7xx_hal.h"
-#include "ff.h"
 
 #ifndef BRICK6_STREAM_READ_CHUNK_KIB
 #define BRICK6_STREAM_READ_CHUNK_KIB (16U)
@@ -376,70 +375,18 @@ static uint8_t sample_stream_io_begin_request(
 
     sample_stream_physical_cursor_t *const cursor =
         &async->local_physical_cursor;
-    const uint8_t physical_expected = (uint8_t)(
-        sample_stream_safe_metadata_backend(&async->stream.stream_safe)
-            == SAMPLE_STREAM_BACKEND_PHYSICAL);
-    if (physical_expected != 0U)
+    if (sample_stream_backend_physical_begin(
+            &async->physical, &async->stream.stream_safe,
+            target, page_count, cursor,
+            (uint8_t *)async->page[0].frames_interleaved,
+            page_count * SAMPLE_PAGE_BYTES,
+            destinations_cpu_clean, deadline_margin_us) != 0U)
     {
-        if (sample_stream_backend_physical_begin(
-                &async->physical, &async->stream.stream_safe,
-                target, page_count, cursor,
-                (uint8_t *)async->page[0].frames_interleaved,
-                page_count * SAMPLE_PAGE_BYTES,
-                destinations_cpu_clean, deadline_margin_us) != 0U)
-        {
-            async->physical_active = 1U;
-            async->state = SAMPLE_STREAM_IO_JOB_DMA;
-            PERF_END(PERF_CPU_STREAM_IO_BEGIN, begin_start);
-            return 1U;
-        }
-        async->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
-        async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
+        async->physical_active = 1U;
+        async->state = SAMPLE_STREAM_IO_JOB_DMA;
+        PERF_END(PERF_CPU_STREAM_IO_BEGIN, begin_start);
         return 1U;
     }
-
-    if ((page_count == 1U) && (async->stream.physical_only == 0U)
-        && (deadline_margin_us == UINT32_MAX))
-    {
-        sample_page_stream_info_t fallback;
-        FIL file;
-        UINT read = 0U;
-        const uint64_t source_offset =
-            (uint64_t)async->stream.stream_safe.data_offset_bytes
-            + ((uint64_t)async->page[0].start_frame
-               * async->stream.stream_safe.block_align);
-        if ((source_offset <= UINT32_MAX)
-            && (sample_page_cache_get_stream_info_key(
-                    async->token[0].key, &fallback) != 0U)
-            && (fallback.registration_epoch
-                == async->token[0].registration_epoch)
-            && (fallback.path[0] != '\0')
-            && (f_open(&file, fallback.path, FA_READ) == FR_OK))
-        {
-            if (f_lseek(&file, (FSIZE_t)source_offset) == FR_OK)
-            {
-                const FRESULT read_result = f_read(
-                    &file, async->page[0].frames_interleaved,
-                    async->source_bytes, &read);
-                const uint8_t cache_clean = (uint8_t)((read == 0U)
-                    || (sample_page_cache_clean_loading_payload(
-                            &async->token[0], read) != 0U));
-                if ((read_result == FR_OK)
-                    && (read == async->source_bytes)
-                    && (cache_clean != 0U))
-                {
-                    async->read_bytes = read;
-                    async->load_result = SAMPLE_PAGE_LOAD_OK;
-                    async->source =
-                        (const uint8_t *)async->page[0].frames_interleaved;
-                }
-            }
-            (void)f_close(&file);
-        }
-        async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
-        return 1U;
-    }
-
     async->load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
     async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
     return 1U;

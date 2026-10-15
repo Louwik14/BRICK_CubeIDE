@@ -37,21 +37,21 @@ typedef struct
 
 typedef struct
 {
-    sample_audio_key_t key;
-    char path[SAMPLE_PAGE_CACHE_PATH_MAX];
-    wav_info_t info;
-    uint32_t total_frames;
-    volatile uint32_t readable_frames;
-    uint32_t data_offset;
-    sample_audio_format_t format;
-    uint16_t stride_floats;
-    uint32_t frames_per_page;
-    uint32_t registration_epoch;
     sample_stream_safe_metadata_t stream_safe;
-    uint8_t valid;
-    uint8_t live_committed;
-    uint8_t physical_only;
+    volatile uint32_t readable_frames;
+    uint32_t registration_epoch;
+    uint8_t format;
+    uint8_t encoding;
+    uint8_t flags;
+    uint8_t reserved;
 } sample_page_sample_desc_t;
+
+#define SAMPLE_PAGE_SAMPLE_VALID           (1U << 0U)
+#define SAMPLE_PAGE_SAMPLE_LIVE_COMMITTED  (1U << 1U)
+#define SAMPLE_PAGE_SAMPLE_CANONICAL_FLOAT (1U << 2U)
+
+_Static_assert(sizeof(sample_page_sample_desc_t) == 116U,
+               "STREAM sample descriptor budget changed");
 
 typedef sample_page_backing_index_entry_t sample_page_index_entry_t;
 
@@ -93,8 +93,8 @@ uint8_t sample_page_cache_get_registration_epoch_key(
 
     const sample_page_sample_desc_t *const sample =
         &g_sample_page_sample_desc[key_slot];
-    if ((sample->valid == 0U)
-            || (sample_audio_key_equal(&sample->key, &key) == 0U)
+    if (((sample->flags & SAMPLE_PAGE_SAMPLE_VALID) == 0U)
+            || (sample_audio_key_equal(&sample->stream_safe.key, &key) == 0U)
             || (sample->registration_epoch == 0U))
         return 0U;
 
@@ -140,8 +140,8 @@ uint8_t sample_page_cache_control_resolve_page_key(sample_audio_key_t key,
     }
     const sample_page_sample_desc_t *const sample =
         &g_sample_page_sample_desc[key_slot];
-    if(sample->valid == 0U
-            || sample_audio_key_equal(&sample->key, &key) == 0U
+    if((sample->flags & SAMPLE_PAGE_SAMPLE_VALID) == 0U
+            || sample_audio_key_equal(&sample->stream_safe.key, &key) == 0U
             || sample->registration_epoch != registration_epoch)
     {
         return 0U;
@@ -153,15 +153,19 @@ uint8_t sample_page_cache_control_resolve_page_key(sample_audio_key_t key,
             || sample_audio_key_equal(&page->key, &key) == 0U
             || page->registration_epoch != registration_epoch
             || page->page_index != page_index
-            || page->format != sample->format
-            || page->stride_floats != sample->stride_floats
-            || page->frames_per_page != sample->frames_per_page
+            || page->format != (sample_audio_format_t)sample->format
+            || page->stride_floats != sample_audio_format_stride_floats(
+                (sample_audio_format_t)sample->format)
+            || page->frames_per_page != sample_audio_format_frames_per_page(
+                (sample_audio_format_t)sample->format)
             || page->start_frame != (uint64_t)page_index
-                * sample->frames_per_page
+                * sample_audio_format_frames_per_page(
+                    (sample_audio_format_t)sample->format)
             || page->frame_count == 0U
-            || page->frame_count > sample->frames_per_page
+            || page->frame_count > sample_audio_format_frames_per_page(
+                (sample_audio_format_t)sample->format)
             || (uint64_t)page->start_frame + page->frame_count
-                > sample->total_frames)
+                > sample->stream_safe.total_frames)
     {
         return 0U;
     }

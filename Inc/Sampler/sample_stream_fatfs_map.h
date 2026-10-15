@@ -9,12 +9,6 @@
 extern "C" {
 #endif
 
-typedef enum
-{
-    SAMPLE_STREAM_BACKEND_FATFS = 0,
-    SAMPLE_STREAM_BACKEND_PHYSICAL = 1
-} sample_stream_backend_kind_t;
-
 #define SAMPLE_STREAM_PHYSICAL_MAP_MAX_EXTENTS      (128U)
 #define SAMPLE_STREAM_PHYSICAL_MAP_POOL_BLOCKS      (512U)
 #define SAMPLE_STREAM_PHYSICAL_MAP_EXTENTS_PER_BLOCK (8U)
@@ -126,8 +120,6 @@ uint8_t sample_stream_physical_map_import(
     uint16_t extent_count,
     uint32_t media_epoch);
 uint8_t sample_stream_physical_map_is_current(const sample_stream_physical_map_t *map);
-sample_stream_backend_kind_t sample_stream_safe_metadata_backend(
-    const sample_stream_safe_metadata_t *metadata);
 uint8_t sample_stream_physical_map_get_extent(const sample_stream_physical_map_t *map,
                                               uint16_t extent_index,
                                               sample_stream_physical_extent_t *out_extent);

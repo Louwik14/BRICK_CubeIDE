@@ -51,7 +51,6 @@ uint32_t sample_page_cache_port_local_free_bytes(void)
 static uint8_t sample_page_cache_port_prepare_registration(
     sample_audio_key_t key, const char *path, const wav_info_t *info,
     uint32_t total_frames, uint32_t data_offset, FIL *map_file,
-    uint8_t allow_fatfs,
     sample_page_stream_info_t *out)
 {
     if ((path == NULL) || (info == NULL) || (out == NULL)
@@ -61,28 +60,25 @@ static uint8_t sample_page_cache_port_prepare_registration(
         && (wav_parser_is_canonical_brick_float(info) == 0U)) return 0U;
     memset(out, 0, sizeof(*out));
     out->key = key;
-    out->info = *info;
     out->total_frames = total_frames;
     out->data_offset = data_offset;
     out->format = sample_audio_format_from_channels(info->channels);
     out->stride_floats = (uint16_t)sample_audio_format_stride_floats(out->format);
     out->frames_per_page = sample_audio_format_frames_per_page(out->format);
+    out->encoding = info->encoding;
+    out->canonical_float = wav_parser_is_canonical_brick_float(info);
     if (sample_audio_format_is_valid(out->format) == 0U) return 0U;
-    if (strlen(path) >= sizeof(out->path)) return 0U;
-    memcpy(out->path, path, strlen(path) + 1U);
     sample_stream_safe_metadata_init_fatfs(key, info, total_frames,
                                            data_offset, &out->stream_safe);
     const uint8_t map_ok = (map_file != NULL)
         ? sample_stream_fatfs_map_build_from_file(map_file, &out->stream_safe)
         : sample_stream_fatfs_map_build_from_path(path, &out->stream_safe);
     const uint64_t data_end = (uint64_t)data_offset + info->data_size;
-    if (((map_ok == 0U) && (allow_fatfs == 0U))
-        || ((map_ok != 0U) && (data_end > out->stream_safe.file_size)))
+    if ((map_ok == 0U) || (data_end > out->stream_safe.file_size))
     {
         sample_stream_physical_map_release(&out->stream_safe.physical_map);
         return 0U;
     }
-    out->physical_only = (map_ok != 0U) ? 1U : 0U;
     return 1U;
 }
 
@@ -100,7 +96,7 @@ uint8_t sample_page_cache_port_prepare_stream(
     if (out_prefill_pages != NULL) *out_prefill_pages = 0U;
     sample_page_stream_info_t registration;
     if (sample_page_cache_port_prepare_registration(
-            key, path, info, total_frames, data_offset, map_file, 0U,
+            key, path, info, total_frames, data_offset, map_file,
             &registration) == 0U) return 0U;
     if (sample_page_cache_register_prepared_stream(&registration) == 0U)
     {
@@ -157,7 +153,6 @@ uint8_t sample_page_cache_port_prepare_stream_mapped(
     sample_page_stream_info_t registration;
     memset(&registration, 0, sizeof(registration));
     registration.key = key;
-    registration.info = *info;
     registration.total_frames = total_frames;
     registration.data_offset = data_offset;
     registration.format = sample_audio_format_from_channels(info->channels);
@@ -165,10 +160,10 @@ uint8_t sample_page_cache_port_prepare_stream_mapped(
         registration.format);
     registration.frames_per_page = sample_audio_format_frames_per_page(
         registration.format);
+    registration.encoding = info->encoding;
+    registration.canonical_float = wav_parser_is_canonical_brick_float(info);
     if ((sample_audio_format_is_valid(registration.format) == 0U)
-        || (strlen(path) >= sizeof(registration.path))
         || ((uint64_t)data_offset + info->data_size > file_size)) return 0U;
-    memcpy(registration.path, path, strlen(path) + 1U);
     sample_stream_safe_metadata_init_fatfs(key, info, total_frames,
         data_offset, &registration.stream_safe);
     registration.stream_safe.file_size = file_size;
@@ -177,7 +172,6 @@ uint8_t sample_page_cache_port_prepare_stream_mapped(
     map->first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
     for (uint32_t i = 0U; i < SAMPLE_STREAM_PHYSICAL_MAP_MAX_BLOCKS; ++i)
         map->pool_block[i] = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
-    registration.physical_only = 1U;
     if (sample_page_cache_register_prepared_stream(&registration) == 0U)
     {
         sample_stream_physical_map_release(&registration.stream_safe.physical_map);
@@ -223,7 +217,7 @@ uint8_t sample_page_cache_port_register_file(sample_audio_key_t key,
 {
     sample_page_stream_info_t registration;
     if (sample_page_cache_port_prepare_registration(
-            key, path, info, total_frames, data_offset, map_file, 0U,
+            key, path, info, total_frames, data_offset, map_file,
             &registration) == 0U) return 0U;
     if (sample_page_cache_register_prepared_stream(&registration) == 0U)
     {

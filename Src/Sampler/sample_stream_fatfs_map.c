@@ -220,17 +220,6 @@ uint8_t sample_stream_physical_map_is_current(const sample_stream_physical_map_t
             && (map->media_epoch == sd_access_media_epoch())) ? 1U : 0U;
 }
 
-sample_stream_backend_kind_t sample_stream_safe_metadata_backend(
-    const sample_stream_safe_metadata_t *metadata)
-{
-    if ((metadata != 0)
-        && (sample_stream_physical_map_is_current(&metadata->physical_map) != 0U))
-    {
-        return SAMPLE_STREAM_BACKEND_PHYSICAL;
-    }
-    return SAMPLE_STREAM_BACKEND_FATFS;
-}
-
 uint8_t sample_stream_physical_map_get_extent(const sample_stream_physical_map_t *map,
                                               uint16_t extent_index,
                                               sample_stream_physical_extent_t *out_extent)

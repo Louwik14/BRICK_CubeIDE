@@ -356,9 +356,7 @@ static void recover_promotion(void)
             rec_source_generation_t *const recovered =
                 &g_rec_source_generations[(uint8_t)recovered_slot];
             if ((strcmp(recovered->path, journal.new_path) != 0)
-                    && ((sample_page_cache_update_stream_path_key(
-                            recovered->key, journal.new_path) == 0U)
-                        || (copy_path(recovered->path, journal.new_path) == 0U)))
+                    && (copy_path(recovered->path, journal.new_path) == 0U))
                 return;
             recovered->ownership = REC_SOURCE_OWNERSHIP_PERSISTENT;
         }
@@ -647,14 +645,6 @@ uint8_t rec_source_promote_current(const char *persistent_path)
         return 0U;
     }
     if (write_promotion_journal(&journal, REC_SOURCE_PROMOTION_RENAMED) == 0U)
-    {
-        if (f_rename(persistent_path, current->path) == FR_OK)
-            clear_promotion_journals();
-        else
-            g_rec_source_recovery_pending = 1U;
-        return 0U;
-    }
-    if (sample_page_cache_update_stream_path_key(current->key, persistent_path) == 0U)
     {
         if (f_rename(persistent_path, current->path) == FR_OK)
             clear_promotion_journals();

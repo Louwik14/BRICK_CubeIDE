@@ -7,17 +7,19 @@ static uint32_t sample_page_cache_stream_page_frame_count_key(sample_audio_key_t
     if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
     {
         const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-        if ((sample->valid != 0U) && (sample->total_frames != 0U))
+        if (((sample->flags & SAMPLE_PAGE_SAMPLE_VALID) != 0U)
+            && (sample->stream_safe.total_frames != 0U))
         {
-            const sample_audio_format_t format = sample_audio_format_or_stereo(sample->format);
+            const sample_audio_format_t format = sample_audio_format_or_stereo(
+                (sample_audio_format_t)sample->format);
             const uint32_t frames_per_page = sample_audio_format_frames_per_page(format);
             const uint32_t start_frame = sample_audio_format_page_start_frame(format, page_index);
-            if (start_frame >= sample->total_frames)
+            if (start_frame >= sample->stream_safe.total_frames)
             {
                 return 0U;
             }
 
-            uint32_t frame_count = sample->total_frames - start_frame;
+            uint32_t frame_count = sample->stream_safe.total_frames - start_frame;
             if (frame_count > frames_per_page)
             {
                 frame_count = frames_per_page;
@@ -41,7 +43,10 @@ static uint8_t sample_page_cache_sample_is_stream_loadable_key(sample_audio_key_
     }
 
     const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-    return ((sample->valid != 0U) && (sample->path[0] != '\0')) ? 1U : 0U;
+    return (((sample->flags & SAMPLE_PAGE_SAMPLE_VALID) != 0U)
+        && (sample_audio_key_equal(&sample->stream_safe.key, &key) != 0U)
+        && (sample_stream_physical_map_is_current(
+            &sample->stream_safe.physical_map) != 0U)) ? 1U : 0U;
 }
 
 static void sample_page_cache_alloc_range(sample_page_alloc_type_t alloc_type,
@@ -235,37 +240,6 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     return evict_page;
 }
 
-static uint32_t sample_page_cache_trim_path_copy(char *dst, uint32_t dst_size, const char *src)
-{
-    uint32_t start = 0U;
-    uint32_t end;
-
-    if ((dst == 0) || (dst_size == 0U) || (src == 0))
-    {
-        return 0U;
-    }
-
-    end = (uint32_t)strlen(src);
-    while ((start < end) && (((unsigned char)src[start]) <= ' '))
-    {
-        start++;
-    }
-    while ((end > start) && (((unsigned char)src[end - 1U]) <= ' '))
-    {
-        end--;
-    }
-
-    const uint32_t len = end - start;
-    if ((len == 0U) || (len >= dst_size))
-    {
-        return 0U;
-    }
-
-    memcpy(dst, &src[start], len);
-    dst[len] = '\0';
-    return len;
-}
-
 static int32_t sample_page_cache_find_contiguous_empty_run_in_range(uint32_t page_count,
                                                                     uint32_t range_start,
                                                                     uint32_t range_count)
@@ -318,7 +292,7 @@ static void sample_page_cache_reclaim_stream_pages_for_slot_allocation(uint32_t 
 
         const sample_page_sample_desc_t *const sample =
             &g_sample_page_sample_desc[sample_page_cache_key_slot(page->key)];
-        if (sample->valid != 0U)
+        if ((sample->flags & SAMPLE_PAGE_SAMPLE_VALID) != 0U)
         {
             if (sample_page_cache_claim_for_recycle(page) != 0U)
             {

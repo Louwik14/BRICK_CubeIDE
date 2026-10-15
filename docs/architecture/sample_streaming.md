@@ -21,6 +21,22 @@ Une page suit toujours `FREE -> RESERVED -> LOADING -> READY`, avec les chemins
 stereo de 512 octets, puis vaut 2048. Une completion n'est publiee que si la
 cle, le slot, la generation et l'epoch d'enregistrement correspondent encore.
 
+Les 772 identifiants STREAM possedent chacun un descriptor froid de 116 octets
+en SDRAM: 104 octets de metadata physique (cle, geometrie source et map FAT),
+`readable_frames`, l'epoch d'enregistrement, le format, l'encoding et les flags
+`valid/live/canonical`. Les chemins et le resultat WAV complet restent chez
+leurs proprietaires Classic, Multi ou REC_SOURCE; ils ne sont pas recopies dans
+le registre STREAM. Le tableau occupe 89 552 octets, contre 262 480 auparavant,
+soit 172 928 octets recuperes.
+
+Toute registration jouable exige une map physique valide et appartenant a
+l'epoch media courant. Un echec de construction, une map trop fragmentee ou un
+pool d'extents epuise refuse la registration avant publication. Le runtime de
+lecture ne possede plus de fallback FatFs: FatFs reste utilise en amont pour
+ouvrir, parser, importer, convertir et construire les maps, ainsi que par
+Preview et Waveform. Le snapshot fige par un job I/O reste exactement 128
+octets et le cycle de remplacement reste `STOP -> DELETE -> LOAD`.
+
 ## Lecture SD progressive
 
 Trois granularites independantes sont contractuelles:

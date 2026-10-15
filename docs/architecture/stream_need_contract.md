@@ -38,7 +38,7 @@ workload est une rupture de contrat, pas une admission tardive.
 
 ## I/O et cadence
 
-Le service Storage traite une commande bornee hors IRQ. Chaque page et le quantum READ STREAM produit font 16 KiB. Une page canonique utilise un CMD18 de 16 KiB et 32 publications IDMA de 512 octets. Le backend physique resout des extents vers une FIFO DMA bornee et lit le payload FLOAT32 directement dans la page finale; FatFs reste le fallback cold-path vers cette meme page. Read-ahead ne change ni ordre, besoins ni lifecycle. Le contrat detaille est dans [sample_streaming.md](sample_streaming.md).
+Le service Storage traite une commande bornee hors IRQ. Chaque page et le quantum READ STREAM produit font 16 KiB. Une page canonique utilise un CMD18 de 16 KiB et 32 publications IDMA de 512 octets. Le backend physique resout des extents vers une FIFO DMA bornee et lit le payload FLOAT32 directement dans la page finale. Toute ressource jouable possede une map physique valide; le runtime READ STREAM n'a pas de fallback FatFs. FatFs reste utilise hors de ce chemin pour la preparation, l'import, la conversion, Preview et Waveform. Read-ahead ne change ni ordre, besoins ni lifecycle. Le contrat detaille est dans [sample_streaming.md](sample_streaming.md).
 
 Le job I/O local contient geometrie source, format et token. STORAGE remplit le
 payload, publie chaque prefixe valide, puis publie READY; AUDIO conserve les credits de lecture. La

@@ -24,9 +24,11 @@ static sample_audio_format_t sample_page_cache_format_key(sample_audio_key_t key
     if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
     {
         const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-        if ((sample->valid != 0U) && (sample_audio_format_is_valid(sample->format) != 0U))
+        if (((sample->flags & SAMPLE_PAGE_SAMPLE_VALID) != 0U)
+            && (sample_audio_format_is_valid(
+                (sample_audio_format_t)sample->format) != 0U))
         {
-            return sample->format;
+            return (sample_audio_format_t)sample->format;
         }
     }
     return SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED;

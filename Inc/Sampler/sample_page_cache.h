@@ -16,8 +16,6 @@ extern "C" {
 typedef struct
 {
     sample_audio_key_t key;
-    char path[SAMPLE_PAGE_CACHE_PATH_MAX];
-    wav_info_t info;
     uint32_t total_frames;
     uint32_t data_offset;
     sample_audio_format_t format;
@@ -25,12 +23,11 @@ typedef struct
     uint32_t frames_per_page;
     uint32_t registration_epoch;
     sample_stream_safe_metadata_t stream_safe;
-    uint8_t physical_only;
+    wav_sample_encoding_t encoding;
+    uint8_t canonical_float;
 } sample_page_stream_info_t;
 
-/* Immutable snapshot retained by a page I/O job.  Paths and the full WAV
- * parser result stay in the registry and are fetched only by the synchronous
- * FatFs fallback. */
+/* Immutable 128-byte snapshot retained by a physical page I/O job. */
 typedef struct
 {
     sample_audio_key_t key;
@@ -41,7 +38,7 @@ typedef struct
     uint32_t frames_per_page;
     wav_sample_encoding_t encoding;
     uint8_t canonical_float;
-    uint8_t physical_only;
+    uint8_t reserved;
 } sample_page_stream_load_info_t;
 
 typedef struct
@@ -223,7 +220,6 @@ uint8_t sample_page_cache_mark_static_page_key_alloc(sample_audio_key_t key,
                                                      sample_page_alloc_type_t alloc_type);
 uint8_t sample_page_cache_register_live_float32_stereo_sample_key(
     sample_audio_key_t key,
-    const char *path,
     uint32_t total_frames,
     uint32_t readable_frames,
     uint32_t data_offset,
@@ -236,8 +232,6 @@ uint8_t sample_page_cache_update_readable_frames_key(sample_audio_key_t key,
 /* STOP seals the REC stream geometry so its final partial page is loadable. */
 uint8_t sample_page_cache_finalize_live_frames_key(sample_audio_key_t key,
                                                    uint32_t final_frames);
-uint8_t sample_page_cache_update_stream_path_key(sample_audio_key_t key,
-                                                  const char *path);
 
 /*
  * General transient range service kept for non-Sampler-pool users.
