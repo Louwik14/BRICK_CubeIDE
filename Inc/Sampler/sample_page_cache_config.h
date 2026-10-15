@@ -15,11 +15,11 @@
  * use the reserved reader range.
  */
 
-#define SAMPLE_PAGE_CACHE_CARRIER_COUNT        (1660U)
-#define SAMPLE_PAGE_ORDINARY_CARRIER_COUNT     (1112U)
+#define SAMPLE_PAGE_CACHE_CARRIER_COUNT        (1548U)
+#define SAMPLE_PAGE_ORDINARY_CARRIER_COUNT     (1000U)
 #define SAMPLE_PAGE_SLICE_CARRIER_COUNT        (512U)
 #define SAMPLE_PAGE_RUNTIME_CARRIER_COUNT      (36U)
-#define SAMPLE_PAGE_ORDINARY_DESCRIPTOR_COUNT  (2224U)
+#define SAMPLE_PAGE_ORDINARY_DESCRIPTOR_COUNT  (2000U)
 #define SAMPLE_PAGE_SLICE_DESCRIPTOR_COUNT     (512U)
 #define SAMPLE_PAGE_RUNTIME_DESCRIPTOR_COUNT   (36U)
 #define SAMPLE_PAGE_CACHE_DESCRIPTOR_COUNT \
@@ -76,8 +76,8 @@
 #define SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES SAMPLE_PAGE_ORDINARY_DESCRIPTOR_COUNT
 #define SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS_RAW \
     (SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES / SAMPLE_PAGE_MIN_READY_PAGES)
-/* Persistent project ABI currently exposes 152 shared catalogue slots. */
-#define SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS (152U)
+/* Fixed product admission budget, expressed in mono 8 KiB units. */
+#define SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS (2000U)
 
 #define SAMPLE_PAGE_SLOT_POOL_START          (0U)
 #define SAMPLE_PAGE_SLOT_POOL_COUNT          SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES
@@ -158,11 +158,11 @@ static inline uint8_t sample_page_slot_is_voice_window_pool(uint32_t slot)
 #if (SAMPLE_PAGE_FRAMES != 2048U)
 #error "Streamer product contract requires 2048 stereo frames per page"
 #endif
-#if (SAMPLE_PAGE_CACHE_CARRIER_COUNT != 1660U)
-#error "Streamer product cache budget must expose 1660 physical carriers"
+#if (SAMPLE_PAGE_CACHE_CARRIER_COUNT != 1548U)
+#error "Streamer product cache budget must expose 1548 physical carriers"
 #endif
-#if (SAMPLE_PAGE_MAX_COUNT != 2772U)
-#error "Streamer product cache budget must expose 2772 logical descriptors"
+#if (SAMPLE_PAGE_MAX_COUNT != 2548U)
+#error "Streamer product cache budget must expose 2548 logical descriptors"
 #endif
 #if (SAMPLE_PAGE_MIN_READY_PAGES != 1U)
 #error "Streamer presocle must be one physical page"
@@ -182,8 +182,8 @@ static inline uint8_t sample_page_slot_is_voice_window_pool(uint32_t slot)
 #if (SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT > 64U)
 #error "Runtime FREE/READY bitmaps require at most 64 pages"
 #endif
-#if (SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES != 2224U)
-#error "Global ordinary cache must retain 2224 logical pages"
+#if (SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES != 2000U)
+#error "Global ordinary cache must retain 2000 logical pages"
 #endif
 #if ((SAMPLE_PAGE_ORDINARY_CARRIER_COUNT + SAMPLE_PAGE_SLICE_CARRIER_COUNT \
       + SAMPLE_PAGE_RUNTIME_CARRIER_COUNT) != SAMPLE_PAGE_CACHE_CARRIER_COUNT)
