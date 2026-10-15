@@ -597,11 +597,6 @@ static void brick6_sampler_runtime_multi_release_dsp_slot(brick6_sampler_voice_t
     voice->dsp_slot = MULTI_VOICE_DSP_SLOT_INDEX_INVALID;
 }
 
-static sample_audio_key_t brick6_sampler_runtime_multi_key(uint16_t multi_sample_id)
-{
-    return multi_sample_audio_projection_key(multi_sample_id);
-}
-
 static void brick6_sampler_runtime_multi_release_voice_vca(
     brick6_sampler_voice_t *voice)
 {

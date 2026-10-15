@@ -409,7 +409,7 @@ brick6_sampler_runtime_start_multi_renderer(uint8_t track_id,
         return BRICK6_SAMPLER_NOTE_INVARIANT;
     }
 
-    const sample_audio_key_t key = brick6_sampler_runtime_multi_key(resolved.multi_sample_id);
+    const sample_audio_key_t key = resolved.key;
     brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
     if ((voice->active != 0U)
         && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_CLIP))

@@ -47,7 +47,7 @@ _Static_assert(PERSIST_CODEC_PATTERN_CURRENT_DOCUMENT_MAX_BYTES == 106340U,
                "Current Pattern codec worst-case envelope changed");
 _Static_assert(PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES == 106340U,
                "Pattern codec worst-case envelope changed");
-_Static_assert(PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES == 336132U,
+_Static_assert(PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES == 338788U,
                "Project codec worst-case envelope changed");
 
 typedef enum

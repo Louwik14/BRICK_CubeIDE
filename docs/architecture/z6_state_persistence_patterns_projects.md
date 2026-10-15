@@ -2,7 +2,7 @@
 
 ## Modele et format
 
-Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 21. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts, et aucun format anterieur n'est accepte. FM Transpose reste encode en centiemes de demi-ton sur `uint16_t`. La section Macro Project version 2 contient 14 macros natives, chacune avec ses valeurs cibles `(track, parametre, valeur)`. Aucun dump de structure n'est lu. AUDIO_GLOBAL contient exactement 51 floats, FILTER douze floats, et aucun type Drum Analog historique n'est accepte. Les enveloppes courantes sont 106 340 octets pour un Pattern et 29 364 octets pour un Project.
+Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 21. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts, et aucun format anterieur n'est accepte. FM Transpose reste encode en centiemes de demi-ton sur `uint16_t`. La section Macro Project version 2 contient 14 macros natives, chacune avec ses valeurs cibles `(track, parametre, valeur)`. Aucun dump de structure n'est lu. AUDIO_GLOBAL contient exactement 51 floats, FILTER douze floats, et aucun type Drum Analog historique n'est accepte. Les enveloppes courantes sont 106 340 octets pour un Pattern et 338 788 octets pour un Project.
 
 Les cles persistantes de famille, type, parametre, MIDI, clock, modulation et asset sont explicites et independantes des ordinaux C. Les FLOAT32 conservent leurs bits. Les indices runtime, contextes AUDIO installes, pointeurs, caches, voix, phases, playheads et UI sont exclus. Note FX persiste directement son unique bloc brut de seize octets `GENERATOR/VOICER/SCALER/TRIG`; il n'existe plus de cle de modele, count, slot ou ORDER, ni de migration depuis les anciennes chaines.
 
@@ -465,11 +465,12 @@ Pattern et le PANIC/full rebuild pour Project. Pattern/Project ne construisent,
 ne dedupliquent et ne rejouent plus de transaction de commandes live.
 Les tailles de reference ARM finales sont `Pattern = 146 092`,
 `PreparedPattern = 8 876`, `PreparedAudio = 8 728` et slot
-`PreparedAudio = 8 736` octets. `PROJECT_SAVE` occupe 137 308 octets,
+`PreparedAudio = 8 736` octets. `PROJECT_SAVE` occupe 450 460 octets,
 `GROOVE_BUILD` 82 560, `PATCH_DX7_BOOT` 114 480, `PATTERN_IO` 261 312
-et `PROJECT_RESTORE` 268 544.
-Le workspace Persistence, borne par ce dernier membre, occupe donc 268 544
-octets. Project Save porte au plus les 152 descriptors du catalogue produit et
+et `PROJECT_RESTORE` 581 696.
+Le workspace Persistence, borne par ce dernier membre, occupe donc 581 696
+octets. Project Save porte au plus 2016 descriptors: les 2000 identites
+musicales CLASSIC/MULTI et jusqu'a seize references Wavetable par entite. Il
 ne reserve plus de DTO Pattern ni de record de banque. La
 transaction AUDIO legacy de `36 872` octets appartient uniquement a Patch.
 Cette boundary est globale au Pattern sortant et ne depend jamais de la lane

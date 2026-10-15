@@ -84,10 +84,10 @@ Assert-True ($codec.Contains('st->lock_first = lock_cursor') -and
 Assert-True ($control.Contains('step->lock_first=sequence->lock_count') -and
     $control.Contains('&x->sequence.locks[st->lock_first+i]')) `
     'CONTROL capture/apply does not use the lane pool'
-Assert-True ($workspace.Contains('PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY (152U)') -and
+Assert-True ($workspace.Contains('PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY PERSIST_CONTROL_ASSET_COUNT') -and
     $workspace.Contains('sizeof(persistence_patch_dx7_boot_workspace_t) == 114480U') -and
     $workspace.Contains('sizeof(persistence_pattern_io_workspace_t) == 261312U') -and
-    $workspace.Contains('sizeof(persistence_project_restore_workspace_t) == 268544U')) `
+    $workspace.Contains('sizeof(persistence_project_restore_workspace_t) == 581696U')) `
     'workspace capacity proofs are missing'
 Assert-True ($workspace.Contains('PERSISTENCE_WORKSPACE_PATCH_DX7_BOOT') -and
     $workspaceSource.Contains('persistence_patch_dx7_boot_workspace_t patch_dx7_boot;') -and

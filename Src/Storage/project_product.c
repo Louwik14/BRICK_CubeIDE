@@ -34,12 +34,12 @@
 #include <stdio.h>
 #include <string.h>
 
-_Static_assert(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
+_Static_assert(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS + BRICK_ENTITY_CAPACITY
                    == PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY,
-               "Project Save asset capacity must match the product catalogue");
-_Static_assert(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
+               "Project Save asset capacity must cover music and wavetables");
+_Static_assert(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS + BRICK_ENTITY_CAPACITY
                    == PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY,
-               "Project Restore asset capacity must match the product pool");
+               "Project Restore asset capacity must cover music and wavetables");
 _Static_assert(PROJECT_PRODUCT_NAME_BYTES == PERSIST_CODEC_PROJECT_NAME_BYTES,
                "Project name capacities must remain identical");
 

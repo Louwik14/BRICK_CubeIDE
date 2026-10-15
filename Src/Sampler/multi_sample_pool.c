@@ -799,6 +799,11 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
     multi_sample_desc_t *const sample = &g_multi_samples[multi_sample_id];
     const sample_audio_format_t format = sample_audio_format_from_channels(channels);
     if ((sample_audio_format_is_valid(format) == 0U)
+        || (data_offset != 512U)
+        || (sample_rate != 48000U)
+        || (bits_per_sample != 32U)
+        || ((uint64_t)data_size
+            != (uint64_t)sample->total_frames * channels * sizeof(float))
         || (g_multi_instruments[sample->instrument_id].used == 0U))
     {
         return 0U;
@@ -821,9 +826,7 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
     {
         (void)multi_sample_pool_set_instrument_format(sample->instrument_id, format);
     }
-    return (uint8_t)(data_offset == 512U && sample_rate == 48000U
-        && bits_per_sample == 32U
-        && data_size == sample->total_frames * channels * sizeof(float));
+    return 1U;
 }
 
 uint8_t multi_sample_pool_set_sample_loop(uint16_t multi_sample_id,

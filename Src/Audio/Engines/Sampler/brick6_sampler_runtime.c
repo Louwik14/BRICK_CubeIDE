@@ -380,7 +380,6 @@ static void brick6_sampler_runtime_multi_stop_track(uint8_t track_id);
 static void brick6_sampler_runtime_multi_stop_track_renderer(uint8_t track_id);
 static void brick6_sampler_runtime_multi_defer_stream_release(uint16_t multi_sample_id);
 static void brick6_sampler_runtime_multi_service_stream_releases(void);
-static sample_audio_key_t brick6_sampler_runtime_multi_key(uint16_t multi_sample_id);
 static void brick6_sampler_runtime_voice_note_output(brick6_sampler_voice_t *voice,
                                                      float out_l,
                                                      float out_r);

@@ -3,16 +3,16 @@
 ## Contrat
 
 Classic STREAM, Multi et REC_SOURCE utilisent un seul Page Cache. Le backing
-reste forme de 1660 carriers physiques de 16 KiB, chacun divisible en deux
+reste forme de 1548 carriers physiques de 16 KiB, chacun divisible en deux
 blocs alignes de 8 KiB. Une page FLOAT32 mono occupe un bloc (2048 frames) et
 une page FLOAT32 stereo entrelace occupe les deux blocs contigus du carrier
-(2048 frames). Deux pages mono peuvent donc partager un carrier. Les 2772
-descriptors logiques sont independants des carriers: 2224 ordinaires, 512
+(2048 frames). Deux pages mono peuvent donc partager un carrier. Les 2548
+descriptors logiques sont independants des carriers: 2000 ordinaires, 512
 reserves aux departs de slices et 36 reserves
 aux neuf readers garantis et a leurs quatre roles `CURRENT`, `NEXT`,
-`LOOP_START`, `LOOP_START_NEXT`. Le payload occupe donc 27 197 440 octets en
+`LOOP_START`, `LOOP_START_NEXT`. Le payload occupe donc 25 362 432 octets en
 SDRAM. Un presocle mono coute 8192 octets, un presocle stereo 16384 octets;
-les zones physiques fixes comprennent 1112 carriers ordinaires, 512 carriers
+les zones physiques fixes comprennent 1000 carriers ordinaires, 512 carriers
 slices et 36 carriers runtime. Elles partagent le meme backing continu, le meme
 index et le meme Streamer, sans redistribution dynamique.
 
@@ -22,13 +22,15 @@ Une page suit toujours `FREE -> RESERVED -> LOADING -> READY`, avec les chemins
 64 frames stereo par chunk de 512 octets, puis vaut 2048. Une completion n'est publiee que si la
 cle, le slot, la generation et l'epoch d'enregistrement correspondent encore.
 
-Les 772 identifiants STREAM possedent chacun un descriptor froid de 96 octets
+Les 2004 identifiants STREAM possedent chacun un descriptor froid de 96 octets
 en SDRAM: 84 octets de metadata physique (cle, geometrie source et map FAT),
 `readable_frames`, l'epoch d'enregistrement, le format, l'encoding et les flags
 `valid/live/canonical`. Les chemins et le resultat WAV complet restent chez
 leurs proprietaires Classic, Multi ou REC_SOURCE; ils ne sont pas recopies dans
-le registre STREAM. Le tableau occupe 74 112 octets, contre 262 480 auparavant,
-soit 188 368 octets recuperes.
+le registre STREAM. CLASSIC et MULTI partagent les 2000 slots musicaux;
+REC_SOURCE conserve quatre slots distincts. Un identifiant Multi est alloue
+uniquement hors des slots Classic actifs et porte une generation incrementee.
+Il n'est libere qu'apres retrait des voix, leases, pages et operations STREAM.
 
 Toute registration jouable exige une map physique valide et appartenant a
 l'epoch media courant. Un echec de construction, une map trop fragmentee ou un
@@ -97,29 +99,29 @@ jamais un mono en stereo dans STORAGE et la duplication L/R reste dans les
 kernels AUDIO. Les maps physiques, epochs, leases, slices, reverse et boucles
 restent communs aux deux formats.
 
-Le build Release final porte 27 197 440 octets de payload, 2772 descriptors
-de 40 octets, 5544 entrees hash de 12 octets et 6640 octets d'occupation des
-3320 demi-carriers. Le nombre de descriptors est independant du nombre de
+Le build Release final porte 25 362 432 octets de payload, 2548 descriptors
+de 40 octets, 5096 entrees hash de 12 octets et 6192 octets d'occupation des
+3096 demi-carriers. Le nombre de descriptors est independant du nombre de
 carriers; AUDIO conserve la resolution directe par `data_offset`.
 
 La MAP Release mesure le passage suivant pour les structures du Page Cache:
 
 | Structure | Avant | Apres | Delta |
 |---|---:|---:|---:|
-| Payload SDRAM | 6 160 384 | 27 197 440 | +21 037 056 |
-| Descriptors D1 | 15 040 (376) | 110 880 (2772) | +95 840 |
-| Index hash D1 | 9 024 (752) | 66 528 (5544) | +57 504 |
-| Occupation SDRAM | 1 504 | 6 640 | +5 136 |
+| Payload SDRAM | 27 197 440 | 25 362 432 | -1 835 008 |
+| Descriptors D1 | 110 880 (2772) | 101 920 (2548) | -8 960 |
+| Index hash D1 | 66 528 (5544) | 61 152 (5096) | -5 376 |
+| Occupation SDRAM | 6 640 | 6 192 | -448 |
 
-Apres liaison, l'arene D1 non affectee mesure 51 744 octets. Le dernier objet
-SDRAM general finit 12 512 octets avant l'anneau Recorder fixe; les 296 960
+Apres liaison, l'arene D1 non affectee mesure 64 352 octets. Le dernier objet
+SDRAM general finit 5 664 octets avant l'anneau Recorder fixe; les 296 960
 octets situes apres cet anneau restent la reserve de fin existante.
 
-Le Sample Browser admet au plus 2224 unites ordinaires de 8 KiB et affiche
-`X/2224`. Un presocle mono coute une unite et un presocle stereo deux. Les
+Le Sample Browser admet au plus 2000 unites ordinaires de 8 KiB et affiche
+`X/2000`. Un presocle mono coute une unite et un presocle stereo deux. Les
 pages slices et runtime ne participent pas a ce compteur. La capacite
-d'identifiants CLASSIC/MULTI reste un contrat distinct: 152 slots globaux et
-340 entrees de catalogue, inchanges par le redimensionnement memoire.
+d'identifiants CLASSIC/MULTI partage 2000 slots musicaux, tandis que les
+identifiants locaux des instruments et zones Multi restent inchanges.
 
 Le Slicer publie une demande de preparation par piste. STORAGE calcule les
 departs reguliers, elimine les pages dupliquees, reutilise toute page globale

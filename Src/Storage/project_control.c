@@ -1186,7 +1186,7 @@ static project_control_asset_result_t apply_bank_asset(uint32_t kind,uint16_t lo
     uint16_t runtime=PROJECT_CONTROL_INVALID_RUNTIME;
     if(kind==PERSIST_ASSET_SAMPLE_STREAM)
     {
-        if (logical >= PROJECT_CONTROL_WAVETABLE_BANK_CAPACITY)
+        if (logical >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
             return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
         if(sample_global_pool_load_classic(logical,canonical_path)==0U)
             return classic_start_failure_result();

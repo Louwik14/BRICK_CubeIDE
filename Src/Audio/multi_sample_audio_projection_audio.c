@@ -12,14 +12,6 @@ uint8_t multi_sample_audio_projection_is_ready(uint16_t instrument_id)
     return g_multi_audio_instruments[instrument_id].ready;
 }
 
-sample_audio_key_t multi_sample_audio_projection_key(uint16_t multi_sample_id)
-{
-    if (multi_sample_id >= MULTI_SAMPLE_POOL_MAX_SAMPLES)
-        return (sample_audio_key_t){ SAMPLE_AUDIO_DOMAIN_MULTI, 0U,
-                                     UINT16_MAX, 0U };
-    return g_multi_audio_samples[multi_sample_id].key;
-}
-
 static uint8_t abs_delta(uint8_t a, uint8_t b)
 {
     return (a > b) ? (uint8_t)(a - b) : (uint8_t)(b - a);

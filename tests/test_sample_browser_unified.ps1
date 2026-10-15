@@ -17,6 +17,8 @@ $config = Get-Content -Raw (Join-Path $root `
     'Inc/Sampler/sample_page_cache_config.h')
 $pool = Get-Content -Raw (Join-Path $root `
     'Inc/Sampler/sample_global_pool.h')
+$projectControl = Get-Content -Raw (Join-Path $root `
+    'Src/Storage/project_control.c')
 
 Assert-True ($navigation.Contains('return 2U;') -and
              $navigation.Contains('return "SAMPLE BROWSER";')) `
@@ -35,9 +37,9 @@ Assert-True ($assets.Contains('"CLASSIC"') -and
              $assets.Contains('SAMPLE_GLOBAL_POOL_BUDGET_BYTES')) `
     'header does not expose CLASSIC | MULTI | ordinary 8 KiB usage'
 Assert-True ($config.Contains(
-    '#define SAMPLE_PAGE_CACHE_CARRIER_COUNT        (1660U)') -and
+    '#define SAMPLE_PAGE_CACHE_CARRIER_COUNT        (1548U)') -and
              $config.Contains(
-    '#define SAMPLE_PAGE_ORDINARY_DESCRIPTOR_COUNT  (2224U)') -and
+    '#define SAMPLE_PAGE_ORDINARY_DESCRIPTOR_COUNT  (2000U)') -and
              $config.Contains(
     '#define SAMPLE_PAGE_SLICE_DESCRIPTOR_COUNT     (512U)') -and
              $config.Contains(
@@ -47,9 +49,14 @@ Assert-True ($config.Contains(
              $pool.Contains(
     '(SAMPLE_PAGE_ORDINARY_CARRIER_COUNT * SAMPLE_PAGE_BYTES)') -and
              $pool.Contains(
-    '#define SAMPLE_GLOBAL_POOL_ENTRY_CAPACITY (340U)')) `
+    '#define SAMPLE_GLOBAL_POOL_ENTRY_CAPACITY (2000U)')) `
     'the browser capacity no longer derives from the protected pool'
 Assert-True (-not $navigation.Contains('return "STREAM";')) `
     'STREAM remains exposed in the Sample Browser menu'
+Assert-True ($projectControl.Contains(
+    'if (logical >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)') -and
+             $projectControl.Contains(
+    '#define PROJECT_CONTROL_WAVETABLE_BANK_CAPACITY BRICK_ENTITY_CAPACITY')) `
+    'Project restore confuses the music and wavetable logical capacities'
 
 Write-Output 'unified sample browser regressions: PASS'
