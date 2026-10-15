@@ -23,8 +23,11 @@ le CRC du record complet.
 
 Le scan de boot ne publie que les records dont les bornes, le marqueur de
 commit et les CRC sont valides. Un record incomplet ou corrompu n'est jamais
-visible par AUDIO. La suppression est logique et programme son flashword dédié;
-elle n'efface pas individuellement un secteur de 128 Kio.
+visible par AUDIO. Si deux records valides portent le même chemin, le dernier
+commit l'emporte ; un record de longueur vérifiable mais invalidé est sauté,
+ce qui permet de retrouver son successeur après une coupure pendant le retrait.
+La suppression est logique et programme son flashword dédié ; elle n'efface pas
+individuellement un secteur de 128 Kio.
 
 Une table standard de huit frames occupe 65 536 octets de payload et 66 112
 octets au total. Trois tables occupent 198 336 octets et laissent 63 808 octets.
@@ -77,8 +80,8 @@ comme gains, puisqu'ils restent alloués et partagés.
 
 ## Flash firmware et coût AUDIO
 
-La somme des sections chargeables du firmware passe de 1 552 876 à 1 554 800
-octets, soit +1 924 octets. Le span du binaire Release est 1 567 572 octets sur
+La somme des sections chargeables du firmware passe de 1 552 876 à 1 554 832
+octets, soit +1 956 octets. Le span du binaire Release est 1 567 572 octets sur
 la région firmware de 1 572 864 octets, laissant 5 292 octets. Le pool
 Wavetable de 262 144 octets est une région séparée et vide dans l'image usine ;
 son occupation utile vaut 66 112 octets par table standard, 198 336 octets pour

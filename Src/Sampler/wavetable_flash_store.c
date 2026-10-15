@@ -256,16 +256,35 @@ void wavetable_flash_store_init(void)
         wavetable_slot_t slot;
         const uint8_t status = decode_record(g_append_offset, &slot,
                                              &record_bytes);
-        if ((status == 0U) || (record_bytes == 0U))
+        if (record_bytes == 0U)
         {
             g_append_offset = WAVETABLE_FLASH_SIZE;
             break;
         }
-        if ((status == 1U) && (g_record_count < WAVETABLE_POOL_MAX_SLOTS))
+        if (status == 1U)
         {
-            g_records[g_record_count].offset = g_append_offset;
-            g_records[g_record_count].record_bytes = record_bytes;
-            ++g_record_count;
+            uint16_t replace = WAVETABLE_POOL_INVALID_SLOT;
+            for (uint16_t i = 0U; i < g_record_count; ++i)
+            {
+                wavetable_slot_t previous;
+                if ((decode_record(g_records[i].offset, &previous, NULL) == 1U)
+                    && (strcmp(previous.path, slot.path) == 0))
+                {
+                    replace = i;
+                    break;
+                }
+            }
+            if (replace < g_record_count)
+            {
+                g_records[replace].offset = g_append_offset;
+                g_records[replace].record_bytes = record_bytes;
+            }
+            else if (g_record_count < WAVETABLE_POOL_MAX_SLOTS)
+            {
+                g_records[g_record_count].offset = g_append_offset;
+                g_records[g_record_count].record_bytes = record_bytes;
+                ++g_record_count;
+            }
         }
         g_append_offset += record_bytes;
     }
