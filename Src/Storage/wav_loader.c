@@ -40,6 +40,7 @@ static uint8_t g_wav_catalog_stale;
 static uint8_t g_wav_catalog_last_sd_busy;
 static uint8_t g_wav_catalog_last_io_error;
 static uint8_t g_wav_catalog_path_truncated;
+static uint32_t g_wav_catalog_media_epoch;
 
 
 #if WAV_LOADER_HAS_FATFS
@@ -103,8 +104,10 @@ typedef struct
     uint16_t indices[WAV_LOADER_CATALOG_VIEW_MAX];
 } wav_loader_catalog_view_t;
 
+_Static_assert(sizeof(wav_loader_catalog_view_t) == 56848U,
+               "WAV catalogue view SDRAM budget changed");
+
 UI_SDRAM static wav_loader_catalog_view_t g_wav_catalog_views[WAV_LOADER_CATALOG_VIEW_CACHE_COUNT];
-UI_SDRAM static wav_loader_catalog_view_t g_wav_catalog_scratch_view;
 static wav_loader_catalog_entry_t g_wav_catalog_lookup_entry;
 static uint16_t g_wav_catalog_lookup_index = WAV_LOADER_CATALOG_ROOT_PARENT;
 static uint8_t g_wav_catalog_lookup_valid;
@@ -132,9 +135,14 @@ typedef struct
     uint32_t media_epoch;
     uint8_t file_open;
     uint8_t read_ok;
+    uint8_t target_view;
+    uint8_t cancel_requested;
 } wav_catalog_view_load_t;
 
 STORAGE_STATE_SDRAM static wav_catalog_view_load_t g_wav_catalog_view_load;
+static uint16_t g_wav_catalog_pending_parent_id;
+static uint16_t g_wav_catalog_pending_page_start;
+static uint8_t g_wav_catalog_pending_request;
 
 static void wav_loader_catalog_checksum_update(uint32_t *hash, const void *data, uint32_t len)
 {
@@ -146,15 +154,55 @@ static void wav_loader_catalog_checksum_update(uint32_t *hash, const void *data,
     }
 }
 
-static void wav_loader_catalog_views_clear(void)
+static void wav_loader_catalog_view_cache_clear(void)
 {
     memset(g_wav_catalog_views, 0, sizeof(g_wav_catalog_views));
-    memset(&g_wav_catalog_scratch_view, 0, sizeof(g_wav_catalog_scratch_view));
     memset(&g_wav_catalog_lookup_entry, 0, sizeof(g_wav_catalog_lookup_entry));
     g_wav_catalog_lookup_index = WAV_LOADER_CATALOG_ROOT_PARENT;
     g_wav_catalog_lookup_valid = 0U;
     g_wav_catalog_view_age = 0U;
+}
+
+static void wav_loader_catalog_invalidate_io(void)
+{
+    wav_loader_catalog_view_cache_clear();
+    g_wav_catalog_count = 0U;
+    g_wav_catalog_loaded = 0U;
+    g_wav_catalog_stale = 1U;
+    g_wav_catalog_last_io_error = 1U;
+}
+
+static uint8_t wav_loader_catalog_media_is_current(void)
+{
+    if ((g_wav_catalog_loaded != 0U)
+        && (g_wav_catalog_media_epoch != sd_access_media_epoch()))
+    {
+        wav_loader_catalog_invalidate_io();
+        if (g_wav_catalog_view_load.state != WAV_CATALOG_VIEW_IDLE)
+        {
+            g_wav_catalog_view_load.cancel_requested = 1U;
+        }
+        return 0U;
+    }
+    return 1U;
+}
+
+static uint8_t wav_loader_catalog_view_abort_locked(void)
+{
+    uint8_t close_ok = 1U;
+    if (g_wav_catalog_view_load.file_open != 0U)
+    {
+        close_ok = (f_close(&g_wav_catalog_view_load.file) == FR_OK) ? 1U : 0U;
+    }
     memset(&g_wav_catalog_view_load, 0, sizeof(g_wav_catalog_view_load));
+    g_wav_catalog_pending_request = 0U;
+    return close_ok;
+}
+
+static void wav_loader_catalog_views_clear(void)
+{
+    wav_loader_catalog_view_cache_clear();
+    (void)wav_loader_catalog_view_abort_locked();
 }
 
 static void wav_loader_catalog_release_gate_on_error(void)
@@ -523,12 +571,44 @@ static wav_loader_catalog_view_t *wav_loader_catalog_alloc_view(void)
     return oldest;
 }
 
+static void wav_loader_catalog_start_view_load(uint16_t parent_id, uint16_t page_start)
+{
+    wav_loader_catalog_view_t *const target = wav_loader_catalog_alloc_view();
+    const uint8_t target_view = (uint8_t)(target - g_wav_catalog_views);
+
+    target->valid = 0U;
+    target->parent_id = parent_id;
+    target->page_start = page_start;
+    target->child_count = 0U;
+    target->loaded_count = 0U;
+    target->age = 0U;
+
+    memset(&g_wav_catalog_view_load, 0, sizeof(g_wav_catalog_view_load));
+    g_wav_catalog_view_load.parent_id = parent_id;
+    g_wav_catalog_view_load.page_start = page_start;
+    g_wav_catalog_view_load.media_epoch = sd_access_media_epoch();
+    g_wav_catalog_view_load.read_ok = 1U;
+    g_wav_catalog_view_load.target_view = target_view;
+    g_wav_catalog_view_load.state = WAV_CATALOG_VIEW_MOUNT;
+}
+
 static wav_loader_catalog_view_t *wav_loader_catalog_load_view(uint16_t parent_id, uint16_t child_index)
 {
+    if (wav_loader_catalog_media_is_current() == 0U)
+    {
+        return 0;
+    }
     const uint16_t page_start = wav_loader_catalog_page_start(child_index);
     wav_loader_catalog_view_t *view = wav_loader_catalog_find_view(parent_id, page_start);
     if (view != 0)
     {
+        if ((g_wav_catalog_view_load.state != WAV_CATALOG_VIEW_IDLE)
+            && ((g_wav_catalog_view_load.parent_id != parent_id)
+                || (g_wav_catalog_view_load.page_start != page_start)))
+        {
+            g_wav_catalog_view_load.cancel_requested = 1U;
+            g_wav_catalog_pending_request = 0U;
+        }
         return view;
     }
 
@@ -539,15 +619,20 @@ static wav_loader_catalog_view_t *wav_loader_catalog_load_view(uint16_t parent_i
 
     if (g_wav_catalog_view_load.state == WAV_CATALOG_VIEW_IDLE)
     {
-        memset(&g_wav_catalog_view_load, 0, sizeof(g_wav_catalog_view_load));
-        memset(&g_wav_catalog_scratch_view, 0, sizeof(g_wav_catalog_scratch_view));
-        g_wav_catalog_view_load.parent_id = parent_id;
-        g_wav_catalog_view_load.page_start = page_start;
-        g_wav_catalog_view_load.media_epoch = sd_access_media_epoch();
-        g_wav_catalog_view_load.read_ok = 1U;
-        g_wav_catalog_view_load.state = WAV_CATALOG_VIEW_MOUNT;
-        g_wav_catalog_scratch_view.parent_id = parent_id;
-        g_wav_catalog_scratch_view.page_start = page_start;
+        wav_loader_catalog_start_view_load(parent_id, page_start);
+    }
+    else if ((g_wav_catalog_view_load.parent_id == parent_id)
+             && (g_wav_catalog_view_load.page_start == page_start))
+    {
+        g_wav_catalog_view_load.cancel_requested = 0U;
+        g_wav_catalog_pending_request = 0U;
+    }
+    else
+    {
+        g_wav_catalog_pending_parent_id = parent_id;
+        g_wav_catalog_pending_page_start = page_start;
+        g_wav_catalog_pending_request = 1U;
+        g_wav_catalog_view_load.cancel_requested = 1U;
     }
     return 0;
 }
@@ -558,14 +643,63 @@ uint8_t wav_loader_catalog_view_busy(void)
 }
 
 static sd_scheduler_background_admission_t wav_loader_catalog_view_begin(
-    sd_scheduler_background_kind_t kind, uint32_t bytes)
+    sd_scheduler_background_kind_t kind, uint32_t bytes, uint32_t media_epoch)
 {
     const sd_scheduler_background_request_t request = {
         .byte_count = bytes,
-        .media_epoch = g_wav_catalog_view_load.media_epoch,
+        .media_epoch = media_epoch,
         .kind = kind
     };
     return sd_scheduler_runtime_background_try_begin(&request);
+}
+
+static wav_loader_catalog_view_service_result_t wav_loader_catalog_cancel_view_load(
+    uint8_t media_changed)
+{
+    wav_catalog_view_load_t *const load = &g_wav_catalog_view_load;
+    uint8_t close_ok = 1U;
+    if (load->file_open != 0U)
+    {
+        const sd_scheduler_background_admission_t admission =
+            wav_loader_catalog_view_begin(SD_SCHEDULER_BACKGROUND_METADATA,
+                                          0U,
+                                          sd_access_media_epoch());
+        if (admission == SD_SCHEDULER_BACKGROUND_NOT_NOW)
+        {
+            return WAV_LOADER_CATALOG_VIEW_PENDING;
+        }
+        if (admission != SD_SCHEDULER_BACKGROUND_GO)
+        {
+            return WAV_LOADER_CATALOG_VIEW_PENDING;
+        }
+        close_ok = (f_close(&load->file) == FR_OK) ? 1U : 0U;
+        sd_scheduler_runtime_background_end();
+    }
+
+    if (load->target_view < WAV_LOADER_CATALOG_VIEW_CACHE_COUNT)
+    {
+        g_wav_catalog_views[load->target_view].valid = 0U;
+    }
+    memset(load, 0, sizeof(*load));
+
+    if ((media_changed != 0U) || (close_ok == 0U))
+    {
+        g_wav_catalog_pending_request = 0U;
+        wav_loader_catalog_invalidate_io();
+        return WAV_LOADER_CATALOG_VIEW_ERROR;
+    }
+
+    if (g_wav_catalog_pending_request != 0U)
+    {
+        const uint16_t parent_id = g_wav_catalog_pending_parent_id;
+        const uint16_t page_start = g_wav_catalog_pending_page_start;
+        g_wav_catalog_pending_request = 0U;
+        if ((g_wav_catalog_loaded != 0U) && (g_wav_catalog_stale == 0U))
+        {
+            wav_loader_catalog_start_view_load(parent_id, page_start);
+        }
+    }
+    return WAV_LOADER_CATALOG_VIEW_PENDING;
 }
 
 wav_loader_catalog_view_service_result_t wav_loader_catalog_view_service(void)
@@ -574,6 +708,13 @@ wav_loader_catalog_view_service_result_t wav_loader_catalog_view_service(void)
     if (load->state == WAV_CATALOG_VIEW_IDLE)
     {
         return WAV_LOADER_CATALOG_VIEW_PENDING;
+    }
+
+    const uint8_t media_changed =
+        (load->media_epoch != sd_access_media_epoch()) ? 1U : 0U;
+    if ((load->cancel_requested != 0U) || (media_changed != 0U))
+    {
+        return wav_loader_catalog_cancel_view_load(media_changed);
     }
 
     const uint32_t entries_per_slice =
@@ -595,16 +736,17 @@ wav_loader_catalog_view_service_result_t wav_loader_catalog_view_service(void)
     }
 
     const sd_scheduler_background_admission_t admission =
-        wav_loader_catalog_view_begin(kind, bytes);
+        wav_loader_catalog_view_begin(kind, bytes, load->media_epoch);
     if (admission == SD_SCHEDULER_BACKGROUND_NOT_NOW)
     {
         return WAV_LOADER_CATALOG_VIEW_PENDING;
     }
     if (admission != SD_SCHEDULER_BACKGROUND_GO)
     {
-        memset(load, 0, sizeof(*load));
+        load->read_ok = 0U;
+        load->state = WAV_CATALOG_VIEW_CLOSE;
         g_wav_catalog_last_io_error = 1U;
-        return WAV_LOADER_CATALOG_VIEW_ERROR;
+        return WAV_LOADER_CATALOG_VIEW_PENDING;
     }
 
     wav_loader_catalog_view_service_result_t result = WAV_LOADER_CATALOG_VIEW_PENDING;
@@ -672,13 +814,15 @@ wav_loader_catalog_view_service_result_t wav_loader_catalog_view_service(void)
                 }
                 if (entry.parent_id == load->parent_id)
                 {
-                    g_wav_catalog_scratch_view.child_count++;
+                    wav_loader_catalog_view_t *const target =
+                        &g_wav_catalog_views[load->target_view];
+                    target->child_count++;
                     if ((load->child_ordinal >= load->page_start)
-                        && (g_wav_catalog_scratch_view.loaded_count < WAV_LOADER_CATALOG_VIEW_MAX))
+                        && (target->loaded_count < WAV_LOADER_CATALOG_VIEW_MAX))
                     {
-                        const uint16_t dst = g_wav_catalog_scratch_view.loaded_count++;
-                        g_wav_catalog_scratch_view.entries[dst] = entry;
-                        g_wav_catalog_scratch_view.indices[dst] = load->entry_index;
+                        const uint16_t dst = target->loaded_count++;
+                        target->entries[dst] = entry;
+                        target->indices[dst] = load->entry_index;
                     }
                     load->child_ordinal++;
                 }
@@ -702,15 +846,15 @@ wav_loader_catalog_view_service_result_t wav_loader_catalog_view_service(void)
             }
             if (load->read_ok != 0U)
             {
-                wav_loader_catalog_view_t *const view = wav_loader_catalog_alloc_view();
-                *view = g_wav_catalog_scratch_view;
+                wav_loader_catalog_view_t *const view =
+                    &g_wav_catalog_views[load->target_view];
                 view->valid = 1U;
                 view->age = ++g_wav_catalog_view_age;
                 result = WAV_LOADER_CATALOG_VIEW_PUBLISHED;
             }
             else
             {
-                g_wav_catalog_last_io_error = 1U;
+                wav_loader_catalog_invalidate_io();
                 result = WAV_LOADER_CATALOG_VIEW_ERROR;
             }
             memset(load, 0, sizeof(*load));
@@ -726,7 +870,8 @@ wav_loader_catalog_view_service_result_t wav_loader_catalog_view_service(void)
 
 static uint8_t wav_loader_catalog_read_entry_by_index(uint16_t index, wav_loader_catalog_entry_t *out)
 {
-    if ((out == 0) || (g_wav_catalog_loaded == 0U) || (index >= g_wav_catalog_count))
+    if ((out == 0) || (wav_loader_catalog_media_is_current() == 0U)
+        || (g_wav_catalog_loaded == 0U) || (index >= g_wav_catalog_count))
     {
         return 0U;
     }
@@ -840,6 +985,7 @@ void wav_loader_catalog_init_load(void)
         g_wav_catalog_loaded = 1U;
         g_wav_catalog_truncated = (header.count >= header.capacity) ? 1U : 0U;
         g_wav_catalog_stale = 0U;
+        g_wav_catalog_media_epoch = sd_access_media_epoch();
     }
     (void)f_close(&file);
     sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
@@ -865,11 +1011,20 @@ void wav_loader_catalog_rebuild(void)
         return;
     }
 
+    if (wav_loader_catalog_view_abort_locked() == 0U)
+    {
+        wav_loader_catalog_invalidate_io();
+        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+        return;
+    }
+
     const uint16_t old_count = g_wav_catalog_count;
     const uint8_t old_loaded = g_wav_catalog_loaded;
     const uint8_t old_truncated = g_wav_catalog_truncated;
     const uint8_t old_path_truncated = g_wav_catalog_path_truncated;
     const uint8_t old_stale = g_wav_catalog_stale;
+    const uint32_t old_media_epoch = g_wav_catalog_media_epoch;
+    const uint32_t rebuild_media_epoch = sd_access_media_epoch();
 
     if (sd_access_fs_mount_if_needed() == 0U)
     {
@@ -882,11 +1037,13 @@ void wav_loader_catalog_rebuild(void)
     g_wav_catalog_path_truncated = 0U;
     g_wav_catalog_loaded = 0U;
     g_wav_catalog_stale = 1U;
-    if (wav_loader_catalog_save() != 0U)
+    if ((wav_loader_catalog_save() != 0U)
+        && (rebuild_media_epoch == sd_access_media_epoch()))
     {
         wav_loader_catalog_views_clear();
         g_wav_catalog_stale = 0U;
         g_wav_catalog_loaded = 1U;
+        g_wav_catalog_media_epoch = rebuild_media_epoch;
     }
     else
     {
@@ -895,6 +1052,7 @@ void wav_loader_catalog_rebuild(void)
         g_wav_catalog_truncated = old_truncated;
         g_wav_catalog_path_truncated = old_path_truncated;
         g_wav_catalog_stale = old_stale;
+        g_wav_catalog_media_epoch = old_media_epoch;
     }
     sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
 #else
@@ -909,6 +1067,7 @@ void wav_loader_catalog_refresh(void)
 
 uint16_t wav_loader_catalog_count(void)
 {
+    (void)wav_loader_catalog_media_is_current();
     return g_wav_catalog_count;
 }
 
@@ -972,25 +1131,34 @@ uint8_t wav_loader_catalog_path_truncated(void)
 
 uint8_t wav_loader_catalog_loaded(void)
 {
+    (void)wav_loader_catalog_media_is_current();
     return g_wav_catalog_loaded;
 }
 
 uint8_t wav_loader_catalog_stale(void)
 {
+    (void)wav_loader_catalog_media_is_current();
     return g_wav_catalog_stale;
 }
 
 void wav_loader_catalog_mark_stale(void)
 {
     g_wav_catalog_stale = 1U;
-    wav_loader_catalog_views_clear();
+    wav_loader_catalog_view_cache_clear();
+    g_wav_catalog_pending_request = 0U;
+    if (g_wav_catalog_view_load.state != WAV_CATALOG_VIEW_IDLE)
+    {
+        g_wav_catalog_view_load.cancel_requested = 1U;
+    }
 }
 
 uint8_t wav_loader_catalog_find_path(const char *path, uint16_t *out_index, wav_loader_catalog_entry_t *out_entry)
 {
     g_wav_catalog_last_sd_busy = 0U;
     g_wav_catalog_last_io_error = 0U;
-    if ((path == 0) || (path[0] == '\0') || (g_wav_catalog_loaded == 0U))
+    if ((path == 0) || (path[0] == '\0')
+        || (wav_loader_catalog_media_is_current() == 0U)
+        || (g_wav_catalog_loaded == 0U))
     {
         return 0U;
     }
@@ -1061,6 +1229,10 @@ const wav_loader_catalog_entry_t *wav_loader_catalog_get(uint16_t index)
 {
     g_wav_catalog_last_sd_busy = 0U;
     g_wav_catalog_last_io_error = 0U;
+    if (wav_loader_catalog_media_is_current() == 0U)
+    {
+        return 0;
+    }
     if ((g_wav_catalog_lookup_valid != 0U) && (g_wav_catalog_lookup_index == index))
     {
         return &g_wav_catalog_lookup_entry;

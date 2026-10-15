@@ -90,3 +90,10 @@ mutation SD invalide/reconstruit ce catalogue puis publie sa vue paginée ; la
 vue UI n'est remplacée qu'après `WAV_LOADER_CATALOG_VIEW_PUBLISHED`. Wavetable
 et Multi gardent leurs complétions dédiées, mais partagent la règle : aucune
 admission asynchrone ne doit être présentée comme une terminaison.
+
+Chaque vue du catalogue WAV est construite directement dans un slot cache rendu
+invalide pendant le chargement. Le slot devient visible uniquement quand lecture
+et fermeture sont terminées. Une navigation plus récente annule la lecture,
+ferme son `FIL` sous admission background, puis ne relance que la dernière vue
+demandée. Une annulation normale reste silencieuse ; un changement de média ou
+une erreur I/O invalide le catalogue et remonte `CAT FAIL`.

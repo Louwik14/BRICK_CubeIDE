@@ -14,6 +14,7 @@ $navigation = Get-Content -Raw (Join-Path $root `
     'Src/UI/pages/Settings/ui_settings_navigation.inc')
 $render = Get-Content -Raw (Join-Path $root `
     'Src/UI/pages/Settings/ui_settings_render.inc')
+$loader = Get-Content -Raw (Join-Path $root 'Src/Storage/wav_loader.c')
 
 Assert-True ($pool.Contains('sample_global_pool_publish_change();')) `
     'the canonical pool does not publish mutations'
@@ -33,6 +34,25 @@ Assert-True ($actions.Contains('ui_page_settings_status("CLEARING");') -and
 Assert-True ($browser.Contains(
     'g_ui_settings.sample_slot_selected = SAMPLE_GLOBAL_POOL_INVALID_INDEX;')) `
     'an empty projection retains a stale selected slot'
+
+Assert-True (-not $loader.Contains('g_wav_catalog_scratch_view')) `
+    'the 56848-byte catalogue scratch view is still allocated'
+Assert-True ($loader.Contains('target->valid = 0U;') -and
+             $loader.Contains('target->entries[dst] = entry;') -and
+             $loader.Contains('view->valid = 1U;')) `
+    'catalogue views are not built privately then published atomically'
+Assert-True ($loader.Contains('g_wav_catalog_pending_request = 1U;') -and
+             $loader.Contains('g_wav_catalog_view_load.cancel_requested = 1U;') -and
+             (-not $loader.Contains('(void)f_close(&load->file);')) -and
+             $loader.Contains('close_ok = (f_close(&load->file) == FR_OK)')) `
+    'superseded catalogue requests do not close and restart transactionally'
+Assert-True ($loader.Contains('load->media_epoch != sd_access_media_epoch()') -and
+             $loader.Contains('g_wav_catalog_loaded = 0U;') -and
+             $loader.Contains('g_wav_catalog_stale = 1U;')) `
+    'media removal does not invalidate the catalogue transaction'
+Assert-True ($loader.Contains('SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES') -and
+             $loader.Contains('sd_scheduler_runtime_background_try_begin(&request)')) `
+    'catalogue reads bypass the AUDIO/STREAM background scheduler'
 
 # Selection contract for deleting first, last and only entries.
 function Select-Neighbor([int[]]$Slots, [int]$Selected) {
