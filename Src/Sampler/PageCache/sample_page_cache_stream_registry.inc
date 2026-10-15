@@ -152,6 +152,16 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
         page->sample_id = sample_page_cache_key_slot(key);
         page->page_index = page_index;
         sample_page_cache_set_page_geometry(page, key);
+        if ((sample_page_cache_assign_payload(page, range_start, range_count) == 0U)
+            && ((page->format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+                || (((sample_page_cache_compact_mono_at_stop(range_start, range_count) != 0U)
+                     || (sample_page_cache_recycle_carrier_for_stereo(
+                             key, range_start, range_count) != 0U))
+                    && (sample_page_cache_assign_payload(page, range_start, range_count) != 0U))))
+        {
+            sample_page_cache_clear_desc(page, selected_free);
+            return 0;
+        }
         page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
         page->frame_count = frame_count;
         page->generation = ++g_sample_page_cache_state.generation_counter;
@@ -223,6 +233,16 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     evict_page->sample_id = sample_page_cache_key_slot(key);
     evict_page->page_index = page_index;
     sample_page_cache_set_page_geometry(evict_page, key);
+    if ((sample_page_cache_assign_payload(evict_page, range_start, range_count) == 0U)
+        && ((evict_page->format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+            || (((sample_page_cache_compact_mono_at_stop(range_start, range_count) != 0U)
+                 || (sample_page_cache_recycle_carrier_for_stereo(
+                         key, range_start, range_count) != 0U))
+                && (sample_page_cache_assign_payload(evict_page, range_start, range_count) != 0U))))
+    {
+        sample_page_cache_clear_desc(evict_page, slot_index);
+        return 0;
+    }
     evict_page->start_frame = sample_audio_format_page_start_frame(evict_page->format, page_index);
     evict_page->frame_count = frame_count;
     evict_page->generation = ++g_sample_page_cache_state.generation_counter;
@@ -256,6 +276,12 @@ static int32_t sample_page_cache_find_contiguous_empty_run_in_range(uint32_t pag
         for (; i < page_count; ++i)
         {
             if (g_sample_page_desc[start + i].state != SAMPLE_PAGE_FREE)
+            {
+                break;
+            }
+            const uint32_t block = (start + i) * SAMPLE_PAGE_BLOCKS_PER_CARRIER;
+            if ((sample_page_cache_payload_block_used(block, 0) != 0U)
+                || (sample_page_cache_payload_block_used(block + 1U, 0) != 0U))
             {
                 break;
             }

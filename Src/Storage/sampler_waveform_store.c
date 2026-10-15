@@ -261,12 +261,21 @@ void sampler_waveform_accumulator_push_float(sampler_waveform_accumulator_t *acc
                                              const float *stereo,
                                              uint32_t frame_count)
 {
-    if(acc == 0 || stereo == 0) return;
+    sampler_waveform_accumulator_push_float_strided(acc, stereo, frame_count, 2U);
+}
+
+void sampler_waveform_accumulator_push_float_strided(
+    sampler_waveform_accumulator_t *acc, const float *samples,
+    uint32_t frame_count, uint16_t channels)
+{
+    if((acc == 0) || (samples == 0) || ((channels != 1U) && (channels != 2U))) return;
     for(uint32_t frame = 0U; frame < frame_count; ++frame)
     {
+        const float left = samples[frame * channels];
+        const float right = (channels == 2U) ? samples[frame * channels + 1U] : left;
         sampler_waveform_accumulator_push_i16(acc,
-            sampler_waveform_float_to_i16(stereo[frame * 2U]),
-            sampler_waveform_float_to_i16(stereo[frame * 2U + 1U]));
+            sampler_waveform_float_to_i16(left),
+            sampler_waveform_float_to_i16(right));
     }
 }
 
@@ -1072,9 +1081,10 @@ static void sampler_waveform_build_service(void)
         g_waveform_diag.io_cycles += (uint32_t)(DWT->CYCCNT - io_start);
     }
     uint32_t frames = build->identity.frame_count - build->next_frame;
-    const uint32_t max_frames = sizeof(g_sampler_waveform_read) / 8U;
+    const uint32_t bytes_per_frame = build->identity.channels * sizeof(float);
+    const uint32_t max_frames = sizeof(g_sampler_waveform_read) / bytes_per_frame;
     if(frames > max_frames) frames = max_frames;
-    const uint32_t bytes = frames * 8U;
+    const uint32_t bytes = frames * bytes_per_frame;
     UINT read = 0U;
     uint32_t start = DWT->CYCCNT;
     const FRESULT result = f_read(&build->file, g_sampler_waveform_read,
@@ -1090,8 +1100,9 @@ static void sampler_waveform_build_service(void)
         return;
     }
     start = DWT->CYCCNT;
-    sampler_waveform_accumulator_push_float(&build->accumulator,
-        (const float *)(const void *)g_sampler_waveform_read, frames);
+    sampler_waveform_accumulator_push_float_strided(&build->accumulator,
+        (const float *)(const void *)g_sampler_waveform_read, frames,
+        build->identity.channels);
     g_waveform_diag.reduction_cycles += (uint32_t)(DWT->CYCCNT - start);
     build->next_frame += frames;
     if(build->next_frame < build->identity.frame_count)

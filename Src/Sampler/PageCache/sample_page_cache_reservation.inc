@@ -324,9 +324,10 @@ uint8_t sample_page_cache_clean_loading_payload(
     const sample_page_load_token_t *token, uint32_t modified_bytes)
 {
     if ((token == NULL) || (token->slot_index >= SAMPLE_PAGE_MAX_COUNT)
-        || (modified_bytes == 0U) || (modified_bytes > SAMPLE_PAGE_BYTES))
+        || (modified_bytes == 0U))
         return 0U;
     sample_page_desc_t *const page = &g_sample_page_desc[token->slot_index];
+    if (modified_bytes > sample_audio_format_page_bytes(page->format)) return 0U;
     if ((page->state != SAMPLE_PAGE_LOADING)
         || (page->generation != token->page_generation)
         || (page->registration_epoch != token->registration_epoch)

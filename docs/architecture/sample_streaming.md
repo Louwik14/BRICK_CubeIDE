@@ -2,12 +2,18 @@
 
 ## Contrat
 
-Classic STREAM, Multi et REC_SOURCE utilisent un seul Page Cache. Un slot fait
-exactement 16 KiB. En FLOAT32 stereo entrelace, cela represente 2048 frames.
-Les 376 slots produit sont conserves: 340 slots generaux et 36 slots reserves
+Classic STREAM, Multi et REC_SOURCE utilisent un seul Page Cache. Le backing
+reste forme de 376 carriers physiques de 16 KiB, chacun divisible en deux
+blocs alignes de 8 KiB. Une page FLOAT32 mono occupe un bloc (2048 frames) et
+une page FLOAT32 stereo entrelace occupe les deux blocs contigus du carrier
+(2048 frames). Deux pages mono peuvent donc partager un carrier. Les 376
+descriptors logiques sont conserves: 340 generaux et 36 reserves
 aux neuf readers garantis et a leurs quatre roles `CURRENT`, `NEXT`,
 `LOOP_START`, `LOOP_START_NEXT`. Le payload occupe donc 6 160 384 octets en
-SDRAM. Le passage depuis 64 KiB libere 18 481 152 octets de SDRAM sans changer
+SDRAM. Un presocle mono coute 8192 octets, un presocle stereo 16384 octets;
+le backing statique ne retrecit pas, mais sa capacite utile mono double jusqu'a
+la limite actuelle des 376 descriptors. Le passage depuis 64 KiB libere
+18 481 152 octets de SDRAM sans changer
 le nombre de slots, les identifiants, les leases, les generations, l'eviction
 ou les refcounts/protections existants. Ce choix libere la SDRAM au lieu de
 porter le cache a 1504 slots: le pool general partage par Classic STREAM, Multi et
@@ -17,8 +23,8 @@ budget D1 actuel; aucun placement agressif du prototype n'est repris.
 
 Une page suit toujours `FREE -> RESERVED -> LOADING -> READY`, avec les chemins
 `EVICTING` et `FAILED` existants. `LOADING` porte en plus un watermark monotone
-`available_frame_end`. Il vaut zero au debut, progresse de 64 frames par chunk
-stereo de 512 octets, puis vaut 2048. Une completion n'est publiee que si la
+`available_frame_end`. Il vaut zero au debut, progresse de 128 frames mono ou
+64 frames stereo par chunk de 512 octets, puis vaut 2048. Une completion n'est publiee que si la
 cle, le slot, la generation et l'epoch d'enregistrement correspondent encore.
 
 Les 772 identifiants STREAM possedent chacun un descriptor froid de 116 octets
@@ -42,15 +48,16 @@ octets et le cycle de remplacement reste `STOP -> DELETE -> LOAD`.
 Trois granularites independantes sont contractuelles:
 
 ```text
-page logique du Page Cache = 16 KiB
+page logique mono           = 8 KiB
+page logique stereo         = 16 KiB
 publication progressive     = 512 octets
-I/O physique sequentielle   = 16, 32, 48 ou 64 KiB
+I/O physique sequentielle   = 8 a 64 KiB, coalesce par pas de page logique
 ```
 
-Le fastpath ne cree aucune page de 64 KiB. Il reserve jusqu'a quatre slots
-16 KiB distincts, avec leurs propres cle, slot, generation, etat et watermark,
-puis effectue au maximum un seul `CMD18` physique pour les remplir. La constante
-`SAMPLE_STREAM_FASTPATH_MAX_PAGES` borne cette premiere version a quatre pages.
+Le fastpath ne cree aucune page de 64 KiB. Il reserve jusqu'a quatre pages
+stereo ou huit pages mono distinctes, avec leurs propres cle, slot, generation,
+etat et watermark, puis effectue au maximum un seul `CMD18` physique pour les
+remplir directement dans leurs blocs finaux.
 Il n'existe qu'un Stream Manager, un scheduler, un backend, un Page Cache et un
 VoiceReader.
 
@@ -78,6 +85,32 @@ Le descriptor prepare par le block device transporte explicitement le flag
 progressif. `chain_next` le restitue au lancement suivant: une lecture
 canonique chainee conserve donc les memes 32 publications et ne retombe pas
 sur le chemin mono-buffer.
+
+L'allocation STORAGE remplit d'abord les carriers mono a moitie occupes; une
+stereo exige un carrier entier. Si aucun carrier entier ne reste, l'eviction
+choisit un carrier dont toutes les pages sont READY, non statiques et non
+louees, en conservant l'ordre temporel du cache. A STOP seulement, et sans
+lease, chargement ni DMA, une page mono READY peut etre copiee vers la moitie
+libre d'un autre carrier afin de recreer un carrier entier. Le deplacement
+incremente sa generation et nettoie exactement 8 KiB de D-cache. Aucune
+maintenance de cache ne couvre la moitie voisine.
+
+Les imports conservent le nombre de canaux: le canonique est FLOAT32 48 kHz
+mono ou stereo. Classic, Group, Multi et Waveform consomment les deux
+geometries; REC_SOURCE et Recorder restent stereo. La conversion n'expanse
+jamais un mono en stereo dans STORAGE et la duplication L/R reste dans les
+kernels AUDIO. Les maps physiques, epochs, leases, slices, reverse et boucles
+restent communs aux deux formats.
+
+Le build Release H743 de cette refonte conserve exactement 6 160 384 octets
+de payload Page Cache et les descriptors de 64 octets. La table d'occupation
+bornee des 752 demi-blocs ajoute 1504 octets en `sdram_page_meta`. Le passage
+du job coalesce de quatre a huit destinations ajoute 576 octets en D2
+cacheable. D1 et D3 ne changent pas. Ces valeurs sont des mesures MAP
+statiques; les latences AUDIO/SD restent a confirmer sur cible avec les memes
+scenarios du 8 octobre. Les 376 descriptors logiques restent la premiere
+limite: sans leur futur redimensionnement, 752 demi-blocs physiques ne peuvent
+pas rendre plus de 376 pages mono simultanement adressables.
 
 Les pages partielles et les formats non canoniques restent sur le chemin de
 lecture asynchrone complet existant. Les writes Recorder/Looper/Overdub ne sont

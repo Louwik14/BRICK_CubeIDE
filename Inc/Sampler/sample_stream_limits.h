@@ -19,11 +19,9 @@
 #define SAMPLE_STREAM_TARGET_MAX_IO_IN_FLIGHT    (1U)
 #define SAMPLE_STREAM_IO_MAX_READERS SAMPLE_STREAM_ACTIVE_READER_CAPACITY
 
-/* Logical pages stay 16 KiB.  Only a sequential physical read may aggregate
- * several independently-owned page-cache destinations. */
-#define SAMPLE_STREAM_FASTPATH_MAX_PAGES       (4U)
-#define SAMPLE_STREAM_FASTPATH_MAX_BYTES \
-    (SAMPLE_STREAM_FASTPATH_MAX_PAGES * SAMPLE_AUDIO_FORMAT_PAGE_BYTES)
+/* A 64 KiB physical burst contains four stereo pages or eight mono pages. */
+#define SAMPLE_STREAM_FASTPATH_MAX_PAGES       (8U)
+#define SAMPLE_STREAM_FASTPATH_MAX_BYTES       (64U * 1024U)
 
 /*
  * Calibration seam: number of complete voice passes allowed per service
@@ -41,6 +39,6 @@ _Static_assert(SAMPLE_STREAM_TARGET_MAX_IO_IN_FLIGHT == 1U,
                "streaming keeps one monocore I/O operation in flight");
 _Static_assert(SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND > 0U,
                "stream round must distribute at least one page per voice");
-_Static_assert(SAMPLE_STREAM_FASTPATH_MAX_PAGES == 4U,
-               "first sequential fastpath version is bounded to four pages");
+_Static_assert(SAMPLE_STREAM_FASTPATH_MAX_PAGES == 8U,
+               "fastpath must cover eight mono pages");
 #endif

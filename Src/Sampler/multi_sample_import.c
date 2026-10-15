@@ -1158,12 +1158,13 @@ static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
         ((uint64_t)source_frames * 48000ULL + info.sample_rate - 1ULL)
         / info.sample_rate;
     if ((target_frames == 0ULL) || (target_frames > UINT32_MAX)
-        || ((target_frames * 8ULL) > (uint64_t)(UINT32_MAX - 512U)))
+        || ((target_frames * (uint64_t)info.channels * 4ULL)
+            > (uint64_t)(UINT32_MAX - 512U)))
     {
         return MULTI_SAMPLE_IMPORT_WAV_UNSUPPORTED;
     }
     item->target_frames = (uint32_t)target_frames;
-    item->target_data_bytes = item->target_frames * 8U;
+    item->target_data_bytes = item->target_frames * info.channels * 4U;
     item->needs_conversion =
         (wav_parser_is_canonical_brick_float(&info) == 0U) ? 1U : 0U;
     memcpy(&g_import_paths[*path_cursor], relative_path, path_len + 1U);
@@ -1231,11 +1232,13 @@ static multi_sample_import_result_t multi_import_refresh_converted_sample(uint16
     }
     item->sample.total_frames = item->target_frames;
     item->sample.sample_rate = 48000U;
-    item->sample.channels = 2U;
+    item->sample.channels = (uint16_t)(item->target_data_bytes
+        / (item->target_frames * sizeof(float)));
     item->sample.bits_per_sample = 32U;
     item->sample.encoding = WAV_SAMPLE_ENCODING_IEEE_FLOAT;
-    item->sample.format = sample_audio_format_from_channels(2U);
-    item->sample.stride_floats = 2U;
+    item->sample.format = sample_audio_format_from_channels(item->sample.channels);
+    item->sample.stride_floats = (uint16_t)sample_audio_format_stride_floats(
+        item->sample.format);
     item->sample.frames_per_page = sample_audio_format_frames_per_page(item->sample.format);
     item->sample.data_offset = 512U;
     item->sample.data_size = item->target_data_bytes;

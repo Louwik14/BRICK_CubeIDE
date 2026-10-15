@@ -78,8 +78,8 @@ typedef struct
 } sample_stream_io_async_t;
 _Static_assert(sizeof(sample_page_stream_load_info_t) == 128U,
                "stream load snapshot budget changed");
-_Static_assert(sizeof(sample_stream_io_async_t) == 632U,
-               "coalesced stream async job budget changed");
+_Static_assert(sizeof(sample_stream_io_async_t) == 928U,
+               "eight-page coalesced stream async job budget changed");
 STREAM_LOCAL_D2 static sample_stream_io_async_t
     g_sample_stream_io_async[SAMPLE_STREAM_IO_JOB_COUNT];
 static uint32_t g_sample_stream_io_next_order;
@@ -334,11 +334,14 @@ static uint8_t sample_stream_io_begin_request(
 
     async->direct_float = (uint8_t)(
         (async->stream.canonical_float != 0U)
-        && (async->page[0].format
-            == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
-        && (async->page[0].stride_floats == 2U)
+        && (sample_audio_format_is_valid(async->page[0].format) != 0U)
+        && (async->page[0].stride_floats
+            == sample_audio_format_stride_floats(async->page[0].format))
+        && (async->stream.stream_safe.block_align
+            == sample_audio_format_bytes_per_float_frame(async->page[0].format))
         && ((((uint64_t)async->stream.stream_safe.data_offset_bytes
-              + (uint64_t)async->page[0].start_frame * 8U)
+              + (uint64_t)async->page[0].start_frame
+                    * async->stream.stream_safe.block_align)
              % SAMPLE_STREAM_IO_SECTOR_BYTES) == 0U));
     async->legacy_recorder_pcm24 = (uint8_t)(
         (page_count == 1U)
@@ -363,7 +366,8 @@ static uint8_t sample_stream_io_begin_request(
             * async->stream.stream_safe.block_align;
     if ((async->source_bytes == 0U)
         || ((async->direct_float != 0U)
-            && (async->source_bytes > page_count * SAMPLE_PAGE_BYTES))
+            && (async->source_bytes > page_count
+                * sample_audio_format_page_bytes(async->page[0].format)))
         || ((async->legacy_recorder_pcm24 != 0U)
             && ((uint64_t)async->source_bytes
                 + (2U * (SAMPLE_STREAM_IO_SECTOR_BYTES - 1U))
@@ -379,7 +383,9 @@ static uint8_t sample_stream_io_begin_request(
             &async->physical, &async->stream.stream_safe,
             target, page_count, cursor,
             (uint8_t *)async->page[0].frames_interleaved,
-            page_count * SAMPLE_PAGE_BYTES,
+            (async->direct_float != 0U)
+                ? page_count * sample_audio_format_page_bytes(async->page[0].format)
+                : SAMPLE_PAGE_BYTES,
             destinations_cpu_clean, deadline_margin_us) != 0U)
     {
         async->physical_active = 1U;

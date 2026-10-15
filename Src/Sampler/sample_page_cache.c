@@ -12,6 +12,7 @@
 #include "Platform/cache_maintenance.h"
 #include "Storage/waveform_service.h"
 #include "SD/sd_block_device.h"
+#include "Seq/seq_runtime.h"
 #include "stm32h7xx.h"
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
@@ -58,6 +59,8 @@ typedef sample_page_backing_index_entry_t sample_page_index_entry_t;
 static CTRL_STATE sample_page_cache_state_t g_sample_page_cache_state;
 SDRAM_PAGE_META static sample_page_sample_desc_t
     g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
+SDRAM_PAGE_META static uint16_t
+    g_sample_page_payload_owner[SAMPLE_PAGE_BLOCK_COUNT];
 static CTRL_STATE uint16_t g_sample_page_reserved_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_free_cursor;
 static CTRL_STATE uint16_t g_sample_page_evict_cursor;

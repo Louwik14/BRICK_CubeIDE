@@ -18,6 +18,8 @@ typedef struct
     uint64_t file_byte_offset;
     uint32_t buffer_capacity;
     uint32_t source_bytes;
+    uint32_t logical_page_bytes;
+    uint16_t bytes_per_frame;
     uint32_t logical_queued;
     uint32_t buffer_sectors;
     uint16_t first_sector_skip;

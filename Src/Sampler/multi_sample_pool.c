@@ -244,8 +244,7 @@ uint16_t multi_sample_pool_get_slot_capacity_used(void)
         if ((sample->instrument_id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
             && (g_multi_instruments[sample->instrument_id].used != 0U))
         {
-            slots += (sample->format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
-                         ? 1U : 0U;
+            slots += (sample_audio_format_is_valid(sample->format) != 0U) ? 1U : 0U;
         }
     }
     return (slots > UINT16_MAX) ? UINT16_MAX : (uint16_t)slots;
@@ -754,7 +753,7 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
 
     multi_sample_desc_t *const sample = &g_multi_samples[multi_sample_id];
     const sample_audio_format_t format = sample_audio_format_from_channels(channels);
-    if ((format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+    if ((sample_audio_format_is_valid(format) == 0U)
         || (g_multi_instruments[sample->instrument_id].used == 0U))
     {
         return 0U;

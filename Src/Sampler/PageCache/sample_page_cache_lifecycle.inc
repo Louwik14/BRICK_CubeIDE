@@ -11,6 +11,7 @@ void sample_page_cache_reset(void)
     sample_stream_physical_map_pool_reset();
     memset(&g_sample_page_cache_state, 0, sizeof(g_sample_page_cache_state));
     memset(g_sample_page_sample_desc, 0, sizeof(g_sample_page_sample_desc));
+    memset(g_sample_page_payload_owner, 0xFF, sizeof(g_sample_page_payload_owner));
     memset(g_sample_page_index, 0, sizeof(g_sample_page_index));
     memset(g_sample_page_reserved_count, 0, sizeof(g_sample_page_reserved_count));
     g_sample_page_free_cursor = 0U;
@@ -207,6 +208,8 @@ uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
         page->generation = ++g_sample_page_cache_state.generation_counter;
         page->last_touch = ++g_sample_page_cache_state.touch_counter;
         page->static_resident = 1U;
+        page->data_offset = slot_index * SAMPLE_PAGE_BYTES;
+        sample_page_cache_claim_payload_blocks(page);
         /* Returning a writable raw allocation transfers CPU ownership. */
         page->payload_cpu_clean = 0U;
         sample_page_cache_set_state(page, SAMPLE_PAGE_READY);
@@ -215,7 +218,8 @@ uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
     out_allocation->first_slot = (uint16_t)start_slot;
     out_allocation->page_count = (uint16_t)page_count;
     out_allocation->capacity_bytes = page_count * SAMPLE_PAGE_BYTES;
-    out_allocation->data = (void *)&g_sample_page_data[start_slot][0];
+    out_allocation->data = (void *)sample_page_cache_data_resolve(
+        &g_sample_page_desc[start_slot]);
     return 1U;
 }
 
@@ -272,7 +276,10 @@ uint32_t sample_page_cache_slot_pool_free_bytes(void)
          i < (SAMPLE_PAGE_SLOT_POOL_START + SAMPLE_PAGE_SLOT_POOL_COUNT);
          ++i)
     {
-        if (g_sample_page_desc[i].state == SAMPLE_PAGE_FREE)
+        const uint32_t block = i * SAMPLE_PAGE_BLOCKS_PER_CARRIER;
+        if ((g_sample_page_desc[i].state == SAMPLE_PAGE_FREE)
+            && (sample_page_cache_payload_block_used(block, 0) == 0U)
+            && (sample_page_cache_payload_block_used(block + 1U, 0) == 0U))
         {
             free_pages++;
         }

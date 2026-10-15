@@ -1,11 +1,13 @@
 static uint8_t sample_page_cache_page_is_contractual(const sample_page_desc_t *page);
 static uint8_t sample_page_cache_can_evict_for_request(sample_audio_key_t request_key,
                                                        sample_audio_key_t victim_key);
+static void sample_page_cache_clear_desc(sample_page_desc_t *page,
+                                         uint32_t slot_index);
 
 static float *sample_page_cache_data_resolve(const sample_page_desc_t *page)
 {
     if ((page == 0) || (page->data_offset >= sizeof(g_sample_page_data))
-        || ((page->data_offset % SAMPLE_PAGE_BYTES) != 0U))
+        || ((page->data_offset % SAMPLE_PAGE_BLOCK_BYTES) != 0U))
         return 0;
     return (float *)((uint8_t *)g_sample_page_data + page->data_offset);
 }
@@ -352,6 +354,180 @@ static uint8_t sample_page_cache_claim_for_recycle(sample_page_desc_t *page)
     return (leased == 0U) ? 1U : 0U;
 }
 
+static uint32_t sample_page_cache_payload_bytes(const sample_page_desc_t *page)
+{
+    if (page == 0) return 0U;
+    if ((page->static_resident != 0U)
+        && (sample_audio_format_is_valid(page->format) == 0U)) return SAMPLE_PAGE_BYTES;
+    return sample_audio_format_page_bytes(page->format);
+}
+
+static uint8_t sample_page_cache_payload_block_used(uint32_t block,
+                                                     const sample_page_desc_t *ignore)
+{
+    if (block >= SAMPLE_PAGE_BLOCK_COUNT) return 1U;
+    const uint16_t owner = g_sample_page_payload_owner[block];
+    if (owner >= SAMPLE_PAGE_MAX_COUNT) return 0U;
+    return ((ignore != 0) && (&g_sample_page_desc[owner] == ignore)) ? 0U : 1U;
+}
+
+static sample_page_desc_t *sample_page_cache_payload_block_owner(uint32_t block)
+{
+    if (block >= SAMPLE_PAGE_BLOCK_COUNT) return 0;
+    const uint16_t owner = g_sample_page_payload_owner[block];
+    return (owner < SAMPLE_PAGE_MAX_COUNT) ? &g_sample_page_desc[owner] : 0;
+}
+
+static void sample_page_cache_claim_payload_blocks(sample_page_desc_t *page)
+{
+    const uint32_t bytes = sample_page_cache_payload_bytes(page);
+    if ((page == 0) || (bytes == 0U)
+        || (page->data_offset >= sizeof(g_sample_page_data))) return;
+    const uint32_t first = page->data_offset / SAMPLE_PAGE_BLOCK_BYTES;
+    const uint32_t count = bytes / SAMPLE_PAGE_BLOCK_BYTES;
+    const uint16_t owner = (uint16_t)(page - g_sample_page_desc);
+    for (uint32_t i = 0U; i < count; ++i)
+        g_sample_page_payload_owner[first + i] = owner;
+}
+
+static void sample_page_cache_release_payload_blocks(sample_page_desc_t *page)
+{
+    const uint32_t bytes = sample_page_cache_payload_bytes(page);
+    if ((page == 0) || (bytes == 0U)
+        || (page->data_offset >= sizeof(g_sample_page_data))) return;
+    const uint32_t first = page->data_offset / SAMPLE_PAGE_BLOCK_BYTES;
+    const uint32_t count = bytes / SAMPLE_PAGE_BLOCK_BYTES;
+    const uint16_t owner = (uint16_t)(page - g_sample_page_desc);
+    for (uint32_t i = 0U; i < count; ++i)
+        if (g_sample_page_payload_owner[first + i] == owner)
+            g_sample_page_payload_owner[first + i] = UINT16_MAX;
+}
+
+static uint8_t sample_page_cache_assign_payload(sample_page_desc_t *page,
+                                                 uint32_t range_start,
+                                                 uint32_t range_count)
+{
+    if ((page == 0) || ((range_start + range_count) > SAMPLE_PAGE_MAX_COUNT)) return 0U;
+    const uint8_t mono = (page->format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO) ? 1U : 0U;
+    if (mono != 0U)
+    {
+        /* Pack a half-full carrier first; this leaves whole carriers available
+         * to the stereo fast path. */
+        for (uint32_t carrier = range_start; carrier < (range_start + range_count); ++carrier)
+        {
+            const uint32_t block = carrier * SAMPLE_PAGE_BLOCKS_PER_CARRIER;
+            const uint8_t lo = sample_page_cache_payload_block_used(block, page);
+            const uint8_t hi = sample_page_cache_payload_block_used(block + 1U, page);
+            if ((lo ^ hi) != 0U)
+            {
+                page->data_offset = (block + ((lo != 0U) ? 1U : 0U))
+                    * SAMPLE_PAGE_BLOCK_BYTES;
+                sample_page_cache_claim_payload_blocks(page);
+                return 1U;
+            }
+        }
+    }
+    for (uint32_t carrier = range_start; carrier < (range_start + range_count); ++carrier)
+    {
+        const uint32_t block = carrier * SAMPLE_PAGE_BLOCKS_PER_CARRIER;
+        if ((sample_page_cache_payload_block_used(block, page) == 0U)
+            && ((mono != 0U)
+                || (sample_page_cache_payload_block_used(block + 1U, page) == 0U)))
+        {
+            page->data_offset = block * SAMPLE_PAGE_BLOCK_BYTES;
+            sample_page_cache_claim_payload_blocks(page);
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static uint8_t sample_page_cache_compact_mono_at_stop(uint32_t range_start,
+                                                       uint32_t range_count)
+{
+    if ((seq_runtime_is_running() != 0U)
+        || (sample_page_lease_control_all_released() == 0U)) return 0U;
+
+    sample_page_desc_t *target_owner = 0;
+    uint32_t target_free_block = UINT32_MAX;
+    sample_page_desc_t *source_owner = 0;
+    for (uint32_t carrier = range_start; carrier < (range_start + range_count); ++carrier)
+    {
+        const uint32_t block = carrier * SAMPLE_PAGE_BLOCKS_PER_CARRIER;
+        sample_page_desc_t *const lo = sample_page_cache_payload_block_owner(block);
+        sample_page_desc_t *const hi = sample_page_cache_payload_block_owner(block + 1U);
+        if ((lo != 0) == (hi != 0)) continue;
+        sample_page_desc_t *const owner = (lo != 0) ? lo : hi;
+        if ((owner->format != SAMPLE_AUDIO_FORMAT_FLOAT32_MONO)
+            || (owner->state != SAMPLE_PAGE_READY)
+            || (owner->static_resident != 0U) || (owner->load_cancel_requested != 0U)) continue;
+        if (target_owner == 0)
+        {
+            target_owner = owner;
+            target_free_block = block + ((lo != 0) ? 1U : 0U);
+        }
+        else
+        {
+            source_owner = owner;
+            break;
+        }
+    }
+    if ((target_owner == 0) || (source_owner == 0)
+        || (target_owner == source_owner)) return 0U;
+
+    float *const src = sample_page_cache_data_resolve(source_owner);
+    float *const dst = (float *)((uint8_t *)g_sample_page_data
+                                 + target_free_block * SAMPLE_PAGE_BLOCK_BYTES);
+    if ((src == 0) || (dst == 0)) return 0U;
+    memmove(dst, src, SAMPLE_PAGE_BLOCK_BYTES);
+    dcache_clean_by_addr_aligned(dst, SAMPLE_PAGE_BLOCK_BYTES);
+    sample_page_cache_release_payload_blocks(source_owner);
+    source_owner->data_offset = target_free_block * SAMPLE_PAGE_BLOCK_BYTES;
+    sample_page_cache_claim_payload_blocks(source_owner);
+    source_owner->generation = ++g_sample_page_cache_state.generation_counter;
+    __DMB();
+    return 1U;
+}
+
+static uint8_t sample_page_cache_recycle_carrier_for_stereo(
+    sample_audio_key_t request_key, uint32_t range_start, uint32_t range_count)
+{
+    uint32_t best_carrier = UINT32_MAX;
+    uint32_t best_touch = UINT32_MAX;
+    for (uint32_t carrier = range_start; carrier < (range_start + range_count); ++carrier)
+    {
+        const uint32_t block = carrier * SAMPLE_PAGE_BLOCKS_PER_CARRIER;
+        sample_page_desc_t *const lo = sample_page_cache_payload_block_owner(block);
+        sample_page_desc_t *const hi = sample_page_cache_payload_block_owner(block + 1U);
+        if ((lo == 0) && (hi == 0)) return 1U;
+        if (((lo != 0) && ((lo->state != SAMPLE_PAGE_READY) || (lo->static_resident != 0U)
+                           || (sample_page_cache_page_is_leased(lo) != 0U)
+                           || (sample_page_cache_can_evict_for_request(request_key, lo->key) == 0U)))
+            || ((hi != 0) && (hi != lo)
+                && ((hi->state != SAMPLE_PAGE_READY) || (hi->static_resident != 0U)
+                    || (sample_page_cache_page_is_leased(hi) != 0U)
+                    || (sample_page_cache_can_evict_for_request(request_key, hi->key) == 0U))))
+            continue;
+        uint32_t touch = (lo != 0) ? lo->last_touch : 0U;
+        if ((hi != 0) && (hi != lo) && (hi->last_touch > touch)) touch = hi->last_touch;
+        if ((best_carrier == UINT32_MAX) || (touch < best_touch))
+        {
+            best_carrier = carrier;
+            best_touch = touch;
+        }
+    }
+    if (best_carrier == UINT32_MAX) return 0U;
+    const uint32_t block = best_carrier * SAMPLE_PAGE_BLOCKS_PER_CARRIER;
+    sample_page_desc_t *const lo = sample_page_cache_payload_block_owner(block);
+    sample_page_desc_t *const hi = sample_page_cache_payload_block_owner(block + 1U);
+    if ((lo != 0) && (sample_page_cache_claim_for_recycle(lo) != 0U))
+        sample_page_cache_clear_desc(lo, (uint32_t)(lo - g_sample_page_desc));
+    if ((hi != 0) && (hi != lo) && (sample_page_cache_claim_for_recycle(hi) != 0U))
+        sample_page_cache_clear_desc(hi, (uint32_t)(hi - g_sample_page_desc));
+    return ((sample_page_cache_payload_block_used(block, 0) == 0U)
+            && (sample_page_cache_payload_block_used(block + 1U, 0) == 0U)) ? 1U : 0U;
+}
+
 static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot_index)
 {
     if (page == 0)
@@ -362,9 +538,12 @@ static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot
     if ((g_sample_page_payload_clean_contract_active != 0U)
         && (page->payload_cpu_clean == 0U))
     {
-        dcache_clean_by_addr_aligned(&g_sample_page_data[slot_index][0],
-                                     SAMPLE_PAGE_BYTES);
+        float *const payload = sample_page_cache_data_resolve(page);
+        const uint32_t bytes = sample_page_cache_payload_bytes(page);
+        if ((payload != 0) && (bytes != 0U))
+            dcache_clean_by_addr_aligned(payload, bytes);
     }
+    sample_page_cache_release_payload_blocks(page);
     const uint16_t key_slot = sample_page_cache_key_slot(page->key);
     if ((key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
         && (g_sample_page_last_slot[key_slot] == slot_index))
@@ -382,7 +561,7 @@ static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot
     page->key = sample_audio_key_classic(UINT16_MAX);
     page->page_index = UINT32_MAX;
     page->start_frame = UINT32_MAX;
-    page->data_offset = slot_index * SAMPLE_PAGE_BYTES;
+    page->data_offset = UINT32_MAX;
     page->payload_cpu_clean = 1U;
     page->state = SAMPLE_PAGE_FREE;
 }

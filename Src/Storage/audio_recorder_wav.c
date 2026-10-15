@@ -22,7 +22,8 @@ uint8_t audio_recorder_wav_build_header(
     uint32_t sample_rate_hz,
     uint16_t channels)
 {
-    if ((header == 0) || (sample_rate_hz == 0U) || (channels != 2U))
+    if ((header == 0) || (sample_rate_hz == 0U)
+        || ((channels != 1U) && (channels != 2U)))
     {
         return 0U;
     }

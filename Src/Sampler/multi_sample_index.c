@@ -190,9 +190,11 @@ static uint8_t multi_index_sample_format_valid(const multi_sample_index_sample_t
 {
     if ((sample == 0) || (sample_audio_format_is_valid(sample->format) == 0U)
         || (sample->encoding != WAV_SAMPLE_ENCODING_IEEE_FLOAT)
-        || (sample->sample_rate != 48000U) || (sample->channels != 2U)
+        || (sample->sample_rate != 48000U)
+        || ((sample->channels != 1U) && (sample->channels != 2U))
         || (sample->bits_per_sample != 32U) || (sample->data_offset != 512U)
-        || ((uint64_t)sample->total_frames * 8ULL != sample->data_size)
+        || ((uint64_t)sample->total_frames * sample->channels * 4ULL
+            != sample->data_size)
         || ((uint64_t)sample->data_offset + sample->data_size > sample->wav_size)
         || (sample_audio_format_matches_channels(sample->format, sample->channels) == 0U)
         || (sample->stride_floats != sample_audio_format_stride_floats(sample->format))
@@ -216,7 +218,7 @@ static uint8_t multi_index_format_contract_valid(const multi_sample_index_t *idx
     }
 
     const uint8_t homogeneous = 1U;
-    if ((idx->format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+    if ((sample_audio_format_is_valid(idx->format) == 0U)
         || (idx->stride_floats != sample_audio_format_stride_floats(idx->format))
         || (idx->frames_per_page != sample_audio_format_frames_per_page(idx->format)))
     {
@@ -1123,7 +1125,7 @@ uint8_t multi_sample_index_validate(const multi_sample_index_t *idx)
             || (sample->sample_rate != 48000U)
             || (sample->encoding != WAV_SAMPLE_ENCODING_IEEE_FLOAT)
             || (sample->bits_per_sample != 32U)
-            || (sample->channels != 2U)
+            || ((sample->channels != 1U) && (sample->channels != 2U))
             || (sample->data_offset != 512U)
             || ((sample->has_loop != 0U)
                 && ((sample->loop_end <= sample->loop_begin)

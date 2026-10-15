@@ -17,7 +17,7 @@ static float *sample_page_cache_audio_data_resolve(
     const sample_page_desc_t *page)
 {
     if ((page == NULL) || (page->data_offset >= sizeof(g_sample_page_data))
-            || ((page->data_offset % SAMPLE_PAGE_BYTES) != 0U))
+            || ((page->data_offset % SAMPLE_PAGE_BLOCK_BYTES) != 0U))
         return NULL;
     return (float *)((uint8_t *)g_sample_page_data + page->data_offset);
 }

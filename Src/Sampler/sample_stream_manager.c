@@ -176,9 +176,10 @@ static uint8_t sample_stream_manager_submit_fastpath(
     if ((sample_page_cache_get_stream_load_info_key(
             candidate->key, &stream) == 0U)
         || (stream.canonical_float == 0U)
-        || (stream.format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
-        || (stream.stride_floats != SAMPLE_PAGE_FRAME_STRIDE_FLOATS)
-        || (stream.stream_safe.block_align != SAMPLE_PAGE_BYTES_PER_FRAME)
+        || (sample_audio_format_is_valid(stream.format) == 0U)
+        || (stream.stride_floats != sample_audio_format_stride_floats(stream.format))
+        || (stream.stream_safe.block_align
+            != sample_audio_format_bytes_per_float_frame(stream.format))
         || (sample_stream_physical_map_is_current(
             &stream.stream_safe.physical_map) == 0U))
         return 0U;
@@ -190,6 +191,10 @@ static uint8_t sample_stream_manager_submit_fastpath(
         : (lease->sequential_page_end - candidate->page_index);
     uint8_t desired = (remaining_pages > SAMPLE_STREAM_FASTPATH_MAX_PAGES)
         ? SAMPLE_STREAM_FASTPATH_MAX_PAGES : (uint8_t)remaining_pages;
+    const uint32_t logical_page_bytes = sample_audio_format_page_bytes(stream.format);
+    const uint8_t byte_limited = (uint8_t)(SAMPLE_STREAM_FASTPATH_MAX_BYTES
+                                           / logical_page_bytes);
+    if (desired > byte_limited) desired = byte_limited;
     if (reverse != 0U)
     {
         uint8_t contiguous = 0U;

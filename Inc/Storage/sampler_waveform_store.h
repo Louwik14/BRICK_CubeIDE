@@ -68,6 +68,9 @@ void sampler_waveform_accumulator_init(sampler_waveform_accumulator_t *acc,
 void sampler_waveform_accumulator_push_float(sampler_waveform_accumulator_t *acc,
                                              const float *stereo,
                                              uint32_t frame_count);
+void sampler_waveform_accumulator_push_float_strided(
+    sampler_waveform_accumulator_t *acc, const float *samples,
+    uint32_t frame_count, uint16_t channels);
 uint8_t sampler_waveform_accumulator_finish(sampler_waveform_accumulator_t *acc,
                                             sampler_waveform_bin_t out_bins[SAMPLER_WAVEFORM_BIN_COUNT]);
 

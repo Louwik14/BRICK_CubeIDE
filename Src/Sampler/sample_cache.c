@@ -91,7 +91,7 @@ uint32_t sample_cache_product_cost_bytes(uint32_t frames,
                                      : SAMPLE_PREP_MIN_READY_FRAMES;
     return sample_audio_format_required_page_count(
                sample_audio_format_or_stereo(format), prep_frames)
-           * SAMPLE_PAGE_BYTES;
+           * sample_audio_format_page_bytes(sample_audio_format_or_stereo(format));
 }
 
 uint32_t sample_cache_get_product_cost_bytes(uint16_t sample_id)
@@ -468,8 +468,9 @@ static void sample_cache_coop_parse_service(void)
         {
             const uint32_t last = load->info.data_offset + load->info.data_size
                 - load->info.block_align;
-            if (sample_cache_coop_read(last, 8U) == 0U) return;
-            memcpy(&load->io[24], load->io, 8U);
+            if (sample_cache_coop_read(last, load->info.block_align) == 0U) return;
+            memset(&load->io[24], 0, 8U);
+            memcpy(&load->io[24], load->io, load->info.block_align);
             load->source_signature = sample_cache_coop_crc32(&load->io[16], 16U);
             load->edge_ready = 1U;
             return;

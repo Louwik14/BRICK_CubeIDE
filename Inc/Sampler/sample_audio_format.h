@@ -23,11 +23,12 @@ typedef enum
 #endif
 #define SAMPLE_AUDIO_FORMAT_PAGE_BYTES \
     (BRICK6_STREAM_PRODUCT_PAGE_KIB * 1024U)
+#define SAMPLE_AUDIO_FORMAT_BLOCK_BYTES            (8U * 1024U)
 #define SAMPLE_AUDIO_FORMAT_FLOAT_BYTES             (4U)
 #define SAMPLE_AUDIO_FORMAT_MONO_STRIDE_FLOATS      (1U)
 #define SAMPLE_AUDIO_FORMAT_STEREO_STRIDE_FLOATS   (2U)
 #define SAMPLE_AUDIO_FORMAT_MONO_FRAMES_PER_PAGE \
-    (SAMPLE_AUDIO_FORMAT_PAGE_BYTES / SAMPLE_AUDIO_FORMAT_FLOAT_BYTES)
+    (SAMPLE_AUDIO_FORMAT_BLOCK_BYTES / SAMPLE_AUDIO_FORMAT_FLOAT_BYTES)
 #define SAMPLE_AUDIO_FORMAT_STEREO_FRAMES_PER_PAGE \
     (SAMPLE_AUDIO_FORMAT_PAGE_BYTES / (2U * SAMPLE_AUDIO_FORMAT_FLOAT_BYTES))
 #define SAMPLE_AUDIO_FORMAT_STREAM_PRESOCLE_PAGES    (1U)
@@ -79,6 +80,12 @@ static inline uint32_t sample_audio_format_frames_per_page(sample_audio_format_t
                       : 0U);
 }
 
+static inline uint32_t sample_audio_format_page_bytes(sample_audio_format_t format)
+{
+    return sample_audio_format_frames_per_page(format)
+        * sample_audio_format_bytes_per_float_frame(format);
+}
+
 static inline uint32_t sample_audio_format_page_index_from_frame(sample_audio_format_t format,
                                                                   uint32_t frame)
 {
@@ -105,14 +112,14 @@ static inline uint32_t sample_audio_format_required_page_count(sample_audio_form
 
 static inline uint32_t sample_audio_format_presocle_pages(sample_audio_format_t format)
 {
-    return (format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+    return (sample_audio_format_is_valid(format) != 0U)
                ? SAMPLE_AUDIO_FORMAT_STREAM_PRESOCLE_PAGES
                : 0U;
 }
 
 static inline uint32_t sample_audio_format_window_pages(sample_audio_format_t format)
 {
-    return (format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+    return (sample_audio_format_is_valid(format) != 0U)
                ? SAMPLE_AUDIO_FORMAT_STREAM_WINDOW_PAGES
                : 0U;
 }

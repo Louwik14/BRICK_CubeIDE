@@ -693,15 +693,15 @@ static uint8_t waveform_pcm_render(const waveform_source_t *source,
             }
             if(frame < span.start_frame
                     || frame - span.start_frame >= span.frame_count
-                    || span.stride_floats != 2U)
+                    || ((span.stride_floats != 1U) && (span.stride_floats != 2U)))
             {
                 return 0U;
             }
-            const uint32_t offset = (frame - span.start_frame) * 2U;
+            const uint32_t offset = (frame - span.start_frame) * span.stride_floats;
             const int16_t left = waveform_pcm_to_i16(
                 span.frames_interleaved[offset]);
-            const int16_t right = waveform_pcm_to_i16(
-                span.frames_interleaved[offset + 1U]);
+            const int16_t right = (span.stride_floats == 2U)
+                ? waveform_pcm_to_i16(span.frames_interleaved[offset + 1U]) : left;
             if(left < min) { min = left; }
             if(right < min) { min = right; }
             if(left > max) { max = left; }
@@ -721,9 +721,9 @@ static uint8_t waveform_pcm_request(const waveform_source_t *source,
     if(sample_page_cache_get_stream_info_key(source->key, &info) == 0U
             || info.registration_epoch != source->registration_epoch
             || info.total_frames < source->frame_count
-            || info.format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED
+            || sample_audio_format_is_valid(info.format) == 0U
             || info.frames_per_page != SAMPLE_PAGE_FRAMES
-            || info.stride_floats != 2U)
+            || info.stride_floats != sample_audio_format_stride_floats(info.format))
     {
         return 0U;
     }

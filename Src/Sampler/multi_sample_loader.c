@@ -341,7 +341,8 @@ uint8_t multi_sample_load_required_prep_pages(const multi_sample_index_t *index,
     for (uint16_t i = 0U; i < index->sample_count; ++i)
     {
         const multi_sample_index_sample_t *const sample = &index->samples[i];
-        const uint32_t sample_pages = (sample->channels == 2U)
+        const uint32_t sample_pages = ((sample->channels == 1U)
+                                       || (sample->channels == 2U))
             ? SAMPLE_PAGE_MIN_READY_PAGES : 0U;
         if ((sample_pages == 0U) || (pages > (UINT32_MAX - sample_pages)))
             return 0U;
@@ -453,7 +454,8 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     }
 
     const uint32_t product_cost_bytes =
-        (uint32_t)prep_budget.required_pages * SAMPLE_PAGE_BYTES;
+        (uint32_t)prep_budget.required_pages
+            * sample_audio_format_page_bytes(index.format);
     uint16_t existing_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if ((sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_MULTI,
                                             instrument_id,
@@ -714,7 +716,8 @@ static uint8_t multi_loader_finish_instrument(void)
         || (sample_global_pool_register_multi(g_multi_load_status.instrument_id,
                                               instrument->index_path,
                                               (uint32_t)g_multi_load_status.prep_pages_required
-                                                  * SAMPLE_PAGE_BYTES,
+                                                  * sample_audio_format_page_bytes(
+                                                      instrument->format),
                                               instrument->sample_count,
                                               0) == 0U))
     {

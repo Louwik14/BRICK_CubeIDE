@@ -22,18 +22,16 @@
 #include "stm32h7xx_hal.h"
 
 #define WAV_CONVERT_TARGET_RATE 48000U
-#define WAV_CONVERT_TARGET_CHANNELS 2U
 #define WAV_CONVERT_TARGET_BITS 32U
-#define WAV_CONVERT_TARGET_BYTES_PER_FRAME 8U
 #define WAV_CONVERT_WAV_DATA_OFFSET_BYTES 512U
 #define WAV_CONVERT_WAV_JUNK_BYTES 448U
-#define WAV_CONVERT_PACK_FRAMES (STORAGE_SHARED_IO_BYTES / WAV_CONVERT_TARGET_BYTES_PER_FRAME)
+#define WAV_CONVERT_PACK_FRAMES_STEREO (STORAGE_SHARED_IO_BYTES / 8U)
 #define WAV_CONVERT_SOURCE_IO_BYTES (32U * 1024U)
 #define WAV_CONVERT_FAST_READ_BYTES (63U * 512U)
 #define WAV_CONVERT_FAST_WRITE_BYTES SD_SCHEDULER_BULK_COPY_MAX_DATA_BYTES
 #define WAV_CONVERT_PATH_MAX 160U
 
-_Static_assert((WAV_CONVERT_PACK_FRAMES * WAV_CONVERT_TARGET_BYTES_PER_FRAME) == STORAGE_SHARED_IO_BYTES,
+_Static_assert((WAV_CONVERT_PACK_FRAMES_STEREO * 8U) == STORAGE_SHARED_IO_BYTES,
                "WAV convert pack chunk must be frame-aligned");
 _Static_assert((WAV_CONVERT_SOURCE_IO_BYTES % 512U) == 0U,
                "WAV convert source reads must be sector-aligned");
@@ -131,6 +129,8 @@ typedef struct
     uint32_t frames_done;
     uint32_t frames_written;
     uint32_t target_data_bytes;
+    uint16_t target_channels;
+    uint16_t target_bytes_per_frame;
     uint32_t pack_target_frames;
     uint32_t pack_frames;
     uint64_t source_byte_offset;
@@ -868,15 +868,18 @@ static uint8_t wav_convert_open_phase(void)
          + (uint64_t)g_wav_convert.source_info.sample_rate - 1ULL)
         / (uint64_t)g_wav_convert.source_info.sample_rate;
     if ((target_frames == 0ULL) || (target_frames > UINT32_MAX)
-        || ((target_frames * WAV_CONVERT_TARGET_BYTES_PER_FRAME)
+        || ((target_frames * (uint64_t)g_wav_convert.source_info.channels * 4ULL)
             > (uint64_t)(UINT32_MAX - WAV_CONVERT_WAV_DATA_OFFSET_BYTES)))
     {
         wav_convert_fail(WAV_CONVERT_ERROR_UNSUPPORTED);
         return 0U;
     }
     g_wav_convert.target_frames = (uint32_t)target_frames;
+    g_wav_convert.target_channels = g_wav_convert.source_info.channels;
+    g_wav_convert.target_bytes_per_frame =
+        (uint16_t)(g_wav_convert.target_channels * sizeof(float));
     g_wav_convert.target_data_bytes =
-        g_wav_convert.target_frames * WAV_CONVERT_TARGET_BYTES_PER_FRAME;
+        g_wav_convert.target_frames * g_wav_convert.target_bytes_per_frame;
     sampler_waveform_accumulator_init(&g_wav_convert.waveform_accumulator,
                                       g_wav_convert.target_frames);
 
@@ -922,7 +925,7 @@ static uint8_t wav_convert_open_phase(void)
     }
 
     if ((g_wav_convert.source_info.encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
-        && (g_wav_convert.source_info.channels == WAV_CONVERT_TARGET_CHANNELS)
+        && (g_wav_convert.source_info.channels == g_wav_convert.target_channels)
         && (g_wav_convert.source_info.bits_per_sample == WAV_CONVERT_TARGET_BITS)
         && (g_wav_convert.source_info.sample_rate == WAV_CONVERT_TARGET_RATE))
     {
@@ -964,7 +967,7 @@ static uint8_t wav_convert_write_header_phase(void)
     {
         if (audio_recorder_wav_build_header(g_wav_convert.wav_header,
                 g_wav_convert.target_data_bytes, WAV_CONVERT_TARGET_RATE,
-                WAV_CONVERT_TARGET_CHANNELS) == 0U)
+                g_wav_convert.target_channels) == 0U)
         {
             wav_convert_fail(WAV_CONVERT_ERROR_WRITE_FAIL);
             return 0U;
@@ -993,7 +996,7 @@ static uint8_t wav_convert_write_header_phase(void)
 
 static uint8_t wav_convert_write_output(uint32_t frame_count)
 {
-    const uint32_t bytes = frame_count * WAV_CONVERT_TARGET_BYTES_PER_FRAME;
+    const uint32_t bytes = frame_count * g_wav_convert.target_bytes_per_frame;
     const uint32_t dma_bytes = (bytes + SD_SCHEDULER_SECTOR_BYTES - 1U)
         & ~(SD_SCHEDULER_SECTOR_BYTES - 1U);
     if ((bytes == 0U) || (dma_bytes > STORAGE_SHARED_IO_BYTES))
@@ -1001,15 +1004,16 @@ static uint8_t wav_convert_write_output(uint32_t frame_count)
         wav_convert_fail(WAV_CONVERT_ERROR_WRITE_FAIL);
         return 0U;
     }
-    sampler_waveform_accumulator_push_float(&g_wav_convert.waveform_accumulator,
-        (const float *)(const void *)g_storage_shared_io, frame_count);
+    sampler_waveform_accumulator_push_float_strided(&g_wav_convert.waveform_accumulator,
+        (const float *)(const void *)g_storage_shared_io, frame_count,
+        g_wav_convert.target_channels);
     if (dma_bytes > bytes)
     {
         memset(&g_storage_shared_io[bytes], 0, dma_bytes - bytes);
     }
     const uint64_t file_offset = WAV_CONVERT_WAV_DATA_OFFSET_BYTES
         + (uint64_t)g_wav_convert.frames_written
-            * WAV_CONVERT_TARGET_BYTES_PER_FRAME;
+            * g_wav_convert.target_bytes_per_frame;
     wav_convert_release_gate();
     if (wav_convert_fast_write_begin(&g_wav_convert.fast_write,
             file_offset, g_storage_shared_io, bytes, frame_count) == 0U)
@@ -1087,20 +1091,30 @@ static uint8_t wav_convert_copy_48k_service(void)
             return 0U;
         }
         uint8_t *const output = &g_storage_shared_io[
-            g_wav_convert.pack_frames * WAV_CONVERT_TARGET_BYTES_PER_FRAME];
+            g_wav_convert.pack_frames * g_wav_convert.target_bytes_per_frame];
         if (g_wav_convert.copy_mode == WAV_CONVERT_COPY_RAW_FLOAT)
         {
             memcpy(output, source, source_bytes);
         }
         else
         {
-            wav_audio_codec_decode_stereo_block(
-                source,
-                g_wav_convert.source_info.encoding,
-                g_wav_convert.source_info.channels,
-                g_wav_convert.source_info.bits_per_sample,
-                (float *)(void *)output,
-                read_frames);
+            if (g_wav_convert.target_channels == 2U)
+                wav_audio_codec_decode_stereo_block(
+                    source, g_wav_convert.source_info.encoding,
+                    g_wav_convert.source_info.channels,
+                    g_wav_convert.source_info.bits_per_sample,
+                    (float *)(void *)output, read_frames);
+            else for (uint32_t frame = 0U; frame < read_frames; ++frame)
+            {
+                float decoded[2];
+                wav_audio_codec_decode_stereo_frame(
+                    source + frame * g_wav_convert.source_info.block_align,
+                    g_wav_convert.source_info.encoding,
+                    g_wav_convert.source_info.channels,
+                    g_wav_convert.source_info.bits_per_sample,
+                    &decoded[0], &decoded[1]);
+                ((float *)(void *)output)[frame] = decoded[0];
+            }
         }
         g_wav_convert.pack_frames += read_frames;
         g_wav_convert.source_byte_offset += source_bytes;
@@ -1156,6 +1170,13 @@ static uint8_t wav_convert_copy_resample_service(void)
             &((float *)(void *)g_storage_shared_io)[
                 g_wav_convert.pack_frames * 2U],
             remaining);
+        if (g_wav_convert.target_channels == 1U)
+        {
+            float *const packed = (float *)(void *)g_storage_shared_io;
+            const uint32_t base = g_wav_convert.pack_frames;
+            for (uint32_t frame = 0U; frame < produced; ++frame)
+                packed[base + frame] = packed[(base + frame) * 2U];
+        }
         g_wav_convert.pack_frames += produced;
     }
 
@@ -1207,10 +1228,15 @@ static uint8_t wav_convert_copy_phase(uint32_t byte_budget)
     }
     if (g_wav_convert.pack_target_frames == 0U)
     {
-        uint32_t frames_budget = byte_budget / WAV_CONVERT_TARGET_BYTES_PER_FRAME;
-        if (frames_budget > WAV_CONVERT_PACK_FRAMES)
+        uint32_t frames_budget = byte_budget / g_wav_convert.target_bytes_per_frame;
+        uint32_t pack_capacity = STORAGE_SHARED_IO_BYTES
+            / g_wav_convert.target_bytes_per_frame;
+        if ((g_wav_convert.copy_mode == WAV_CONVERT_COPY_RESAMPLE)
+            && (pack_capacity > WAV_CONVERT_PACK_FRAMES_STEREO))
+            pack_capacity = WAV_CONVERT_PACK_FRAMES_STEREO;
+        if (frames_budget > pack_capacity)
         {
-            frames_budget = WAV_CONVERT_PACK_FRAMES;
+            frames_budget = pack_capacity;
         }
         const uint32_t remaining =
             g_wav_convert.target_frames - g_wav_convert.frames_done;
@@ -1302,10 +1328,11 @@ static uint8_t wav_convert_verify_phase(void)
         && (memcmp(&h[8], "WAVEfmt ", 8U) == 0)
         && (wav_convert_read_le32(&h[16]) == 16U)
         && (wav_convert_read_le16(&h[20]) == 3U)
-        && (wav_convert_read_le16(&h[22]) == WAV_CONVERT_TARGET_CHANNELS)
+        && (wav_convert_read_le16(&h[22]) == g_wav_convert.target_channels)
         && (wav_convert_read_le32(&h[24]) == WAV_CONVERT_TARGET_RATE)
-        && (wav_convert_read_le32(&h[28]) == 384000U)
-        && (wav_convert_read_le16(&h[32]) == WAV_CONVERT_TARGET_BYTES_PER_FRAME)
+        && (wav_convert_read_le32(&h[28])
+            == WAV_CONVERT_TARGET_RATE * g_wav_convert.target_bytes_per_frame)
+        && (wav_convert_read_le16(&h[32]) == g_wav_convert.target_bytes_per_frame)
         && (wav_convert_read_le16(&h[34]) == WAV_CONVERT_TARGET_BITS)
         && (memcmp(&h[36], "fact", 4U) == 0)
         && (wav_convert_read_le32(&h[40]) == 4U)
@@ -1362,9 +1389,9 @@ static uint8_t wav_convert_replace_phase(void)
             .encoding = WAV_SAMPLE_ENCODING_IEEE_FLOAT,
             .sample_rate = WAV_CONVERT_TARGET_RATE,
             .byte_rate = WAV_CONVERT_TARGET_RATE
-                * WAV_CONVERT_TARGET_BYTES_PER_FRAME,
-            .channels = WAV_CONVERT_TARGET_CHANNELS,
-            .block_align = WAV_CONVERT_TARGET_BYTES_PER_FRAME,
+                * g_wav_convert.target_bytes_per_frame,
+            .channels = g_wav_convert.target_channels,
+            .block_align = g_wav_convert.target_bytes_per_frame,
             .bits_per_sample = WAV_CONVERT_TARGET_BITS,
             .valid_bits_per_sample = WAV_CONVERT_TARGET_BITS,
             .fmt_chunk_size = 16U,
@@ -1494,7 +1521,7 @@ uint8_t wav_convert_get_progress_percent(void)
 
 uint32_t wav_convert_get_output_bytes_done(void)
 {
-    return g_wav_convert.frames_written * WAV_CONVERT_TARGET_BYTES_PER_FRAME;
+    return g_wav_convert.frames_written * g_wav_convert.target_bytes_per_frame;
 }
 
 uint32_t wav_convert_get_output_bytes_total(void)
