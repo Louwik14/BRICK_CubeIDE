@@ -2,8 +2,8 @@
 
 ## Implantation H743
 
-Le pool global occupe les secteurs 4 et 5 de la banque Flash 2, soit
-`0x08180000..0x081BFFFF` (256 Kio). Le firmware s'arrête à la fin du secteur 3
+Le pool global occupe le secteur 5 de la banque Flash 2, soit
+`0x081A0000..0x081BFFFF` (128 Kio). Le firmware peut occuper le secteur 4
 et les secteurs 6 et 7 restent réservés à Groove. La région linker
 `WAVETABLE_FLASH` empêche toute section firmware d'occuper ce pool.
 
@@ -30,7 +30,7 @@ La suppression est logique et programme son flashword dédié ; elle n'efface pa
 individuellement un secteur de 128 Kio.
 
 Une table standard de huit frames occupe 65 536 octets de payload et 66 112
-octets au total. Trois tables occupent 198 336 octets et laissent 63 808 octets.
+octets au total. Le slot unique laisse 64 960 octets dans son secteur.
 La base 1024 points est la première bande du payload et n'est pas dupliquée.
 
 ## Import, publication et compatibilité
@@ -60,7 +60,7 @@ retirées afin qu'un chemin de restore ne puisse pas les réutiliser par erreur.
 
 Le Browser applique la même règle avant tout import : un chemin déjà présent
 dans le catalogue Flash global est rattaché à la banque logique courante sans
-réécriture, même si les trois slots Flash sont occupés. La colonne gauche reste
+réécriture, même si le slot Flash unique est occupé. La colonne gauche reste
 le catalogue SD et marque `*` les fichiers déjà importés ; la colonne droite ne
 montre que les références de la banque courante. `UNLOAD` retire uniquement
 cette référence logique. La suppression SD ne touche que la source. La
@@ -148,15 +148,15 @@ de cache supplémentaire.
 
 ## Flash firmware et coût AUDIO
 
-La somme des sections chargeables du firmware passe de 1 552 876 à 1 554 832
-octets, soit +1 956 octets. Le span du binaire Release est 1 567 572 octets sur
-la région firmware de 1 572 864 octets, laissant 5 292 octets. Le pool
-Wavetable de 262 144 octets est une région séparée et vide dans l'image usine ;
-son occupation utile vaut 66 112 octets par table standard, 198 336 octets pour
-trois tables.
+Le span du binaire Release est 1 567 668 octets. La région firmware couvre
+désormais 1 703 936 octets et laisse 136 268 octets disponibles. Le secteur 4
+ainsi rendu au firmware apporte exactement 131 072 octets par rapport à
+l'ancienne région de 1 572 864 octets. Le binaire lui-même ne change pas de
+taille pendant cette réduction.
 
-La passe d'import manuel porte le span Release de 1 567 620 à 1 567 668
-octets, soit +48 octets. Les régions Flash Wavetable et Groove ne changent pas.
+Le pool Wavetable est une région séparée et vide dans l'image usine. Sa
+réservation passe de 262 144 à 131 072 octets et sa capacité de trois à un slot.
+L'unique table standard occupe 66 112 octets. La région Groove ne change pas.
 
 Le calcul AUDIO, l'interpolation et le choix de mipmap sont inchangés. Les
 lectures passent des pages SDRAM à la Flash mappée et cacheable ; il n'y a aucun
@@ -169,8 +169,8 @@ hors IRQ et imposent un arrêt explicite d'AUDIO.
 
 Le journal est append-only. Une suppression rend le record invisible mais ne
 récupère pas immédiatement son espace physique. Quand la queue vierge ne peut
-plus recevoir un record, une maintenance doit arrêter AUDIO, effacer les deux
-secteurs et reconstruire le catalogue depuis les sources SD. Aucun compactage
+plus recevoir un record, une maintenance doit arrêter AUDIO, effacer le secteur
+et reconstruire le catalogue depuis la source SD. Aucun compactage
 sur place n'est annoncé comme sûr sans secteur de secours A/B. Le backend expose
 l'effacement global, mais cette reconstruction n'est pas automatisée dans l'UI
 produit actuelle ; l'état plein est retourné explicitement à l'import.

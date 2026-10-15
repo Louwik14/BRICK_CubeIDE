@@ -95,14 +95,12 @@ uint8_t wavetable_flash_backend_erase_all(void)
     if (HAL_FLASH_Unlock() != HAL_OK) return 0U;
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
-    const uint8_t ok4 = wavetable_flash_erase_sector_itcm(FLASH_SECTOR_4);
-    const uint8_t ok5 = (ok4 != 0U)
-        ? wavetable_flash_erase_sector_itcm(FLASH_SECTOR_5) : 0U;
+    const uint8_t ok = wavetable_flash_erase_sector_itcm(FLASH_SECTOR_5);
     __set_PRIMASK(primask);
     (void)HAL_FLASH_Lock();
     SCB_InvalidateDCache_by_Addr((uint32_t *)WAVETABLE_FLASH_BASE,
                                  (int32_t)WAVETABLE_FLASH_SIZE);
-    return (uint8_t)(ok4 && ok5);
+    return ok;
 }
 
 uint8_t wavetable_flash_backend_program(uint32_t offset,
