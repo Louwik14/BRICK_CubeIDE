@@ -13,6 +13,8 @@ $render = Get-Content -Raw (Join-Path $root `
     'Src/UI/pages/Settings/ui_settings_render.inc')
 $assets = Get-Content -Raw (Join-Path $root `
     'Src/UI/pages/Settings/ui_settings_multi_assets.inc')
+$settingsPage = Get-Content -Raw (Join-Path $root `
+    'Src/UI/pages/ui_page_settings.c')
 $config = Get-Content -Raw (Join-Path $root `
     'Inc/Sampler/sample_page_cache_config.h')
 $pool = Get-Content -Raw (Join-Path $root `
@@ -23,9 +25,20 @@ $projectControl = Get-Content -Raw (Join-Path $root `
 Assert-True ($navigation.Contains('return 2U;') -and
              $navigation.Contains('return "SAMPLE BROWSER";')) `
     'CLASSIC and MULTI still have separate menu entries'
-Assert-True ($public.Contains('ui_page_settings_sample_browser_toggle_mode(level);') -and
+Assert-True ($public.Contains('ui_page_settings_sample_browser_change_mode(level, step);') -and
+             $public.Contains('(level->view == UI_SETTINGS_VIEW_SAMPLER) && (step > 0)') -and
+             $public.Contains('(level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE) && (step < 0)') -and
              $public.Contains('if (encoder == 2U)')) `
-    'E3 does not toggle the unified browser mode'
+    'E3 browser navigation is not clamped at the end modes'
+Assert-True ($assets.Contains(
+    'drv_display_fill_rect(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_Y, 29, 6);') -and
+             $render.Contains(
+    'UI_SETTINGS_SAMPLE_BROWSER_PATH_LABEL_Y - 1U') -and
+             $settingsPage.Contains(
+    '#define UI_SETTINGS_SAMPLE_BROWSER_HEADER_Y 1U') -and
+             $settingsPage.Contains(
+    '#define UI_SETTINGS_SAMPLE_BROWSER_PATH_LABEL_Y 10U')) `
+    'browser header bands no longer use their offset coordinates'
 Assert-True ($render.Contains(
     'ui_page_settings_draw_unified_sample_header(UI_SETTINGS_VIEW_SAMPLER);') -and
              $render.Contains(

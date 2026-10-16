@@ -253,25 +253,25 @@ static void ui_page_settings_draw_unified_sample_header(ui_settings_view_t view)
     drv_display_set_font(&FONT_4X6);
     if (view == UI_SETTINGS_VIEW_SAMPLER)
     {
-        drv_display_fill_rect(0, 0, 29, 6);
-        drv_display_draw_text_inverted(1U, 0U, "CLASSIC");
+        drv_display_fill_rect(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_Y, 29, 6);
+        drv_display_draw_text_inverted(1U, UI_SETTINGS_SAMPLE_BROWSER_HEADER_Y, "CLASSIC");
     }
     else
     {
-        drv_display_draw_text(1U, 0U, "CLASSIC");
+        drv_display_draw_text(1U, UI_SETTINGS_SAMPLE_BROWSER_HEADER_Y, "CLASSIC");
     }
-    drv_display_draw_text(31U, 0U, "|");
+    drv_display_draw_text(31U, UI_SETTINGS_SAMPLE_BROWSER_HEADER_Y, "|");
     if (view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
     {
-        drv_display_fill_rect(37, 0, 21, 6);
-        drv_display_draw_text_inverted(38U, 0U, "MULTI");
+        drv_display_fill_rect(37, UI_SETTINGS_SAMPLE_BROWSER_HEADER_Y, 21, 6);
+        drv_display_draw_text_inverted(38U, UI_SETTINGS_SAMPLE_BROWSER_HEADER_Y, "MULTI");
     }
     else
     {
-        drv_display_draw_text(38U, 0U, "MULTI");
+        drv_display_draw_text(38U, UI_SETTINGS_SAMPLE_BROWSER_HEADER_Y, "MULTI");
     }
-    drv_display_draw_text(60U, 0U, "|");
-    drv_display_draw_text(67U, 0U, capacity);
+    drv_display_draw_text(60U, UI_SETTINGS_SAMPLE_BROWSER_HEADER_Y, "|");
+    drv_display_draw_text(67U, UI_SETTINGS_SAMPLE_BROWSER_HEADER_Y, capacity);
 }
 
 static void ui_page_settings_draw_global_sample_header(const char *title)

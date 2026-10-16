@@ -114,19 +114,20 @@ static void ui_page_settings_preview_current(void)
     }
 }
 
-static void ui_page_settings_sample_browser_toggle_mode(
-    ui_settings_menu_level_t *level)
+static void ui_page_settings_sample_browser_change_mode(
+    ui_settings_menu_level_t *level, int16_t step)
 {
     if (level == 0) return;
-    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-    if (level->view == UI_SETTINGS_VIEW_SAMPLER)
+    if ((level->view == UI_SETTINGS_VIEW_SAMPLER) && (step > 0))
     {
+        ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
         ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
         ui_page_settings_multi_browser_enter_root();
         level->view = UI_SETTINGS_VIEW_MULTI_SAMPLE;
     }
-    else if (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+    else if ((level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE) && (step < 0))
     {
+        ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
         ui_page_settings_refresh_sampler_slots();
         ui_page_settings_sample_browser_enter_root();
         level->view = UI_SETTINGS_VIEW_SAMPLER;
@@ -256,7 +257,7 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
             if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
                 || (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE))
             {
-                ui_page_settings_sample_browser_toggle_mode(level);
+                ui_page_settings_sample_browser_change_mode(level, step);
             }
             return;
         }
